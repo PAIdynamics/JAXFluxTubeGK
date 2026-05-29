@@ -1086,6 +1086,47 @@ frequency curves from \texttt{omega\_kxkyt}, and GX/GS2 eik-style geometry
 tables.  These references are used as objective targets and parser tests now;
 full solver-to-reference RH, Cyclone, and eik parity runs remain the next
 validation gate.
+The validation-gate interface reports
+\[
+  \left(
+    \mathcal{O}_{\mathrm{obs}},
+    \frac{\mathcal{O}_{\mathrm{obs}}-\mathcal{O}_{\mathrm{ref}}}{\sigma},
+    J_{\mathrm{bench}},
+    \mathrm{pass/open}
+  \right).
+\]
+With the present reduced executable gates, the GX/GS2 eik metric import passes
+the solver \(\kperp^2\) contract exactly, while the RH and Cyclone gates are
+marked open against production tolerances.  This is intentional: it prevents
+DESC-driven optimization studies from being mistaken for validated physical
+predictions before the RH long-time residual and CBC selected-\(k_y\) growth
+rate are brought onto the reference ladder.
+The current implementation now also includes three validation-hardening tools.
+First, late-time growth rates may be computed by a least-squares fit of
+\(\log A_{k_y}(t)\) over a selected diagnostic window,
+\begin{equation}
+  \gamma_{k_y}^{\mathrm{fit}}
+  =
+  \frac{\sum_{m\in W}(t_m-\bar t)
+  [\log A_{k_y}(t_m)-\overline{\log A_{k_y}}]}
+  {\sum_{m\in W}(t_m-\bar t)^2},
+  \label{eq:windowed-growth-fit}
+\end{equation}
+where \(A_{k_y}\) is the weighted connected-mode-chain potential amplitude.
+This is the diagnostic path intended for Cyclone/GX/GKW growth-rate gates.
+Second, a calibrated reduced RH crossing gate records the deterministic
+\(N_z=16,N_{v_\parallel}=16,N_\mu=8,\Delta t=0.01,N_t=620\) point where the
+present collisionless discretization crosses the documented residual.  It is a
+regression hook, not a physical replacement for the \(t>80\) residual plateau.
+Third, the eik parity layer can compare any solver-produced geometry object
+against a GX/GS2 table field by field:
+\[
+  B,\ F,\ g^{xx},\ g^{xy},\ g^{yy},\
+  D_x,\ D_y,\ G,\ \kperp^2 .
+\]
+Imported eik tables pass this contract exactly; DESC- or solver-generated
+stellarator geometry must pass the same comparison before being used for
+validated optimization.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

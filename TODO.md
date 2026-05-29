@@ -447,6 +447,11 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add named scalar benchmark targets for the documented Rosenbluth-Hinton residual and Cyclone Base Case growth-rate references.
 - [x] Load GX NetCDF growth/frequency reference curves from `omega_kxkyt` and convert selected `ky` points into optimization targets.
 - [x] Load local GX/GS2 eik-style geometry tables for future stellarator geometry parity checks.
+- [x] Add executable reduced RH and CBC validation gates that report observed values, normalized residuals, and pass/open status against production targets.
+- [x] Add a GX/GS2 eik metric gate verifying the imported table maps into the solver `k_perp^2` contract.
+- [x] Add a late-window least-squares growth diagnostic for CBC/GX/GKW-style growth-rate gates.
+- [x] Add a calibrated reduced RH crossing gate as a deterministic regression hook while keeping the production long-time RH plateau open.
+- [x] Add solver-geometry-to-GX/GS2-eik field-by-field parity reports and a corresponding geometry gate.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
@@ -463,7 +468,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, and GX/GS2 eik-table loading. Full end-to-end Rosenbluth-Hinton evolution, production Cyclone growth-rate agreement, solver-to-GX/eik geometry parity, and ITG scan comparison remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a calibrated reduced RH crossing hook, and solver-to-eik field parity reports. The GX/eik imported metric and field-parity gates pass the solver geometry contract. The default RH and CBC production gates still run but remain open against production tolerances, so full end-to-end Rosenbluth-Hinton long-time convergence, production Cyclone growth-rate agreement, solver-produced stellarator geometry parity from DESC/GX conventions, and ITG scan comparison remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -507,4 +512,9 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 ## Immediate Next Round
 
-Promote the benchmark-target plumbing into end-to-end validation runs: evolve the full Rosenbluth-Hinton residual case, run the production Cyclone Base Case growth-rate comparison at selected `ky`, compare solver geometry arrays against the loaded GX/GS2 eik table, and then use those tolerances as gates for DESC-driven optimization studies.
+Use the new validation-hardening tools to close the remaining production gaps:
+
+- replace the calibrated RH crossing with a true long-time plateau/convergence gate, including benchmark-justified spectral or modal dissipation if needed,
+- calibrate the Cyclone selected-`ky` setup with production resolution, late-window growth fitting, and GKW/GX tolerance checks,
+- run solver-produced DESC/GX-convention stellarator geometry through the field-by-field eik parity gate rather than only imported-table self-parity,
+- keep DESC-driven optimization examples labeled reduced until RH, CBC, and solver-produced eik parity gates pass.

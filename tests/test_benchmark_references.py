@@ -18,15 +18,23 @@ from stellarator_gk import (
     benchmark_target_residual,
     build_desc_geometry_from_arrays,
     build_fourier_grid,
+    build_flux_tube_geometry_from_gx_eik_reference,
     build_mode_connectivity,
     build_parallel_grid,
     build_velocity_grid,
     cyclone_base_case_growth_target,
+    compare_geometry_to_gx_eik_reference,
     gx_growth_rate_target,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
+    resample_gx_eik_geometry_reference,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
+    run_calibrated_reduced_rosenbluth_hinton_gate,
+    run_gx_eik_geometry_gate,
+    run_reduced_cyclone_base_case_gate,
+    run_reduced_rosenbluth_hinton_gate,
+    run_solver_geometry_to_gx_eik_gate,
     single_surface_benchmark_objective,
 )
 
@@ -95,6 +103,77 @@ def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
     np.testing.assert_allclose(reference.bmag[0], reference.bmag[-1], rtol=2e-12)
     assert jnp.all(jnp.isfinite(reference.gds2))
     assert jnp.min(reference.bmag) > 0.0
+
+
+def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
+    path = (
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+    )
+    reference = load_gx_eik_geometry_reference(path)
+    theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
+    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    parallel = _parallel_grid_from_theta(theta)
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
+    )
+
+    result = run_gx_eik_geometry_gate(sampled, parallel, fourier)
+
+    assert bool(result.passed)
+    np.testing.assert_allclose(result.observed_value, 0.0, atol=1.0e-13)
+    assert result.target.quantity == "max_abs_kperp2_error"
+
+
+def test_solver_geometry_to_eik_parity_report_matches_imported_geometry():
+    path = (
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+    )
+    reference = load_gx_eik_geometry_reference(path)
+    theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
+    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    parallel = _parallel_grid_from_theta(theta)
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
+    )
+    geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+
+    report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
+    gate = run_solver_geometry_to_gx_eik_gate(geometry, sampled, fourier)
+
+    assert bool(gate.passed)
+    assert report.field_names[-1] == "kperp2"
+    assert "D_x" in report.field_names[5]
+    np.testing.assert_allclose(report.field_errors, 0.0, atol=1.0e-13)
+    np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
+
+
+def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
+    rh = run_reduced_rosenbluth_hinton_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
+    cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
+
+    assert rh.target.name == "rosenbluth_hinton_q13_eps005"
+    assert cyclone.target.name == "cyclone_base_case_gkw_kt05"
+    assert jnp.isfinite(rh.observed_value)
+    assert jnp.isfinite(cyclone.observed_value)
+    assert jnp.isfinite(rh.cost)
+    assert jnp.isfinite(cyclone.cost)
+    assert not bool(rh.passed)
+    assert not bool(cyclone.passed)
+    assert "production" in rh.notes
+    assert "production" in cyclone.notes
+    assert "window" in cyclone.notes
+
+
+def test_calibrated_reduced_rh_gate_hits_reference_crossing():
+    rh = run_calibrated_reduced_rosenbluth_hinton_gate()
+
+    assert bool(rh.passed)
+    assert abs(float(rh.observed_value) - float(rh.target.reference_value)) <= rh.target.tolerance
+    assert "production" in rh.notes
 
 
 def test_desc_fixture_can_drive_reduced_benchmark_target_objective():
@@ -187,6 +266,17 @@ def test_desc_fixture_can_drive_reduced_benchmark_target_objective():
 
 def _parallel_grid_from_fixture_z(z):
     z = np.asarray(z, dtype=float)
+    dz = z[1] - z[0]
+    grid = build_parallel_grid(
+        ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
+    )
+    np.testing.assert_allclose(grid.z, z, rtol=2e-12, atol=2e-12)
+    return grid
+
+
+def _parallel_grid_from_theta(theta):
+    theta = np.asarray(theta, dtype=float)
+    z = theta / (2.0 * np.pi)
     dz = z[1] - z[0]
     grid = build_parallel_grid(
         ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))

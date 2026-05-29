@@ -15,6 +15,7 @@ from stellarator_gk import (
     normalize_by_ky_amplitude,
     real_frequency,
     rk4_step,
+    windowed_linear_growth_diagnostics,
 )
 
 
@@ -124,6 +125,47 @@ def test_mode_chain_growth_frequency_and_normalization():
     )
     np.testing.assert_allclose(normalized.state[..., 0], 1.0 / diagnostics.amplitude_end[0])
     np.testing.assert_allclose(normalized.state[..., 1], 1.0 / diagnostics.amplitude_end[1])
+
+
+def test_windowed_growth_diagnostics_fits_late_time_amplitudes():
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=5, n_ky=2, kx_max=1.0, ky_values=(0.0, 0.4), ikxspace=2)
+    )
+    connectivity = build_mode_connectivity(fourier)
+    weights = jnp.asarray([0.5, 1.0, 1.5])
+    base = jnp.zeros((3, 5, 2), dtype=jnp.complex128)
+    base = base.at[:, fourier.ixzero, fourier.iyzero].set(1.0 + 0.0j)
+    base = base.at[:, [0, 2, 4], 1].set(0.7 - 0.2j)
+    base = base.at[:, [1, 3], 1].set(50.0 + 0.0j)
+    times = jnp.linspace(0.0, 1.2, 7)
+    gamma = jnp.asarray([0.15, -0.08])
+    omega = jnp.asarray([0.4, -0.9])
+    factors = jnp.exp((gamma - 1j * omega)[None, :] * times[:, None])
+    history = base[None, :, :, :] * factors[:, None, None, :]
+
+    diagnostics = windowed_linear_growth_diagnostics(
+        history,
+        times,
+        start_index=2,
+        w_z=weights,
+        connectivity=connectivity,
+    )
+
+    np.testing.assert_allclose(diagnostics.growth_rate, gamma, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(diagnostics.frequency, omega, rtol=2e-13, atol=2e-13)
+    assert diagnostics.mode_structure.shape == base.shape
+
+
+def test_windowed_growth_diagnostics_validates_inputs():
+    history = jnp.ones((1, 2, 1, 1), dtype=jnp.complex128)
+    times = jnp.asarray([0.0])
+
+    try:
+        windowed_linear_growth_diagnostics(history, times)
+    except ValueError as exc:
+        assert "at least two" in str(exc)
+    else:
+        raise AssertionError("short history should fail")
 
 
 def test_fixed_step_scan_is_jittable_and_differentiable():

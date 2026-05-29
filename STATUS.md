@@ -32,7 +32,13 @@ canonical DSHAPE `.npz` fixture generated through the DESC HDF5/path loader now
 loads through the solver geometry contract. The current benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
-and a reduced DESC DSHAPE fixture optimization example.
+and a reduced DESC DSHAPE fixture optimization example. The immediate
+validation-gate pass now adds executable RH/CBC reduced gates and a GX/GS2 eik
+metric gate; the eik metric contract passes, while RH and CBC are reported as
+open against production tolerances until the physics/numerics gap is closed. A
+follow-up hardening pass adds late-window growth fitting, a calibrated reduced
+RH crossing regression hook, and solver-geometry-to-GX/GS2-eik field parity
+reports; these are validation tools, not yet production benchmark closure.
 
 The repository currently contains:
 
@@ -44,6 +50,7 @@ The repository currently contains:
 - `docs/optimization_integration.md`: Phase 12 fixed-topology optimization and toy-gradient example.
 - `examples/optimization_loop.py`: runnable reduced optimization loop that prints objective/growth diagnostics and knob values at each iteration.
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
+- `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
@@ -125,29 +132,67 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: promote benchmark references into end-to-end validation gates:
+Goal: close the remaining production physics gaps exposed by the executable
+validation gates:
 
-- evolve the full Rosenbluth-Hinton zonal-flow residual case against the named target,
-- run the production Cyclone Base Case growth-rate comparison at selected `ky`,
-- compare solver geometry arrays against the loaded GX/GS2 eik table,
-- use the resulting tolerances as gates for DESC-driven optimization examples.
+- replace the calibrated reduced RH crossing with a true long-time zonal-flow residual plateau,
+- bring the Cyclone selected-`ky` growth rate onto the GKW/GX tolerance ladder using late-window fitting,
+- run DESC/GX-convention solver-produced geometry through field-by-field eik parity,
+- use passing gates as prerequisites for DESC-driven optimization examples.
 
 Expected file changes:
 
-- production benchmark run helpers/tests,
-- solver-to-eik geometry comparison utilities,
-- tighter docs/examples for benchmark-gated DESC optimization,
+- RH long-time integration and/or benchmark-justified dissipation controls,
+- Cyclone production-resolution setup and calibrated growth extraction,
+- DESC/GX-convention stellarator geometry comparison fixtures,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- full RH residual tolerance test,
-- Cyclone selected-`ky` growth-rate tolerance test,
-- GX/GS2 eik geometry parity tolerance test,
+- RH long-time residual tolerance test promoted from OPEN to PASS,
+- Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS,
+- DESC/GX-convention solver-produced geometry parity tolerance test,
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-29: Added Validation-Hardening Tools for RH, CBC, and eik Parity
+
+- Added `windowed_linear_growth_diagnostics`, which fits
+  `log(A_ky(t))` over a selected late-time window and returns the same
+  `LinearGrowthDiagnostics` contract used by endpoint diagnostics.
+- Updated the reduced Cyclone gate to use late-window growth extraction from a
+  stored potential history. The gate still reports OPEN against the production
+  GKW/GX target.
+- Added `run_calibrated_reduced_rosenbluth_hinton_gate`, a deterministic
+  reduced-grid RH crossing at `N_z=16`, `N_vpar=16`, `N_mu=8`, `dt=0.01`,
+  `N_t=620`. It passes the scalar RH target as a regression hook, while the
+  production long-time plateau remains open.
+- Added `GxEikGeometryParityReport`,
+  `compare_geometry_to_gx_eik_reference`, and
+  `run_solver_geometry_to_gx_eik_gate` for field-by-field solver geometry
+  checks against GX/GS2 eik tables.
+- Extended `examples/run_validation_gates.py` with `--calibrated-rh`.
+- Updated `main.tex` and `TODO.md` to document the new validation tools and the
+  remaining production gaps.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_time_advance.py tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/time_advance.py src/stellarator_gk/__init__.py tests/test_time_advance.py tests/test_benchmark_references.py examples/run_validation_gates.py`
+  - `.venv/bin/python examples/run_validation_gates.py --calibrated-rh`
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused time-advance and benchmark-reference tests: 16 passed,
+  - full suite: 121 passed,
+  - focused ruff: all checks passed,
+  - full ruff: all checks passed,
+  - validation report: default RH and CBC OPEN, imported eik metric PASS,
+    calibrated reduced RH PASS,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings,
+  - diff check: no whitespace errors.
 
 ### 2026-05-29: Added DESC-Style Geometry Array Coupling
 
@@ -218,6 +263,8 @@ Expected tests:
 
 ### 2026-05-29: Added Benchmark-Informed DESC Objective Round
 
+- Committed the DESC extraction and benchmark-target checkpoint:
+  - commit `510970c` (`Add DESC extraction and benchmark targets`).
 - Added `src/stellarator_gk/benchmarks.py` with:
   - named `BenchmarkTarget` objects for the documented Rosenbluth-Hinton residual and Cyclone Base Case growth target,
   - differentiable target residual/cost helpers,
@@ -237,6 +284,35 @@ Expected tests:
 - Verification results:
   - focused benchmark/optimization tests: 11 passed,
   - full suite: 115 passed,
+  - ruff: all checks passed,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings.
+
+### 2026-05-29: Added Executable Benchmark Validation Gates
+
+- Extended `src/stellarator_gk/benchmarks.py` with:
+  - `BenchmarkGateResult`,
+  - `evaluate_benchmark_gate`,
+  - reduced executable RH and CBC gates,
+  - GX/GS2 eik resampling and metric-to-solver geometry mapping,
+  - a GX/eik `k_perp^2` contract gate.
+- Added `examples/run_validation_gates.py`, which prints PASS/OPEN status, observed value, reference, residual, tolerance, and notes for RH, CBC, and GX/eik gates.
+- Extended `tests/test_benchmark_references.py` so the GX/eik metric gate must pass and the current reduced RH/CBC gates must run, remain finite, and explicitly report OPEN against production targets.
+- Current quick gate output:
+  - RH reduced gate: OPEN, observed residual proxy `9.99519817e-01` vs target `7.11000000e-02`,
+  - CBC reduced gate: OPEN, observed selected growth `6.62190126e+00` vs target `1.79000000e-01`,
+  - GX/eik metric gate: PASS, max `k_perp^2` contract error `0.0`.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `.venv/bin/python examples/run_validation_gates.py`
+  - `.venv/bin/python -m ruff check examples/run_validation_gates.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused benchmark-reference tests: 6 passed,
+  - full suite: 117 passed,
   - ruff: all checks passed,
   - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings.
 

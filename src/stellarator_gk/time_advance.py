@@ -224,6 +224,72 @@ def linear_growth_diagnostics(
     )
 
 
+def windowed_linear_growth_diagnostics(
+    field_history,
+    times,
+    *,
+    start_fraction: float = 0.5,
+    start_index: int | None = None,
+    end_index: int | None = None,
+    w_z=None,
+    connectivity: ModeConnectivity | None = None,
+    amplitude_floor: float = 1.0e-300,
+) -> LinearGrowthDiagnostics:
+    """Fit per-``ky`` growth rates from a time window of field snapshots.
+
+    The endpoint diagnostic is exact for a single exponential but is noisy for
+    benchmark runs with transient phase mixing.  This helper fits
+    ``log(amplitude)`` against time over a late window, matching the averaging
+    convention used by GKW/GX-style growth-rate benchmarks.
+    """
+
+    history = jnp.asarray(field_history)
+    times = jnp.asarray(times)
+    if history.ndim != 4:
+        raise ValueError("field_history must have shape (n_time,n_z,n_kx,n_ky)")
+    if times.ndim != 1 or times.shape[0] != history.shape[0]:
+        raise ValueError("times must be one-dimensional and match field_history length")
+    if history.shape[0] < 2:
+        raise ValueError("at least two field snapshots are required")
+    if not 0.0 <= start_fraction < 1.0:
+        raise ValueError("start_fraction must lie in [0, 1)")
+
+    n_time = history.shape[0]
+    start = int(n_time * start_fraction) if start_index is None else int(start_index)
+    end = n_time if end_index is None else int(end_index)
+    start = max(0, min(start, n_time - 2))
+    end = max(start + 2, min(end, n_time))
+    window_history = history[start:end]
+    window_times = times[start:end]
+
+    amplitudes = jax.vmap(
+        lambda field: mode_chain_amplitude(field, w_z=w_z, connectivity=connectivity)
+    )(window_history)
+    floor = jnp.asarray(amplitude_floor, dtype=amplitudes.dtype)
+    log_amplitude = jnp.log(jnp.maximum(amplitudes, floor))
+    centered_time = window_times - jnp.mean(window_times)
+    centered_log = log_amplitude - jnp.mean(log_amplitude, axis=0)
+    denominator = jnp.sum(centered_time**2)
+    fitted_growth = jnp.sum(centered_time[:, None] * centered_log, axis=0) / denominator
+
+    endpoint = linear_growth_diagnostics(
+        window_history[0],
+        window_history[-1],
+        window_times[0],
+        window_times[-1],
+        w_z=w_z,
+        connectivity=connectivity,
+        amplitude_floor=amplitude_floor,
+    )
+    return LinearGrowthDiagnostics(
+        amplitude_start=endpoint.amplitude_start,
+        amplitude_end=endpoint.amplitude_end,
+        growth_rate=fitted_growth,
+        frequency=endpoint.frequency,
+        mode_structure=endpoint.mode_structure,
+    )
+
+
 def normalize_by_ky_amplitude(
     state,
     amplitude,
