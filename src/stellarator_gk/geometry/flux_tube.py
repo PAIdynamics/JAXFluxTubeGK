@@ -237,6 +237,88 @@ def evaluate_boozer_magnetic_field(surface: BoozerSurface, field_line: BoozerFie
     )
 
 
+def build_desc_geometry_from_arrays(
+    parallel_grid: ParallelGrid,
+    *,
+    theta,
+    phi,
+    rho,
+    B,
+    b_dot_grad_z,
+    grad_psi_sq,
+    grad_alpha_sq,
+    grad_psi_dot_grad_alpha,
+    B_cross_gradB_dot_grad_psi,
+    B_cross_gradB_dot_grad_alpha,
+    b_cross_kappa_dot_grad_psi,
+    b_cross_kappa_dot_grad_alpha,
+    alpha=None,
+    radial_coordinate: RadialCoordinate = "rho",
+) -> FluxTubeGeometry:
+    """Build solver geometry from DESC-sampled flux-tube arrays.
+
+    DESC remains the equilibrium/geometry evaluator.  This adapter only assumes
+    that DESC or a caller has sampled the physical quantities on
+    ``parallel_grid.z`` and passes those arrays into the gyrokinetic geometry
+    contract.  Scalars are broadcast to the parallel grid for reduced tests.
+    """
+
+    if radial_coordinate not in ("rho", "psi", "x"):
+        raise ValueError("radial_coordinate must be 'rho', 'psi', or 'x'")
+    shape = parallel_grid.z.shape
+    theta_array = _coerce_geometry_array("theta", theta, shape)
+    phi_array = _coerce_geometry_array("phi", phi, shape)
+    rho_array = _coerce_geometry_array("rho", rho, shape)
+    alpha_array = (
+        jnp.zeros_like(parallel_grid.z)
+        if alpha is None
+        else _coerce_geometry_array("alpha", alpha, shape)
+    )
+    field_line = BoozerFieldLine(
+        z=parallel_grid.z,
+        theta=theta_array,
+        phi=phi_array,
+        alpha=alpha_array,
+        rho=rho_array,
+        w_z=parallel_grid.w_z,
+        radial_coordinate=radial_coordinate,
+    )
+    physical = build_physical_flux_tube_geometry_from_arrays(
+        field_line=field_line,
+        B=_coerce_geometry_array("B", B, shape),
+        b_dot_grad_z=_coerce_geometry_array("b_dot_grad_z", b_dot_grad_z, shape),
+        grad_psi_sq=_coerce_geometry_array("grad_psi_sq", grad_psi_sq, shape),
+        grad_alpha_sq=_coerce_geometry_array("grad_alpha_sq", grad_alpha_sq, shape),
+        grad_psi_dot_grad_alpha=_coerce_geometry_array(
+            "grad_psi_dot_grad_alpha",
+            grad_psi_dot_grad_alpha,
+            shape,
+        ),
+        B_cross_gradB_dot_grad_psi=_coerce_geometry_array(
+            "B_cross_gradB_dot_grad_psi",
+            B_cross_gradB_dot_grad_psi,
+            shape,
+        ),
+        B_cross_gradB_dot_grad_alpha=_coerce_geometry_array(
+            "B_cross_gradB_dot_grad_alpha",
+            B_cross_gradB_dot_grad_alpha,
+            shape,
+        ),
+        b_cross_kappa_dot_grad_psi=_coerce_geometry_array(
+            "b_cross_kappa_dot_grad_psi",
+            b_cross_kappa_dot_grad_psi,
+            shape,
+        ),
+        b_cross_kappa_dot_grad_alpha=_coerce_geometry_array(
+            "b_cross_kappa_dot_grad_alpha",
+            b_cross_kappa_dot_grad_alpha,
+            shape,
+        ),
+        source="desc",
+    )
+    return map_physical_to_internal_geometry(physical, parallel_grid)
+
+
 def build_physical_flux_tube_geometry_from_arrays(
     *,
     field_line: BoozerFieldLine,
@@ -311,3 +393,11 @@ def map_physical_to_internal_geometry(
         source=physical.source,
     )
 
+
+def _coerce_geometry_array(name: str, value, shape: tuple[int, ...]):
+    array = jnp.asarray(value)
+    if array.shape == ():
+        return jnp.broadcast_to(array, shape)
+    if array.shape != shape:
+        raise ValueError(f"{name} must have shape {shape}; got {array.shape}")
+    return array

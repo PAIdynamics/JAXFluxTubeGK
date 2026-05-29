@@ -22,6 +22,10 @@ from .types import (
     _PyTreeDataclass,
 )
 
+_ANALYTIC_GEOMETRY_MODELS = ("circular", "circ", "s-alpha")
+_IMPORTED_GEOMETRY_MODELS = ("precomputed", "desc", "desc-precomputed")
+_GEOMETRY_MODELS = _ANALYTIC_GEOMETRY_MODELS + _IMPORTED_GEOMETRY_MODELS
+
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -91,8 +95,12 @@ class SingleSurfaceOptimizationConfig(_PyTreeDataclass):
     )
 
     def __post_init__(self):
-        if self.geometry_model not in ("circular", "circ", "s-alpha"):
-            raise ValueError("geometry_model must be 'circular', 'circ', or 's-alpha'")
+        if self.geometry_model not in _GEOMETRY_MODELS:
+            raise ValueError(
+                "geometry_model must be one of "
+                "'circular', 'circ', 's-alpha', 'precomputed', 'desc', "
+                "or 'desc-precomputed'"
+            )
         if self.n_steps < 1:
             raise ValueError("n_steps must be at least 1")
         if self.dt <= 0:
@@ -186,6 +194,12 @@ def build_optimization_geometry(
     """
 
     config = config or SingleSurfaceOptimizationConfig()
+    if config.geometry_model in _IMPORTED_GEOMETRY_MODELS:
+        raise ValueError(
+            "imported geometry models require a supplied geometry object; "
+            "build one with build_desc_geometry_from_arrays or "
+            "map_physical_to_internal_geometry"
+        )
     params = _geometry_params_from_optimization_knobs(knobs)
     if config.geometry_model == "s-alpha":
         geometry = build_s_alpha_geometry(parallel_grid, params)
@@ -205,12 +219,13 @@ def single_surface_objective(
     electron_params: AdiabaticElectronParams | None = None,
     connectivity: ModeConnectivity | None = None,
     config: SingleSurfaceOptimizationConfig | None = None,
+    geometry=None,
 ) -> SingleSurfaceOptimizationResult:
     """Evaluate a differentiable single-surface linear objective."""
 
     config = config or SingleSurfaceOptimizationConfig()
     species = build_optimization_species(knobs, base_species)
-    geometry = build_optimization_geometry(parallel_grid, knobs, config)
+    geometry = _objective_geometry(parallel_grid, knobs, config, geometry)
     electrons = electron_params or default_adiabatic_electron_params()
     precompute = build_linear_residual_precompute(
         velocity_grid,
@@ -257,6 +272,7 @@ def scan_single_surface_objective(
     electron_params: AdiabaticElectronParams | None = None,
     connectivity: ModeConnectivity | None = None,
     config: SingleSurfaceOptimizationConfig | None = None,
+    geometry=None,
 ) -> OptimizationScanResult:
     """Evaluate the scalar objective on a static ``rho``/``alpha``/``ky`` scan."""
 
@@ -282,6 +298,7 @@ def scan_single_surface_objective(
                     electron_params=electron_params,
                     connectivity=connectivity,
                     config=scan_config,
+                    geometry=geometry,
                 )
                 ky_objectives.append(result.scalar_objective)
             alpha_objectives.append(jnp.stack(ky_objectives))
@@ -309,6 +326,28 @@ def toy_gradient_descent_step(
         gradient,
     )
     return ToyOptimizationStep(value=value, gradient=gradient, updated_knobs=updated)
+
+
+def _objective_geometry(
+    parallel_grid: ParallelGrid,
+    knobs: OptimizationKnobs,
+    config: SingleSurfaceOptimizationConfig,
+    geometry,
+):
+    if geometry is None:
+        return build_optimization_geometry(parallel_grid, knobs, config)
+    _validate_objective_geometry(parallel_grid, geometry)
+    return geometry
+
+
+def _validate_objective_geometry(parallel_grid: ParallelGrid, geometry):
+    target_shape = parallel_grid.z.shape
+    for name in ("w_z", "B", "F", "G", "E_y", "D_x", "D_y", "g_xx", "g_xy", "g_yy"):
+        array = jnp.asarray(getattr(geometry, name))
+        if array.shape != target_shape:
+            raise ValueError(
+                f"supplied geometry.{name} must have shape {target_shape}; got {array.shape}"
+            )
 
 
 def _scalar_from_objective_values(

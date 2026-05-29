@@ -292,6 +292,35 @@ field line.  DESC, SIMSOPT/Boozer objects, VMEC, or booz\_xform files should be
 added as source adapters that produce the same precomputed physical-array
 contract.
 
+For coupling to DESC, the intended interface is array-based rather than a
+refactor of DESC inside the gyrokinetic package.  DESC should solve or optimize
+the MHD equilibrium and evaluate the flux-tube quantities in
+\eqref{eq:stellarator-geometry} on the selected nodes \(z_i\):
+\begin{equation}
+  \mathcal{A}_{\mathrm{DESC}}
+  \colon
+  \{E_{\mathrm{DESC}},\rho,\alpha,z_i\}_{i=1}^{N_z}
+  \longmapsto
+  \left\{\mathcal{G}_{\mathrm{phys}}(z_i)\right\}_{i=1}^{N_z}.
+  \label{eq:desc-array-adapter}
+\end{equation}
+The gyrokinetic solver then maps these arrays with
+\eqref{eq:geometry-adapter}, builds the fixed-topology residual, and evaluates
+the objective.  If DESC exposes JAX-compatible sensitivities of
+\(\mathcal{G}_{\mathrm{phys}}\) with respect to equilibrium parameters \(p\),
+the design gradient is assembled by the chain rule
+\begin{equation}
+  \frac{\partial \mathcal{J}}{\partial p}
+  =
+  \sum_i
+  \frac{\partial \mathcal{J}}{\partial \mathcal{G}_{\mathrm{phys}}(z_i)}
+  \frac{\partial \mathcal{G}_{\mathrm{phys}}(z_i)}{\partial p}.
+  \label{eq:desc-chain-rule}
+\end{equation}
+This keeps file I/O, equilibrium solves, and any remeshing outside the
+time-advance kernels while preserving differentiation through continuous
+geometry arrays.
+
 \subsection{Magnetic drift coefficient}
 
 Use a geometry-factorized magnetic drift frequency
@@ -954,6 +983,9 @@ The following quantities are static/non-differentiable:
   \item random initialization keys.
 \end{itemize}
 For stellarator optimization, a differentiable equilibrium code may provide geometry arrays and their sensitivities.  The gyrokinetic solver should not require differentiating through an integer remeshing or topology change.
+In the present implementation, imported DESC-style arrays are accepted as a
+\texttt{desc} geometry model in the single-surface objective; the direct DESC object
+reader remains a source-adapter task rather than a solver-core dependency.
 
 \section{Current Reduced Optimization Results}
 \label{sec:reduced-optimization-results}
@@ -1115,9 +1147,9 @@ fixed; only continuous parameters are differentiated and updated.
 The current result should be interpreted narrowly: it is evidence that the
 optimization interface is wired through the solver and differentiates through a
 fixed number of time steps.  The next physical validation step is to replace the
-toy circular-geometry coefficient modulation with Boozer/DESC/precomputed
-geometry arrays and to optimize only after the Rosenbluth-Hinton, Cyclone Base
-Case, and GX/eik benchmark checks are stable.
+toy circular-geometry coefficient modulation with DESC-generated flux-tube
+fixtures using the imported-array path, and to optimize only after the
+Rosenbluth-Hinton, Cyclone Base Case, and GX/eik benchmark checks are stable.
 
 \section{Nonlinear and Extended Physics Roadmap}
 \label{sec:nonlinear-extension}
@@ -1160,7 +1192,7 @@ Every public function in \path{src/} must have a matching unit test.  The intend
   \item Optional GKW finite-difference backend behind the same derivative interface.
   \item Mode connectivity and static topology maps.
   \item Circular and \(s\)-alpha analytic geometry.
-  \item Boozer/stellarator geometry adapter.
+  \item Boozer/stellarator geometry adapter, including DESC-style sampled arrays.
   \item Bessel, \(\Gzero\), Maxwellian, and drive factors.
   \item Adiabatic \(\phi\) solve with separate zonal tests.
   \item Individual RHS term functions.

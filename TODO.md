@@ -271,7 +271,8 @@ src/stellarator_gk/
 
 - [x] Define `BoozerSurface`, `PhysicalFluxTubeGeometry`, and `FluxTubeGeometry` data models.
 - [x] Support loading geometry from one or more practical sources:
-  - [ ] DESC equilibrium output,
+  - [x] DESC-style precomputed flux-tube geometry arrays,
+  - [ ] direct DESC equilibrium object/output reader,
   - [ ] SIMSOPT/Boozer surface objects if available,
   - [x] precomputed arrays for tests,
   - [ ] later VMEC/booz_xform data.
@@ -494,6 +495,8 @@ Phase 11 baseline note: the current hardening pass adds CPU profiling/memory too
 
 Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented, with `examples/optimization_loop.py` available for printing per-iteration objective/growth diagnostics. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
 
+Phase 12 DESC-array note: the solver now supports a supplied imported geometry object in `single_surface_objective`, and `build_desc_geometry_from_arrays` maps DESC-sampled Boozer/Clebsch flux-tube arrays into the internal solver geometry. DESC should remain the upstream equilibrium and sensitivity provider; refactoring or vendoring DESC internals into this solver is not needed for the first coupling.
+
 ## Immediate Next Round
 
-Continue optimization integration by adding a real Boozer/DESC geometry-array objective path, then reconnect Phase 10 external benchmarks so optimization targets are validated against Rosenbluth-Hinton, Cyclone, and GX/eik reference data.
+Continue optimization integration by adding a direct DESC extraction script/fixture that evaluates the required arrays on this solver's parallel grid, then reconnect Phase 10 external benchmarks so optimization targets are validated against Rosenbluth-Hinton, Cyclone, and GX/eik reference data.

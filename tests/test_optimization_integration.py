@@ -3,6 +3,7 @@ from dataclasses import replace
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from stellarator_gk import (
     AdiabaticElectronParams,
@@ -13,6 +14,7 @@ from stellarator_gk import (
     SpeciesParams,
     VelocityGridSpec,
     build_fourier_grid,
+    build_desc_geometry_from_arrays,
     build_mode_connectivity,
     build_optimization_geometry,
     build_optimization_species,
@@ -62,6 +64,27 @@ def _knobs():
     )
 
 
+def _desc_geometry(parallel, amplitude=0.06):
+    z = parallel.z
+    ones = jnp.ones_like(z)
+    return build_desc_geometry_from_arrays(
+        parallel,
+        theta=0.15 + 0.6 * z,
+        phi=z,
+        alpha=0.15 * ones,
+        rho=0.45,
+        B=1.0 + amplitude * jnp.cos(2.0 * jnp.pi * z),
+        b_dot_grad_z=1.0 + 0.02 * jnp.sin(2.0 * jnp.pi * z),
+        grad_psi_sq=1.1 + 0.03 * jnp.cos(2.0 * jnp.pi * z),
+        grad_alpha_sq=1.4 + 0.02 * jnp.sin(2.0 * jnp.pi * z),
+        grad_psi_dot_grad_alpha=0.04 * jnp.sin(2.0 * jnp.pi * z),
+        B_cross_gradB_dot_grad_psi=0.02 * jnp.cos(2.0 * jnp.pi * z),
+        B_cross_gradB_dot_grad_alpha=0.03 * jnp.sin(2.0 * jnp.pi * z),
+        b_cross_kappa_dot_grad_psi=0.04 * ones,
+        b_cross_kappa_dot_grad_alpha=0.05 * jnp.cos(2.0 * jnp.pi * z),
+    )
+
+
 def _config(**updates):
     base = SingleSurfaceOptimizationConfig(
         geometry_model="circular",
@@ -98,6 +121,12 @@ def test_optimization_knobs_build_species_and_geometry():
     assert geometry.B.shape == parallel.z.shape
     assert jnp.all(jnp.isfinite(geometry.B))
     assert jnp.all(jnp.isfinite(geometry.g_yy))
+
+
+def test_desc_geometry_model_requires_supplied_geometry():
+    _velocity, parallel, _fourier, _connectivity, _state = _grids()
+    with pytest.raises(ValueError, match="imported geometry models require"):
+        build_optimization_geometry(parallel, _knobs(), _config(geometry_model="desc"))
 
 
 def test_single_surface_objective_is_jittable_and_differentiable():
@@ -148,6 +177,93 @@ def test_single_surface_objective_is_jittable_and_differentiable():
         rtol=5e-4,
         atol=5e-6,
     )
+
+
+def test_single_surface_objective_accepts_desc_geometry_arrays():
+    velocity, parallel, fourier, connectivity, initial_state = _grids()
+    knobs = _knobs()
+    config = _config(
+        geometry_model="desc",
+        objective_kind="selected_growth",
+        quasilinear_weight=0.0,
+    )
+    electrons = AdiabaticElectronParams(density=1.0, temperature=1.0, zonal_correction=False)
+    geometry = _desc_geometry(parallel)
+
+    def objective(amplitude):
+        local_geometry = _desc_geometry(parallel, amplitude=amplitude)
+        return single_surface_objective(
+            knobs,
+            velocity,
+            parallel,
+            fourier,
+            initial_state,
+            electron_params=electrons,
+            connectivity=connectivity,
+            config=config,
+            geometry=local_geometry,
+        ).scalar_objective
+
+    result = single_surface_objective(
+        knobs,
+        velocity,
+        parallel,
+        fourier,
+        initial_state,
+        electron_params=electrons,
+        connectivity=connectivity,
+        config=config,
+        geometry=geometry,
+    )
+    value, gradient = jax.jit(jax.value_and_grad(objective))(0.06)
+    step = 1.0e-5
+    finite_difference = (objective(0.06 + step) - objective(0.06 - step)) / (2.0 * step)
+
+    assert result.geometry.source == "desc"
+    assert jnp.isfinite(result.scalar_objective)
+    assert result.values.growth_rate.shape == (fourier.ky.shape[0],)
+    np.testing.assert_allclose(value, result.scalar_objective, rtol=2e-12, atol=2e-12)
+    assert jnp.isfinite(gradient)
+    np.testing.assert_allclose(gradient, finite_difference, rtol=1e-4, atol=1e-6)
+
+    bad_geometry = replace(geometry, B=geometry.B[:-1])
+    with pytest.raises(ValueError, match="supplied geometry.B"):
+        single_surface_objective(
+            knobs,
+            velocity,
+            parallel,
+            fourier,
+            initial_state,
+            electron_params=electrons,
+            connectivity=connectivity,
+            config=config,
+            geometry=bad_geometry,
+        )
+
+
+def test_scan_single_surface_objective_accepts_supplied_desc_geometry():
+    velocity, parallel, fourier, connectivity, initial_state = _grids()
+    scan = scan_single_surface_objective(
+        _knobs(),
+        velocity,
+        parallel,
+        fourier,
+        initial_state,
+        rho_values=jnp.asarray([0.45]),
+        alpha_values=jnp.asarray([0.0, 0.4]),
+        ky_indices=(1,),
+        electron_params=AdiabaticElectronParams(
+            density=1.0,
+            temperature=1.0,
+            zonal_correction=False,
+        ),
+        connectivity=connectivity,
+        config=_config(geometry_model="desc", objective_kind="selected_growth"),
+        geometry=_desc_geometry(parallel),
+    )
+
+    assert scan.objectives.shape == (1, 2, 1)
+    assert jnp.all(jnp.isfinite(scan.objectives))
 
 
 def test_scan_single_surface_objective_over_rho_alpha_and_ky():

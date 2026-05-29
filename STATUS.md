@@ -22,7 +22,10 @@ linear residual, memory/profiling helpers, performance smoke tests, and
 static-vs-differentiable documentation. Phase 12 optimization integration now
 has a fixed-topology single-surface objective layer, differentiable profile and
 geometry knobs, reduced `rho`/`alpha`/`ky` scans, and a toy gradient-descent
-example before full DESC coupling.
+example before full DESC coupling. The first DESC coupling path is now
+implemented as a sampled-array adapter: DESC remains the equilibrium/geometry
+provider, while this solver consumes the required flux-tube geometry arrays in
+the fixed-topology objective.
 
 The repository currently contains:
 
@@ -105,34 +108,48 @@ For implementation work, use the GKW source modules as the authoritative source 
 - Begin with linear electrostatic, collisionless, adiabatic-electron flux-tube gyrokinetics.
 - Keep nonlinear ExB, kinetic electrons, collisions, and electromagnetic effects as later extensions.
 - Keep differentiable continuous geometry separate from non-differentiable integer topology and file I/O.
+- Couple to DESC through a sampled flux-tube geometry-array contract first; do not refactor or vendor DESC internals into this solver unless a later direct adapter proves that shared source code is necessary.
 - Require tests for every new function added under `src/`.
 - Update this file during every implementation round.
 
 ## Next Implementation Round
 
-Goal: continue optimization integration and validation coupling:
+Goal: continue DESC validation coupling and benchmark-informed optimization:
 
-- add a real Boozer/DESC/precomputed-geometry objective path,
+- add a direct DESC extraction script or fixture that evaluates the required geometry arrays on this solver's parallel grid,
 - connect the optimization objective to externally validated Phase 10 benchmark cases,
 - add stronger scan/objective examples once Rosenbluth-Hinton, Cyclone, and GX/eik references are stable,
 - keep toy equilibrium coefficients only as a reduced plumbing test.
 
 Expected file changes:
 
-- additions to flux-tube geometry/objective adapters,
-- tests using precomputed Boozer/DESC-like geometry arrays,
+- DESC fixture/source-adapter utilities,
+- tests comparing imported DESC arrays with stored reference values,
 - docs/examples for benchmark-informed optimization targets,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- precomputed-geometry objective value/gradient checks,
-- scan tests over multiple surfaces/field-line labels,
+- direct DESC-array extraction and shape/normalization checks,
+- scan tests over multiple imported surfaces/field-line labels,
 - benchmark-informed objective checks once external references are selected,
 - continued finite-difference agreement on selected optimization knobs.
 
 ## Round Log
+
+### 2026-05-29: Added DESC-Style Geometry Array Coupling
+
+- Implemented `build_desc_geometry_from_arrays`, a thin adapter that maps DESC-sampled Boozer/Clebsch flux-tube arrays into the internal `FluxTubeGeometry` contract without importing or refactoring DESC internals.
+- Extended `single_surface_objective` and `scan_single_surface_objective` to accept a supplied imported geometry object; `geometry_model="desc"`/`"precomputed"` now requires such a geometry object instead of generating toy analytic geometry.
+- Added tests for DESC-array shape validation, physical-to-internal drift/mirror mapping, differentiation through supplied geometry arrays, imported-geometry objective values, and objective gradients.
+- Updated `TODO.md` and `main.tex` to record the array-based DESC coupling strategy and leave direct DESC object/output extraction as the next source-adapter step.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_flux_tube_geometry.py tests/test_optimization_integration.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/geometry/flux_tube.py src/stellarator_gk/optimization.py tests/test_flux_tube_geometry.py tests/test_optimization_integration.py`
+  - `.venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
 
 ### 2026-05-29: Added Reduced Optimization Results to `main.tex`
 
