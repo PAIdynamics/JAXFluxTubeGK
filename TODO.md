@@ -366,17 +366,17 @@ This is a parallel extension path, not a blocker for the first Chebyshev-colloca
   - quasineutrality residual near machine precision,
   - algebraic small-fixture checks against the Gyaradax/GKW phi-solve convention,
   - flux/spectrum normalization checks.
-- [ ] Add a direct reduced Gyaradax phi-solve parity fixture once Phase 7 couples the same RHS/precompute inputs as the reference path.
+- [ ] Add a direct reduced Gyaradax/GKW phi/RHS parity fixture using the Phase 7 coupled precompute inputs.
 
 ## Phase 7: Linear RHS Residual
 
-- [ ] Implement a public matrix-free residual:
+- [x] Implement a public matrix-free residual:
 
 ```python
 rhs = linear_residual(df, geometry, params, precomputed)
 ```
 
-- [ ] Implement RHS terms in isolated, testable functions:
+- [x] Implement RHS terms in isolated, testable functions:
   - `parallel_streaming`,
   - `magnetic_drift_advection`,
   - `mirror_force`,
@@ -384,32 +384,36 @@ rhs = linear_residual(df, geometry, params, precomputed)
   - `parallel_field_drive`,
   - `drift_field_drive`,
   - dissipation.
-- [ ] Implement precomputation for geometry/species coefficients.
-- [ ] Keep RHS differentiable with respect to `df`, continuous geometry arrays, and physical parameters.
-- [ ] Unit tests:
+- [x] Implement precomputation for geometry/species coefficients.
+- [x] Keep RHS differentiable with respect to `df`, continuous geometry arrays, and physical parameters.
+- [x] Unit tests:
   - each term has expected shape and zero-input behavior,
   - isolated manufactured-solution derivative checks,
   - full RHS linearity in `df` for fixed geometry,
   - `jax.jit` compatibility,
-  - reverse-mode gradients versus finite differences.
+  - reverse-mode gradients versus finite differences for `df`, continuous geometry arrays, and species parameters.
+
+Phase 7 baseline note: dissipation is implemented as optional linear perpendicular damping with zero default. Spectral/modal damping and benchmark-tuned hyperdissipation should remain inactive until needed by Phase 8/10 tests.
 
 ## Phase 8: Time Advancement and Growth Rates
 
-- [ ] Implement RK4 single-step and multi-step scan.
-- [ ] Implement fixed timestep first.
-- [ ] Add CFL estimate only after fixed-step tests pass.
-- [ ] Implement per-`ky` amplitude normalization for linear growth-rate extraction.
-- [ ] Keep the time-advance interface compatible with later GX-style nonlinear pseudo-spectral runs, including explicit dealias/filter hooks that can be no-ops in the linear solver.
-- [ ] Compute:
+- [x] Implement RK4 single-step and multi-step scan.
+- [x] Implement fixed timestep first.
+- [x] Add CFL estimate only after fixed-step tests pass.
+- [x] Implement per-`ky` amplitude normalization for linear growth-rate extraction.
+- [x] Keep the time-advance interface compatible with later GX-style nonlinear pseudo-spectral runs, including explicit dealias/filter hooks that can be no-ops in the linear solver.
+- [x] Compute:
   - growth rate `gamma`,
   - real frequency `omega`,
   - mode amplitude,
   - mode structure.
-- [ ] Unit tests:
+- [x] Unit tests:
   - zero-input invariance,
   - RK4 order test on a scalar linear ODE,
   - growth-rate recovery for a known scalar mode,
   - JIT and gradient checks through a short solve.
+
+Phase 8 baseline note: the integrator is fixed-step RK4 with an explicit post-step filter hook. Per-`ky` amplitude normalization is exposed as a separate utility so production runs can choose diagnostic-window cadence before applying it.
 
 ## Phase 9: Eigenvalue and Objective Interfaces
 

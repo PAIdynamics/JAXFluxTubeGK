@@ -1,0 +1,148 @@
+from types import SimpleNamespace
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from stellarator_gk import (
+    FourierGridSpec,
+    build_fourier_grid,
+    build_mode_connectivity,
+    estimate_linear_cfl_dt,
+    integrate_fixed_step,
+    linear_growth_diagnostics,
+    mode_chain_amplitude,
+    normalize_by_ky_amplitude,
+    real_frequency,
+    rk4_step,
+)
+
+
+def test_rk4_zero_input_invariance_and_history_times():
+    def rhs(state):
+        return (0.3 - 0.2j) * state
+
+    state = jnp.zeros((3,), dtype=jnp.complex128)
+    result = integrate_fixed_step(state, 0.1, 5, rhs)
+
+    np.testing.assert_allclose(rk4_step(state, 0.1, rhs), 0.0, atol=0.0)
+    np.testing.assert_allclose(result.state, 0.0, atol=0.0)
+    np.testing.assert_allclose(result.history, 0.0, atol=0.0)
+    np.testing.assert_allclose(result.times, jnp.linspace(0.0, 0.5, 6))
+    assert result.history.shape == (6, 3)
+
+
+def test_rk4_fixed_step_has_fourth_order_scalar_convergence():
+    rate = 0.25 - 0.9j
+    state0 = 1.2 + 0.4j
+    final_time = 0.8
+
+    def rhs(state, coefficient):
+        return coefficient * state
+
+    def solve(n_steps):
+        dt = final_time / n_steps
+        return integrate_fixed_step(state0, dt, n_steps, rhs, rate).state
+
+    exact = state0 * jnp.exp(rate * final_time)
+    error_coarse = jnp.abs(solve(20) - exact)
+    error_fine = jnp.abs(solve(40) - exact)
+
+    assert error_fine < error_coarse / 12.0
+    assert error_fine < 2.0e-8
+
+
+def test_mode_chain_growth_frequency_and_normalization():
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=5, n_ky=2, kx_max=1.0, ky_values=(0.0, 0.4), ikxspace=2)
+    )
+    connectivity = build_mode_connectivity(fourier)
+    weights = jnp.asarray([0.5, 1.0, 1.5, 2.0])
+    start = jnp.zeros((4, 5, 2), dtype=jnp.complex128)
+    start = start.at[:, fourier.ixzero, fourier.iyzero].set(1.0 + 0.0j)
+    start = start.at[:, [0, 2, 4], 1].set(1.0 + 0.5j)
+    start = start.at[:, [1, 3], 1].set(100.0 + 0.0j)
+
+    gamma = jnp.asarray([0.2, -0.1])
+    omega = jnp.asarray([0.7, -1.2])
+    duration = 0.6
+    factors = jnp.exp((gamma - 1j * omega) * duration)
+    end = start * factors[None, None, :]
+
+    amplitude = mode_chain_amplitude(start, w_z=weights, connectivity=connectivity)
+    diagnostics = linear_growth_diagnostics(
+        start,
+        end,
+        0.0,
+        duration,
+        w_z=weights,
+        connectivity=connectivity,
+    )
+
+    expected_amplitude = jnp.asarray([
+        jnp.sqrt(jnp.sum(weights)),
+        jnp.sqrt(jnp.sum(weights) * 3.0 * 1.25),
+    ])
+    np.testing.assert_allclose(amplitude, expected_amplitude, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(diagnostics.growth_rate, gamma, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(diagnostics.frequency, omega, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(
+        real_frequency(start, end, 0.0, duration, w_z=weights, connectivity=connectivity),
+        omega,
+        rtol=2e-13,
+        atol=2e-13,
+    )
+
+    normalized = normalize_by_ky_amplitude(
+        jnp.ones((2, 3, 4, 5, 2)),
+        diagnostics.amplitude_end,
+        log_normalization=jnp.asarray([0.1, -0.2]),
+    )
+    np.testing.assert_allclose(normalized.scale, diagnostics.amplitude_end)
+    np.testing.assert_allclose(
+        normalized.log_normalization,
+        jnp.asarray([0.1, -0.2]) + jnp.log(diagnostics.amplitude_end),
+    )
+    np.testing.assert_allclose(normalized.state[..., 0], 1.0 / diagnostics.amplitude_end[0])
+    np.testing.assert_allclose(normalized.state[..., 1], 1.0 / diagnostics.amplitude_end[1])
+
+
+def test_fixed_step_scan_is_jittable_and_differentiable():
+    state0 = 0.7
+    dt = 0.05
+    n_steps = 8
+
+    def rhs(state, rate):
+        return rate * state
+
+    @jax.jit
+    def final_state(rate):
+        return integrate_fixed_step(state0, dt, n_steps, rhs, rate).state
+
+    def objective(rate):
+        state = final_state(rate)
+        return state**2
+
+    rate = 0.4
+    step = 1.0e-5
+    grad_value = jax.grad(objective)(rate)
+    finite_difference = (objective(rate + step) - objective(rate - step)) / (2.0 * step)
+
+    np.testing.assert_allclose(final_state(rate), state0 * jnp.exp(rate * dt * n_steps), rtol=1e-8)
+    np.testing.assert_allclose(grad_value, finite_difference, rtol=3e-5, atol=2e-7)
+
+
+def test_linear_cfl_estimate_uses_rhs_coefficient_row_sums():
+    rhs = SimpleNamespace(
+        D_z=jnp.asarray([[1.0, -1.0], [2.0, -2.0]]),
+        D_vpar=jnp.asarray([[0.5, -0.5], [1.5, -1.5]]),
+        parallel_streaming_coeff=jnp.asarray([[[3.0, -1.0]]]),
+        mirror_force_coeff=jnp.asarray([[[2.0, -4.0]]]),
+        magnetic_drift_frequency=jnp.ones((1, 1, 1, 2, 1, 1)) * 0.7,
+        perpendicular_damping=jnp.asarray([[0.3]]),
+    )
+
+    estimate = estimate_linear_cfl_dt(rhs, safety=1.0, rk4_radius=2.4)
+    expected_radius = 3.0 * 4.0 + 4.0 * 3.0 + 0.7 + 0.3
+
+    np.testing.assert_allclose(estimate, 2.4 / expected_radius)

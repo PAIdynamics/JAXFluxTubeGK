@@ -62,6 +62,23 @@ def gamma0(b):
     return i0e(jnp.asarray(b))
 
 
+@jax.custom_jvp
+def _nonnegative_sqrt(x):
+    """Square root with a finite zero-mode tangent for static nonnegative factors."""
+
+    return jnp.sqrt(jnp.maximum(jnp.asarray(x), 0.0))
+
+
+@_nonnegative_sqrt.defjvp
+def _nonnegative_sqrt_jvp(primals, tangents):
+    (x,) = primals
+    (x_dot,) = tangents
+    y = _nonnegative_sqrt(x)
+    safe_y = jnp.where(x > 0.0, y, jnp.ones_like(y))
+    tangent = jnp.where(x > 0.0, 0.5 * x_dot / safe_y, jnp.zeros_like(x_dot))
+    return y, tangent
+
+
 def thermal_speed(species: SpeciesParams):
     """Return the normalized thermal speed ``sqrt(T_s / m_s)``."""
 
@@ -145,9 +162,9 @@ def species_flr_factors(
     charge_abs = jnp.abs(_nonzero_charge(species))
     mu_b = jnp.asarray(mu)[:, None, None, None]
     B_b = jnp.asarray(B)[None, :, None, None]
-    kperp = jnp.sqrt(jnp.maximum(jnp.asarray(kperp_squared), 0.0))[None, :, :, :]
+    kperp = _nonnegative_sqrt(jnp.asarray(kperp_squared))[None, :, :, :]
     rho_factor = jnp.asarray(species.mass) * thermal_speed(species) / charge_abs
-    argument = rho_factor * kperp * jnp.sqrt(jnp.maximum(2.0 * mu_b / B_b, 0.0))
+    argument = rho_factor * kperp * _nonnegative_sqrt(2.0 * mu_b / B_b)
     b_arg = polarization_argument(B, kperp_squared, species)
     return FLRFactors(
         bessel_argument=argument,

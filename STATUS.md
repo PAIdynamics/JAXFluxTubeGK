@@ -8,8 +8,9 @@ Planning pass complete, the first physical-model/numerics specification has
 been drafted, and the first Phase 4 Boozer/stellarator flux-tube geometry
 adapter is implemented and tested. GX has now been added as an algorithmic
 and benchmark reference for future velocity-space, geometry, nonlinear,
-closure, and diagnostic extensions. Phases 5, 5A, and 6 are implemented and
-tested through quasineutrality and diagnostic primitives.
+closure, and diagnostic extensions. Phases 5, 5A, 6, 7, and 8 are implemented
+and tested through quasineutrality, diagnostics, the self-consistent linear RHS
+residual, fixed-step RK4 integration, and linear growth-rate extraction.
 
 The repository currently contains:
 
@@ -19,11 +20,12 @@ The repository currently contains:
 - `STATUS.md`: this progress ledger.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
-- `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, and Phase 4 flux-tube geometry adapters.
+- `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, and Phase 8 fixed-step time advancement.
 - `src/stellarator_gk/geometry/`: circular/\(s\)-alpha analytic geometry plus Boozer/precomputed flux-tube geometry scaffolding.
-- `src/stellarator_gk/physics/`: Phase 5 Bessel/FLR, Maxwellian, drive, drift, mirror, streaming primitives, Phase 5A Hermite-Laguerre velocity-moment utilities, and Phase 6 quasineutrality solvers.
+- `src/stellarator_gk/physics/`: Phase 5 Bessel/FLR, Maxwellian, drive, drift, mirror, streaming primitives, Phase 5A Hermite-Laguerre velocity-moment utilities, Phase 6 quasineutrality solvers, and Phase 7 linear RHS terms.
 - `src/stellarator_gk/diagnostics.py`: Phase 6 diagnostic reductions, spectra, and quasilinear flux ingredients.
-- `tests/`: Phase 2 through Phase 6 unit tests.
+- `src/stellarator_gk/time_advance.py`: Phase 8 RK4 stepping, fixed-step scan integration, CFL estimate, per-`ky` normalization, and growth/frequency diagnostics.
+- `tests/`: Phase 2 through Phase 8 unit tests.
 - `papers/`: Gyaradax paper sources, stellarator microstability/optimization papers, and GKW paper materials.
 - `papers/gkw/`: GKW reference PDF, rebuilt extracted TeX, GKW manual PDF, and related paper material.
 - `papers/gx-paper/`: GX paper source for the Fourier-Laguerre-Hermite flux-tube formulation and benchmark discussion.
@@ -89,29 +91,117 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: implement Phase 7 linear RHS residual:
+Goal: implement Phase 9 eigenvalue and objective interfaces:
 
-- public matrix-free `linear_residual(df, geometry, params, precomputed)` entry point,
-- isolated RHS term functions for parallel streaming, magnetic drift advection, mirror force, equilibrium-gradient drive, parallel field drive, drift field drive, and optional dissipation,
-- precomputed coefficient object combining Phase 3/4 geometry, Phase 5 physics primitives, and Phase 6 field-solve weights,
-- differentiability with respect to `df`, continuous geometry arrays, and physical parameters.
+- matrix-free linear-operator wrappers around the Phase 7 residual and Phase 8 stepping/growth diagnostics,
+- one-`ky` or connected-mode-chain restriction helpers,
+- optional Arnoldi/eigensolver path if a small robust dependency-light route is useful,
+- differentiable objective functions for max/selected growth rate and quasilinear proxies,
+- finite-difference checks for gradients with respect to profile and continuous geometry parameters on reduced grids.
 
 Expected file changes:
 
-- `src/stellarator_gk/physics/rhs_terms.py`
-- `src/stellarator_gk/solver.py` or a small residual wrapper module,
+- `src/stellarator_gk/objectives.py` and/or `src/stellarator_gk/operators.py`,
+- possible additions to `src/stellarator_gk/time_advance.py` and `src/stellarator_gk/diagnostics.py`,
 - `tests/`
 - `STATUS.md`
 
 Expected tests:
 
-- each RHS term has expected shape and zero-input behavior,
-- manufactured derivative checks for streaming and mirror terms,
-- magnetic drift and drive formula checks against Phase 5 primitives,
-- full RHS linearity in `df` for fixed geometry/precompute,
-- JIT compatibility and reverse-mode gradients versus finite differences.
+- objective shapes and finite values,
+- selected/max growth objective checks on manufactured histories or reduced residuals,
+- AD gradients with respect to `R/L_T`, `R/L_n`, `q`, `shat`, and continuous geometry controls,
+- finite-difference agreement on reduced grids,
+- JIT compatibility for objective calls.
 
 ## Round Log
+
+### 2026-05-29: Implemented Phase 8 Time Advancement and Growth Rates
+
+- Added `src/stellarator_gk/time_advance.py`.
+- Implemented Phase 8 time-advance containers:
+  - `TimeAdvanceResult`,
+  - `LinearGrowthDiagnostics`,
+  - `KyNormalizationResult`.
+- Implemented fixed-step time advancement:
+  - `rk4_step`,
+  - `integrate_fixed_step` using `jax.lax.scan`,
+  - explicit post-step `filter_fn` hook for later pseudo-spectral filtering/dealiasing.
+- Implemented linear diagnostics:
+  - `mode_chain_amplitude` using the connected `kx` chain containing `kx=0`,
+  - `growth_rate`,
+  - `real_frequency` with the GKW/Gyaradax sign convention from `main.tex`,
+  - `linear_growth_diagnostics` returning amplitudes, growth rates, frequencies, and normalized mode structures.
+- Implemented per-`ky` amplitude normalization:
+  - `normalize_by_ky_amplitude`,
+  - accumulated logarithmic normalization factors for diagnostic bookkeeping.
+- Implemented `estimate_linear_cfl_dt`, a conservative row-sum/RK4-radius estimate using Phase 7 RHS precompute coefficients.
+- Exported Phase 8 APIs through the top-level `stellarator_gk` package.
+- Added `tests/test_time_advance.py` covering:
+  - zero-input RK4 invariance,
+  - fixed-step history and times,
+  - fourth-order RK4 convergence on a complex scalar ODE,
+  - mode-chain amplitude, growth-rate, frequency, and normalization recovery,
+  - JIT compatibility and reverse-mode gradients through a short fixed-step solve,
+  - CFL estimate formula behavior.
+- Updated `TODO.md` to mark Phase 8 complete and set Phase 9 as the next project phase.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_time_advance.py`
+  - `uv run --extra dev python -m pytest`
+  - `uv run --extra dev ruff check src tests`
+- Verification:
+  - `5 passed` for `tests/test_time_advance.py`,
+  - `77 passed` for the full pytest suite,
+  - `ruff check src tests` passed.
+
+### 2026-05-29: Implemented Phase 7 Linear RHS Residual
+
+- Added `src/stellarator_gk/physics/rhs_terms.py`.
+- Implemented `LinearRHSPrecompute`, combining:
+  - spectral derivative matrices,
+  - Fourier `ky`,
+  - geometry fields,
+  - species FLR factors,
+  - Maxwellian and thermodynamic drive factors,
+  - parallel streaming, mirror, and magnetic-drift coefficients,
+  - charge-over-temperature factors,
+  - optional perpendicular damping with zero default.
+- Implemented isolated RHS terms:
+  - `parallel_streaming`,
+  - `magnetic_drift_advection`,
+  - `mirror_force`,
+  - `equilibrium_drive`,
+  - `parallel_field_drive`,
+  - `drift_field_drive`,
+  - `dissipation`.
+- Added `linear_residual_from_phi` for supplied-field residual assembly.
+- Added a finite zero-mode JVP for the nonnegative square root used in FLR Bessel arguments, avoiding `sqrt(0)` AD NaNs for exact zero Fourier/Larmor-radius modes.
+- Added `src/stellarator_gk/solver.py` with:
+  - `LinearResidualPrecompute`,
+  - `build_linear_residual_precompute`,
+  - public `linear_residual` supporting both explicit `phi` through `LinearRHSPrecompute` and self-consistent adiabatic/kinetic phi solves through `LinearResidualPrecompute`.
+- Exported Phase 7 APIs through `stellarator_gk.physics` and the top-level `stellarator_gk` package.
+- Added `tests/test_linear_rhs.py` covering:
+  - precompute shapes,
+  - zero-input behavior for every term and the assembled residual,
+  - manufactured spectral derivative checks for streaming and mirror terms,
+  - magnetic drift and field-drive formula checks,
+  - full self-consistent residual linearity,
+  - `jax.jit` compatibility,
+  - reverse-mode gradient versus finite difference,
+  - geometry-array and species-parameter gradients through RHS precomputation,
+  - multi-species residual shape and finite-value behavior.
+- Updated `TODO.md` to mark Phase 7 complete and set Phase 8 as the next project phase.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_linear_rhs.py`
+  - `uv run --extra dev python -m pytest tests/test_linear_rhs.py tests/test_physics_primitives.py`
+  - `uv run --extra dev python -m pytest`
+  - `uv run --extra dev ruff check src tests`
+- Verification:
+  - `7 passed` for `tests/test_linear_rhs.py`,
+  - `17 passed` for `tests/test_linear_rhs.py tests/test_physics_primitives.py`,
+  - `72 passed` for the full pytest suite,
+  - `ruff check src tests` passed.
 
 ### 2026-05-29: Implemented Phase 6 Quasineutrality and Diagnostics
 
