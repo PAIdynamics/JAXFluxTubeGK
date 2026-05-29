@@ -22,6 +22,15 @@ Differentiable:
 
 ## Toy Objective
 
+Run the repository example with:
+
+```bash
+uv run --extra dev python examples/optimization_loop.py --iterations 5
+```
+
+Each row prints the scalar objective, selected/max growth rates, and the
+current optimization knobs before applying the next gradient step.
+
 ```python
 import jax
 from stellarator_gk import single_surface_objective, toy_gradient_descent_step

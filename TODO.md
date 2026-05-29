@@ -492,7 +492,7 @@ Phase 11 baseline note: the current hardening pass adds CPU profiling/memory too
 - [x] Add examples showing `jax.grad`/`jax.value_and_grad` through the objective.
 - [x] Add a small toy optimization example before using full DESC equilibria.
 
-Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
+Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented, with `examples/optimization_loop.py` available for printing per-iteration objective/growth diagnostics. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
 
 ## Immediate Next Round
 

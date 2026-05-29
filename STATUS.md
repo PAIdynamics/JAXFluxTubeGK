@@ -32,6 +32,7 @@ The repository currently contains:
 - `STATUS.md`: this progress ledger.
 - `docs/performance_and_differentiability.md`: Phase 11 CPU scaling, memory, and AD/topology notes.
 - `docs/optimization_integration.md`: Phase 12 fixed-topology optimization and toy-gradient example.
+- `examples/optimization_loop.py`: runnable reduced optimization loop that prints objective/growth diagnostics and knob values at each iteration.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -132,6 +133,30 @@ Expected tests:
 - continued finite-difference agreement on selected optimization knobs.
 
 ## Round Log
+
+### 2026-05-29: Added Runnable Optimization Loop Example
+
+- Committed the Phase 12 optimization integration checkpoint:
+  - commit `e2a831f` (`Add Phase 12 optimization integration`).
+- Added `examples/optimization_loop.py`.
+- Extended `docs/optimization_integration.md` with the example run command.
+- The example prints one row per optimization iteration:
+  - scalar objective,
+  - selected growth rate,
+  - max growth rate,
+  - `q`,
+  - `shat`,
+  - `R/L_T`,
+  - `R/L_n`,
+  - first two toy equilibrium coefficients.
+- Commands run:
+  - `uv run --extra dev python examples/optimization_loop.py --iterations 3`
+  - `uv run --extra dev ruff check src tests examples`
+  - `uv run --extra dev python examples/optimization_loop.py --iterations 2`
+- Verification:
+  - example ran successfully and printed three optimization iterations.
+  - `ruff check src tests examples` passed.
+  - example rerun printed two optimization iterations without x64 warnings.
 
 ### 2026-05-29: Implemented Phase 12 Optimization Integration Baseline
 
