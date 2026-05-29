@@ -1,0 +1,7 @@
+jax>=0.4.30
+numpy>=1.26
+scipy>=1.11
+
+[dev]
+pytest>=8
+ruff>=0.6

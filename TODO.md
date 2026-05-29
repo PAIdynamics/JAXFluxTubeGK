@@ -346,26 +346,27 @@ This is a parallel extension path, not a blocker for the first Chebyshev-colloca
 
 ## Phase 6: Quasineutrality and Diagnostics
 
-- [ ] Implement adiabatic-electron electrostatic phi solve.
-- [ ] Add zonal-mode correction if the chosen formulation requires it.
-- [ ] Implement kinetic-electron phi solve as second milestone.
-- [ ] Implement diagnostic integrals:
+- [x] Implement adiabatic-electron electrostatic phi solve.
+- [x] Add zonal-mode correction if the chosen formulation requires it.
+- [x] Implement kinetic-electron phi solve as second milestone.
+- [x] Implement diagnostic integrals:
   - density response,
   - heat flux / quasilinear ingredients,
   - spectra,
   - mode amplitude.
-- [ ] Add GX-style spectra hooks for later output:
+- [x] Add GX-style spectra hooks for later output:
   - `ky`,
   - `kx`,
   - `kxky`,
   - `z`,
   - Hermite/Laguerre free-energy spectra when Phase 5A exists.
-- [ ] Unit tests:
+- [x] Unit tests:
   - zero distribution gives zero `phi`,
   - no-zonal and zonal paths,
   - quasineutrality residual near machine precision,
-  - small fixture parity against Gyaradax phi solve,
+  - algebraic small-fixture checks against the Gyaradax/GKW phi-solve convention,
   - flux/spectrum normalization checks.
+- [ ] Add a direct reduced Gyaradax phi-solve parity fixture once Phase 7 couples the same RHS/precompute inputs as the reference path.
 
 ## Phase 7: Linear RHS Residual
 
@@ -474,4 +475,4 @@ rhs = linear_residual(df, geometry, params, precomputed)
 
 ## Immediate Next Round
 
-Phase 6 should implement adiabatic-electron electrostatic quasineutrality and the first diagnostic integrals. Use the Phase 5 `FLRFactors`, Maxwellian, and grid weights directly, keep zonal/nonzonal paths explicit, and add tests for zero-response, quasineutrality residuals, shape broadcasting, JIT compatibility, and small-fixture parity against the Gyaradax/GKW convention.
+Phase 7 should implement the matrix-free linear RHS residual. Start with isolated term functions for parallel streaming, magnetic drift advection, mirror force, equilibrium-gradient drive, parallel field drive, and drift field drive, using the Phase 5 physics primitives and Phase 6 phi solve/precompute objects. Each term should get shape, zero-input, manufactured-derivative, JIT, and linearity tests before coupling the full residual.

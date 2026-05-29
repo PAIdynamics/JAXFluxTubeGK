@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: stellarator-gk
+Version: 0.1.0
+Summary: Differentiable flux-tube stellarator gyrokinetic solver
+Requires-Python: >=3.11
+Requires-Dist: jax>=0.4.30
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
