@@ -209,10 +209,18 @@ def initial_value_growth_objectives(
     amplitude_floor: float = 1.0e-300,
     kperp_epsilon: float = 1.0e-12,
     softplus_temperature: float | None = None,
+    store_history: bool = True,
 ) -> LinearObjectiveValues:
     """Run a short fixed-step linear solve and return growth objectives."""
 
-    result = integrate_fixed_step(initial_state, dt, n_steps, linear_residual, precomputed)
+    result = integrate_fixed_step(
+        initial_state,
+        dt,
+        n_steps,
+        linear_residual,
+        precomputed,
+        store_history=store_history,
+    )
     field_start = solve_field_from_state(result.history[0], precomputed)
     field_end = solve_field_from_state(result.state, precomputed)
     return linear_growth_objectives(

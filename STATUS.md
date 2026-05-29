@@ -19,7 +19,10 @@ fixture mapped into the solver's public grid, geometry, species, and
 Hermite-Laguerre interfaces. Phase 11 CPU performance and differentiability
 hardening is implemented with endpoint-only RK4 integration, a public jitted
 linear residual, memory/profiling helpers, performance smoke tests, and
-static-vs-differentiable documentation.
+static-vs-differentiable documentation. Phase 12 optimization integration now
+has a fixed-topology single-surface objective layer, differentiable profile and
+geometry knobs, reduced `rho`/`alpha`/`ky` scans, and a toy gradient-descent
+example before full DESC coupling.
 
 The repository currently contains:
 
@@ -28,6 +31,7 @@ The repository currently contains:
 - `TODO.md`: project implementation plan.
 - `STATUS.md`: this progress ledger.
 - `docs/performance_and_differentiability.md`: Phase 11 CPU scaling, memory, and AD/topology notes.
+- `docs/optimization_integration.md`: Phase 12 fixed-topology optimization and toy-gradient example.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -36,9 +40,10 @@ The repository currently contains:
 - `src/stellarator_gk/diagnostics.py`: Phase 6 diagnostic reductions, spectra, and quasilinear flux ingredients.
 - `src/stellarator_gk/operators.py`: Phase 9 matrix-free residual actions, mode-chain projection helpers, dense reduced-operator construction, and tiny eigensystem helpers.
 - `src/stellarator_gk/objectives.py`: Phase 9 growth-rate, selected-mode, quasilinear-proxy, mode-structure, and short initial-value objective helpers.
+- `src/stellarator_gk/optimization.py`: Phase 12 optimization knobs, single-surface objectives, scan helpers, and toy gradient-descent step.
 - `src/stellarator_gk/performance.py`: Phase 11 reduced-grid profiler, memory estimators, PyTree byte accounting, and byte-format helpers.
 - `src/stellarator_gk/time_advance.py`: Phase 8 RK4 stepping, fixed-step scan integration, CFL estimate, per-`ky` normalization, and growth/frequency diagnostics.
-- `tests/`: Phase 2 through Phase 11 unit, validation, performance-smoke, and differentiability tests.
+- `tests/`: Phase 2 through Phase 12 unit, validation, performance-smoke, optimization, and differentiability tests.
 - `papers/`: Gyaradax paper sources, stellarator microstability/optimization papers, and GKW paper materials.
 - `papers/gkw/`: GKW reference PDF, rebuilt extracted TeX, GKW manual PDF, and related paper material.
 - `papers/gx-paper/`: GX paper source for the Fourier-Laguerre-Hermite flux-tube formulation and benchmark discussion.
@@ -104,29 +109,63 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: begin Phase 12 optimization integration:
+Goal: continue optimization integration and validation coupling:
 
-- define differentiable geometry/profile input knobs for optimization,
-- implement a single-surface/single-alpha objective wrapper using the Phase 9/11 no-history path,
-- add a small toy `jax.value_and_grad` optimization example,
-- keep DESC equilibrium coupling as the next step after the toy objective is stable.
+- add a real Boozer/DESC/precomputed-geometry objective path,
+- connect the optimization objective to externally validated Phase 10 benchmark cases,
+- add stronger scan/objective examples once Rosenbluth-Hinton, Cyclone, and GX/eik references are stable,
+- keep toy equilibrium coefficients only as a reduced plumbing test.
 
 Expected file changes:
 
-- optimization-facing helper module or additions to `objectives.py`,
-- focused tests for single-surface/single-alpha objective values and gradients,
-- example or docs snippet for the toy optimization path,
+- additions to flux-tube geometry/objective adapters,
+- tests using precomputed Boozer/DESC-like geometry arrays,
+- docs/examples for benchmark-informed optimization targets,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- objective shape/value smoke tests,
-- `jax.grad`/`jax.value_and_grad` finite-gradient checks,
-- finite-difference agreement on selected optimization knobs,
-- no-history integration parity against the default history path on reduced grids.
+- precomputed-geometry objective value/gradient checks,
+- scan tests over multiple surfaces/field-line labels,
+- benchmark-informed objective checks once external references are selected,
+- continued finite-difference agreement on selected optimization knobs.
 
 ## Round Log
+
+### 2026-05-29: Implemented Phase 12 Optimization Integration Baseline
+
+- Committed the Phase 10/11 validation and performance hardening checkpoint:
+  - commit `b7a8f07` (`Add Phase 10 and 11 validation hardening`).
+- Added `src/stellarator_gk/optimization.py` with:
+  - `OptimizationKnobs`,
+  - `SingleSurfaceOptimizationConfig`,
+  - `SingleSurfaceOptimizationResult`,
+  - `OptimizationScanResult`,
+  - `ToyOptimizationStep`,
+  - `build_optimization_species`,
+  - `build_optimization_geometry`,
+  - `single_surface_objective`,
+  - `scan_single_surface_objective`,
+  - `toy_gradient_descent_step`.
+- Extended `initial_value_growth_objectives` with `store_history` so optimization paths can use endpoint-only Phase 11 integration.
+- Added public exports for the Phase 12 optimization API in `src/stellarator_gk/__init__.py`.
+- Added `docs/optimization_integration.md` with the fixed-topology AD contract and a toy `jax.value_and_grad`/gradient-step example.
+- Added `tests/test_optimization_integration.py` covering:
+  - mapping differentiable knobs to species and analytic geometry,
+  - jitted `jax.value_and_grad` through the single-surface objective,
+  - finite-difference agreement for a profile-gradient knob,
+  - static scans over `rho`, `alpha`, and selected `ky`,
+  - a toy gradient-descent update on the optimization knobs.
+- Updated `TODO.md` to mark the Phase 12 baseline complete and record DESC/Boozer geometry objectives as the next extension.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_optimization_integration.py`
+  - `uv run --extra dev ruff check src tests`
+  - `uv run --extra dev python -m pytest`
+- Verification:
+  - `4 passed` for `tests/test_optimization_integration.py`.
+  - `ruff check src tests` passed.
+  - `99 passed` for the full pytest suite.
 
 ### 2026-05-29: Implemented Phase 11 CPU Performance and Differentiability Hardening
 

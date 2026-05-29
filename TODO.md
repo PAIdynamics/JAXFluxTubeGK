@@ -481,17 +481,19 @@ Phase 11 baseline note: the current hardening pass adds CPU profiling/memory too
 
 ## Phase 12: Optimization Integration
 
-- [ ] Define geometry-parameter inputs for optimization:
+- [x] Define geometry-parameter inputs for optimization:
   - profile gradients,
   - rotational transform / shear,
   - beta or pressure-gradient knobs,
-  - boundary/equilibrium coefficients from DESC when available.
-- [ ] Implement single-surface/single-alpha objective evaluation.
-- [ ] Implement scans over `rho`, `alpha`, and `ky`.
-- [ ] Add quasilinear objective compatible with gradient-based stellarator design loops.
-- [ ] Add examples showing `jax.grad`/`jax.value_and_grad` through the objective.
-- [ ] Add a small toy optimization example before using full DESC equilibria.
+  - placeholder boundary/equilibrium coefficients for future DESC/Boozer adapters.
+- [x] Implement single-surface/single-alpha objective evaluation.
+- [x] Implement scans over `rho`, `alpha`, and `ky`.
+- [x] Add quasilinear objective compatible with gradient-based stellarator design loops.
+- [x] Add examples showing `jax.grad`/`jax.value_and_grad` through the objective.
+- [x] Add a small toy optimization example before using full DESC equilibria.
+
+Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
 
 ## Immediate Next Round
 
-Begin Phase 12 optimization integration: define differentiable geometry/profile input knobs, implement a single-surface/single-alpha objective wrapper, and add a small toy `jax.value_and_grad` optimization example before connecting DESC equilibria.
+Continue optimization integration by adding a real Boozer/DESC geometry-array objective path, then reconnect Phase 10 external benchmarks so optimization targets are validated against Rosenbluth-Hinton, Cyclone, and GX/eik reference data.
