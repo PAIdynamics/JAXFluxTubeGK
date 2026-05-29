@@ -8,9 +8,10 @@ Planning pass complete, the first physical-model/numerics specification has
 been drafted, and the first Phase 4 Boozer/stellarator flux-tube geometry
 adapter is implemented and tested. GX has now been added as an algorithmic
 and benchmark reference for future velocity-space, geometry, nonlinear,
-closure, and diagnostic extensions. Phases 5, 5A, 6, 7, and 8 are implemented
+closure, and diagnostic extensions. Phases 5, 5A, 6, 7, 8, and 9 are implemented
 and tested through quasineutrality, diagnostics, the self-consistent linear RHS
-residual, fixed-step RK4 integration, and linear growth-rate extraction.
+residual, fixed-step RK4 integration, linear growth-rate extraction, matrix-free
+operator wrappers, and differentiable objective helpers.
 
 The repository currently contains:
 
@@ -20,12 +21,14 @@ The repository currently contains:
 - `STATUS.md`: this progress ledger.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
-- `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, and Phase 8 fixed-step time advancement.
+- `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
 - `src/stellarator_gk/geometry/`: circular/\(s\)-alpha analytic geometry plus Boozer/precomputed flux-tube geometry scaffolding.
 - `src/stellarator_gk/physics/`: Phase 5 Bessel/FLR, Maxwellian, drive, drift, mirror, streaming primitives, Phase 5A Hermite-Laguerre velocity-moment utilities, Phase 6 quasineutrality solvers, and Phase 7 linear RHS terms.
 - `src/stellarator_gk/diagnostics.py`: Phase 6 diagnostic reductions, spectra, and quasilinear flux ingredients.
+- `src/stellarator_gk/operators.py`: Phase 9 matrix-free residual actions, mode-chain projection helpers, dense reduced-operator construction, and tiny eigensystem helpers.
+- `src/stellarator_gk/objectives.py`: Phase 9 growth-rate, selected-mode, quasilinear-proxy, mode-structure, and short initial-value objective helpers.
 - `src/stellarator_gk/time_advance.py`: Phase 8 RK4 stepping, fixed-step scan integration, CFL estimate, per-`ky` normalization, and growth/frequency diagnostics.
-- `tests/`: Phase 2 through Phase 8 unit tests.
+- `tests/`: Phase 2 through Phase 9 unit tests.
 - `papers/`: Gyaradax paper sources, stellarator microstability/optimization papers, and GKW paper materials.
 - `papers/gkw/`: GKW reference PDF, rebuilt extracted TeX, GKW manual PDF, and related paper material.
 - `papers/gx-paper/`: GX paper source for the Fourier-Laguerre-Hermite flux-tube formulation and benchmark discussion.
@@ -91,30 +94,77 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: implement Phase 9 eigenvalue and objective interfaces:
+Goal: implement Phase 10 benchmarks and validation:
 
-- matrix-free linear-operator wrappers around the Phase 7 residual and Phase 8 stepping/growth diagnostics,
-- one-`ky` or connected-mode-chain restriction helpers,
-- optional Arnoldi/eigensolver path if a small robust dependency-light route is useful,
-- differentiable objective functions for max/selected growth rate and quasilinear proxies,
-- finite-difference checks for gradients with respect to profile and continuous geometry parameters on reduced grids.
+- reproduce reduced Gyaradax/GKW circular and s-alpha fixtures,
+- add a direct reduced Gyaradax/GKW phi/RHS parity fixture using the Phase 7 coupled precompute inputs,
+- add Rosenbluth-Hinton zonal-flow residual and Cyclone Base Case linear ITG growth-rate checks as fixtures become stable,
+- add a reduced stellarator geometry fixture and compare geometry arrays against available DESC/GX/GS2-style references,
+- run convergence tests over spectral resolution, velocity resolution, `ky`, and timestep.
 
 Expected file changes:
 
-- `src/stellarator_gk/objectives.py` and/or `src/stellarator_gk/operators.py`,
-- possible additions to `src/stellarator_gk/time_advance.py` and `src/stellarator_gk/diagnostics.py`,
+- benchmark fixture files under `tests/` or a dedicated `benchmarks/`/`fixtures/` path,
+- possible reference readers/adapters for reduced GKW/Gyaradax/GX data,
+- small additions to geometry/RHS/time/objective modules only when needed by validation,
 - `tests/`
 - `STATUS.md`
 
 Expected tests:
 
-- objective shapes and finite values,
-- selected/max growth objective checks on manufactured histories or reduced residuals,
-- AD gradients with respect to `R/L_T`, `R/L_n`, `q`, `shat`, and continuous geometry controls,
-- finite-difference agreement on reduced grids,
-- JIT compatibility for objective calls.
+- reduced parity tests for phi/RHS signs and shapes,
+- manufactured benchmark invariants before full physics comparisons,
+- growth-rate tolerance checks for stable reference fixtures,
+- convergence tests over at least one grid/timestep axis,
+- clear tolerances recorded in `STATUS.md`.
 
 ## Round Log
+
+### 2026-05-29: Implemented Phase 9 Eigenvalue and Objective Interfaces
+
+- Added `src/stellarator_gk/operators.py`.
+- Implemented matrix-free/eigensolver helpers:
+  - `mode_chain_mask`,
+  - `project_to_ky`,
+  - `project_to_mode_chain`,
+  - `linear_operator_action`,
+  - `flatten_state`,
+  - `unflatten_state`,
+  - `dense_matrix_from_action`,
+  - `dense_linear_operator_matrix`,
+  - `dense_eigensystem`.
+- Added `src/stellarator_gk/objectives.py`.
+- Implemented differentiable objective containers and helpers:
+  - `LinearObjectiveValues`,
+  - `max_growth_objective`,
+  - `selected_growth_objective`,
+  - `weighted_quasilinear_proxy`,
+  - `kperp2_weighted_average`,
+  - `mode_structure_penalty`,
+  - `linear_growth_objectives`,
+  - `initial_value_growth_objectives`,
+  - `solve_field_from_state`.
+- Exported Phase 9 APIs through the top-level `stellarator_gk` package.
+- Added `tests/test_objectives_operators.py` covering:
+  - mode-chain and one-`ky` projection helpers,
+  - dense matrix reconstruction and tiny eigensystem helpers,
+  - restricted matrix-free residual actions,
+  - objective shapes, values, and penalties on manufactured mode histories,
+  - short reduced-grid initial-value objective gradients with respect to `R/L_n`, `R/L_T`, `q`, `shat`, and continuous geometry scaling,
+  - finite-difference agreement for representative objective gradients.
+- Committed completed Phase 7/8 work before starting Phase 9:
+  - `a324343 Implement linear RHS and RK4 time advance`.
+- Updated `TODO.md` to mark Phase 9 complete and set Phase 10 as the next project phase.
+- Commands run:
+  - `git add ...`
+  - `git commit -m "Implement linear RHS and RK4 time advance"`
+  - `uv run --extra dev python -m pytest tests/test_objectives_operators.py`
+  - `uv run --extra dev python -m pytest`
+  - `uv run --extra dev ruff check src tests`
+- Verification:
+  - `4 passed` for `tests/test_objectives_operators.py`,
+  - `81 passed` for the full pytest suite,
+  - `ruff check src tests` passed.
 
 ### 2026-05-29: Implemented Phase 8 Time Advancement and Growth Rates
 

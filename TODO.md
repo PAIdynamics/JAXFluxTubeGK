@@ -417,18 +417,20 @@ Phase 8 baseline note: the integrator is fixed-step RK4 with an explicit post-st
 
 ## Phase 9: Eigenvalue and Objective Interfaces
 
-- [ ] Expose residual for external nonlinear/eigenvalue solvers.
-- [ ] Add matrix-free linear operator wrapper for one `ky` or a mode chain.
-- [ ] Add optional Arnoldi/eigensolver path if useful for faster linear growth rates.
-- [ ] Implement differentiable objective functions:
+- [x] Expose residual for external nonlinear/eigenvalue solvers.
+- [x] Add matrix-free linear operator wrapper for one `ky` or a mode chain.
+- [x] Add optional Arnoldi/eigensolver path if useful for faster linear growth rates.
+- [x] Implement differentiable objective functions:
   - max growth rate,
   - selected `ky` growth rate,
   - weighted quasilinear proxy `sum gamma / <k_perp^2>`,
   - mode-structure penalties.
-- [ ] Unit tests:
+- [x] Unit tests:
   - objective shapes and finite values,
   - AD gradients with respect to `R/L_T`, `R/L_n`, `q`, `shat`, and continuous geometry controls,
   - finite-difference agreement on reduced grids.
+
+Phase 9 baseline note: dense eigensystem helpers are intentionally limited to small validation problems. Production linear scans should continue using matrix-free residual actions, RK4 growth extraction, or a future sparse/Arnoldi adapter.
 
 ## Phase 10: Benchmarks and Validation
 
