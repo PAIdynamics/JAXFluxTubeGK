@@ -434,25 +434,29 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 
 ## Phase 10: Benchmarks and Validation
 
-- [ ] Reproduce Gyaradax/GKW circular and s-alpha tests.
-- [ ] Add Rosenbluth-Hinton zonal-flow residual test.
+- [x] Reproduce reduced Gyaradax/GKW circular and s-alpha geometry tests.
+- [x] Add a direct reduced Gyaradax/GKW-style phi/RHS parity fixture using the Phase 7 coupled precompute inputs.
+- [x] Add a reduced zonal-flow invariant test: constant zonal mode is stationary in a flat flux tube.
+- [ ] Add full Rosenbluth-Hinton zonal-flow residual test.
 - [ ] Add Cyclone Base Case linear ITG growth-rate test.
 - [ ] Add GX-inspired benchmark fixtures from `relevant-codes/gx/docs/inputFiles/` and `relevant-codes/gx/unit_tests/inputs/` after verifying their current compatibility.
-- [ ] Add a reduced stellarator fixture:
+- [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
   - small `ky` grid,
   - reference geometry arrays.
-- [ ] Compare stellarator geometry quantities against DESC/SIMSOPT or precomputed reference data.
+- [x] Compare stellarator geometry quantities against precomputed reference data.
 - [ ] Compare ITG growth-rate scans against available GS2/GX/GKW-style references.
 - [ ] Compare geometry arrays against GX/GS2/stella-style `eik` outputs where local fixtures are available.
 - [ ] Add convergence tests over:
-  - `N_s`,
+  - [x] `N_s`,
   - `N_vparallel`,
   - `N_mu`,
   - `ky`,
-  - timestep.
-- [ ] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
+  - [x] timestep.
+- [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
+
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures and manufactured convergence. Full Rosenbluth-Hinton, Cyclone Base Case, GX/eik parity, and broader convergence scans remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -481,4 +485,4 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 
 ## Immediate Next Round
 
-Phase 7 should implement the matrix-free linear RHS residual. Start with isolated term functions for parallel streaming, magnetic drift advection, mirror force, equilibrium-gradient drive, parallel field drive, and drift field drive, using the Phase 5 physics primitives and Phase 6 phi solve/precompute objects. Each term should get shape, zero-input, manufactured-derivative, JIT, and linearity tests before coupling the full residual.
+Continue Phase 10 with external-reference validation: reduced GKW/Gyaradax data parity where fixtures are available, Rosenbluth-Hinton and Cyclone Base Case tolerances, GX/eik geometry comparisons, and convergence scans over velocity resolution and `ky`.

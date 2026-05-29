@@ -11,7 +11,9 @@ and benchmark reference for future velocity-space, geometry, nonlinear,
 closure, and diagnostic extensions. Phases 5, 5A, 6, 7, 8, and 9 are implemented
 and tested through quasineutrality, diagnostics, the self-consistent linear RHS
 residual, fixed-step RK4 integration, linear growth-rate extraction, matrix-free
-operator wrappers, and differentiable objective helpers.
+operator wrappers, and differentiable objective helpers. The first Phase 10
+validation tranche is implemented with reduced parity, stellarator fixture, and
+manufactured convergence tests.
 
 The repository currently contains:
 
@@ -28,7 +30,7 @@ The repository currently contains:
 - `src/stellarator_gk/operators.py`: Phase 9 matrix-free residual actions, mode-chain projection helpers, dense reduced-operator construction, and tiny eigensystem helpers.
 - `src/stellarator_gk/objectives.py`: Phase 9 growth-rate, selected-mode, quasilinear-proxy, mode-structure, and short initial-value objective helpers.
 - `src/stellarator_gk/time_advance.py`: Phase 8 RK4 stepping, fixed-step scan integration, CFL estimate, per-`ky` normalization, and growth/frequency diagnostics.
-- `tests/`: Phase 2 through Phase 9 unit tests.
+- `tests/`: Phase 2 through Phase 10 baseline unit and validation tests.
 - `papers/`: Gyaradax paper sources, stellarator microstability/optimization papers, and GKW paper materials.
 - `papers/gkw/`: GKW reference PDF, rebuilt extracted TeX, GKW manual PDF, and related paper material.
 - `papers/gx-paper/`: GX paper source for the Fourier-Laguerre-Hermite flux-tube formulation and benchmark discussion.
@@ -94,17 +96,17 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: implement Phase 10 benchmarks and validation:
+Goal: continue Phase 10 benchmarks and validation with external-reference fixtures:
 
-- reproduce reduced Gyaradax/GKW circular and s-alpha fixtures,
-- add a direct reduced Gyaradax/GKW phi/RHS parity fixture using the Phase 7 coupled precompute inputs,
-- add Rosenbluth-Hinton zonal-flow residual and Cyclone Base Case linear ITG growth-rate checks as fixtures become stable,
-- add a reduced stellarator geometry fixture and compare geometry arrays against available DESC/GX/GS2-style references,
-- run convergence tests over spectral resolution, velocity resolution, `ky`, and timestep.
+- add full Rosenbluth-Hinton zonal-flow residual once a stable reference fixture is selected,
+- add Cyclone Base Case linear ITG growth-rate checks against GKW/Gyaradax data,
+- add GX/eik geometry comparisons where local eik-style fixtures are available,
+- broaden convergence tests over velocity resolution and `ky`,
+- document benchmark tolerances in a dedicated docs/benchmark note once reference fixtures stabilize.
 
 Expected file changes:
 
-- benchmark fixture files under `tests/` or a dedicated `benchmarks/`/`fixtures/` path,
+- additional benchmark fixture files under `tests/` or a dedicated `benchmarks/`/`fixtures/` path,
 - possible reference readers/adapters for reduced GKW/Gyaradax/GX data,
 - small additions to geometry/RHS/time/objective modules only when needed by validation,
 - `tests/`
@@ -112,13 +114,52 @@ Expected file changes:
 
 Expected tests:
 
-- reduced parity tests for phi/RHS signs and shapes,
-- manufactured benchmark invariants before full physics comparisons,
-- growth-rate tolerance checks for stable reference fixtures,
-- convergence tests over at least one grid/timestep axis,
+- external-data phi/RHS and diagnostic parity tests,
+- Rosenbluth-Hinton and Cyclone growth-rate tolerance checks for stable reference fixtures,
+- GX/eik geometry-array comparison tests where fixtures exist,
+- convergence tests over velocity resolution and `ky`,
 - clear tolerances recorded in `STATUS.md`.
 
 ## Round Log
+
+### 2026-05-29: Implemented Phase 10 Baseline Benchmarks and Validation
+
+- Added `tests/test_benchmark_validation.py`.
+- Implemented reduced Gyaradax/GKW analytic geometry validation for both circular and s-alpha models:
+  - `B`,
+  - `F`,
+  - `G`,
+  - `E_y`,
+  - perpendicular metric components,
+  - magnetic drift coefficients.
+- Added a direct reduced phi/RHS parity fixture:
+  - builds the coupled Phase 7 precompute,
+  - solves adiabatic quasineutrality,
+  - checks the field residual to `2e-12`,
+  - compares `linear_residual` against an explicit GKW/Gyaradax-term formula to `3e-12`.
+- Added a reduced zonal-flow invariant:
+  - flat Boozer flux tube,
+  - `kx=ky=0`,
+  - constant distribution,
+  - self-consistent residual remains zero to `3e-12`.
+- Added a reduced stellarator fixture:
+  - fixed Boozer surface,
+  - fixed field-line label `alpha`,
+  - small `ky` grid,
+  - precomputed physical arrays mapped to internal geometry,
+  - drift, metric, `B`, source label, and nonnegative `k_perp^2` checked.
+- Added convergence validation:
+  - periodic parallel spectral derivative convergence from `N_s=12` to `N_s=24`,
+  - fixed-step RK4 growth-rate convergence from 10 to 20 steps.
+- Updated `TODO.md` to mark the completed reduced Phase 10 baseline tasks and leave full Rosenbluth-Hinton, Cyclone, GX/eik, velocity-resolution, and `ky` scans open.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_benchmark_validation.py`
+  - `uv run --extra dev python -m pytest`
+  - `uv run --extra dev ruff check src tests`
+- Verification:
+  - `6 passed` for `tests/test_benchmark_validation.py`,
+  - `87 passed` for the full pytest suite,
+  - `ruff check src tests` passed.
 
 ### 2026-05-29: Implemented Phase 9 Eigenvalue and Objective Interfaces
 
