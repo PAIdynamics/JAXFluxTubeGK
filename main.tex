@@ -376,6 +376,14 @@ provides a compatible proxy.  This convention lets DESC-generated flux-tube
 arrays pass through the same metric/drift and \(\kperp^2\) contract used by
 GX/GS2 \texttt{eik} fixtures without claiming a curvature split that was not
 provided.
+For GIST/GS2 text fixtures from the GX VMEC test suite, the drift columns are
+read in the order
+\[
+  \theta,\ B,\ \grad_\parallel,\ gds2,\ gds21,\ gds22,
+  cvdrift,\ cvdrift0,\ gbdrift,\ gbdrift0,
+\]
+and the solver compares both the individual metric fields and the summed drift
+fields used by the residual.
 
 \subsection{Magnetic drift coefficient}
 
@@ -530,8 +538,22 @@ The baseline solver includes only numerical dissipation:
   +\Dop_{\perp,s}.
   \label{eq:diss-total}
 \end{equation}
-For the spectral backend, use modal filtering or modal damping.  In a coordinate
-\(\xi\in\{z,\vpar,\mu\}\),
+For GKW/Gyaradax-style parallel recurrence control, keep the damping inside the
+residual rather than applying a post-step filter:
+\begin{equation}
+  \Dop_{z,s} f_s
+  =
+  -\texttt{disp\_par}\,
+  |a_{\parallel,s}^{\rm rms}(z)|\,
+  \frac{\Delta z^3}{12}\,
+  \partial_z^4 f_s .
+  \label{eq:gkw-disp-par}
+\end{equation}
+On a uniform finite-difference fallback this is exactly the GKW stencil
+\([ -1,4,-6,4,-1]/(12\Delta z)\); on the spectral backend it is the
+low-wavenumber-equivalent fourth derivative with the same resolution scaling.
+Additional modal filtering is treated only as an experimental diagnostic.  In a
+coordinate \(\xi\in\{z,\vpar,\mu\}\),
 \begin{equation}
   \Dop_{\xi,s} f_s
   =
@@ -1159,13 +1181,12 @@ the GKW/Gyaradax benchmark,
   \label{eq:rh-plateau-gate}
 \end{equation}
 The gate uses the normalized GKW cell-centered \(s\)-grid, tracks the
-nonzero zonal \(k_x\rho_s=0.025\) mode, and can apply benchmark-controlled
-spectral modal damping, with the default parallel damping motivated by
-GKW/Gyaradax \(\texttt{disp\_par}=0.01\).  Passing this gate requires both the
-reference residual and a small late-window spread.  In the present code the
-gate is executable but still open; strong ad hoc velocity filtering can suppress
-recurrence but damps the residual itself, so it is not accepted as production
-validation.
+nonzero zonal \(k_x\rho_s=0.025\) mode, and applies the in-residual
+\(\texttt{disp\_par}=0.01\) recurrence-control term in
+\eqref{eq:gkw-disp-par}.  Passing this gate requires both the reference
+residual and a small late-window spread.  In the present code the gate is
+executable but still open; post-step modal damping is disabled by default
+because it can suppress recurrence while also damping the residual itself.
 Third, the eik parity layer can compare any solver-produced geometry object
 against a GX/GS2 table field by field:
 \[
@@ -1229,21 +1250,21 @@ state.  The left panel evaluates the late-window Rosenbluth--Hinton metric
 \eqref{eq:rh-plateau-gate} on short smoke-test windows using
 \(N_z=8\), \(N_{v_\parallel}=6\), \(N_\mu=4\),
 \(\Delta t=0.01\), the GKW cell-centered \(s\)-grid, the nonzero zonal
-\(k_x\rho_s=0.025\) mode, and the default parallel modal damping
-\(\nu_z=0.01\).  Over \(t_{\mathrm{end}}\in[0.02,0.10]\), the measured
+\(k_x\rho_s=0.025\) mode, and in-residual GKW-scaled
+\(\texttt{disp\_par}=0.01\).  Over \(t_{\mathrm{end}}\in[0.02,0.10]\), the measured
 metric decreases only from \(0.9999\) to \(0.9988\), far from the documented
 Rosenbluth--Hinton residual \(0.0711\).  The gate is therefore correctly
 reported as open rather than artificially calibrated.
 
-The right panel summarizes five executable gates.  The imported GX/GS2 eik
-metric contract and the DESC DSHAPE geometry-to-eik export contract both pass
-with zero residual.  The reduced RH endpoint, true RH plateau, and reduced
-Cyclone growth gates remain open with normalized residuals
-\(9.28\times 10^2\), \(9.28\times 10^2\), and \(1.88\times 10^3\),
-respectively.  This figure is the current validation ledger: stellarator
-geometry can now enter through the DESC array path and leave through a GX/eik
-metric/drift contract, while the remaining open work is the RH/Cyclone
-physics/numerics parity problem.
+The right panel summarizes six executable gates.  The imported GX/GS2 eik
+metric contract, the DESC DSHAPE geometry-to-eik export contract, and a
+three-fixture GX/VMEC GIST eik suite pass with zero residual.  The reduced RH
+endpoint, true RH plateau, and reduced Cyclone growth gates remain open with
+normalized residuals \(9.28\times 10^2\), \(9.28\times 10^2\), and
+\(1.88\times 10^3\), respectively.  This figure is the current validation
+ledger: stellarator geometry can now enter through the DESC array path and be
+audited through GX/GIST/eik metric and drift contracts, while the remaining
+open work is the RH/Cyclone physics/numerics parity problem.
 
 \begin{figure}[htbp]
   \centering
@@ -1251,9 +1272,9 @@ physics/numerics parity problem.
   \caption{Reduced validation-gate demonstration from the current solver.
   Left: short-window Rosenbluth--Hinton plateau metric compared with the
   GKW/Gyaradax reference residual.  Right: normalized gate residuals, where
-  values below one pass the tolerance.  The GX/GS2 imported eik metric and
-  DESC geometry eik-export contracts pass; RH and Cyclone remain deliberately
-  open against production tolerances.}
+  values below one pass the tolerance.  The GX/GS2 imported eik metric, DESC
+  geometry eik-export, and GX/VMEC GIST external eik-suite contracts pass; RH
+  and Cyclone remain deliberately open against production tolerances.}
   \label{fig:validation-gate-status}
 \end{figure}
 

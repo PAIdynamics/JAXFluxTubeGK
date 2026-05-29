@@ -44,6 +44,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
     magnetic_drift_frequency: object
     charge_over_temperature: object
     perpendicular_damping: object
+    parallel_recurrence_operator: object
+    parallel_recurrence_coeff: object
     n_species: int
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
@@ -59,6 +61,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
         "magnetic_drift_frequency",
         "charge_over_temperature",
         "perpendicular_damping",
+        "parallel_recurrence_operator",
+        "parallel_recurrence_coeff",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("n_species",)
 
@@ -76,6 +80,8 @@ def build_linear_rhs_precompute(
     *,
     flr_factors: FLRFactors | None = None,
     perpendicular_damping=None,
+    parallel_recurrence_rate: float = 0.0,
+    parallel_recurrence_velocity_model: str = "rms",
 ) -> LinearRHSPrecompute:
     """Precompute geometry/species coefficients used by the linear RHS terms."""
 
@@ -136,6 +142,16 @@ def build_linear_rhs_precompute(
         fourier_grid.ky.shape[0],
         dtype=jnp.asarray(geometry.B).dtype,
     )
+    recurrence_operator = _gkw_parallel_recurrence_operator(
+        parallel_grid,
+        dtype=jnp.asarray(geometry.B).dtype,
+    )
+    recurrence_coeff = _parallel_recurrence_coefficient(
+        velocity_grid.vpar,
+        parallel,
+        parallel_recurrence_rate,
+        parallel_recurrence_velocity_model,
+    )
 
     return LinearRHSPrecompute(
         D_z=parallel_grid.D_z,
@@ -150,6 +166,8 @@ def build_linear_rhs_precompute(
         magnetic_drift_frequency=drift,
         charge_over_temperature=charge_over_temperature,
         perpendicular_damping=damping,
+        parallel_recurrence_operator=recurrence_operator,
+        parallel_recurrence_coeff=recurrence_coeff,
         n_species=n_species,
     )
 
@@ -260,6 +278,29 @@ def dissipation(distribution, damping_rate=None):
     return -damping * distribution
 
 
+def parallel_recurrence_control(distribution, operator, coefficient):
+    """Return the GKW-scaled parallel fourth-order recurrence-control term."""
+
+    distribution = jnp.asarray(distribution)
+    coefficient = jnp.asarray(coefficient)
+    if coefficient.ndim == 2:
+        n_species = 1
+        coefficient_s = coefficient[None, ...]
+    elif coefficient.ndim == 3:
+        n_species = int(coefficient.shape[0])
+        coefficient_s = coefficient
+    else:
+        raise ValueError(
+            "parallel_recurrence_coeff must have shape (n_vpar,n_z) "
+            "or (n_species,n_vpar,n_z)"
+        )
+    original_ndim = distribution.ndim
+    distribution_s = _distribution_with_species_axis(distribution, n_species)
+    d4_distribution = _parallel_derivative(distribution_s, operator)
+    result = coefficient_s[:, :, None, :, None, None] * d4_distribution
+    return _restore_distribution_shape(result, original_ndim)
+
+
 def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute):
     """Assemble the linear RHS for a supplied electrostatic potential."""
 
@@ -271,6 +312,11 @@ def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute)
         + parallel_field_drive(phi, precompute.D_z, precompute)
         + drift_field_drive(phi, precompute)
         + dissipation(distribution, precompute.perpendicular_damping)
+        + parallel_recurrence_control(
+            distribution,
+            precompute.parallel_recurrence_operator,
+            precompute.parallel_recurrence_coeff,
+        )
     )
 
 
@@ -397,6 +443,51 @@ def _normalize_perpendicular_damping(damping, n_kx: int, n_ky: int, *, dtype):
     if damping.shape != (n_kx, n_ky):
         raise ValueError("perpendicular_damping must be scalar or have shape (n_kx,n_ky)")
     return damping
+
+
+def _gkw_parallel_recurrence_operator(parallel_grid: ParallelGrid, *, dtype):
+    """Return the negative-semidefinite GKW-scaled fourth derivative operator.
+
+    GKW's ``disp_par`` stencil adds
+    ``[-1, 4, -6, 4, -1] / (12 * ds)`` to the parallel streaming stencil.  For
+    the spectral target backend, the equivalent low-wavenumber scaling is
+    ``-(ds**3 / 12) * d^4/dz^4``; this keeps recurrence control inside the
+    residual while preserving the benchmark discretization's resolution
+    scaling.
+    """
+
+    d_z = jnp.asarray(parallel_grid.D_z, dtype=dtype)
+    d4 = d_z @ d_z @ d_z @ d_z
+    spacing = jnp.sum(jnp.asarray(parallel_grid.w_z, dtype=dtype)) / d_z.shape[0]
+    return -(spacing**3 / 12.0) * d4
+
+
+def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity_model: str):
+    if rate < 0.0:
+        raise ValueError("parallel_recurrence_rate must be nonnegative")
+    if velocity_model not in ("local", "rms"):
+        raise ValueError("parallel_recurrence_velocity_model must be 'local' or 'rms'")
+    parallel_coeff = jnp.asarray(parallel_coeff)
+    if velocity_model == "local":
+        speed = jnp.abs(parallel_coeff)
+    else:
+        vpar = jnp.asarray(vpar, dtype=parallel_coeff.dtype)
+        rms = jnp.sqrt(jnp.mean(vpar**2))
+        eps = jnp.asarray(1.0e-300, dtype=parallel_coeff.dtype)
+        if parallel_coeff.ndim == 2:
+            v_abs = jnp.abs(vpar)[:, None]
+            safe_v_abs = jnp.where(v_abs > eps, v_abs, 1.0)
+            scale = jnp.where(v_abs > eps, jnp.abs(parallel_coeff) / safe_v_abs, 0.0)
+            speed = rms * jnp.max(scale, axis=0, keepdims=True)
+        elif parallel_coeff.ndim == 3:
+            v_abs = jnp.abs(vpar)[None, :, None]
+            safe_v_abs = jnp.where(v_abs > eps, v_abs, 1.0)
+            scale = jnp.where(v_abs > eps, jnp.abs(parallel_coeff) / safe_v_abs, 0.0)
+            speed = rms * jnp.max(scale, axis=1, keepdims=True)
+        else:
+            raise ValueError("parallel_coeff must have shape (n_vpar,n_z) or (n_species,n_vpar,n_z)")
+        speed = jnp.broadcast_to(speed, parallel_coeff.shape)
+    return jnp.asarray(rate, dtype=parallel_coeff.dtype) * speed
 
 
 def _as_species_tuple(species: SpeciesParams | tuple[SpeciesParams, ...]):

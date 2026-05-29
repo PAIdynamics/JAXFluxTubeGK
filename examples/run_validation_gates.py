@@ -27,6 +27,7 @@ from stellarator_gk import (
     load_gx_eik_geometry_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_gx_gist_external_eik_suite_gate,
     run_gx_eik_geometry_gate,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
@@ -41,17 +42,21 @@ def main() -> None:
         n_vpar=args.n_vpar,
         n_mu=args.n_mu,
         n_steps=args.rh_steps,
+        parallel_recurrence_rate=args.rh_disp_par,
     )
     cyclone = run_reduced_cyclone_base_case_gate(
         n_z=args.n_z,
         n_vpar=args.n_vpar,
         n_mu=args.n_mu,
         n_steps=args.cyclone_steps,
+        parallel_recurrence_rate=args.cyclone_disp_par,
     )
     eik = _run_eik_gate(args)
     results = [rh, cyclone, eik]
     if args.desc_eik:
         results.append(_run_desc_eik_export_gate(args))
+    if args.gx_gist_suite:
+        results.append(_run_gx_gist_suite_gate(args))
     if args.rh_plateau:
         results.append(_run_rh_plateau_gate(args))
 
@@ -92,6 +97,7 @@ def _run_rh_plateau_gate(args):
         t_end=args.rh_t_end,
         t_start=args.rh_t_start,
         diagnostic_interval=args.rh_diagnostic_interval,
+        parallel_recurrence_rate=args.rh_disp_par,
         z_modal_damping=args.rh_z_modal_damping,
         vpar_modal_damping=args.rh_vpar_modal_damping,
         mu_modal_damping=args.rh_mu_modal_damping,
@@ -123,6 +129,13 @@ def _run_desc_eik_export_gate(args):
     return run_geometry_to_gx_eik_export_gate(geometry, fourier)
 
 
+def _run_gx_gist_suite_gate(args):
+    return run_gx_gist_external_eik_suite_gate(
+        args.gx_gist_reference,
+        n_theta=args.gx_gist_nodes,
+    )
+
+
 def _parallel_grid_from_fixture_z(z):
     z = np.asarray(z, dtype=float)
     dz = z[1] - z[0]
@@ -140,16 +153,20 @@ def _parse_args():
     parser.add_argument("--cyclone-steps", type=int, default=5)
     parser.add_argument("--rh-plateau", action="store_true")
     parser.add_argument("--desc-eik", action="store_true")
+    parser.add_argument("--gx-gist-suite", action="store_true")
     parser.add_argument("--rh-plateau-n-z", type=int, default=16)
     parser.add_argument("--rh-plateau-n-vpar", type=int, default=16)
     parser.add_argument("--rh-plateau-n-mu", type=int, default=8)
     parser.add_argument("--rh-t-end", type=float, default=100.0)
     parser.add_argument("--rh-t-start", type=float, default=80.0)
     parser.add_argument("--rh-diagnostic-interval", type=float, default=1.0)
-    parser.add_argument("--rh-z-modal-damping", type=float, default=0.01)
+    parser.add_argument("--rh-disp-par", type=float, default=0.01)
+    parser.add_argument("--cyclone-disp-par", type=float, default=1.0)
+    parser.add_argument("--rh-z-modal-damping", type=float, default=0.0)
     parser.add_argument("--rh-vpar-modal-damping", type=float, default=0.0)
     parser.add_argument("--rh-mu-modal-damping", type=float, default=0.0)
     parser.add_argument("--eik-nodes", type=int, default=17)
+    parser.add_argument("--gx-gist-nodes", type=int, default=17)
     parser.add_argument(
         "--eik-reference",
         type=Path,
@@ -162,6 +179,25 @@ def _parse_args():
         "--desc-fixture",
         type=Path,
         default=Path("fixtures/desc_geometry_dshape_rho05_alpha0.npz"),
+    )
+    parser.add_argument(
+        "--gx-gist-reference",
+        type=Path,
+        action="append",
+        default=[
+            Path(
+                "relevant-codes/gx/geometry_modules/vmec/tests/"
+                "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+            ),
+            Path(
+                "relevant-codes/gx/geometry_modules/vmec/tests/"
+                "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
+            ),
+            Path(
+                "relevant-codes/gx/geometry_modules/vmec/tests/"
+                "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000"
+            ),
+        ],
     )
     return parser.parse_args()
 

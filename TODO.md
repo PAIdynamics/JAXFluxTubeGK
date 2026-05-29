@@ -456,6 +456,8 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add solver-geometry-to-GX/GS2-eik field-by-field parity reports and a corresponding geometry gate.
 - [x] Add a reduced validation-gate example that writes CSV summaries and a paper figure for the RH endpoint, RH plateau, Cyclone, and GX/eik gates.
 - [x] Add a solver-produced DESC fixture geometry export gate for GX/GS2 eik-compatible fields, including \(B\), \(\nabla_\parallel\), metric elements, summed magnetic drifts, and \(\kperp^2\).
+- [x] Correct GIST/GS2 eik drift-column ordering and add a three-fixture GX/VMEC GIST external eik-suite gate.
+- [x] Replace the RH/CBC post-step parallel modal-damping default with an in-residual GKW/Gyaradax-scaled `disp_par` recurrence-control term.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
@@ -472,7 +474,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a true RH late-plateau metric, spectral modal damping hooks, solver-to-eik field parity reports, a DESC fixture eik-export contract gate, and a reduced validation-gate plotting example used in `main.tex`. The GX/eik imported metric, field-parity gate, and DESC eik-export gate pass the solver geometry contract. The default RH and CBC production gates still run but remain open against production tolerances, so full end-to-end Rosenbluth-Hinton long-time convergence, production Cyclone growth-rate agreement, independent solver-produced stellarator geometry parity against external eik outputs, and ITG scan comparison remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, spectral modal damping hooks for experiments only, solver-to-eik field parity reports, a DESC fixture eik-export contract gate, corrected GIST drift-column handling, a three-fixture GX/VMEC GIST external eik-suite gate, and a reduced validation-gate plotting example used in `main.tex`. The GX/eik imported metric, field-parity gate, DESC eik-export gate, and GX/GIST suite pass the solver geometry contract. The default RH and CBC production gates still run but remain open against production tolerances, so full end-to-end Rosenbluth-Hinton long-time convergence, production Cyclone growth-rate agreement, matched DESC geometry parity against an independent external eik output, and ITG scan comparison remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -518,7 +520,7 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 Use the new validation-hardening tools to close the remaining production gaps:
 
-- make the true RH late-time plateau gate pass by matching the GKW/Gyaradax `disp_par` recurrence-control model without damping the residual,
+- make the true RH late-time plateau gate pass by resolving the remaining residual gap beyond the in-residual GKW/Gyaradax `disp_par` model,
 - calibrate the Cyclone selected-`ky` setup with production resolution, late-window growth fitting, and GKW/GX tolerance checks,
-- compare solver-produced DESC/GX-convention stellarator geometry against an independent external eik output, now that the DESC eik-export contract gate exists,
+- compare solver-produced DESC geometry against a matched independent external eik output; GX/VMEC GIST external eik-suite coverage is now in place,
 - keep DESC-driven optimization examples labeled reduced until RH, CBC, and solver-produced eik parity gates pass.

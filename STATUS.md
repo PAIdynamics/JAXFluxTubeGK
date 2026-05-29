@@ -39,14 +39,16 @@ open against production tolerances until the physics/numerics gap is closed. A
 follow-up hardening pass adds late-window growth fitting, a calibrated reduced
 RH crossing regression hook, and solver-geometry-to-GX/GS2-eik field parity
 reports. The active RH path has now been replaced by a true late-time plateau
-gate with benchmark-controlled modal damping hooks; it is executable but still
-OPEN until the GKW/Gyaradax `disp_par` recurrence-control model is matched
-without damping away the physical residual. A reduced validation-gate example
-now writes CSV summaries and a paper figure that show the current RH, Cyclone,
-GX/eik, and DESC/eik gate status in `main.tex`. The stellarator-geometry path
+gate with an in-residual GKW/Gyaradax-scaled `disp_par` recurrence-control
+term; it is executable but still OPEN because the late residual does not yet
+match the production RH value. A reduced validation-gate example now writes CSV
+summaries and a paper figure that show the current RH, Cyclone, GX/eik,
+DESC/eik, and GX/GIST gate status in `main.tex`. The stellarator-geometry path
 now includes a solver-produced DESC fixture export gate for GX/GS2
 eik-compatible fields, so DESC arrays can be audited through the same
-metric/drift and `k_perp^2` contract before they are used in optimization.
+metric/drift and `k_perp^2` contract before they are used in optimization. The
+external stellarator eik path now also checks three independent GX/VMEC GIST
+fixtures and uses the correct GIST drift-column order.
 
 The repository currently contains:
 
@@ -143,19 +145,22 @@ For implementation work, use the GKW source modules as the authoritative source 
 ## Next Implementation Round
 
 Goal: close the remaining production physics gaps exposed by the executable
-validation gates and move from eik export self-contracts to independent
-stellarator geometry parity:
+validation gates after the in-residual `disp_par` recurrence-control update,
+and move from eik export self-contracts to matched DESC geometry parity:
 
-- make the true long-time RH plateau gate pass with GKW/Gyaradax-compatible recurrence control,
+- diagnose and close the remaining RH residual gap beyond the implemented
+  GKW/Gyaradax-compatible recurrence-control term,
 - bring the Cyclone selected-`ky` growth rate onto the GKW/GX tolerance ladder using late-window fitting,
-- compare DESC/GX-convention solver-produced geometry against independent field-by-field eik outputs,
+- compare solver-produced DESC geometry against a matched independent field-by-field eik output,
 - use passing gates as prerequisites for DESC-driven optimization examples.
 
 Expected file changes:
 
-- RH dissipation/RHS parity with the GKW/Gyaradax `disp_par` recurrence-control model,
+- RH residual parity work beyond the implemented GKW/Gyaradax `disp_par`
+  recurrence-control model, including finite-difference/upwind or velocity-grid
+  parity if needed,
 - Cyclone production-resolution setup and calibrated growth extraction,
-- DESC/GX-convention stellarator geometry comparison fixtures,
+- matched DESC/GX-convention stellarator geometry comparison fixtures,
 - `TODO.md`,
 - `STATUS.md`
 
@@ -163,10 +168,75 @@ Expected tests:
 
 - RH long-time plateau tolerance test promoted from OPEN to PASS,
 - Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS,
-- DESC/GX-convention solver-produced geometry parity tolerance test,
+- matched DESC solver-produced geometry parity tolerance test,
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-29: Added In-Residual GKW `disp_par` Recurrence Control
+
+- Added a GKW/Gyaradax-scaled parallel recurrence-control term inside the
+  linear RHS:
+  `-disp_par * |a_parallel,rms| * (dz^3/12) * d_z^4 f`.
+- Wired `parallel_recurrence_rate` through the RHS and coupled-residual
+  precomputes. RH defaults now use `disp_par=0.01`, and the reduced Cyclone
+  gate defaults to `disp_par=1.0`.
+- Kept post-step modal damping available only as an experimental hook and set
+  the RH validation defaults to zero modal damping so the residual is not
+  artificially filtered.
+- Added unit tests for the negative-semidefinite recurrence-control operator
+  and the RMS velocity scaling that matches GKW `idisp=2`.
+- Regenerated the reduced validation CSV/PDF artifacts with the in-residual
+  `disp_par` path. RH and Cyclone remain OPEN; GX/eik, DESC/eik, and GX/GIST
+  pass.
+- Updated `main.tex` with the `disp_par` equation and with the current reduced
+  validation status.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_linear_rhs.py tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/physics/rhs_terms.py tests/test_linear_rhs.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `.venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused tests: 20 passed,
+  - full test suite: 127 passed,
+  - ruff: all checks passed,
+  - LaTeX: `main.pdf` built successfully,
+  - diff check: clean,
+  - validation summary: RH endpoint OPEN (`0.9995304769749543`), RH plateau
+    OPEN (`0.9987612200398621`), Cyclone OPEN (`18.77815606907163`), GX/eik
+    PASS, DESC/eik PASS, GX/GIST PASS.
+
+### 2026-05-29: Added External GX/VMEC GIST eik Suite Gate
+
+- Committed the previous RH plateau, validation-figure, and DESC/eik checkpoint:
+  - commit `9d678ea` (`Add RH plateau and stellarator validation gates`).
+- Corrected `load_gx_eik_geometry_reference` for the local GIST/GS2 text
+  fixture drift-column order:
+  `theta, bmag, gradpar, gds2, gds21, gds22, cvdrift, cvdrift0, gbdrift, gbdrift0`.
+- Added `run_gx_gist_external_eik_suite_gate`, which maps independent GX/VMEC
+  GIST eik fixtures into solver geometry and compares the fields and
+  `k_perp^2` contract across multiple stellarator references.
+- Added tests for the corrected drift-column order and for the three-fixture
+  external eik-suite gate.
+- Extended `examples/run_validation_gates.py` with `--gx-gist-suite`.
+- Updated `examples/generate_validation_gate_figures.py` and regenerated the
+  validation CSV/PDF so the current result figure includes `GX/GIST` PASS.
+- Updated `main.tex` and `TODO.md` to record that GX/VMEC GIST external eik
+  coverage is in place while matched DESC-vs-external-eik parity remains open.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_validation_gates.py examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python examples/run_validation_gates.py --desc-eik --gx-gist-suite --rh-plateau --rh-t-end 0.05 --rh-t-start 0.02 --rh-diagnostic-interval 0.01 --rh-plateau-n-z 8 --rh-plateau-n-vpar 6 --rh-plateau-n-mu 4`
+  - `.venv/bin/python examples/generate_validation_gate_figures.py`
+- Verification results:
+  - focused benchmark-reference tests: 11 passed,
+  - focused ruff: all checks passed,
+  - validation CLI: `gx_gist_external_eik_suite` PASS with observed residual `0.0`,
+  - regenerated validation summary now includes `GX/GIST` PASS alongside
+    `GX/eik` PASS, `DESC/eik` PASS, and the open RH/Cyclone gates.
 
 ### 2026-05-29: Added DESC Geometry to the GX/eik Validation Path
 

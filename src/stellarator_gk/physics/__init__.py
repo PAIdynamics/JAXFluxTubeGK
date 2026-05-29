@@ -43,6 +43,7 @@ from .rhs_terms import (
     magnetic_drift_advection,
     mirror_force,
     parallel_field_drive,
+    parallel_recurrence_control,
     parallel_streaming,
 )
 from .velocity_moments import (
@@ -116,6 +117,7 @@ __all__ = [
     "normalized_energy",
     "parallel_field_drive",
     "parallel_heat_flux_moment",
+    "parallel_recurrence_control",
     "parallel_streaming_coefficient",
     "parallel_streaming",
     "parallel_flow_moment",

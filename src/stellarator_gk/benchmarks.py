@@ -307,7 +307,7 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
 
     The local GX VMEC test fixtures use one numeric header row followed by
     rows with
-    ``theta, bmag, gradpar, gds2, gds21, gds22, gbdrift, gbdrift0, cvdrift, cvdrift0``.
+    ``theta, bmag, gradpar, gds2, gds21, gds22, cvdrift, cvdrift0, gbdrift, gbdrift0``.
     """
 
     path = Path(path)
@@ -325,10 +325,10 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
         gds2=data[:, 3],
         gds21=data[:, 4],
         gds22=data[:, 5],
-        gbdrift=data[:, 6],
-        gbdrift0=data[:, 7],
-        cvdrift=data[:, 8],
-        cvdrift0=data[:, 9],
+        cvdrift=data[:, 6],
+        cvdrift0=data[:, 7],
+        gbdrift=data[:, 8],
+        gbdrift0=data[:, 9],
         source=str(path),
         header=header,
     )
@@ -596,6 +596,7 @@ def run_reduced_rosenbluth_hinton_gate(
     mu_max: float = 8.0,
     dt: float = 0.01,
     n_steps: int = 100,
+    parallel_recurrence_rate: float = 0.01,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Evolve the present reduced zonal-flow setup and compare its residual.
@@ -647,6 +648,8 @@ def run_reduced_rosenbluth_hinton_gate(
             temperature=1.0,
             zonal_correction=True,
         ),
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_recurrence_velocity_model="rms",
     )
     ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
     maxwellian = precompute.rhs.maxwellian[0]
@@ -666,7 +669,10 @@ def run_reduced_rosenbluth_hinton_gate(
     return evaluate_benchmark_gate(
         observed,
         target,
-        notes="reduced executable RH gate; production t=100 convergence remains open",
+        notes=(
+            "reduced executable RH gate with GKW-scaled disp_par recurrence control; "
+            "production t=100 convergence remains open"
+        ),
     )
 
 
@@ -681,7 +687,8 @@ def run_rosenbluth_hinton_plateau_gate(
     t_end: float = 100.0,
     t_start: float = 80.0,
     diagnostic_interval: float = 1.0,
-    z_modal_damping: float = 0.01,
+    parallel_recurrence_rate: float = 0.01,
+    z_modal_damping: float = 0.0,
     vpar_modal_damping: float = 0.0,
     mu_modal_damping: float = 0.0,
     modal_damping_order: int = 4,
@@ -693,9 +700,10 @@ def run_rosenbluth_hinton_plateau_gate(
 
     The metric follows the GKW/Gyaradax benchmark convention:
     ``sqrt(mean(kxspec(t)/kxspec(0)))`` over the late-time window.  The default
-    parallel modal damping is benchmark-motivated by the Gyaradax/GKW
-    ``disp_par=0.01`` RH setup, but this spectral implementation is still an
-    open validation target until the late plateau agrees with the reference.
+    recurrence control follows the Gyaradax/GKW ``disp_par=0.01`` scaling as
+    an in-residual fourth-order parallel term.  The modal filter arguments are
+    retained for experiments but default to zero and are not part of the
+    production gate.
     """
 
     from .geometry import build_s_alpha_geometry
@@ -754,6 +762,8 @@ def run_rosenbluth_hinton_plateau_gate(
             temperature=1.0,
             zonal_correction=True,
         ),
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_recurrence_velocity_model="rms",
     )
     ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
     state = jnp.zeros((n_vpar, n_mu, n_z, 3, 1), dtype=jnp.complex128)
@@ -830,6 +840,7 @@ def run_rosenbluth_hinton_plateau_gate(
         "long-time RH plateau gate; "
         f"status={status}, t_start={t_start:g}, t_end={current_time:g}, "
         f"diagnostic_interval={diagnostic_interval:g}, "
+        f"disp_par={parallel_recurrence_rate:g}, "
         f"z_modal_damping={z_modal_damping:g}, "
         f"vpar_modal_damping={vpar_modal_damping:g}, "
         f"mu_modal_damping={mu_modal_damping:g}, "
@@ -856,6 +867,7 @@ def run_reduced_cyclone_base_case_gate(
     dt: float = 0.003,
     n_steps: int = 100,
     growth_window_fraction: float = 0.5,
+    parallel_recurrence_rate: float = 1.0,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Run the present reduced Cyclone setup and compare selected growth."""
@@ -905,6 +917,8 @@ def run_reduced_cyclone_base_case_gate(
             temperature=1.0,
             zonal_correction=False,
         ),
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_recurrence_velocity_model="rms",
     )
     shape = (n_vpar, n_mu, n_z, 1, 2)
     index = jnp.arange(np.prod(shape), dtype=jnp.float64).reshape(shape)
@@ -931,7 +945,8 @@ def run_reduced_cyclone_base_case_gate(
         diagnostics.growth_rate[1],
         target,
         notes=(
-            "reduced executable CBC gate with late-window growth fit; "
+            "reduced executable CBC gate with late-window growth fit and "
+            "GKW-scaled disp_par recurrence control; "
             "production GKW/GX agreement remains open"
         ),
     )
@@ -999,6 +1014,59 @@ def run_geometry_to_gx_eik_export_gate(
         notes=(
             "solver-produced stellarator geometry exported to GX/GS2 eik-compatible "
             "fields; internal mirror coefficient G is tracked separately"
+        ),
+    )
+
+
+def run_gx_gist_external_eik_suite_gate(
+    paths,
+    *,
+    n_theta: int = 33,
+    fourier_grid=None,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Run external GIST/GS2 eik fixtures through the solver geometry contract."""
+
+    from .grids import build_fourier_grid, build_parallel_grid
+    from .types import FourierGridSpec, ParallelGridSpec
+
+    paths = tuple(Path(path) for path in paths)
+    if not paths:
+        raise ValueError("at least one eik reference path is required")
+    if n_theta < 2:
+        raise ValueError("n_theta must be at least 2")
+    fourier = fourier_grid or build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
+    )
+    theta = np.linspace(-np.pi, np.pi, n_theta, endpoint=False)
+    z = theta / (2.0 * np.pi)
+    dz = z[1] - z[0]
+    parallel = build_parallel_grid(
+        ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
+    )
+    errors = []
+    for path in paths:
+        reference = load_gx_eik_geometry_reference(path)
+        sampled = resample_gx_eik_geometry_reference(reference, theta)
+        geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+        report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
+        errors.append(report.max_abs_error)
+    observed = jnp.max(jnp.asarray(errors, dtype=jnp.float64))
+    target = target or BenchmarkTarget(
+        name="gx_gist_external_eik_suite",
+        quantity="max_abs_geometry_error",
+        reference_value=0.0,
+        tolerance=1.0e-10,
+        source=";".join(str(path) for path in paths),
+        metadata=(("n_references", len(paths)), ("n_theta", int(n_theta))),
+    )
+    return evaluate_benchmark_gate(
+        observed,
+        target,
+        normalize_by_tolerance=False,
+        notes=(
+            "independent GX/VMEC GIST eik fixtures mapped into solver geometry "
+            "and compared field-by-field"
         ),
     )
 

@@ -25,6 +25,7 @@ from stellarator_gk import (
     magnetic_drift_advection,
     mirror_force,
     parallel_field_drive,
+    parallel_recurrence_control,
     parallel_streaming,
 )
 
@@ -135,6 +136,78 @@ def test_streaming_and_mirror_terms_match_manufactured_derivatives():
 
     np.testing.assert_allclose(streaming, expected_streaming, rtol=2e-10, atol=2e-10)
     np.testing.assert_allclose(mirror, expected_mirror, rtol=2e-10, atol=2e-10)
+
+
+def test_gkw_scaled_parallel_recurrence_control_is_negative_semidefinite():
+    velocity, parallel, fourier, geometry, species, _precompute, _residual_precompute = _setup(
+        n_z=32
+    )
+    rate = 0.2
+    precompute = build_linear_rhs_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        parallel_recurrence_rate=rate,
+    )
+    shape = (
+        velocity.vpar.shape[0],
+        velocity.mu.shape[0],
+        parallel.z.shape[0],
+        fourier.kx.shape[0],
+        fourier.ky.shape[0],
+    )
+    profile = jnp.sin(2.0 * jnp.pi * parallel.z)
+    distribution = jnp.ones(shape, dtype=jnp.complex128) * profile[None, None, :, None, None]
+
+    term = parallel_recurrence_control(
+        distribution,
+        precompute.parallel_recurrence_operator,
+        precompute.parallel_recurrence_coeff,
+    )
+    energy_rate = jnp.real(jnp.vdot(distribution, term))
+
+    assert precompute.parallel_recurrence_operator.shape == parallel.D_z.shape
+    assert precompute.parallel_recurrence_coeff.shape == (
+        1,
+        velocity.vpar.shape[0],
+        parallel.z.shape[0],
+    )
+    assert energy_rate < 0.0
+
+
+def test_parallel_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
+    velocity, _parallel, _fourier, _geometry, _species, _precompute, residual_precompute = _setup()
+    rate = 0.3
+    precompute = build_linear_residual_precompute(
+        velocity,
+        _parallel,
+        _fourier,
+        _geometry,
+        _species,
+        parallel_recurrence_rate=rate,
+    )
+
+    v_abs = jnp.abs(velocity.vpar)[None, :, None]
+    safe_v_abs = jnp.where(v_abs > 1.0e-300, v_abs, 1.0)
+    scale = jnp.where(
+        v_abs > 1.0e-300,
+        jnp.abs(residual_precompute.rhs.parallel_streaming_coeff) / safe_v_abs,
+        0.0,
+    )
+    expected = rate * jnp.sqrt(jnp.mean(velocity.vpar**2)) * jnp.max(
+        scale,
+        axis=1,
+        keepdims=True,
+    )
+
+    np.testing.assert_allclose(
+        precompute.rhs.parallel_recurrence_coeff,
+        jnp.broadcast_to(expected, precompute.rhs.parallel_recurrence_coeff.shape),
+        rtol=1e-13,
+        atol=1e-13,
+    )
 
 
 def test_drift_and_field_drive_terms_match_formulae():

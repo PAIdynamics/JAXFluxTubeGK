@@ -37,6 +37,7 @@ from stellarator_gk import (
     load_gx_eik_geometry_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_gx_gist_external_eik_suite_gate,
     run_gx_eik_geometry_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
@@ -97,7 +98,8 @@ def _run_rh_plateau_points() -> list[RhPlateauPoint]:
             t_end=t_end,
             t_start=t_start,
             diagnostic_interval=0.01,
-            z_modal_damping=0.01,
+            parallel_recurrence_rate=0.01,
+            z_modal_damping=0.0,
         )
         points.append(
             RhPlateauPoint(
@@ -118,6 +120,7 @@ def _run_gate_summary(rh_plateau_point: RhPlateauPoint) -> list[GateSummary]:
     cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
     eik = _run_eik_gate()
     desc_eik = _run_desc_eik_export_gate()
+    gx_gist = _run_gx_gist_suite_gate()
     return [
         _summary_from_result("RH endpoint", reduced_rh),
         GateSummary(
@@ -133,6 +136,7 @@ def _run_gate_summary(rh_plateau_point: RhPlateauPoint) -> list[GateSummary]:
         _summary_from_result("Cyclone", cyclone),
         _summary_from_result("GX/eik", eik),
         _summary_from_result("DESC/eik", desc_eik),
+        _summary_from_result("GX/GIST", gx_gist),
     ]
 
 
@@ -193,6 +197,24 @@ def _run_desc_eik_export_gate():
     return run_geometry_to_gx_eik_export_gate(geometry, fourier)
 
 
+def _run_gx_gist_suite_gate():
+    paths = (
+        Path(
+            "relevant-codes/gx/geometry_modules/vmec/tests/"
+            "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+        ),
+        Path(
+            "relevant-codes/gx/geometry_modules/vmec/tests/"
+            "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
+        ),
+        Path(
+            "relevant-codes/gx/geometry_modules/vmec/tests/"
+            "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000"
+        ),
+    )
+    return run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
+
+
 def _parallel_grid_from_fixture_z(z):
     z = np.asarray(z, dtype=float)
     dz = z[1] - z[0]
@@ -203,7 +225,7 @@ def _parallel_grid_from_fixture_z(z):
 
 def _write_rh_csv(path: Path, points: list[RhPlateauPoint]) -> None:
     with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(
             (
                 "t_end",
@@ -231,7 +253,7 @@ def _write_rh_csv(path: Path, points: list[RhPlateauPoint]) -> None:
 
 def _write_summary_csv(path: Path, rows: list[GateSummary]) -> None:
     with path.open("w", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(
             (
                 "label",

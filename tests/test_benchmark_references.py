@@ -30,6 +30,7 @@ from stellarator_gk import (
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_gx_gist_external_eik_suite_gate,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
@@ -105,6 +106,21 @@ def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
     np.testing.assert_allclose(reference.bmag[0], reference.bmag[-1], rtol=2e-12)
     assert jnp.all(jnp.isfinite(reference.gds2))
     assert jnp.min(reference.bmag) > 0.0
+
+
+def test_gx_eik_loader_uses_gist_drift_column_order():
+    path = (
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
+    )
+
+    reference = load_gx_eik_geometry_reference(path)
+
+    np.testing.assert_allclose(reference.cvdrift[0], 9.4946168708e-01)
+    np.testing.assert_allclose(reference.cvdrift0[0], -2.1124355474e-02)
+    np.testing.assert_allclose(reference.gbdrift[0], 8.8374219166e-01)
+    np.testing.assert_allclose(reference.gbdrift0[0], -2.1124355474e-02)
 
 
 def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
@@ -197,6 +213,27 @@ def test_desc_fixture_geometry_exports_to_gx_eik_contract():
     np.testing.assert_allclose(reference.gbdrift0 + reference.cvdrift0, geometry.D_x)
     np.testing.assert_allclose(reference.gbdrift + reference.cvdrift, geometry.D_y)
     np.testing.assert_allclose(report.field_errors, 0.0, atol=1.0e-13)
+    np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
+
+
+def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
+    paths = (
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000",
+        ROOT
+        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000",
+    )
+
+    gate = run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
+
+    assert bool(gate.passed)
+    assert gate.target.name == "gx_gist_external_eik_suite"
+    assert dict(gate.target.metadata)["n_references"] == 3
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
