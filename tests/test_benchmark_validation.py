@@ -1,5 +1,6 @@
 from importlib import util
 from pathlib import Path
+import tomllib
 
 import jax.numpy as jnp
 import numpy as np
@@ -12,11 +13,13 @@ from stellarator_gk import (
     GeometryScalarParams,
     ParallelGridSpec,
     SpeciesParams,
+    VelocityBasisSpec,
     VelocityGridSpec,
     adiabatic_quasineutrality_residual,
     build_boozer_parallel_grid,
     build_circular_geometry,
     build_fourier_grid,
+    build_hermite_laguerre_basis,
     build_linear_residual_precompute,
     build_parallel_grid,
     build_physical_flux_tube_geometry_from_arrays,
@@ -28,6 +31,7 @@ from stellarator_gk import (
     linear_growth_diagnostics,
     linear_residual,
     map_physical_to_internal_geometry,
+    max_growth_objective,
     sample_boozer_field_line,
     solve_adiabatic_electron_phi,
 )
@@ -257,6 +261,116 @@ def test_parallel_spectral_derivative_converges_with_resolution():
 
     assert fine < coarse * 1.0e-3
     assert fine < 1.0e-8
+
+
+def test_velocity_space_spectral_derivatives_converge_with_resolution():
+    def vparallel_error(n_vpar):
+        grid = build_velocity_grid(
+            VelocityGridSpec(n_vpar=n_vpar, n_mu=4, vpar_max=2.0, mu_max=1.0)
+        )
+        vpar = grid.vpar
+        values = jnp.exp(0.25 * vpar) + 0.1 * jnp.sin(2.0 * vpar)
+        exact = 0.25 * jnp.exp(0.25 * vpar) + 0.2 * jnp.cos(2.0 * vpar)
+        return jnp.sqrt(jnp.mean(jnp.abs(grid.D_vpar @ values - exact) ** 2))
+
+    def mu_error(n_mu):
+        grid = build_velocity_grid(
+            VelocityGridSpec(n_vpar=4, n_mu=n_mu, vpar_max=1.0, mu_max=3.0)
+        )
+        mu = grid.mu
+        values = jnp.exp(-0.35 * mu) + 0.2 * jnp.cos(1.5 * mu)
+        exact = -0.35 * jnp.exp(-0.35 * mu) - 0.3 * jnp.sin(1.5 * mu)
+        return jnp.sqrt(jnp.mean(jnp.abs(grid.D_mu @ values - exact) ** 2))
+
+    vparallel_coarse = vparallel_error(8)
+    vparallel_fine = vparallel_error(16)
+    mu_coarse = mu_error(8)
+    mu_fine = mu_error(16)
+
+    assert vparallel_fine < vparallel_coarse * 1.0e-5
+    assert vparallel_fine < 1.0e-8
+    assert mu_fine < mu_coarse * 1.0e-6
+    assert mu_fine < 1.0e-10
+
+
+def test_manufactured_ky_growth_scan_converges_with_resolution():
+    peak_ky = 0.41
+    reference_growth = 0.18
+    curvature = 1.7
+
+    def scan_error(n_ky):
+        fourier = build_fourier_grid(
+            FourierGridSpec(n_kx=1, n_ky=n_ky, kx_max=0.0, ky_max=1.0)
+        )
+        growth = reference_growth - curvature * (fourier.ky - peak_ky) ** 2
+        return jnp.abs(max_growth_objective(growth) - reference_growth)
+
+    coarse = scan_error(9)
+    fine = scan_error(65)
+
+    assert fine < coarse / 20.0
+    assert fine < 1.0e-4
+
+
+def test_gx_cyclone_input_fixture_maps_to_solver_specs_and_geometry():
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
+    )
+    data = tomllib.loads(path.read_text())
+    dimensions = data["Dimensions"]
+    domain = data["Domain"]
+    geometry_input = data["Geometry"]
+    species_input = data["species"]
+
+    n_z = dimensions["ntheta"] * (2 * dimensions["nperiod"] - 1)
+    y0 = domain["y0"]
+    fourier = build_fourier_grid(
+        FourierGridSpec(
+            n_kx=dimensions["nkx"],
+            n_ky=dimensions["nky"],
+            kx_max=0.0,
+            ky_max=(dimensions["nky"] - 1) / y0,
+        )
+    )
+    basis = build_hermite_laguerre_basis(
+        VelocityBasisSpec(
+            n_hermite=dimensions["nhermite"],
+            n_laguerre=dimensions["nlaguerre"],
+        )
+    )
+    parallel = _cell_centered_parallel_grid(n_z)
+    geometry = build_s_alpha_geometry(
+        parallel,
+        GeometryScalarParams(
+            q=geometry_input["qinp"],
+            shat=geometry_input["shat"],
+            eps=geometry_input["eps"],
+        ),
+    )
+    ion = SpeciesParams(
+        charge=species_input["z"][0],
+        mass=species_input["mass"][0],
+        density=species_input["dens"][0],
+        temperature=species_input["temp"][0],
+        density_gradient=species_input["fprim"][0],
+        temperature_gradient=species_input["tprim"][0],
+    )
+
+    np.testing.assert_allclose(fourier.ky[0], 0.0)
+    np.testing.assert_allclose(fourier.ky[1], 1.0 / y0)
+    np.testing.assert_allclose(fourier.ky[-1], (dimensions["nky"] - 1) / y0)
+    np.testing.assert_allclose(fourier.parseval[0], 1.0)
+    np.testing.assert_allclose(fourier.parseval[1:], 2.0)
+    assert basis.hermite_to_grid.shape == (dimensions["nhermite"], dimensions["nhermite"])
+    assert basis.laguerre_to_grid.shape == (dimensions["nlaguerre"], dimensions["nlaguerre"])
+    assert geometry.B.shape == (n_z,)
+    assert jnp.all(jnp.isfinite(geometry.B))
+    assert data["Physics"]["nonlinear_mode"] is False
+    assert data["Boltzmann"]["Boltzmann_type"] == "electrons"
+    assert data["Dissipation"]["closure_model"] == "none"
+    np.testing.assert_allclose(ion.density_gradient, 0.8)
+    np.testing.assert_allclose(ion.temperature_gradient, 2.49)
 
 
 def test_rk4_growth_rate_converges_with_timestep():

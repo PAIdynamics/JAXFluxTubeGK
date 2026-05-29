@@ -68,6 +68,15 @@ from .objectives import (
     solve_field_from_state,
     weighted_quasilinear_proxy,
 )
+from .performance import (
+    LinearMemoryEstimate,
+    LinearResidualBenchmark,
+    benchmark_linear_residual,
+    estimate_linear_memory_from_dimensions,
+    estimate_linear_memory_from_precompute,
+    format_bytes,
+    pytree_nbytes,
+)
 from .physics import (
     AdiabaticElectronParams,
     AdiabaticQuasineutralityPrecompute,
@@ -135,6 +144,7 @@ from .physics import (
 from .solver import (
     LinearResidualPrecompute,
     build_linear_residual_precompute,
+    jitted_linear_residual,
     linear_residual,
 )
 from .time_advance import (
@@ -164,9 +174,11 @@ __all__ = [
     "KineticQuasineutralityPrecompute",
     "KyNormalizationResult",
     "LinearObjectiveValues",
+    "LinearMemoryEstimate",
     "LinearRHSPrecompute",
     "LinearGrowthDiagnostics",
     "LinearResidualPrecompute",
+    "LinearResidualBenchmark",
     "ModeConnectivity",
     "ParallelGrid",
     "ParallelGridSpec",
@@ -202,6 +214,7 @@ __all__ = [
     "build_s_alpha_geometry",
     "build_velocity_basis",
     "build_velocity_grid",
+    "benchmark_linear_residual",
     "bessel_j0",
     "dense_eigensystem",
     "dense_linear_operator_matrix",
@@ -213,10 +226,13 @@ __all__ = [
     "equilibrium_drive",
     "equilibrium_gradient_drive_coefficient",
     "estimate_linear_cfl_dt",
+    "estimate_linear_memory_from_dimensions",
+    "estimate_linear_memory_from_precompute",
     "evaluate_boozer_magnetic_field",
     "flatten_state",
     "fluid_moments",
     "free_energy_spectrum",
+    "format_bytes",
     "gamma0",
     "gamma0_limit_error",
     "gyroaverage_laguerre_coefficients",
@@ -225,6 +241,7 @@ __all__ = [
     "hypercollision_damping_rates",
     "initial_value_growth_objectives",
     "integrate_fixed_step",
+    "jitted_linear_residual",
     "k_perp_squared",
     "kperp2_weighted_average",
     "kxky_spectrum",
@@ -260,6 +277,7 @@ __all__ = [
     "perpendicular_heat_flux_moment",
     "perpendicular_temperature_moment",
     "polarization_argument",
+    "pytree_nbytes",
     "radial_flux_spectrum",
     "real_frequency",
     "rk4_step",

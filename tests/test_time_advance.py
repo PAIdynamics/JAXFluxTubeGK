@@ -52,6 +52,25 @@ def test_rk4_fixed_step_has_fourth_order_scalar_convergence():
     assert error_fine < 2.0e-8
 
 
+def test_fixed_step_can_store_only_endpoints_for_memory_sensitive_runs():
+    rate = 0.2 - 0.3j
+    state0 = jnp.asarray([1.0 + 0.1j, -0.2 + 0.4j])
+    dt = 0.04
+    n_steps = 6
+
+    def rhs(state, coefficient):
+        return coefficient * state
+
+    full = integrate_fixed_step(state0, dt, n_steps, rhs, rate)
+    endpoints = integrate_fixed_step(state0, dt, n_steps, rhs, rate, store_history=False)
+
+    np.testing.assert_allclose(endpoints.state, full.state, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(endpoints.history[0], state0, rtol=0, atol=0)
+    np.testing.assert_allclose(endpoints.history[-1], full.state, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(endpoints.times, jnp.asarray([0.0, dt * n_steps]))
+    assert endpoints.history.shape == (2,) + state0.shape
+
+
 def test_mode_chain_growth_frequency_and_normalization():
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=5, n_ky=2, kx_max=1.0, ky_values=(0.0, 0.4), ikxspace=2)

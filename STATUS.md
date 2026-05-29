@@ -13,7 +13,13 @@ and tested through quasineutrality, diagnostics, the self-consistent linear RHS
 residual, fixed-step RK4 integration, linear growth-rate extraction, matrix-free
 operator wrappers, and differentiable objective helpers. The first Phase 10
 validation tranche is implemented with reduced parity, stellarator fixture, and
-manufactured convergence tests.
+manufactured convergence tests. A second Phase 10 validation tranche now adds
+velocity-space and `ky` convergence checks plus a GX Cyclone input-contract
+fixture mapped into the solver's public grid, geometry, species, and
+Hermite-Laguerre interfaces. Phase 11 CPU performance and differentiability
+hardening is implemented with endpoint-only RK4 integration, a public jitted
+linear residual, memory/profiling helpers, performance smoke tests, and
+static-vs-differentiable documentation.
 
 The repository currently contains:
 
@@ -21,6 +27,7 @@ The repository currently contains:
 - `main.tex`: physical model and numerical scheme specification for the first solver implementation.
 - `TODO.md`: project implementation plan.
 - `STATUS.md`: this progress ledger.
+- `docs/performance_and_differentiability.md`: Phase 11 CPU scaling, memory, and AD/topology notes.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -29,8 +36,9 @@ The repository currently contains:
 - `src/stellarator_gk/diagnostics.py`: Phase 6 diagnostic reductions, spectra, and quasilinear flux ingredients.
 - `src/stellarator_gk/operators.py`: Phase 9 matrix-free residual actions, mode-chain projection helpers, dense reduced-operator construction, and tiny eigensystem helpers.
 - `src/stellarator_gk/objectives.py`: Phase 9 growth-rate, selected-mode, quasilinear-proxy, mode-structure, and short initial-value objective helpers.
+- `src/stellarator_gk/performance.py`: Phase 11 reduced-grid profiler, memory estimators, PyTree byte accounting, and byte-format helpers.
 - `src/stellarator_gk/time_advance.py`: Phase 8 RK4 stepping, fixed-step scan integration, CFL estimate, per-`ky` normalization, and growth/frequency diagnostics.
-- `tests/`: Phase 2 through Phase 10 baseline unit and validation tests.
+- `tests/`: Phase 2 through Phase 11 unit, validation, performance-smoke, and differentiability tests.
 - `papers/`: Gyaradax paper sources, stellarator microstability/optimization papers, and GKW paper materials.
 - `papers/gkw/`: GKW reference PDF, rebuilt extracted TeX, GKW manual PDF, and related paper material.
 - `papers/gx-paper/`: GX paper source for the Fourier-Laguerre-Hermite flux-tube formulation and benchmark discussion.
@@ -96,31 +104,92 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: continue Phase 10 benchmarks and validation with external-reference fixtures:
+Goal: begin Phase 12 optimization integration:
 
-- add full Rosenbluth-Hinton zonal-flow residual once a stable reference fixture is selected,
-- add Cyclone Base Case linear ITG growth-rate checks against GKW/Gyaradax data,
-- add GX/eik geometry comparisons where local eik-style fixtures are available,
-- broaden convergence tests over velocity resolution and `ky`,
-- document benchmark tolerances in a dedicated docs/benchmark note once reference fixtures stabilize.
+- define differentiable geometry/profile input knobs for optimization,
+- implement a single-surface/single-alpha objective wrapper using the Phase 9/11 no-history path,
+- add a small toy `jax.value_and_grad` optimization example,
+- keep DESC equilibrium coupling as the next step after the toy objective is stable.
 
 Expected file changes:
 
-- additional benchmark fixture files under `tests/` or a dedicated `benchmarks/`/`fixtures/` path,
-- possible reference readers/adapters for reduced GKW/Gyaradax/GX data,
-- small additions to geometry/RHS/time/objective modules only when needed by validation,
-- `tests/`
+- optimization-facing helper module or additions to `objectives.py`,
+- focused tests for single-surface/single-alpha objective values and gradients,
+- example or docs snippet for the toy optimization path,
+- `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- external-data phi/RHS and diagnostic parity tests,
-- Rosenbluth-Hinton and Cyclone growth-rate tolerance checks for stable reference fixtures,
-- GX/eik geometry-array comparison tests where fixtures exist,
-- convergence tests over velocity resolution and `ky`,
-- clear tolerances recorded in `STATUS.md`.
+- objective shape/value smoke tests,
+- `jax.grad`/`jax.value_and_grad` finite-gradient checks,
+- finite-difference agreement on selected optimization knobs,
+- no-history integration parity against the default history path on reduced grids.
 
 ## Round Log
+
+### 2026-05-29: Implemented Phase 11 CPU Performance and Differentiability Hardening
+
+- Added `src/stellarator_gk/performance.py` with:
+  - `LinearMemoryEstimate`,
+  - `LinearResidualBenchmark`,
+  - `pytree_nbytes`,
+  - `estimate_linear_memory_from_dimensions`,
+  - `estimate_linear_memory_from_precompute`,
+  - `benchmark_linear_residual`,
+  - `format_bytes`.
+- Added `jitted_linear_residual` as the public fixed-topology JIT residual entry point.
+- Extended `integrate_fixed_step` with `store_history=False`:
+  - default path still uses `jax.lax.scan` and stores all snapshots,
+  - endpoint-only path uses `jax.lax.fori_loop` and stores initial/final states only.
+- Added `docs/performance_and_differentiability.md` documenting:
+  - CPU execution strategy,
+  - memory scaling and endpoint-history savings,
+  - qualitative GX comparison,
+  - differentiable continuous quantities versus static topology/file-I/O.
+- Added `tests/test_performance_hardening.py` covering:
+  - dimension-only target memory estimates,
+  - assembled-precompute byte accounting,
+  - eager versus jitted residual parity,
+  - reduced-grid residual benchmark smoke timing,
+  - finite/stable gradients through a jitted no-history objective path.
+- Extended `tests/test_time_advance.py` with endpoint-only RK4 parity.
+- Updated `TODO.md` to mark Phase 11 complete and set Phase 12 as the next implementation round.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_performance_hardening.py tests/test_time_advance.py`
+  - `uv run --extra dev ruff check src tests`
+  - `uv run --extra dev python -m pytest`
+- Verification:
+  - `10 passed` for the Phase 11 targeted tests.
+  - `ruff check src tests` passed.
+  - `95 passed` for the full pytest suite.
+
+### 2026-05-29: Extended Phase 10 Benchmark and Convergence Tests
+
+- Committed the first Phase 10 baseline validation tranche:
+  - commit `6fd5db0` (`Add baseline benchmark validation tests`).
+- Extended `tests/test_benchmark_validation.py` with:
+  - Chebyshev `v_parallel` derivative convergence from `N_vparallel=8` to `N_vparallel=16`,
+  - Chebyshev `mu` derivative convergence from `N_mu=8` to `N_mu=16`,
+  - a manufactured `ky` growth-scan convergence check from `N_ky=9` to `N_ky=65`,
+  - a GX Cyclone s-alpha input fixture parsed from `relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`.
+- The GX fixture check maps the local TOML input into:
+  - `FourierGridSpec`/`build_fourier_grid`,
+  - `VelocityBasisSpec`/`build_hermite_laguerre_basis`,
+  - `GeometryScalarParams`/`build_s_alpha_geometry`,
+  - `SpeciesParams`.
+- Updated `TODO.md`:
+  - marked the stale coupled phi/RHS parity checkbox complete,
+  - marked the first GX input fixture complete,
+  - marked convergence over `N_vparallel`, `N_mu`, and `ky` complete.
+- Commands run:
+  - `uv run --extra dev python -m pytest tests/test_benchmark_validation.py`
+  - `uv run --extra dev python -m pytest`
+  - `uv run --extra dev ruff check src tests`
+- Verification:
+  - `9 passed` for `tests/test_benchmark_validation.py`.
+  - `90 passed` for the full pytest suite.
+  - `ruff check src tests` passed.
 
 ### 2026-05-29: Implemented Phase 10 Baseline Benchmarks and Validation
 

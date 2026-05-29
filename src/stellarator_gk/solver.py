@@ -124,6 +124,13 @@ def linear_residual(
     return linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
 
 
+@jax.jit
+def jitted_linear_residual(distribution, precomputed: LinearResidualPrecompute):
+    """JIT-compiled self-consistent linear residual for fixed grid topology."""
+
+    return linear_residual(distribution, precomputed=precomputed)
+
+
 def _solve_phi(distribution, precompute: LinearResidualPrecompute):
     if precompute.field_model == "adiabatic":
         return solve_adiabatic_electron_phi(distribution, precompute.field)

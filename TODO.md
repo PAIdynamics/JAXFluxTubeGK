@@ -366,7 +366,7 @@ This is a parallel extension path, not a blocker for the first Chebyshev-colloca
   - quasineutrality residual near machine precision,
   - algebraic small-fixture checks against the Gyaradax/GKW phi-solve convention,
   - flux/spectrum normalization checks.
-- [ ] Add a direct reduced Gyaradax/GKW phi/RHS parity fixture using the Phase 7 coupled precompute inputs.
+- [x] Add a direct reduced Gyaradax/GKW phi/RHS parity fixture using the Phase 7 coupled precompute inputs.
 
 ## Phase 7: Linear RHS Residual
 
@@ -439,7 +439,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add a reduced zonal-flow invariant test: constant zonal mode is stationary in a flat flux tube.
 - [ ] Add full Rosenbluth-Hinton zonal-flow residual test.
 - [ ] Add Cyclone Base Case linear ITG growth-rate test.
-- [ ] Add GX-inspired benchmark fixtures from `relevant-codes/gx/docs/inputFiles/` and `relevant-codes/gx/unit_tests/inputs/` after verifying their current compatibility.
+- [x] Add a first GX-inspired benchmark fixture from `relevant-codes/gx/benchmarks/linear/ITG_cyclone/` after verifying TOML compatibility.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
@@ -450,25 +450,34 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [ ] Compare geometry arrays against GX/GS2/stella-style `eik` outputs where local fixtures are available.
 - [ ] Add convergence tests over:
   - [x] `N_s`,
-  - `N_vparallel`,
-  - `N_mu`,
-  - `ky`,
+  - [x] `N_vparallel`,
+  - [x] `N_mu`,
+  - [x] `ky`,
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures and manufactured convergence. Full Rosenbluth-Hinton, Cyclone Base Case, GX/eik parity, and broader convergence scans remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, and a GX Cyclone input-contract fixture. Full Rosenbluth-Hinton, production Cyclone growth-rate checks, GX/eik geometry parity, and ITG scan comparison remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
-- [ ] Profile reduced and target-size linear runs on CPU.
-- [ ] Compare algorithmic scaling against GX qualitatively, while treating GPU-native CUDA performance as a non-goal for the first differentiable CPU-oriented solver.
-- [ ] Remove avoidable Python loops from traced paths.
-- [ ] Cache/precompute static coefficient arrays.
-- [ ] Use `jax.jit`, `jax.vmap`, and `jax.lax.scan` carefully with static arguments.
-- [ ] Check memory footprint for target grids.
-- [ ] Add performance smoke tests with relaxed thresholds.
-- [ ] Verify gradients for target objectives are finite and stable.
-- [ ] Document which operations are differentiable and which are treated as static topology.
+- [x] Profile reduced and target-size linear runs on CPU:
+  - reduced-grid JIT residual smoke profiler,
+  - static target-grid memory estimates before allocating large arrays.
+- [x] Compare algorithmic scaling against GX qualitatively, while treating GPU-native CUDA performance as a non-goal for the first differentiable CPU-oriented solver.
+- [x] Remove avoidable Python loops from traced paths:
+  - RK4 history path uses `jax.lax.scan`,
+  - memory-sensitive endpoint path uses `jax.lax.fori_loop`.
+- [x] Cache/precompute static coefficient arrays in Phase 7 precompute objects and expose precompute byte accounting.
+- [x] Use `jax.jit`, `jax.vmap`, and `jax.lax.scan` carefully with static arguments:
+  - public `jitted_linear_residual`,
+  - dense reduced-operator construction remains `vmap`-based,
+  - fixed-step integration remains scan/loop based.
+- [x] Check memory footprint for target grids with dimension-only and precompute-based estimators.
+- [x] Add performance smoke tests with relaxed thresholds.
+- [x] Verify gradients for target objectives are finite and stable on reduced JIT/no-history objective paths.
+- [x] Document which operations are differentiable and which are treated as static topology in `docs/performance_and_differentiability.md`.
+
+Phase 11 baseline note: the current hardening pass adds CPU profiling/memory tools and differentiability smoke coverage. Production timing comparisons should still be rerun after full Rosenbluth-Hinton/Cyclone/GX validation fixtures are selected.
 
 ## Phase 12: Optimization Integration
 
@@ -485,4 +494,4 @@ Phase 10 baseline note: the current validation tranche covers reduced determinis
 
 ## Immediate Next Round
 
-Continue Phase 10 with external-reference validation: reduced GKW/Gyaradax data parity where fixtures are available, Rosenbluth-Hinton and Cyclone Base Case tolerances, GX/eik geometry comparisons, and convergence scans over velocity resolution and `ky`.
+Begin Phase 12 optimization integration: define differentiable geometry/profile input knobs, implement a single-surface/single-alpha objective wrapper, and add a small toy `jax.value_and_grad` optimization example before connecting DESC equilibria.

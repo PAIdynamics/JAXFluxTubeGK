@@ -75,13 +75,29 @@ def rk4_step(state, dt, rhs_fn, *rhs_args, filter_fn=None):
     return _apply_filter(next_state, filter_fn)
 
 
-def integrate_fixed_step(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=None):
-    """Advance ``state`` for ``n_steps`` fixed RK4 steps using ``jax.lax.scan``."""
+def integrate_fixed_step(
+    state,
+    dt,
+    n_steps: int,
+    rhs_fn,
+    *rhs_args,
+    filter_fn=None,
+    store_history: bool = True,
+):
+    """Advance ``state`` for ``n_steps`` fixed RK4 steps.
+
+    The default path stores every RK4 snapshot with ``jax.lax.scan``.  Passing
+    ``store_history=False`` uses ``jax.lax.fori_loop`` and stores only the
+    initial/final endpoints in ``history`` for memory-sensitive objective runs.
+    """
 
     if n_steps < 0:
         raise ValueError("n_steps must be nonnegative")
     state = jnp.asarray(state)
     dt = jnp.asarray(dt)
+
+    if not store_history:
+        return _integrate_fixed_step_endpoints(state, dt, n_steps, rhs_fn, *rhs_args, filter_fn=filter_fn)
 
     def body(carry, _index):
         next_state = rk4_step(carry, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
@@ -94,6 +110,22 @@ def integrate_fixed_step(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=N
     return TimeAdvanceResult(
         state=final_state,
         history=history,
+        times=times,
+        dt=dt,
+        n_steps=int(n_steps),
+    )
+
+
+def _integrate_fixed_step_endpoints(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=None):
+    def body(_index, carry):
+        return rk4_step(carry, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+
+    final_state = jax.lax.fori_loop(0, n_steps, body, state)
+    time_dtype = jnp.result_type(dt, jnp.float64)
+    times = jnp.asarray([0.0, dt * n_steps], dtype=time_dtype)
+    return TimeAdvanceResult(
+        state=final_state,
+        history=jnp.stack([state, final_state], axis=0),
         times=times,
         dt=dt,
         n_steps=int(n_steps),
