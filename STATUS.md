@@ -25,7 +25,14 @@ geometry knobs, reduced `rho`/`alpha`/`ky` scans, and a toy gradient-descent
 example before full DESC coupling. The first DESC coupling path is now
 implemented as a sampled-array adapter: DESC remains the equilibrium/geometry
 provider, while this solver consumes the required flux-tube geometry arrays in
-the fixed-topology objective.
+the fixed-topology objective. A direct optional DESC extraction adapter and CLI
+script now evaluate those arrays from a DESC equilibrium/example object onto
+`parallel_grid.z`. DESC dependencies are installed in the project `.venv`, and a
+canonical DSHAPE `.npz` fixture generated through the DESC HDF5/path loader now
+loads through the solver geometry contract. The current benchmark-informed
+optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
+loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
+and a reduced DESC DSHAPE fixture optimization example.
 
 The repository currently contains:
 
@@ -36,10 +43,14 @@ The repository currently contains:
 - `docs/performance_and_differentiability.md`: Phase 11 CPU scaling, memory, and AD/topology notes.
 - `docs/optimization_integration.md`: Phase 12 fixed-topology optimization and toy-gradient example.
 - `examples/optimization_loop.py`: runnable reduced optimization loop that prints objective/growth diagnostics and knob values at each iteration.
+- `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
+- `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
+- `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
-- `src/stellarator_gk/geometry/`: circular/\(s\)-alpha analytic geometry plus Boozer/precomputed flux-tube geometry scaffolding.
+- `src/stellarator_gk/benchmarks.py`: named validation targets and lightweight GX/GX-eik reference loaders.
+- `src/stellarator_gk/geometry/`: circular/\(s\)-alpha analytic geometry plus Boozer/precomputed/DESC flux-tube geometry scaffolding.
 - `src/stellarator_gk/physics/`: Phase 5 Bessel/FLR, Maxwellian, drive, drift, mirror, streaming primitives, Phase 5A Hermite-Laguerre velocity-moment utilities, Phase 6 quasineutrality solvers, and Phase 7 linear RHS terms.
 - `src/stellarator_gk/diagnostics.py`: Phase 6 diagnostic reductions, spectra, and quasilinear flux ingredients.
 - `src/stellarator_gk/operators.py`: Phase 9 matrix-free residual actions, mode-chain projection helpers, dense reduced-operator construction, and tiny eigensystem helpers.
@@ -114,27 +125,27 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: continue DESC validation coupling and benchmark-informed optimization:
+Goal: promote benchmark references into end-to-end validation gates:
 
-- add a direct DESC extraction script or fixture that evaluates the required geometry arrays on this solver's parallel grid,
-- connect the optimization objective to externally validated Phase 10 benchmark cases,
-- add stronger scan/objective examples once Rosenbluth-Hinton, Cyclone, and GX/eik references are stable,
-- keep toy equilibrium coefficients only as a reduced plumbing test.
+- evolve the full Rosenbluth-Hinton zonal-flow residual case against the named target,
+- run the production Cyclone Base Case growth-rate comparison at selected `ky`,
+- compare solver geometry arrays against the loaded GX/GS2 eik table,
+- use the resulting tolerances as gates for DESC-driven optimization examples.
 
 Expected file changes:
 
-- DESC fixture/source-adapter utilities,
-- tests comparing imported DESC arrays with stored reference values,
-- docs/examples for benchmark-informed optimization targets,
+- production benchmark run helpers/tests,
+- solver-to-eik geometry comparison utilities,
+- tighter docs/examples for benchmark-gated DESC optimization,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- direct DESC-array extraction and shape/normalization checks,
-- scan tests over multiple imported surfaces/field-line labels,
-- benchmark-informed objective checks once external references are selected,
-- continued finite-difference agreement on selected optimization knobs.
+- full RH residual tolerance test,
+- Cyclone selected-`ky` growth-rate tolerance test,
+- GX/GS2 eik geometry parity tolerance test,
+- continued reduced DESC objective and gradient checks.
 
 ## Round Log
 
@@ -150,6 +161,84 @@ Expected tests:
   - `.venv/bin/python -m pytest`
   - `latexmk -pdf -interaction=nonstopmode main.tex`
   - `git diff --check`
+
+### 2026-05-29: Added Direct DESC Extraction Adapter and Script
+
+- Added `src/stellarator_gk/geometry/desc_adapter.py` with:
+  - `DESC_GEOMETRY_COMPUTE_KEYS`,
+  - `desc_geometry_arrays_from_data`,
+  - `desc_geometry_arrays_from_equilibrium`,
+  - `build_desc_geometry_from_equilibrium`.
+- The adapter uses DESC's field-line coordinates \((\rho,\alpha,\zeta)\), computes the required vector contractions from DESC output, and feeds the existing `build_desc_geometry_from_arrays` solver contract.
+- Added `scripts/extract_desc_geometry_fixture.py` to load a DESC example equilibrium, sample it on `build_boozer_parallel_grid`, and write the physical flux-tube arrays to an `.npz` fixture file.
+- Added unit tests with a fake DESC equilibrium/grid path so the package tests do not require DESC as a hard dependency.
+- Local caveat: running the script against `relevant-codes/DESC` in the current `.venv` stops at DESC import because the local DESC checkout dependencies are not installed (`colorama` is the first missing package).
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_desc_adapter.py tests/test_flux_tube_geometry.py tests/test_optimization_integration.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/geometry/desc_adapter.py src/stellarator_gk/geometry/__init__.py src/stellarator_gk/__init__.py tests/test_desc_adapter.py scripts/extract_desc_geometry_fixture.py`
+  - `.venv/bin/python scripts/extract_desc_geometry_fixture.py --help`
+  - `.venv/bin/python scripts/extract_desc_geometry_fixture.py --desc-root relevant-codes/DESC --output /private/tmp/desc_geometry_probe.npz` (expected dependency failure until DESC requirements are installed)
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+
+### 2026-05-29: Installed DESC Dependencies and Generated DSHAPE Fixture
+
+- Installed DESC requirements into `.venv` with `uv pip install --python .venv/bin/python -r relevant-codes/DESC/requirements.txt`.
+- The install downgraded JAX/JAXLIB from `0.10.1` to DESC-compatible `0.9.2`.
+- Verified the local DESC checkout imports with `PYTHONPATH=relevant-codes/DESC`; DESC reports `0.17.1+27.gc119da0f8`.
+- Ran the extraction script against the local DESC `DSHAPE` example and wrote `fixtures/desc_geometry_dshape_rho05_alpha0.npz`.
+- Added a fixture-regression test that loads the `.npz`, checks grid consistency and finite positive geometry arrays, and maps it through `build_desc_geometry_from_arrays`.
+- Commands run:
+  - `uv pip install --python .venv/bin/python -r relevant-codes/DESC/requirements.txt`
+  - `PYTHONPATH=relevant-codes/DESC .venv/bin/python -c "import desc, jax; import desc.examples; print('desc', desc.__version__); print('jax', jax.__version__); print(desc.examples.listall()[:5])"`
+  - `.venv/bin/python scripts/extract_desc_geometry_fixture.py --desc-root relevant-codes/DESC --example DSHAPE --rho 0.5 --alpha 0.0 --output fixtures/desc_geometry_dshape_rho05_alpha0.npz`
+  - `.venv/bin/python -m pytest tests/test_desc_adapter.py tests/test_flux_tube_geometry.py tests/test_optimization_integration.py`
+  - `.venv/bin/python -m ruff check tests/test_desc_adapter.py`
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts`
+  - `git diff --check`
+
+### 2026-05-29: Added DESC HDF5/Path Loading
+
+- Added public DESC path-loading helpers:
+  - `load_desc_equilibrium`,
+  - `desc_geometry_arrays_from_path`,
+  - `build_desc_geometry_from_path`.
+- Extended `scripts/extract_desc_geometry_fixture.py` with `--desc-path`, `--file-format`, and `--family-index` so it can sample either a named DESC example or a direct HDF5/pickle path.
+- Enabled JAX x64 inside the extraction script before grid construction so generated fixtures preserve float64 arrays.
+- Regenerated `fixtures/desc_geometry_dshape_rho05_alpha0.npz` through the direct DESC HDF5 path `relevant-codes/DESC/desc/examples/DSHAPE_output.h5`.
+- Added fake-loader tests for path loading and verified the real local HDF5 path extraction once outside the unit-test suite.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_desc_adapter.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/geometry/desc_adapter.py src/stellarator_gk/geometry/__init__.py src/stellarator_gk/__init__.py tests/test_desc_adapter.py scripts/extract_desc_geometry_fixture.py`
+  - `.venv/bin/python scripts/extract_desc_geometry_fixture.py --desc-root relevant-codes/DESC --desc-path relevant-codes/DESC/desc/examples/DSHAPE_output.h5 --rho 0.5 --alpha 0.0 --output /private/tmp/desc_geometry_path_probe.npz`
+  - `.venv/bin/python scripts/extract_desc_geometry_fixture.py --desc-root relevant-codes/DESC --desc-path relevant-codes/DESC/desc/examples/DSHAPE_output.h5 --rho 0.5 --alpha 0.0 --output fixtures/desc_geometry_dshape_rho05_alpha0.npz`
+
+### 2026-05-29: Added Benchmark-Informed DESC Objective Round
+
+- Added `src/stellarator_gk/benchmarks.py` with:
+  - named `BenchmarkTarget` objects for the documented Rosenbluth-Hinton residual and Cyclone Base Case growth target,
+  - differentiable target residual/cost helpers,
+  - a GX NetCDF `omega_kxkyt` growth/frequency loader,
+  - a GX/GS2 eik-style geometry table loader.
+- Added `single_surface_benchmark_objective`, which wraps the fixed-topology single-surface objective as a least-squares error to a named benchmark target.
+- Added `tests/test_benchmark_references.py` covering named targets, GX Cyclone reference loading, GX/GS2 W7-X eik table loading, and a differentiable reduced objective using `fixtures/desc_geometry_dshape_rho05_alpha0.npz`.
+- Added `examples/desc_fixture_optimization_loop.py`, which prints per-iteration cost, residual, observed growth, and profile knobs on the extracted DESC DSHAPE fixture.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_benchmark_references.py tests/test_optimization_integration.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/optimization.py tests/test_benchmark_references.py examples/desc_fixture_optimization_loop.py src/stellarator_gk/__init__.py`
+  - `.venv/bin/python examples/desc_fixture_optimization_loop.py --iterations 3 --learning-rate 0.005`
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused benchmark/optimization tests: 11 passed,
+  - full suite: 115 passed,
+  - ruff: all checks passed,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings.
 
 ### 2026-05-29: Added Reduced Optimization Results to `main.tex`
 

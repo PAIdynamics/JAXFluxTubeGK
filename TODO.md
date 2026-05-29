@@ -272,7 +272,9 @@ src/stellarator_gk/
 - [x] Define `BoozerSurface`, `PhysicalFluxTubeGeometry`, and `FluxTubeGeometry` data models.
 - [x] Support loading geometry from one or more practical sources:
   - [x] DESC-style precomputed flux-tube geometry arrays,
-  - [ ] direct DESC equilibrium object/output reader,
+  - [x] direct DESC equilibrium object/example extraction script,
+  - [x] canonical DESC DSHAPE `.npz` fixture generated from `relevant-codes/DESC`,
+  - [x] direct DESC HDF5/path reader,
   - [ ] SIMSOPT/Boozer surface objects if available,
   - [x] precomputed arrays for tests,
   - [ ] later VMEC/booz_xform data.
@@ -295,6 +297,7 @@ src/stellarator_gk/
   - [x] `k_perp^2 >= 0`,
   - [x] field-line periodicity/twist consistency,
   - [x] AD gradients through geometry arrays for differentiable inputs,
+  - [x] extracted DESC DSHAPE fixture loads through the solver geometry contract,
   - [ ] finite differences against DESC/SIMSOPT geometry quantities for a small fixture.
 
 ## Phase 5: Physics Primitives
@@ -441,14 +444,17 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [ ] Add full Rosenbluth-Hinton zonal-flow residual test.
 - [ ] Add Cyclone Base Case linear ITG growth-rate test.
 - [x] Add a first GX-inspired benchmark fixture from `relevant-codes/gx/benchmarks/linear/ITG_cyclone/` after verifying TOML compatibility.
+- [x] Add named scalar benchmark targets for the documented Rosenbluth-Hinton residual and Cyclone Base Case growth-rate references.
+- [x] Load GX NetCDF growth/frequency reference curves from `omega_kxkyt` and convert selected `ky` points into optimization targets.
+- [x] Load local GX/GS2 eik-style geometry tables for future stellarator geometry parity checks.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
   - small `ky` grid,
   - reference geometry arrays.
 - [x] Compare stellarator geometry quantities against precomputed reference data.
-- [ ] Compare ITG growth-rate scans against available GS2/GX/GKW-style references.
-- [ ] Compare geometry arrays against GX/GS2/stella-style `eik` outputs where local fixtures are available.
+- [ ] Compare solver-computed ITG growth-rate scans against available GS2/GX/GKW-style references.
+- [ ] Compare solver-produced geometry arrays against GX/GS2/stella-style `eik` outputs where local fixtures are available.
 - [ ] Add convergence tests over:
   - [x] `N_s`,
   - [x] `N_vparallel`,
@@ -457,7 +463,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, and a GX Cyclone input-contract fixture. Full Rosenbluth-Hinton, production Cyclone growth-rate checks, GX/eik geometry parity, and ITG scan comparison remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, and GX/GS2 eik-table loading. Full end-to-end Rosenbluth-Hinton evolution, production Cyclone growth-rate agreement, solver-to-GX/eik geometry parity, and ITG scan comparison remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -492,11 +498,13 @@ Phase 11 baseline note: the current hardening pass adds CPU profiling/memory too
 - [x] Add quasilinear objective compatible with gradient-based stellarator design loops.
 - [x] Add examples showing `jax.grad`/`jax.value_and_grad` through the objective.
 - [x] Add a small toy optimization example before using full DESC equilibria.
+- [x] Add benchmark-target least-squares objective wrappers.
+- [x] Add a reduced DESC DSHAPE fixture optimization example.
 
-Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented, with `examples/optimization_loop.py` available for printing per-iteration objective/growth diagnostics. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
+Phase 12 baseline note: the current optimization layer is fixed-topology and reduced-grid oriented, with `examples/optimization_loop.py` available for printing analytic per-iteration objective/growth diagnostics and `examples/desc_fixture_optimization_loop.py` available for the extracted DESC DSHAPE fixture. DESC/Boozer equilibrium arrays should replace the toy equilibrium-coefficient modulation before production stellarator optimization.
 
-Phase 12 DESC-array note: the solver now supports a supplied imported geometry object in `single_surface_objective`, and `build_desc_geometry_from_arrays` maps DESC-sampled Boozer/Clebsch flux-tube arrays into the internal solver geometry. DESC should remain the upstream equilibrium and sensitivity provider; refactoring or vendoring DESC internals into this solver is not needed for the first coupling.
+Phase 12 DESC-array note: the solver now supports a supplied imported geometry object in `single_surface_objective`, and `build_desc_geometry_from_arrays` maps DESC-sampled Boozer/Clebsch flux-tube arrays into the internal solver geometry. `single_surface_benchmark_objective` can compare selected reduced diagnostics against named benchmark targets on this imported geometry. `desc_geometry_arrays_from_equilibrium`, `desc_geometry_arrays_from_path`, and `scripts/extract_desc_geometry_fixture.py` provide direct DESC equilibrium/example/HDF5 extraction paths. DESC should remain the upstream equilibrium and sensitivity provider; refactoring or vendoring DESC internals into this solver is not needed for the first coupling.
 
 ## Immediate Next Round
 
-Continue optimization integration by adding a direct DESC extraction script/fixture that evaluates the required arrays on this solver's parallel grid, then reconnect Phase 10 external benchmarks so optimization targets are validated against Rosenbluth-Hinton, Cyclone, and GX/eik reference data.
+Promote the benchmark-target plumbing into end-to-end validation runs: evolve the full Rosenbluth-Hinton residual case, run the production Cyclone Base Case growth-rate comparison at selected `ky`, compare solver geometry arrays against the loaded GX/GS2 eik table, and then use those tolerances as gates for DESC-driven optimization studies.

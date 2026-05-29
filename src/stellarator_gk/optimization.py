@@ -8,6 +8,7 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 
+from .benchmarks import BenchmarkTarget, benchmark_target_cost, benchmark_target_residual
 from .geometry import build_circular_geometry, build_s_alpha_geometry, k_perp_squared
 from .objectives import LinearObjectiveValues, initial_value_growth_objectives
 from .physics import AdiabaticElectronParams, default_adiabatic_electron_params
@@ -164,6 +165,24 @@ class ToyOptimizationStep(_PyTreeDataclass):
     _dynamic_fields: ClassVar[tuple[str, ...]] = ("value", "gradient", "updated_knobs")
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class BenchmarkOptimizationResult(_PyTreeDataclass):
+    """Single-surface objective recast as a least-squares benchmark-target error."""
+
+    scalar_objective: object
+    target_residual: object
+    observed_value: object
+    surface_result: SingleSurfaceOptimizationResult
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "scalar_objective",
+        "target_residual",
+        "observed_value",
+        "surface_result",
+    )
+
+
 def build_optimization_species(
     knobs: OptimizationKnobs,
     base_species: SpeciesParams | None = None,
@@ -311,6 +330,54 @@ def scan_single_surface_objective(
     )
 
 
+def single_surface_benchmark_objective(
+    knobs: OptimizationKnobs,
+    velocity_grid: VelocityGrid,
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    initial_state,
+    target: BenchmarkTarget,
+    *,
+    base_species: SpeciesParams | None = None,
+    electron_params: AdiabaticElectronParams | None = None,
+    connectivity: ModeConnectivity | None = None,
+    config: SingleSurfaceOptimizationConfig | None = None,
+    geometry=None,
+    normalize_by_tolerance: bool = True,
+) -> BenchmarkOptimizationResult:
+    """Evaluate a reduced objective as a benchmark-target least-squares error."""
+
+    result = single_surface_objective(
+        knobs,
+        velocity_grid,
+        parallel_grid,
+        fourier_grid,
+        initial_state,
+        base_species=base_species,
+        electron_params=electron_params,
+        connectivity=connectivity,
+        config=config,
+        geometry=geometry,
+    )
+    observed = _benchmark_observed_value(result, target.quantity)
+    residual = benchmark_target_residual(
+        observed,
+        target,
+        normalize_by_tolerance=normalize_by_tolerance,
+    )
+    cost = benchmark_target_cost(
+        observed,
+        target,
+        normalize_by_tolerance=normalize_by_tolerance,
+    )
+    return BenchmarkOptimizationResult(
+        scalar_objective=cost,
+        target_residual=residual,
+        observed_value=observed,
+        surface_result=result,
+    )
+
+
 def toy_gradient_descent_step(
     objective_fn,
     knobs: OptimizationKnobs,
@@ -365,6 +432,22 @@ def _scalar_from_objective_values(
         + config.quasilinear_weight * values.quasilinear_proxy
         + config.mode_structure_weight * values.mode_structure_penalty
     )
+
+
+def _benchmark_observed_value(result: SingleSurfaceOptimizationResult, quantity: str):
+    aliases = {
+        "growth_rate": "selected_growth_rate",
+        "selected_growth": "selected_growth_rate",
+        "max_growth": "max_growth_rate",
+        "quasilinear": "quasilinear_proxy",
+        "mode_structure": "mode_structure_penalty",
+    }
+    quantity = aliases.get(quantity, quantity)
+    if quantity == "scalar_objective":
+        return result.scalar_objective
+    if hasattr(result.values, quantity):
+        return getattr(result.values, quantity)
+    raise ValueError(f"unsupported benchmark target quantity {quantity!r}")
 
 
 def _apply_toy_equilibrium_coefficients(geometry, knobs: OptimizationKnobs):
