@@ -134,6 +134,53 @@ Expected tests:
 
 ## Round Log
 
+### 2026-05-29: Added Reduced Optimization Results to `main.tex`
+
+- Added a new `Current Reduced Optimization Results` section to `main.tex`.
+- Added `graphicx` support and included three generated PDF figures:
+  - `figures/optimization_objectives.pdf`,
+  - `figures/optimization_growth_rates.pdf`,
+  - `figures/optimization_geometry_knobs.pdf`.
+- Added `examples/generate_optimization_figures.py`, which runs three reduced fixed-topology optimization cases and writes:
+  - `figures/optimization_traces.csv`,
+  - the three figure PDFs used by `main.tex`.
+- Regenerated the figure PDFs with Matplotlib axes, numeric tick labels, gridlines, and legends, replacing the initial minimal custom PDF writer.
+- Extended the result-generation run from 12 to 1000 optimization iterations after the absolute growth-rate and geometry-knob plots looked visually flat.
+- Replaced the signed-growth objective trace with a zero-target least-squares cost, `J = 0.5 * r**2`, and now plot the absolute objective error `|J - 0|` so the objective curve has a meaningful zero target.
+- Switched the absolute objective-error figure to a logarithmic y-axis; exact zero values remain exact in the CSV and are drawn at a small positive plotting floor.
+- Changed the growth-rate and geometry-knob figures to plot increments relative to their initial values, and collapsed duplicated selected/max growth-rate curves where they coincide.
+- Tested larger learning-rate multipliers; uniform increases above `1e-3` become unstable for Case A over 1000 iterations, so Cases B and C were raised from `8e-4` to `1e-3` and all documented cases now use `1e-3`.
+- Added Matplotlib to the development dependencies because the result-figure generator now uses it directly.
+- The documented examples optimize zero-target residual costs:
+  - `0.5 * gamma(ky=0.35)**2`,
+  - `0.5 * gamma(ky=0.50)**2`,
+  - `0.5 * max(gamma(ky>0))**2` over `ky=0.25,0.50`.
+- The `main.tex` results section records the reduced simulation setup:
+  - one kinetic ion with adiabatic electrons,
+  - circular analytic geometry,
+  - `N_vparallel=3`, `N_mu=3`, `N_z=5`, `N_kx=3`,
+  - endpoint-only RK4 with `dt=0.01` and two steps per objective evaluation,
+  - 1000 gradient-descent iterations,
+  - fixed topology with differentiable continuous knobs.
+- Commands run:
+  - `uv run --extra dev python examples/generate_optimization_figures.py`
+  - `.venv/bin/python examples/generate_optimization_figures.py`
+  - `.venv/bin/python -c <learning-rate multiplier sweep>`
+  - `.venv/bin/python -m ruff check examples src tests`
+  - `.venv/bin/python -m pytest`
+  - `sips -s format png figures/<optimization figure>.pdf --out /tmp/<preview>.png`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification:
+  - figure generation completed and wrote all expected PDFs with axes, ticks, and legends,
+  - the 1000-iteration CSV contains 3000 trace rows plus the header and remained finite for all three cases,
+  - the plotted absolute objective error reaches `0.0` for Cases B and C and `3.78e-8` for Case A in the current 1000-iteration reduced examples,
+  - rendered PNG previews of the three PDFs with `sips` to visually check axes, tick labels, and legends,
+  - `.venv/bin/python -m ruff check examples src tests` passed,
+  - `99 passed` in pytest,
+  - `git diff --check` passed,
+  - `main.tex` built successfully to `main.pdf`.
+
 ### 2026-05-29: Added Runnable Optimization Loop Example
 
 - Committed the Phase 12 optimization integration checkpoint:
