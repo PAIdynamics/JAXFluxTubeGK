@@ -1,0 +1,6 @@
+label,gate,status,observed,reference,normalized_residual,tolerance,notes
+RH endpoint,rosenbluth_hinton_q13_eps005,OPEN,0.9995304397482084,0.0711,928.4304397482084,0.001,reduced executable RH gate; production t=100 convergence remains open
+RH plateau,rosenbluth_hinton_q13_eps005,OPEN,0.9987611431533643,0.0711,927.6611431533644,0.001,"long-time RH plateau gate; status=completed, t_start=0.05, t_end=0.1, diagnostic_interval=0.01, z_modal_damping=0.01, vpar_modal_damping=0, mu_modal_damping=0, plateau_spread=1.200554e-03; production pass remains open until residual and plateau spread both pass"
+Cyclone,cyclone_base_case_gkw_kt05,OPEN,19.004077227793744,0.179,1882.5077227793745,0.01,reduced executable CBC gate with late-window growth fit; production GKW/GX agreement remains open
+GX/eik,gx_eik_kperp_contract,PASS,0.0,0.0,0.0,1e-12,GX/GS2 eik metric imported into solver kperp contract
+DESC/eik,desc_gx_eik_export_contract,PASS,0.0,0.0,0.0,1e-12,solver-produced stellarator geometry exported to GX/GS2 eik-compatible fields; internal mirror coefficient G is tracked separately

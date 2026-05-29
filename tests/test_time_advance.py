@@ -6,8 +6,13 @@ import numpy as np
 
 from stellarator_gk import (
     FourierGridSpec,
+    ParallelGridSpec,
+    VelocityGridSpec,
     build_fourier_grid,
     build_mode_connectivity,
+    build_modal_damping_filter,
+    build_parallel_grid,
+    build_velocity_grid,
     estimate_linear_cfl_dt,
     integrate_fixed_step,
     linear_growth_diagnostics,
@@ -166,6 +171,38 @@ def test_windowed_growth_diagnostics_validates_inputs():
         assert "at least two" in str(exc)
     else:
         raise AssertionError("short history should fail")
+
+
+def test_modal_damping_filter_preserves_low_modes_and_damps_high_modes():
+    velocity = build_velocity_grid(VelocityGridSpec(n_vpar=5, n_mu=4, vpar_max=1.0, mu_max=1.0))
+    parallel = build_parallel_grid(
+        ParallelGridSpec(n_z=6, z_min=0.0, z_max=1.0, topology="periodic")
+    )
+    filter_fn = build_modal_damping_filter(
+        dt=0.2,
+        velocity_grid=velocity,
+        parallel_grid=parallel,
+        vpar_rate=0.7,
+        z_rate=0.5,
+    )
+    v_coefficients = jnp.zeros((5, 4, 6, 1, 1), dtype=jnp.complex128)
+    v_coefficients = v_coefficients.at[0, :, :, :, :].set(2.0)
+    v_coefficients = v_coefficients.at[-1, :, :, :, :].set(1.0)
+    nodal_state = jnp.tensordot(
+        velocity.vpar_inverse_modal_transform,
+        v_coefficients,
+        axes=((1,), (0,)),
+    )
+
+    filtered = filter_fn(nodal_state)
+    filtered_coefficients = jnp.tensordot(
+        velocity.vpar_modal_transform,
+        filtered,
+        axes=((1,), (0,)),
+    )
+
+    np.testing.assert_allclose(filtered_coefficients[0], 2.0, rtol=2e-13, atol=2e-13)
+    assert jnp.max(jnp.abs(filtered_coefficients[-1])) < 1.0
 
 
 def test_fixed_step_scan_is_jittable_and_differentiable():

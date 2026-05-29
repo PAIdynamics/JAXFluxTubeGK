@@ -451,7 +451,11 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add a GX/GS2 eik metric gate verifying the imported table maps into the solver `k_perp^2` contract.
 - [x] Add a late-window least-squares growth diagnostic for CBC/GX/GKW-style growth-rate gates.
 - [x] Add a calibrated reduced RH crossing gate as a deterministic regression hook while keeping the production long-time RH plateau open.
+- [x] Replace the calibrated RH crossing in the active validation path with a true long-time plateau metric over the \(t>80\) window.
+- [x] Add reusable spectral modal damping filters for benchmark-controlled recurrence studies.
 - [x] Add solver-geometry-to-GX/GS2-eik field-by-field parity reports and a corresponding geometry gate.
+- [x] Add a reduced validation-gate example that writes CSV summaries and a paper figure for the RH endpoint, RH plateau, Cyclone, and GX/eik gates.
+- [x] Add a solver-produced DESC fixture geometry export gate for GX/GS2 eik-compatible fields, including \(B\), \(\nabla_\parallel\), metric elements, summed magnetic drifts, and \(\kperp^2\).
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
@@ -459,7 +463,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - reference geometry arrays.
 - [x] Compare stellarator geometry quantities against precomputed reference data.
 - [ ] Compare solver-computed ITG growth-rate scans against available GS2/GX/GKW-style references.
-- [ ] Compare solver-produced geometry arrays against GX/GS2/stella-style `eik` outputs where local fixtures are available.
+- [ ] Compare solver-produced geometry arrays against independent GX/GS2/stella-style `eik` outputs where local fixtures are available.
 - [ ] Add convergence tests over:
   - [x] `N_s`,
   - [x] `N_vparallel`,
@@ -468,7 +472,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a calibrated reduced RH crossing hook, and solver-to-eik field parity reports. The GX/eik imported metric and field-parity gates pass the solver geometry contract. The default RH and CBC production gates still run but remain open against production tolerances, so full end-to-end Rosenbluth-Hinton long-time convergence, production Cyclone growth-rate agreement, solver-produced stellarator geometry parity from DESC/GX conventions, and ITG scan comparison remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a true RH late-plateau metric, spectral modal damping hooks, solver-to-eik field parity reports, a DESC fixture eik-export contract gate, and a reduced validation-gate plotting example used in `main.tex`. The GX/eik imported metric, field-parity gate, and DESC eik-export gate pass the solver geometry contract. The default RH and CBC production gates still run but remain open against production tolerances, so full end-to-end Rosenbluth-Hinton long-time convergence, production Cyclone growth-rate agreement, independent solver-produced stellarator geometry parity against external eik outputs, and ITG scan comparison remain open benchmark tasks.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -514,7 +518,7 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 Use the new validation-hardening tools to close the remaining production gaps:
 
-- replace the calibrated RH crossing with a true long-time plateau/convergence gate, including benchmark-justified spectral or modal dissipation if needed,
+- make the true RH late-time plateau gate pass by matching the GKW/Gyaradax `disp_par` recurrence-control model without damping the residual,
 - calibrate the Cyclone selected-`ky` setup with production resolution, late-window growth fitting, and GKW/GX tolerance checks,
-- run solver-produced DESC/GX-convention stellarator geometry through the field-by-field eik parity gate rather than only imported-table self-parity,
+- compare solver-produced DESC/GX-convention stellarator geometry against an independent external eik output, now that the DESC eik-export contract gate exists,
 - keep DESC-driven optimization examples labeled reduced until RH, CBC, and solver-produced eik parity gates pass.

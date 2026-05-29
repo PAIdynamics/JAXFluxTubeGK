@@ -38,7 +38,15 @@ metric gate; the eik metric contract passes, while RH and CBC are reported as
 open against production tolerances until the physics/numerics gap is closed. A
 follow-up hardening pass adds late-window growth fitting, a calibrated reduced
 RH crossing regression hook, and solver-geometry-to-GX/GS2-eik field parity
-reports; these are validation tools, not yet production benchmark closure.
+reports. The active RH path has now been replaced by a true late-time plateau
+gate with benchmark-controlled modal damping hooks; it is executable but still
+OPEN until the GKW/Gyaradax `disp_par` recurrence-control model is matched
+without damping away the physical residual. A reduced validation-gate example
+now writes CSV summaries and a paper figure that show the current RH, Cyclone,
+GX/eik, and DESC/eik gate status in `main.tex`. The stellarator-geometry path
+now includes a solver-produced DESC fixture export gate for GX/GS2
+eik-compatible fields, so DESC arrays can be audited through the same
+metric/drift and `k_perp^2` contract before they are used in optimization.
 
 The repository currently contains:
 
@@ -51,6 +59,8 @@ The repository currently contains:
 - `examples/optimization_loop.py`: runnable reduced optimization loop that prints objective/growth diagnostics and knob values at each iteration.
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
+- `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, and `figures/validation_gate_summary.csv`: current reduced validation-gate result artifacts.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
@@ -133,16 +143,17 @@ For implementation work, use the GKW source modules as the authoritative source 
 ## Next Implementation Round
 
 Goal: close the remaining production physics gaps exposed by the executable
-validation gates:
+validation gates and move from eik export self-contracts to independent
+stellarator geometry parity:
 
-- replace the calibrated reduced RH crossing with a true long-time zonal-flow residual plateau,
+- make the true long-time RH plateau gate pass with GKW/Gyaradax-compatible recurrence control,
 - bring the Cyclone selected-`ky` growth rate onto the GKW/GX tolerance ladder using late-window fitting,
-- run DESC/GX-convention solver-produced geometry through field-by-field eik parity,
+- compare DESC/GX-convention solver-produced geometry against independent field-by-field eik outputs,
 - use passing gates as prerequisites for DESC-driven optimization examples.
 
 Expected file changes:
 
-- RH long-time integration and/or benchmark-justified dissipation controls,
+- RH dissipation/RHS parity with the GKW/Gyaradax `disp_par` recurrence-control model,
 - Cyclone production-resolution setup and calibrated growth extraction,
 - DESC/GX-convention stellarator geometry comparison fixtures,
 - `TODO.md`,
@@ -150,12 +161,123 @@ Expected file changes:
 
 Expected tests:
 
-- RH long-time residual tolerance test promoted from OPEN to PASS,
+- RH long-time plateau tolerance test promoted from OPEN to PASS,
 - Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS,
 - DESC/GX-convention solver-produced geometry parity tolerance test,
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-29: Added DESC Geometry to the GX/eik Validation Path
+
+- Added `geometry_to_gx_eik_reference`, an exporter from internal solver
+  geometry to GX/GS2 eik-compatible fields:
+  `B`, `gradpar`, `gds2`, `gds21`, `gds22`, summed radial/binormal drifts, and
+  `k_perp^2`.
+- Added `run_geometry_to_gx_eik_export_gate`, which verifies solver-produced
+  stellarator geometry against its exported eik-compatible contract while
+  keeping the internal mirror coefficient `G` separate from the eik drift table.
+- Extended `compare_geometry_to_gx_eik_reference` with an
+  `include_mirror_proxy` option so imported GX/eik self-parity can keep the
+  historical mirror proxy while DESC export checks compare only fields present
+  in standard eik files.
+- Added a DESC DSHAPE fixture test showing the solver-produced DESC geometry
+  passes the eik export contract with zero residual.
+- Extended `examples/run_validation_gates.py` with `--desc-eik`.
+- Updated `examples/generate_validation_gate_figures.py` and regenerated:
+  - `figures/validation_gate_status.pdf`,
+  - `figures/validation_gate_summary.csv`,
+  - `figures/rh_plateau_demo.csv`.
+- Updated `main.tex` with the eik export mapping and the new DESC/eik result in
+  the current validation figure.
+- Updated `TODO.md` to mark the DESC eik-export contract gate complete while
+  leaving independent external eik-output parity open.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_benchmark_references.py tests/test_desc_adapter.py tests/test_flux_tube_geometry.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_validation_gates.py examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python examples/run_validation_gates.py --desc-eik --rh-plateau --rh-t-end 0.05 --rh-t-start 0.02 --rh-diagnostic-interval 0.01 --rh-plateau-n-z 8 --rh-plateau-n-vpar 6 --rh-plateau-n-mu 4`
+  - `.venv/bin/python examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+  - `.venv/bin/python -m pytest`
+- Verification results:
+  - focused geometry/benchmark tests: 24 passed,
+  - focused and full ruff: all checks passed,
+  - validation CLI: DESC/eik export gate PASS with observed residual `0.0`,
+  - regenerated validation summary now includes DESC/eik PASS alongside the
+    existing GX/eik PASS and open RH/Cyclone gates,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings,
+  - diff check: no whitespace errors,
+  - full suite: 123 passed.
+
+### 2026-05-29: Added Reduced Validation-Gate Result Example
+
+- Added `examples/generate_validation_gate_figures.py`, which runs the reduced
+  RH endpoint, true RH plateau, Cyclone, and GX/eik gates and writes:
+  - `figures/rh_plateau_demo.csv`,
+  - `figures/validation_gate_summary.csv`,
+  - `figures/validation_gate_status.pdf`.
+- Added the validation-gate figure and numerical summary to the result section
+  of `main.tex`.
+- Updated `TODO.md` to record the reduced validation-gate plotting example as
+  part of the Phase 10 validation tranche.
+- The example reports the current short-window RH plateau metric decreasing
+  from `0.9999248529` at `t_end=0.02` to `0.9987611432` at `t_end=0.10`, still
+  far from the RH reference `0.0711`; the gate remains correctly marked OPEN.
+- The generated gate summary reports:
+  - RH endpoint: OPEN, normalized residual `9.2843043975e+02`,
+  - RH plateau: OPEN, normalized residual `9.2766114315e+02`,
+  - Cyclone: OPEN, normalized residual `1.8825077228e+03`,
+  - GX/eik: PASS, normalized residual `0.0`.
+- Commands run:
+  - `.venv/bin/python examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python -m ruff check examples/generate_validation_gate_figures.py`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `.venv/bin/python -m pytest`
+  - `git diff --check`
+- Verification results:
+  - figure/CSV generation completed and printed all three output paths,
+  - ruff: all checks passed,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings,
+  - full suite: 122 passed,
+  - diff check: no whitespace errors.
+
+### 2026-05-29: Added True RH Late-Plateau Gate
+
+- Committed the previous validation-hardening checkpoint:
+  - commit `18ce711` (`Add validation hardening gates`).
+- Added `build_modal_damping_filter`, a reusable spectral post-step filter for
+  Chebyshev/Fourier modal damping in `v_parallel`, `mu`, and `z`.
+- Replaced the active RH validation path with
+  `run_rosenbluth_hinton_plateau_gate`, which computes the GKW/Gyaradax
+  late-time metric `sqrt(mean(kxspec(t)/kxspec(0)))` over `t > t_start`.
+- Switched the RH setup to the normalized GKW cell-centered `s` grid and tracks
+  the nonzero zonal `kx rho_s = 0.025` mode.
+- The plateau gate supports benchmark-controlled modal damping, with the
+  default parallel damping motivated by the RH `disp_par=0.01` reference. Local
+  probes showed that strong velocity filtering can stabilize recurrence but
+  damps the RH residual itself, so it is not accepted as a production pass.
+- Updated `examples/run_validation_gates.py` with `--rh-plateau` and RH plateau
+  controls; removed the calibrated-crossing option from the active CLI path.
+- Updated `TODO.md` and `main.tex` to record that the true plateau gate exists
+  but remains OPEN until the GKW/Gyaradax dissipation/RHS parity is closed.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_time_advance.py tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/time_advance.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_time_advance.py tests/test_benchmark_references.py examples/run_validation_gates.py`
+  - `.venv/bin/python examples/run_validation_gates.py --rh-plateau --rh-t-end 0.05 --rh-t-start 0.02 --rh-diagnostic-interval 0.01 --rh-plateau-n-z 8 --rh-plateau-n-vpar 6 --rh-plateau-n-mu 4`
+  - `.venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused time-advance and benchmark-reference tests: 17 passed,
+  - full suite: 122 passed,
+  - focused and full ruff: all checks passed,
+  - short RH plateau CLI smoke: plateau gate reports OPEN with finite late-window metric,
+  - LaTeX: `main.pdf` built successfully with only existing underfull-box warnings,
+  - diff check: no whitespace errors.
 
 ### 2026-05-29: Added Validation-Hardening Tools for RH, CBC, and eik Parity
 

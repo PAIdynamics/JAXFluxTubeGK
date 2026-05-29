@@ -8,7 +8,7 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 
-from .types import ModeConnectivity, _PyTreeDataclass
+from .types import DerivativeBackend, ModeConnectivity, _PyTreeDataclass
 
 
 @jax.tree_util.register_pytree_node_class
@@ -290,6 +290,102 @@ def windowed_linear_growth_diagnostics(
     )
 
 
+def build_modal_damping_filter(
+    *,
+    dt,
+    velocity_grid=None,
+    parallel_grid=None,
+    vpar_rate: float = 0.0,
+    mu_rate: float = 0.0,
+    z_rate: float = 0.0,
+    order: int = 4,
+):
+    """Return a post-step spectral modal damping filter for phase-space states.
+
+    The rates are continuous-time rates.  One RK4 step applies
+    ``exp(-dt * rate * (r/rmax)**order)`` in each enabled modal basis.  This is
+    intended for benchmark-controlled recurrence damping, with all rates zero
+    by default in solver paths.
+    """
+
+    if order <= 0:
+        raise ValueError("order must be positive")
+    if vpar_rate < 0.0 or mu_rate < 0.0 or z_rate < 0.0:
+        raise ValueError("modal damping rates must be nonnegative")
+    if vpar_rate and velocity_grid is None:
+        raise ValueError("velocity_grid is required when vpar_rate is nonzero")
+    if mu_rate and velocity_grid is None:
+        raise ValueError("velocity_grid is required when mu_rate is nonzero")
+    if z_rate and parallel_grid is None:
+        raise ValueError("parallel_grid is required when z_rate is nonzero")
+
+    dt = jnp.asarray(dt)
+    vpar_factor = (
+        _modal_damping_factor(
+            velocity_grid.vpar.shape[0],
+            dt,
+            vpar_rate,
+            order,
+            DerivativeBackend.CHEBYSHEV.value,
+        )
+        if vpar_rate
+        else None
+    )
+    mu_factor = (
+        _modal_damping_factor(
+            velocity_grid.mu.shape[0],
+            dt,
+            mu_rate,
+            order,
+            DerivativeBackend.CHEBYSHEV.value,
+        )
+        if mu_rate
+        else None
+    )
+    z_factor = (
+        _modal_damping_factor(
+            parallel_grid.z.shape[0],
+            dt,
+            z_rate,
+            order,
+            parallel_grid.backend,
+        )
+        if z_rate
+        else None
+    )
+
+    def filter_fn(state):
+        out = jnp.asarray(state)
+        vpar_axis, mu_axis, z_axis = _phase_space_axes(out.ndim)
+        if vpar_factor is not None:
+            out = _apply_modal_factor(
+                out,
+                vpar_axis,
+                velocity_grid.vpar_modal_transform,
+                velocity_grid.vpar_inverse_modal_transform,
+                vpar_factor,
+            )
+        if mu_factor is not None:
+            out = _apply_modal_factor(
+                out,
+                mu_axis,
+                velocity_grid.mu_modal_transform,
+                velocity_grid.mu_inverse_modal_transform,
+                mu_factor,
+            )
+        if z_factor is not None:
+            out = _apply_modal_factor(
+                out,
+                z_axis,
+                parallel_grid.modal_transform,
+                parallel_grid.inverse_modal_transform,
+                z_factor,
+            )
+        return out
+
+    return filter_fn
+
+
 def normalize_by_ky_amplitude(
     state,
     amplitude,
@@ -337,6 +433,50 @@ def _apply_filter(state, filter_fn):
     if filter_fn is None:
         return state
     return filter_fn(state)
+
+
+def _apply_modal_factor(values, axis: int, transform, inverse_transform, factor):
+    coefficients = _apply_matrix_along_axis(transform, values, axis)
+    shape = [1] * coefficients.ndim
+    shape[axis] = factor.shape[0]
+    coefficients = coefficients * factor.reshape(shape)
+    return _apply_matrix_along_axis(inverse_transform, coefficients, axis)
+
+
+def _apply_matrix_along_axis(matrix, values, axis: int):
+    values = jnp.asarray(values)
+    matrix = jnp.asarray(matrix)
+    moved = jnp.moveaxis(values, axis, 0)
+    transformed = jnp.tensordot(matrix, moved, axes=((1,), (0,)))
+    return jnp.moveaxis(transformed, 0, axis)
+
+
+def _modal_damping_factor(n: int, dt, rate: float, order: int, backend: str):
+    relative = _relative_modal_index(n, backend)
+    return jnp.exp(-jnp.asarray(dt) * jnp.asarray(rate) * relative**order)
+
+
+def _relative_modal_index(n: int, backend: str):
+    if n < 1:
+        raise ValueError("modal dimension must be positive")
+    indices = jnp.arange(n, dtype=jnp.float64)
+    if backend == DerivativeBackend.FOURIER.value:
+        denominator = jnp.maximum(n // 2, 1)
+        return jnp.minimum(indices, n - indices) / denominator
+    if backend == DerivativeBackend.CHEBYSHEV.value:
+        return indices / jnp.maximum(n - 1, 1)
+    raise ValueError(f"unsupported modal damping backend {backend!r}")
+
+
+def _phase_space_axes(ndim: int):
+    if ndim == 5:
+        return 0, 1, 2
+    if ndim == 6:
+        return 1, 2, 3
+    raise ValueError(
+        "modal damping filter expects a 5D state "
+        "(n_vpar,n_mu,n_z,n_kx,n_ky) or a 6D state with a leading species axis"
+    )
 
 
 def _z_weights(field, w_z):

@@ -24,14 +24,16 @@ from stellarator_gk import (
     build_velocity_grid,
     cyclone_base_case_growth_target,
     compare_geometry_to_gx_eik_reference,
+    geometry_to_gx_eik_reference,
     gx_growth_rate_target,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
+    run_geometry_to_gx_eik_export_gate,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
-    run_calibrated_reduced_rosenbluth_hinton_gate,
     run_gx_eik_geometry_gate,
+    run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
@@ -151,6 +153,53 @@ def test_solver_geometry_to_eik_parity_report_matches_imported_geometry():
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
+def test_desc_fixture_geometry_exports_to_gx_eik_contract():
+    fixture = ROOT / "fixtures/desc_geometry_dshape_rho05_alpha0.npz"
+    data = np.load(fixture)
+    parallel = _parallel_grid_from_fixture_z(data["z"])
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
+    )
+    geometry = build_desc_geometry_from_arrays(
+        parallel,
+        theta=data["theta"],
+        phi=data["phi"],
+        alpha=data["alpha"],
+        rho=data["rho"],
+        B=data["B"],
+        b_dot_grad_z=data["b_dot_grad_z"],
+        grad_psi_sq=data["grad_psi_sq"],
+        grad_alpha_sq=data["grad_alpha_sq"],
+        grad_psi_dot_grad_alpha=data["grad_psi_dot_grad_alpha"],
+        B_cross_gradB_dot_grad_psi=data["B_cross_gradB_dot_grad_psi"],
+        B_cross_gradB_dot_grad_alpha=data["B_cross_gradB_dot_grad_alpha"],
+        b_cross_kappa_dot_grad_psi=data["b_cross_kappa_dot_grad_psi"],
+        b_cross_kappa_dot_grad_alpha=data["b_cross_kappa_dot_grad_alpha"],
+    )
+
+    reference = geometry_to_gx_eik_reference(geometry)
+    report = compare_geometry_to_gx_eik_reference(
+        geometry,
+        reference,
+        fourier,
+        include_mirror_proxy=False,
+    )
+    gate = run_geometry_to_gx_eik_export_gate(geometry, fourier)
+
+    assert reference.source == "desc:gx-eik-export"
+    assert not any(name.startswith("G/") for name in report.field_names)
+    assert bool(gate.passed)
+    np.testing.assert_allclose(reference.bmag, geometry.B, rtol=0.0, atol=1.0e-14)
+    np.testing.assert_allclose(reference.gradpar, geometry.F, rtol=0.0, atol=1.0e-14)
+    np.testing.assert_allclose(reference.gds22, geometry.g_xx, rtol=0.0, atol=1.0e-14)
+    np.testing.assert_allclose(reference.gds21, geometry.g_xy, rtol=0.0, atol=1.0e-14)
+    np.testing.assert_allclose(reference.gds2, geometry.g_yy, rtol=0.0, atol=1.0e-14)
+    np.testing.assert_allclose(reference.gbdrift0 + reference.cvdrift0, geometry.D_x)
+    np.testing.assert_allclose(reference.gbdrift + reference.cvdrift, geometry.D_y)
+    np.testing.assert_allclose(report.field_errors, 0.0, atol=1.0e-13)
+    np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
+
+
 def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
     rh = run_reduced_rosenbluth_hinton_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
     cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
@@ -168,11 +217,20 @@ def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
     assert "window" in cyclone.notes
 
 
-def test_calibrated_reduced_rh_gate_hits_reference_crossing():
-    rh = run_calibrated_reduced_rosenbluth_hinton_gate()
+def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():
+    rh = run_rosenbluth_hinton_plateau_gate(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        t_end=0.05,
+        t_start=0.02,
+        diagnostic_interval=0.01,
+    )
 
-    assert bool(rh.passed)
-    assert abs(float(rh.observed_value) - float(rh.target.reference_value)) <= rh.target.tolerance
+    assert rh.target.name == "rosenbluth_hinton_q13_eps005"
+    assert jnp.isfinite(rh.observed_value)
+    assert not bool(rh.passed)
+    assert "long-time RH plateau gate" in rh.notes
     assert "production" in rh.notes
 
 

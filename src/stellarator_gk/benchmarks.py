@@ -405,6 +405,39 @@ def build_flux_tube_geometry_from_gx_eik_reference(
     )
 
 
+def geometry_to_gx_eik_reference(
+    geometry,
+    *,
+    source: str | None = None,
+) -> GxEikGeometryReference:
+    """Export a solver geometry object to the GX/GS2 eik table contract.
+
+    GX/GS2 eik tables store the metric, parallel-gradient coefficient, and
+    grad-B/curvature drift fields.  The internal solver stores only the summed
+    radial and binormal magnetic-drift coefficients, so this exporter places the
+    totals in ``gbdrift0`` and ``gbdrift`` and sets the corresponding
+    ``cvdrift`` pieces to zero.  This preserves the eik quantities used by the
+    gyrokinetic residual and k-perp contract without inventing a curvature split.
+    """
+
+    theta = jnp.asarray(getattr(geometry, "theta", geometry.z), dtype=jnp.float64)
+    zero = jnp.zeros_like(theta)
+    return GxEikGeometryReference(
+        theta=theta,
+        bmag=jnp.asarray(geometry.B, dtype=jnp.float64),
+        gradpar=jnp.asarray(geometry.F, dtype=jnp.float64),
+        gds2=jnp.asarray(geometry.g_yy, dtype=jnp.float64),
+        gds21=jnp.asarray(geometry.g_xy, dtype=jnp.float64),
+        gds22=jnp.asarray(geometry.g_xx, dtype=jnp.float64),
+        gbdrift=jnp.asarray(geometry.D_y, dtype=jnp.float64),
+        gbdrift0=jnp.asarray(geometry.D_x, dtype=jnp.float64),
+        cvdrift=zero,
+        cvdrift0=zero,
+        source=source or f"{getattr(geometry, 'source', 'solver')}:gx-eik-export",
+        header=(),
+    )
+
+
 def gx_eik_kperp2(
     reference: GxEikGeometryReference,
     kx,
@@ -425,6 +458,8 @@ def compare_geometry_to_gx_eik_reference(
     geometry,
     reference: GxEikGeometryReference,
     fourier_grid,
+    *,
+    include_mirror_proxy: bool = True,
 ) -> GxEikGeometryParityReport:
     """Compare a solver-produced geometry object with a GX/GS2 eik reference."""
 
@@ -446,7 +481,7 @@ def compare_geometry_to_gx_eik_reference(
         geometry.D_y.shape,
     )
     gx_mirror_proxy = -gx_binormal_drift
-    field_names = (
+    field_names = [
         "B/bmag",
         "F/gradpar",
         "g_xx/gds22",
@@ -454,31 +489,32 @@ def compare_geometry_to_gx_eik_reference(
         "g_yy/gds2",
         "D_x/gbdrift0+cvdrift0",
         "D_y/gbdrift+cvdrift",
-        "G/-(gbdrift+cvdrift)",
-        "kperp2",
+    ]
+    errors = [
+        _max_abs_error(geometry.B, bmag),
+        _max_abs_error(geometry.F, gradpar),
+        _max_abs_error(geometry.g_xx, gds22),
+        _max_abs_error(geometry.g_xy, gds21),
+        _max_abs_error(geometry.g_yy, gds2),
+        _max_abs_error(geometry.D_x, gx_radial_drift),
+        _max_abs_error(geometry.D_y, gx_binormal_drift),
+    ]
+    if include_mirror_proxy:
+        field_names.append("G/-(gbdrift+cvdrift)")
+        errors.append(_max_abs_error(geometry.G, gx_mirror_proxy))
+    field_names.append("kperp2")
+    errors.append(
+        _max_abs_error(
+            k_perp_squared(geometry, fourier_grid),
+            gx_eik_kperp2(reference, fourier_grid.kx, fourier_grid.ky),
+        )
     )
-    field_errors = jnp.asarray(
-        [
-            _max_abs_error(geometry.B, bmag),
-            _max_abs_error(geometry.F, gradpar),
-            _max_abs_error(geometry.g_xx, gds22),
-            _max_abs_error(geometry.g_xy, gds21),
-            _max_abs_error(geometry.g_yy, gds2),
-            _max_abs_error(geometry.D_x, gx_radial_drift),
-            _max_abs_error(geometry.D_y, gx_binormal_drift),
-            _max_abs_error(geometry.G, gx_mirror_proxy),
-            _max_abs_error(
-                k_perp_squared(geometry, fourier_grid),
-                gx_eik_kperp2(reference, fourier_grid.kx, fourier_grid.ky),
-            ),
-        ],
-        dtype=jnp.float64,
-    )
+    field_errors = jnp.asarray(errors, dtype=jnp.float64)
     return GxEikGeometryParityReport(
         field_errors=field_errors,
         max_abs_error=jnp.max(field_errors),
         max_abs_kperp2_error=field_errors[-1],
-        field_names=field_names,
+        field_names=tuple(field_names),
         source=reference.source,
     )
 
@@ -568,7 +604,7 @@ def run_reduced_rosenbluth_hinton_gate(
     claim that the present reduced model passes the production RH benchmark.
     """
 
-    from .geometry import build_boozer_parallel_grid, build_s_alpha_geometry
+    from .geometry import build_s_alpha_geometry
     from .grids import build_fourier_grid, build_velocity_grid
     from .physics import AdiabaticElectronParams, solve_adiabatic_electron_phi
     from .solver import build_linear_residual_precompute, linear_residual
@@ -584,7 +620,7 @@ def run_reduced_rosenbluth_hinton_gate(
     velocity = build_velocity_grid(
         VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
     )
-    parallel = build_boozer_parallel_grid(n_z=n_z, n_turns=1)
+    parallel = _build_gkw_cell_centered_parallel_grid(n_z)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
     )
@@ -612,7 +648,7 @@ def run_reduced_rosenbluth_hinton_gate(
             zonal_correction=True,
         ),
     )
-    ix = 0
+    ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
     maxwellian = precompute.rhs.maxwellian[0]
     state = jnp.zeros((n_vpar, n_mu, n_z, 3, 1), dtype=jnp.complex128)
     state = state.at[:, :, :, ix, 0].set(1.0e-4 * maxwellian)
@@ -631,6 +667,182 @@ def run_reduced_rosenbluth_hinton_gate(
         observed,
         target,
         notes="reduced executable RH gate; production t=100 convergence remains open",
+    )
+
+
+def run_rosenbluth_hinton_plateau_gate(
+    *,
+    n_z: int = 16,
+    n_vpar: int = 16,
+    n_mu: int = 8,
+    vpar_max: float = 4.0,
+    mu_max: float = 8.0,
+    dt: float = 0.01,
+    t_end: float = 100.0,
+    t_start: float = 80.0,
+    diagnostic_interval: float = 1.0,
+    z_modal_damping: float = 0.01,
+    vpar_modal_damping: float = 0.0,
+    mu_modal_damping: float = 0.0,
+    modal_damping_order: int = 4,
+    plateau_tolerance: float = 2.0e-2,
+    amplitude_ceiling: float = 1.0e8,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Run the long-time Rosenbluth--Hinton residual plateau gate.
+
+    The metric follows the GKW/Gyaradax benchmark convention:
+    ``sqrt(mean(kxspec(t)/kxspec(0)))`` over the late-time window.  The default
+    parallel modal damping is benchmark-motivated by the Gyaradax/GKW
+    ``disp_par=0.01`` RH setup, but this spectral implementation is still an
+    open validation target until the late plateau agrees with the reference.
+    """
+
+    from .geometry import build_s_alpha_geometry
+    from .grids import build_fourier_grid, build_velocity_grid
+    from .physics import AdiabaticElectronParams, solve_adiabatic_electron_phi
+    from .solver import build_linear_residual_precompute, linear_residual
+    from .time_advance import build_modal_damping_filter, integrate_fixed_step
+    from .types import FourierGridSpec, GeometryScalarParams, SpeciesParams, VelocityGridSpec
+
+    if dt <= 0.0:
+        raise ValueError("dt must be positive")
+    if t_end <= 0.0:
+        raise ValueError("t_end must be positive")
+    if not 0.0 <= t_start < t_end:
+        raise ValueError("t_start must satisfy 0 <= t_start < t_end")
+    if diagnostic_interval <= 0.0:
+        raise ValueError("diagnostic_interval must be positive")
+    if plateau_tolerance < 0.0:
+        raise ValueError("plateau_tolerance must be nonnegative")
+    if amplitude_ceiling <= 0.0:
+        raise ValueError("amplitude_ceiling must be positive")
+
+    target = target or rosenbluth_hinton_target()
+    metadata = dict(target.metadata)
+    q = float(metadata.get("q", 1.3))
+    shat = float(metadata.get("shat", 0.1592))
+    epsilon = float(metadata.get("epsilon", 0.05))
+    kx_rhos = float(metadata.get("kx_rhos", 0.025))
+    velocity = build_velocity_grid(
+        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
+    )
+    parallel = _build_gkw_cell_centered_parallel_grid(n_z)
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
+    )
+    geometry = build_s_alpha_geometry(
+        parallel,
+        GeometryScalarParams(q=q, shat=shat, eps=epsilon),
+    )
+    species = SpeciesParams(
+        charge=1.0,
+        mass=1.0,
+        density=1.0,
+        temperature=1.0,
+        density_gradient=0.0,
+        temperature_gradient=0.0,
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        electron_params=AdiabaticElectronParams(
+            density=1.0,
+            temperature=1.0,
+            zonal_correction=True,
+        ),
+    )
+    ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
+    state = jnp.zeros((n_vpar, n_mu, n_z, 3, 1), dtype=jnp.complex128)
+    state = state.at[:, :, :, ix, 0].set(1.0e-4 * precompute.rhs.maxwellian[0])
+    phi_initial = solve_adiabatic_electron_phi(state, precompute.field)
+    initial_power = _field_power(phi_initial[:, ix, 0], geometry.w_z)
+
+    use_filter = any(
+        rate > 0.0 for rate in (z_modal_damping, vpar_modal_damping, mu_modal_damping)
+    )
+    filter_fn = (
+        build_modal_damping_filter(
+            dt=dt,
+            velocity_grid=velocity,
+            parallel_grid=parallel,
+            vpar_rate=vpar_modal_damping,
+            mu_rate=mu_modal_damping,
+            z_rate=z_modal_damping,
+            order=modal_damping_order,
+        )
+        if use_filter
+        else None
+    )
+
+    diagnostic_steps = max(1, int(round(diagnostic_interval / dt)))
+    total_steps = int(round(t_end / dt))
+    late_power_ratios = []
+    late_times = []
+    current_time = 0.0
+    unstable = False
+    steps_done = 0
+    while steps_done < total_steps:
+        chunk_steps = min(diagnostic_steps, total_steps - steps_done)
+        result = integrate_fixed_step(
+            state,
+            dt,
+            chunk_steps,
+            linear_residual,
+            precompute,
+            filter_fn=filter_fn,
+            store_history=False,
+        )
+        state = result.state
+        steps_done += chunk_steps
+        current_time = steps_done * dt
+        phi = solve_adiabatic_electron_phi(state, precompute.field)
+        power_ratio = _field_power(phi[:, ix, 0], geometry.w_z) / initial_power
+        amplitude_ratio = jnp.sqrt(jnp.maximum(power_ratio, 0.0))
+        if not bool(jnp.isfinite(amplitude_ratio)) or float(amplitude_ratio) > amplitude_ceiling:
+            unstable = True
+            break
+        if current_time > t_start:
+            late_power_ratios.append(float(power_ratio))
+            late_times.append(float(current_time))
+
+    if unstable or not late_power_ratios:
+        observed = jnp.asarray(jnp.inf, dtype=jnp.float64)
+        plateau_spread = jnp.asarray(jnp.inf, dtype=jnp.float64)
+    else:
+        late_power = jnp.asarray(late_power_ratios, dtype=jnp.float64)
+        late_amplitude = jnp.sqrt(jnp.maximum(late_power, 0.0))
+        observed = jnp.sqrt(jnp.mean(late_power))
+        plateau_spread = jnp.max(late_amplitude) - jnp.min(late_amplitude)
+
+    base = evaluate_benchmark_gate(
+        observed,
+        target,
+        notes="",
+    )
+    plateau_ok = jnp.asarray(plateau_spread <= plateau_tolerance)
+    passed = jnp.logical_and(base.passed, plateau_ok)
+    status = "unstable" if unstable else "completed"
+    notes = (
+        "long-time RH plateau gate; "
+        f"status={status}, t_start={t_start:g}, t_end={current_time:g}, "
+        f"diagnostic_interval={diagnostic_interval:g}, "
+        f"z_modal_damping={z_modal_damping:g}, "
+        f"vpar_modal_damping={vpar_modal_damping:g}, "
+        f"mu_modal_damping={mu_modal_damping:g}, "
+        f"plateau_spread={float(plateau_spread):.6e}; "
+        "production pass remains open until residual and plateau spread both pass"
+    )
+    return BenchmarkGateResult(
+        target=base.target,
+        observed_value=base.observed_value,
+        residual=base.residual,
+        cost=base.cost,
+        passed=passed,
+        notes=notes,
     )
 
 
@@ -750,6 +962,47 @@ def run_solver_geometry_to_gx_eik_gate(
     )
 
 
+def run_geometry_to_gx_eik_export_gate(
+    geometry,
+    fourier_grid,
+    *,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Validate that a solver geometry exports to the GX/GS2 eik contract.
+
+    This is an adapter-contract gate for stellarator geometry produced by DESC
+    or another upstream equilibrium code.  It checks the eik-compatible fields
+    that the solver can export directly: ``B``, ``gradpar``, metric elements,
+    summed radial/binormal magnetic drifts, and ``k_perp^2``.  The internal
+    mirror-force coefficient ``G`` is not included because standard eik tables
+    do not carry it as an independent field.
+    """
+
+    reference = geometry_to_gx_eik_reference(geometry)
+    target = target or BenchmarkTarget(
+        name=f"{getattr(geometry, 'source', 'solver')}_gx_eik_export_contract",
+        quantity="max_abs_eik_export_error",
+        reference_value=0.0,
+        tolerance=1.0e-12,
+        source=reference.source,
+    )
+    report = compare_geometry_to_gx_eik_reference(
+        geometry,
+        reference,
+        fourier_grid,
+        include_mirror_proxy=False,
+    )
+    return evaluate_benchmark_gate(
+        report.max_abs_error,
+        target,
+        normalize_by_tolerance=False,
+        notes=(
+            "solver-produced stellarator geometry exported to GX/GS2 eik-compatible "
+            "fields; internal mirror coefficient G is tracked separately"
+        ),
+    )
+
+
 def run_gx_eik_geometry_gate(
     reference: GxEikGeometryReference,
     parallel_grid,
@@ -830,6 +1083,28 @@ def _coerce_geometry_reference_shape(name, values, shape):
 
 def _field_amplitude(field):
     return jnp.sqrt(jnp.mean(jnp.abs(field) ** 2))
+
+
+def _field_power(field, weights):
+    return jnp.sum(jnp.asarray(weights) * jnp.abs(jnp.asarray(field)) ** 2)
+
+
+def _build_gkw_cell_centered_parallel_grid(n_z: int, nperiod: int = 1):
+    from .grids import build_parallel_grid
+    from .types import ParallelGridSpec
+
+    if nperiod < 1:
+        raise ValueError("nperiod must be at least 1")
+    sgrmax = nperiod - 0.5
+    lower = -sgrmax + sgrmax / n_z
+    return build_parallel_grid(
+        ParallelGridSpec(
+            n_z=n_z,
+            z_min=lower,
+            z_max=lower + 2.0 * sgrmax,
+            topology="periodic",
+        )
+    )
 
 
 def _max_abs_error(left, right):
