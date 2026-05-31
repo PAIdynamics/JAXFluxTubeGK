@@ -58,6 +58,8 @@ def build_linear_residual_precompute(
     parallel_recurrence_velocity_model: str = "rms",
     velocity_recurrence_rate: float = 0.0,
     velocity_recurrence_velocity_model: str = "rms",
+    mode_connectivity=None,
+    parallel_derivative_model: str = "matrix",
 ) -> LinearResidualPrecompute:
     """Build the coupled linear RHS and electrostatic field precompute."""
 
@@ -73,6 +75,8 @@ def build_linear_residual_precompute(
         parallel_recurrence_velocity_model=parallel_recurrence_velocity_model,
         velocity_recurrence_rate=velocity_recurrence_rate,
         velocity_recurrence_velocity_model=velocity_recurrence_velocity_model,
+        mode_connectivity=mode_connectivity,
+        parallel_derivative_model=parallel_derivative_model,
     )
     normalized_model = _normalize_field_model(field_model)
     field = field_precompute

@@ -28,6 +28,84 @@ from .primitives import (
 )
 
 
+def _center_9(stencil5):
+    out = [0.0] * 9
+    out[2:7] = stencil5
+    return out
+
+
+_GKW_D1_POS = np.asarray(
+    [
+        _center_9([0.0, 0.0, -18.0, 24.0, -6.0]),
+        [0.0, 0.0, 0.0, -4.0, -6.0, 12.0, -2.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, -8.0, 0.0, 8.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, -8.0, 0.0, 8.0, 0.0, 0.0, 0.0],
+        _center_9([0.0, -6.0, 0.0, 0.0, 0.0]),
+    ],
+    dtype=float,
+)
+_GKW_D1_NEG = np.asarray(
+    [
+        _center_9([0.0, 0.0, 0.0, 6.0, 0.0]),
+        [0.0, 0.0, 0.0, -8.0, 0.0, 8.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, -8.0, 0.0, 8.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 2.0, -12.0, 6.0, 4.0, 0.0, 0.0, 0.0],
+        _center_9([6.0, -24.0, 18.0, 0.0, 0.0]),
+    ],
+    dtype=float,
+)
+_GKW_D4_POS = np.asarray(
+    [
+        [0.0] * 9,
+        [0.0] * 9,
+        _center_9([-1.0, 4.0, -6.0, 4.0, -1.0]),
+        [0.0, 0.0, -1.0, 4.0, -6.0, 4.0, 0.0, 0.0, 0.0],
+        _center_9([0.0, 12.0, -24.0, 0.0, 0.0]),
+    ],
+    dtype=float,
+)
+_GKW_D4_NEG = np.asarray(
+    [
+        _center_9([0.0, 0.0, -24.0, 12.0, 0.0]),
+        [0.0, 0.0, 0.0, 4.0, -6.0, 4.0, -1.0, 0.0, 0.0],
+        _center_9([-1.0, 4.0, -6.0, 4.0, -1.0]),
+        [0.0] * 9,
+        [0.0] * 9,
+    ],
+    dtype=float,
+)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GKWParallelStencil(_PyTreeDataclass):
+    """GKW/Gyaradax sign-dependent parallel stencil maps."""
+
+    d1_pos: object
+    d1_neg: object
+    d4_pos: object
+    d4_neg: object
+    s_shift: object
+    kx_shift: object
+    valid_shift: object
+    spacing: float
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "d1_pos",
+        "d1_neg",
+        "d4_pos",
+        "d4_neg",
+        "s_shift",
+        "kx_shift",
+        "valid_shift",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("spacing",)
+
+    def __post_init__(self):
+        if self.spacing <= 0.0:
+            raise ValueError("spacing must be positive")
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearRHSPrecompute(_PyTreeDataclass):
@@ -49,6 +127,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
     parallel_recurrence_coeff: object
     velocity_recurrence_operator: object
     velocity_recurrence_coeff: object
+    gkw_parallel_stencil: GKWParallelStencil
+    parallel_derivative_model: str
     n_species: int
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
@@ -68,12 +148,15 @@ class LinearRHSPrecompute(_PyTreeDataclass):
         "parallel_recurrence_coeff",
         "velocity_recurrence_operator",
         "velocity_recurrence_coeff",
+        "gkw_parallel_stencil",
     )
-    _static_fields: ClassVar[tuple[str, ...]] = ("n_species",)
+    _static_fields: ClassVar[tuple[str, ...]] = ("parallel_derivative_model", "n_species")
 
     def __post_init__(self):
         if self.n_species < 1:
             raise ValueError("n_species must be at least 1")
+        if self.parallel_derivative_model not in ("matrix", "gkw_upwind"):
+            raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_upwind'")
 
 
 def build_linear_rhs_precompute(
@@ -89,9 +172,13 @@ def build_linear_rhs_precompute(
     parallel_recurrence_velocity_model: str = "rms",
     velocity_recurrence_rate: float = 0.0,
     velocity_recurrence_velocity_model: str = "rms",
+    mode_connectivity=None,
+    parallel_derivative_model: str = "matrix",
 ) -> LinearRHSPrecompute:
     """Precompute geometry/species coefficients used by the linear RHS terms."""
 
+    if parallel_derivative_model not in ("matrix", "gkw_upwind"):
+        raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_upwind'")
     species_tuple = _as_species_tuple(species)
     n_species = len(species_tuple)
     kperp2 = _k_perp_squared(geometry, fourier_grid)
@@ -169,6 +256,21 @@ def build_linear_rhs_precompute(
         velocity_recurrence_rate,
         velocity_recurrence_velocity_model,
     )
+    if parallel_derivative_model == "gkw_upwind":
+        if mode_connectivity is None:
+            raise ValueError("mode_connectivity is required for gkw_upwind parallel derivatives")
+        gkw_parallel_stencil = build_gkw_parallel_stencil(
+            parallel_grid,
+            fourier_grid,
+            mode_connectivity,
+            dtype=jnp.asarray(geometry.B).dtype,
+        )
+    else:
+        gkw_parallel_stencil = _empty_gkw_parallel_stencil(
+            parallel_grid,
+            fourier_grid,
+            dtype=jnp.asarray(geometry.B).dtype,
+        )
 
     return LinearRHSPrecompute(
         D_z=parallel_grid.D_z,
@@ -187,7 +289,77 @@ def build_linear_rhs_precompute(
         parallel_recurrence_coeff=recurrence_coeff,
         velocity_recurrence_operator=velocity_recurrence_operator,
         velocity_recurrence_coeff=velocity_recurrence_coeff,
+        gkw_parallel_stencil=gkw_parallel_stencil,
+        parallel_derivative_model=parallel_derivative_model,
         n_species=n_species,
+    )
+
+
+def build_gkw_parallel_stencil(
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    mode_connectivity,
+    *,
+    dtype=None,
+) -> GKWParallelStencil:
+    """Build the GKW/Gyaradax fourth-order upwind parallel stencil maps."""
+
+    n_z = int(jnp.asarray(parallel_grid.z).shape[0])
+    n_kx = int(jnp.asarray(fourier_grid.kx).shape[0])
+    n_ky = int(jnp.asarray(fourier_grid.ky).shape[0])
+    spacing = float(jnp.sum(jnp.asarray(parallel_grid.w_z)) / n_z)
+    dtype = jnp.asarray(parallel_grid.z).dtype if dtype is None else dtype
+    ixplus = np.asarray(mode_connectivity.ixplus, dtype=np.int32)
+    ixminus = np.asarray(mode_connectivity.ixminus, dtype=np.int32)
+    iyzero = int(mode_connectivity.iyzero)
+    if ixplus.shape != (n_kx, n_ky) or ixminus.shape != (n_kx, n_ky):
+        raise ValueError("mode_connectivity shape must match the Fourier grid")
+
+    pos_class = _gkw_parallel_position_classes(ixplus, ixminus, iyzero, n_z)
+    s_shift, kx_shift, valid_shift = _gkw_parallel_shift_maps(
+        ixplus,
+        ixminus,
+        iyzero,
+        n_z,
+        max_shift=4,
+    )
+
+    def coefficients(table):
+        idx = np.clip(pos_class + 2, 0, 4)
+        selected = table[idx] / (12.0 * spacing)
+        return jnp.asarray(np.moveaxis(selected, -1, 0), dtype=dtype)
+
+    return GKWParallelStencil(
+        d1_pos=coefficients(_GKW_D1_POS),
+        d1_neg=coefficients(_GKW_D1_NEG),
+        d4_pos=coefficients(_GKW_D4_POS),
+        d4_neg=coefficients(_GKW_D4_NEG),
+        s_shift=jnp.asarray(s_shift, dtype=jnp.int32),
+        kx_shift=jnp.asarray(kx_shift, dtype=jnp.int32),
+        valid_shift=jnp.asarray(valid_shift, dtype=bool),
+        spacing=spacing,
+    )
+
+
+def _empty_gkw_parallel_stencil(
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    *,
+    dtype,
+) -> GKWParallelStencil:
+    n_z = int(jnp.asarray(parallel_grid.z).shape[0])
+    n_kx = int(jnp.asarray(fourier_grid.kx).shape[0])
+    n_ky = int(jnp.asarray(fourier_grid.ky).shape[0])
+    shape = (9, n_z, n_kx, n_ky)
+    return GKWParallelStencil(
+        d1_pos=jnp.zeros(shape, dtype=dtype),
+        d1_neg=jnp.zeros(shape, dtype=dtype),
+        d4_pos=jnp.zeros(shape, dtype=dtype),
+        d4_neg=jnp.zeros(shape, dtype=dtype),
+        s_shift=jnp.zeros(shape, dtype=jnp.int32),
+        kx_shift=jnp.zeros(shape, dtype=jnp.int32),
+        valid_shift=jnp.zeros(shape, dtype=bool),
+        spacing=1.0,
     )
 
 
@@ -271,6 +443,66 @@ def parallel_field_drive(phi, D_z, precompute: LinearRHSPrecompute):
     return _drop_single_species(result, precompute.n_species)
 
 
+def gkw_parallel_streaming(distribution, precompute: LinearRHSPrecompute):
+    """Return GKW upwinded Term I plus fused ``disp_par`` recurrence control."""
+
+    coefficient = jnp.asarray(precompute.parallel_streaming_coeff)
+    n_species = _coefficient_species_count(coefficient, single_ndim=2, name="parallel_coefficient")
+    original_ndim = jnp.asarray(distribution).ndim
+    distribution_s = _distribution_with_species_axis(distribution, n_species)
+    coefficient_s = _with_species_axis(
+        coefficient,
+        n_species,
+        "parallel_coefficient",
+        single_ndim=2,
+    )
+    upar = -coefficient_s
+    d1_pos = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d1_pos, precompute.gkw_parallel_stencil)
+    d1_neg = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d1_neg, precompute.gkw_parallel_stencil)
+    d4_pos = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d4_pos, precompute.gkw_parallel_stencil)
+    d4_neg = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d4_neg, precompute.gkw_parallel_stencil)
+    sign = upar[:, :, None, :, None, None]
+    d1 = jnp.where(sign > 0.0, d1_pos, d1_neg)
+    d4 = jnp.where(sign > 0.0, d4_pos, d4_neg)
+    recurrence = jnp.asarray(precompute.parallel_recurrence_coeff)
+    recurrence_s = _with_species_axis(
+        recurrence,
+        n_species,
+        "parallel_recurrence_coeff",
+        single_ndim=2,
+    )
+    result = sign * d1 + recurrence_s[:, :, None, :, None, None] * d4
+    return _restore_distribution_shape(result, original_ndim)
+
+
+def gkw_parallel_field_drive(phi, precompute: LinearRHSPrecompute):
+    """Return GKW upwinded Term VII for the gyroaveraged potential."""
+
+    gyro_phi = _gyroaveraged_potential(phi, precompute)
+    d1_pos = _apply_gkw_parallel_stencil_table(
+        gyro_phi,
+        precompute.gkw_parallel_stencil.d1_pos,
+        precompute.gkw_parallel_stencil,
+    )
+    d1_neg = _apply_gkw_parallel_stencil_table(
+        gyro_phi,
+        precompute.gkw_parallel_stencil.d1_neg,
+        precompute.gkw_parallel_stencil,
+    )
+    coefficient = (
+        -precompute.charge_over_temperature[:, None, None, None, None, None]
+        * precompute.parallel_streaming_coeff[:, :, None, :, None, None]
+        * precompute.maxwellian[..., None, None]
+    )
+    selected_derivative = jnp.where(
+        coefficient < 0.0,
+        d1_pos[:, None, :, :, :, :],
+        d1_neg[:, None, :, :, :, :],
+    )
+    result = coefficient * selected_derivative
+    return _drop_single_species(result, precompute.n_species)
+
+
 def drift_field_drive(phi, precompute: LinearRHSPrecompute):
     """Return ``-(Z/T) i omega_d F_M J0 phi``."""
 
@@ -346,19 +578,31 @@ def velocity_recurrence_control(distribution, operator, coefficient):
 def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute):
     """Assemble the linear RHS for a supplied electrostatic potential."""
 
-    return (
-        parallel_streaming(distribution, precompute.D_z, precompute.parallel_streaming_coeff)
-        + magnetic_drift_advection(distribution, precompute.magnetic_drift_frequency)
-        + mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
-        + equilibrium_drive(phi, precompute)
-        + parallel_field_drive(phi, precompute.D_z, precompute)
-        + drift_field_drive(phi, precompute)
-        + dissipation(distribution, precompute.perpendicular_damping)
-        + parallel_recurrence_control(
+    if precompute.parallel_derivative_model == "gkw_upwind":
+        parallel_term = gkw_parallel_streaming(distribution, precompute)
+        parallel_field_term = gkw_parallel_field_drive(phi, precompute)
+        parallel_recurrence_term = jnp.zeros_like(distribution)
+    else:
+        parallel_term = parallel_streaming(
+            distribution,
+            precompute.D_z,
+            precompute.parallel_streaming_coeff,
+        )
+        parallel_field_term = parallel_field_drive(phi, precompute.D_z, precompute)
+        parallel_recurrence_term = parallel_recurrence_control(
             distribution,
             precompute.parallel_recurrence_operator,
             precompute.parallel_recurrence_coeff,
         )
+    return (
+        parallel_term
+        + magnetic_drift_advection(distribution, precompute.magnetic_drift_frequency)
+        + mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
+        + equilibrium_drive(phi, precompute)
+        + parallel_field_term
+        + drift_field_drive(phi, precompute)
+        + dissipation(distribution, precompute.perpendicular_damping)
+        + parallel_recurrence_term
         + velocity_recurrence_control(
             distribution,
             precompute.velocity_recurrence_operator,
@@ -389,6 +633,25 @@ def _apply_matrix_along_axis(matrix, values, axis: int):
     moved = jnp.moveaxis(values, axis, 0)
     differentiated = jnp.tensordot(matrix, moved, axes=((1,), (0,)))
     return jnp.moveaxis(differentiated, 0, axis)
+
+
+def _apply_gkw_parallel_stencil_table(values, coefficients, stencil: GKWParallelStencil):
+    values = jnp.asarray(values)
+    prefix_shape = values.shape[:-3]
+    n_z, n_kx, n_ky = values.shape[-3:]
+    flat = jnp.reshape(values, (-1, n_z, n_kx, n_ky))
+    output = jnp.zeros_like(flat)
+    ky_idx = jnp.reshape(jnp.arange(n_ky, dtype=jnp.int32), (1, 1, n_ky))
+    for shift_index in range(9):
+        shifted = flat[
+            :,
+            stencil.s_shift[shift_index],
+            stencil.kx_shift[shift_index],
+            ky_idx,
+        ]
+        shifted = jnp.where(stencil.valid_shift[shift_index][None, :, :, :], shifted, 0.0)
+        output = output + coefficients[shift_index][None, :, :, :] * shifted
+    return jnp.reshape(output, prefix_shape + (n_z, n_kx, n_ky))
 
 
 def _k_perp_squared(geometry, fourier_grid: FourierGrid):
@@ -554,6 +817,75 @@ def _finite_difference_recurrence_operator(n: int, spacing: float, *, periodic: 
             elif 0 <= col < n:
                 matrix[row, col] += value
     return jnp.asarray(matrix, dtype=dtype)
+
+
+def _gkw_parallel_position_classes(
+    ixplus: np.ndarray,
+    ixminus: np.ndarray,
+    iyzero: int,
+    n_z: int,
+) -> np.ndarray:
+    pos = np.zeros((n_z,) + ixplus.shape, dtype=np.int8)
+    zonal = np.zeros(ixplus.shape, dtype=bool)
+    if 0 <= iyzero < ixplus.shape[1]:
+        zonal[:, iyzero] = True
+    left_open = np.logical_and(ixminus < 0, ~zonal)
+    right_open = np.logical_and(ixplus < 0, ~zonal)
+    if n_z >= 1:
+        pos[0, left_open] = -2
+        pos[n_z - 1, right_open] = 2
+    if n_z >= 2:
+        pos[1, left_open] = -1
+        pos[n_z - 2, right_open] = 1
+    return pos
+
+
+def _gkw_parallel_shift_maps(
+    ixplus: np.ndarray,
+    ixminus: np.ndarray,
+    iyzero: int,
+    n_z: int,
+    *,
+    max_shift: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    n_kx, n_ky = ixplus.shape
+    offsets = np.arange(-max_shift, max_shift + 1, dtype=np.int32)
+    shape = (offsets.size, n_z, n_kx, n_ky)
+    s_shift = np.zeros(shape, dtype=np.int32)
+    kx_shift = np.zeros(shape, dtype=np.int32)
+    valid = np.zeros(shape, dtype=bool)
+    for offset_index, delta_s in enumerate(offsets):
+        for iz in range(n_z):
+            for ix in range(n_kx):
+                for iy in range(n_ky):
+                    target_z = iz + int(delta_s)
+                    target_kx = ix
+                    ok = True
+                    if target_z < 0:
+                        if iy == iyzero:
+                            target_z += n_z
+                        else:
+                            connected = int(ixminus[ix, iy])
+                            if connected >= 0:
+                                target_kx = connected
+                                target_z += n_z
+                            else:
+                                ok = False
+                    elif target_z >= n_z:
+                        if iy == iyzero:
+                            target_z -= n_z
+                        else:
+                            connected = int(ixplus[ix, iy])
+                            if connected >= 0:
+                                target_kx = connected
+                                target_z -= n_z
+                            else:
+                                ok = False
+                    if ok and 0 <= target_z < n_z:
+                        s_shift[offset_index, iz, ix, iy] = target_z
+                        kx_shift[offset_index, iz, ix, iy] = target_kx
+                        valid[offset_index, iz, ix, iy] = True
+    return s_shift, kx_shift, valid
 
 
 def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity_model: str):

@@ -1,3 +1,4 @@
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from stellarator_gk import (
     VelocityGridSpec,
     benchmark_target_cost,
     benchmark_target_residual,
+    build_desc_gx_eik_reference_from_path,
     build_desc_geometry_from_arrays,
     build_fourier_grid,
     build_flux_tube_geometry_from_gx_eik_reference,
@@ -23,6 +25,7 @@ from stellarator_gk import (
     build_parallel_grid,
     build_velocity_grid,
     cyclone_base_case_growth_target,
+    compare_cyclone_base_case_traces,
     compare_geometry_to_gx_eik_reference,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
@@ -30,7 +33,10 @@ from stellarator_gk import (
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
+    run_cyclone_base_case_term_parity_audit,
+    run_cyclone_base_case_trace,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
@@ -65,6 +71,10 @@ def test_named_benchmark_targets_and_costs_are_differentiable():
     assert cyclone_metadata["n_z"] == 144
     assert cyclone_metadata["n_vpar"] == 64
     assert cyclone_metadata["n_mu"] == 16
+    assert cyclone_metadata["parallel_backend"] == "finite_difference"
+    assert cyclone_metadata["parallel_boundary"] == "zero"
+    assert cyclone_metadata["parallel_derivative_model"] == "gkw_upwind"
+    assert cyclone_metadata["velocity_backend"] == "finite_difference"
     assert rosenbluth_hinton_residual(1.3, 0.05) > rh.reference_value
 
     value = jnp.asarray(0.2)
@@ -133,6 +143,20 @@ def test_gx_eik_loader_uses_gist_drift_column_order():
     np.testing.assert_allclose(reference.cvdrift0[0], -2.1124355474e-02)
     np.testing.assert_allclose(reference.gbdrift[0], 8.8374219166e-01)
     np.testing.assert_allclose(reference.gbdrift0[0], -2.1124355474e-02)
+
+
+def test_gx_eik_loader_reads_desc_block_eik_fixture():
+    path = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
+
+    reference = load_gx_eik_geometry_reference(path)
+
+    assert reference.theta.shape == (33,)
+    assert reference.header[0] == pytest.approx(16.0)
+    assert reference.header[2] == pytest.approx(32.0)
+    np.testing.assert_allclose(reference.theta[0], -np.pi, rtol=2e-12)
+    np.testing.assert_allclose(reference.theta[-1], np.pi, rtol=2e-12)
+    np.testing.assert_allclose(reference.bmag[0], 1.1055080508304442)
+    assert jnp.all(jnp.isfinite(reference.gds2))
 
 
 def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
@@ -249,6 +273,31 @@ def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
+def test_desc_gx_eik_reference_matches_external_block_fixture():
+    desc_root = ROOT / "relevant-codes/DESC"
+    if desc_root.exists() and str(desc_root) not in sys.path:
+        sys.path.insert(0, str(desc_root))
+    pytest.importorskip("desc")
+    desc_path = ROOT / "relevant-codes/DESC/desc/examples/DSHAPE_output.h5"
+    eik_path = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
+
+    reference = build_desc_gx_eik_reference_from_path(
+        desc_path,
+        ntheta=32,
+        npol=1,
+        rho=0.5,
+        alpha=0.0,
+    )
+    external = load_gx_eik_geometry_reference(eik_path)
+    gate = run_desc_gx_eik_external_geometry_gate(desc_path, eik_path)
+
+    np.testing.assert_allclose(reference.bmag, external.bmag, rtol=0.0, atol=2.0e-14)
+    np.testing.assert_allclose(reference.gds21, external.gds21, rtol=0.0, atol=2.0e-14)
+    assert bool(gate.passed)
+    assert gate.target.name == "desc_gx_external_eik_geometry_parity"
+    np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
+
+
 def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
     rh = run_reduced_rosenbluth_hinton_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
     cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
@@ -266,6 +315,8 @@ def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
     assert "window" in cyclone.notes
     assert "nperiod=5" in cyclone.notes
     assert "selected ky only" in cyclone.notes
+    assert "velocity_backend=finite_difference" in cyclone.notes
+    assert "parallel_boundary=zero" in cyclone.notes
 
 
 def test_production_cyclone_gate_runs_with_reduced_overrides():
@@ -282,6 +333,48 @@ def test_production_cyclone_gate_runs_with_reduced_overrides():
     assert jnp.isfinite(cyclone.cost)
     assert "production-control CBC gate" in cyclone.notes
     assert "nperiod=5" in cyclone.notes
+    assert "parallel_derivative_model=gkw_upwind" in cyclone.notes
+
+
+def test_cyclone_term_parity_audit_covers_gkw_conventions():
+    report = run_cyclone_base_case_term_parity_audit(n_z=8, n_vpar=6, n_mu=4)
+
+    assert bool(report.passed)
+    assert report.max_abs_error < 5.0e-13
+    assert report.term_names == (
+        "drift_frequency",
+        "equilibrium_drive",
+        "drift_field_drive",
+        "boundary_map",
+        "grid_normalization",
+        "rhs_assembly",
+    )
+    assert "matrix_vs_gkw_parallel_boundary_delta" in report.notes
+
+
+def test_cyclone_trace_records_window_diagnostics_and_compares():
+    trace = run_cyclone_base_case_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+    )
+    comparison = compare_cyclone_base_case_traces(trace, trace)
+
+    assert trace.times.shape == (4,)
+    np.testing.assert_allclose(trace.times, jnp.asarray([0.0, 0.006, 0.012, 0.018]))
+    assert jnp.all(jnp.isfinite(trace.raw_amplitude))
+    assert jnp.all(jnp.isfinite(trace.physical_amplitude))
+    assert jnp.all(jnp.isfinite(trace.window_growth))
+    assert jnp.all(jnp.isfinite(trace.fitted_growth))
+    assert abs(float(trace.window_growth[1])) < 10.0
+    assert jnp.all(trace.phi_norm > 0.0)
+    assert jnp.all(trace.state_norm > 0.0)
+    assert jnp.all(trace.rhs_norm > 0.0)
+    assert bool(comparison.passed)
+    np.testing.assert_allclose(comparison.max_abs_error, 0.0)
+    assert "trace-level CBC comparison" in comparison.notes
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

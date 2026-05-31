@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Current State
 
@@ -33,28 +33,40 @@ loads through the solver geometry contract. The current benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
 and a reduced DESC DSHAPE fixture optimization example. The immediate
-validation-gate pass now adds executable RH/CBC reduced gates and a GX/GS2 eik
-metric gate; the eik metric contract passes, while RH and CBC are reported as
-open against production tolerances until the physics/numerics gap is closed. A
-follow-up hardening pass adds late-window growth fitting, a calibrated reduced
-RH crossing regression hook, and solver-geometry-to-GX/GS2-eik field parity
-reports. The active RH path now passes a true late-time plateau gate over
-`t>80` by using GKW finite-difference fallback stencils in `s` and
-`v_parallel`, exact zonal initialization, direct fourth-difference
-`disp_par`/`disp_vp` recurrence operators inside the residual, and a
-late-window mean-convergence check. The passing CPU gate observes
-`0.07041301423095102` against the GKW/Gyaradax RH target `0.0711`. The Cyclone
-selected-`ky` gate now uses the GKW cell-centered `s` grid, `nperiod=5`, and
-single-mode `ky=0.5` convention, with a separate production-control
-amplitude-window runner. It is still OPEN.
+validation-gate pass now adds executable RH/CBC gates and GX/GS2/DESC eik
+metric gates. A follow-up hardening pass adds late-window growth fitting, a
+calibrated reduced RH crossing regression hook, and
+solver-geometry-to-GX/GS2-eik field parity reports. The active RH path now
+passes a true late-time plateau gate over `t>80` by using GKW
+finite-difference fallback stencils in `s` and `v_parallel`, exact zonal
+initialization, direct fourth-difference `disp_par`/`disp_vp` recurrence
+operators inside the residual, and a late-window mean-convergence check. The
+passing CPU gate observes `0.07041301423095102` against the GKW/Gyaradax RH
+target `0.0711`. The Cyclone selected-`ky` gate now uses the GKW
+cell-centered `s` grid, `nperiod=5`, single-mode `ky=0.5` convention, GKW
+finite-difference velocity fallback, a zero-boundary finite-difference
+parallel fallback, an optional GKW/Gyaradax sign-dependent upwind parallel
+stencil for Term I/Term VII, and a jitted production-control amplitude-window
+runner. The medium production-control gate observes `0.16471456525100867`
+against the GKW/Gyaradax target `0.179`, so it is narrowed but still OPEN
+against the `0.01` tolerance. A CBC term-level audit now passes with zero
+stored error for magnetic drift, equilibrium drive, drift-field drive, GKW
+boundary maps, grid/velocity normalization, and assembled RHS conventions; the
+new reduced CBC trace diagnostic records selected-`ky` raw and physical
+amplitudes, per-window and fitted growth, phi/state/RHS norms, and
+log-normalization for direct external comparison. The next CBC work is
+comparison of that trace against a matched Gyaradax/GKW run.
 A reduced validation-gate example now writes CSV summaries and a paper figure
-that show the current RH, Cyclone, GX/eik, DESC/eik, and GX/GIST gate status in
-`main.tex`. The stellarator-geometry path now includes a solver-produced DESC
-fixture export gate for GX/GS2
-eik-compatible fields, so DESC arrays can be audited through the same
-metric/drift and `k_perp^2` contract before they are used in optimization. The
-external stellarator eik path now also checks three independent GX/VMEC GIST
-fixtures and uses the correct GIST drift-column order.
+that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
+GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
+windowed selected-`ky` evolution. The stellarator-geometry path now includes a
+solver-produced DESC fixture export gate for GX/GS2 eik-compatible fields, so
+DESC arrays can be audited through the same metric/drift and `k_perp^2`
+contract before they are used in optimization. The external stellarator eik
+path now also checks three independent GX/VMEC GIST fixtures, uses the correct
+GIST drift-column order, and includes a matched DESC/GX block-`eik.out` DSHAPE
+fixture with zero residual against the solver-produced DESC/GX-convention
+geometry.
 
 The repository currently contains:
 
@@ -68,9 +80,10 @@ The repository currently contains:
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, and `figures/validation_gate_summary.csv`: current reduced validation-gate result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, and `figures/cyclone_trace_reduced.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
+- `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -150,30 +163,187 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: close the remaining production physics gaps exposed by the executable
-validation gates after the passing RH plateau update, and move from eik export
-self-contracts to matched DESC geometry parity:
+Goal: compare the new reduced Cyclone trace artifact against an external
+Gyaradax/GKW trace, then use any mismatch to close the remaining production
+physics gap while keeping DESC optimization examples labeled as reduced until
+CBC parity passes:
 
-- use the production-control Cyclone selected-`ky` gate to close the remaining
-  growth-rate gap against the GKW/GX tolerance ladder,
-- compare solver-produced DESC geometry against a matched independent field-by-field eik output,
-- use passing gates as prerequisites for DESC-driven optimization examples.
+- install or enable optional Gyaradax runtime dependencies, or export an
+  equivalent GKW diagnostic trace, and compare selected-`ky` time evolution
+  against `CycloneTrace` at matched reduced and production-control resolution,
+  focusing on phi solve history, RK4/window normalization, initialization
+  amplitude/envelope, and late-window growth diagnostics,
+- promote the production-control Cyclone growth-rate gate to PASS only after it
+  is within the documented GKW/GX tolerance ladder,
+- supplement the matched DESC/GX block-eik fixture with a truly independent
+  external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST
+  path is available.
 
 Expected file changes:
 
-- Cyclone physics/numerics parity after the GKW-aligned selected-`ky`
-  production-control setup,
-- matched DESC/GX-convention stellarator geometry comparison fixtures,
+- external Gyaradax/GKW trace fixture, exporter, or loader,
+- trace-level comparison tests/reports against `CycloneTrace`,
+- any independent eik producer/fixture discovered for DESC/GX geometry,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS,
-- matched DESC solver-produced geometry parity tolerance test,
+- Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS
+  when the remaining physics gap is closed,
+- existing matched DESC solver-produced geometry parity tolerance test retained,
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-31: Added CBC Trace-Level Diagnostics
+
+- Added public `CycloneTrace` and `CycloneTraceComparisonReport` PyTree
+  dataclasses.
+- Added `run_cyclone_base_case_trace`, which records selected-`ky` CBC
+  diagnostics after fixed RK4 windows:
+  - raw selected-mode amplitude,
+  - physical amplitude including window normalization,
+  - physical per-window growth,
+  - cumulative fitted growth,
+  - phi norm,
+  - state norm,
+  - RHS norm,
+  - selected-mode log-normalization.
+- Added `compare_cyclone_base_case_traces` for field-by-field trace parity.
+- Added CLI support via `examples/run_validation_gates.py --cyclone-trace`.
+- Regenerated validation artifacts and added
+  `figures/cyclone_trace_reduced.csv`.  The reduced trace currently starts
+  from amplitude `3.084441e-03` and records fitted growth
+  `-6.736663e-01` by `t=0.048` for the short diagnostic example; it is an
+  implementation trace artifact, not yet an external-reference pass.
+- Direct local Gyaradax import is currently blocked by a missing optional
+  dependency: `omegaconf`.  The next trace-parity step is therefore either to
+  install/enable Gyaradax's runtime dependencies or export the equivalent GKW
+  time-history diagnostics.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex`.
+- Commands run:
+  - `PYTHONPATH=relevant-codes/gyaradax .venv/bin/python -c "import gyaradax"`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_validation_gates.py examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/run_validation_gates.py --cyclone-trace --cyclone-trace-windows 2 --rh-steps 1 --cyclone-steps 1`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+- Verification results:
+  - focused benchmark tests: 16 passed,
+  - full ruff: all checks passed,
+  - full pytest suite: 135 passed,
+  - validation CLI `--cyclone-trace` smoke printed the reduced trace table with
+    physical first-window growth `-3.636966e-01`,
+  - validation figure generator wrote `figures/cyclone_trace_reduced.csv`,
+    `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, and
+    `figures/validation_gate_status.pdf`,
+  - `main.tex` built successfully after replacing a fragile `\path` command in
+    the figure caption; existing underfull-box warnings remain.
+
+### 2026-05-31: Added CBC Term-Level Parity Audit
+
+- Added a GKW/Gyaradax sign-dependent upwind parallel fallback for CBC
+  finite-difference parity:
+  - GKW fourth-order upwind \(D_z\) stencil tables for positive/negative
+    characteristics,
+  - open-boundary `s`/`kx` shift maps,
+  - fused `disp_par` recurrence control for Term I,
+  - GKW upwind Term VII for the parallel field drive.
+- Wired the Cyclone selected-`ky` gates to use
+  `parallel_derivative_model="gkw_upwind"` by default, while retaining the
+  centered matrix backend as an explicit comparison mode.
+- Added `run_cyclone_base_case_term_parity_audit`, a public term-level CBC
+  audit for:
+  - magnetic drift frequency,
+  - equilibrium-gradient drive,
+  - drift-field drive,
+  - GKW open-boundary maps,
+  - GKW cell-centered \(s\), \(v_\parallel\), and \(\mu\) normalization,
+  - assembled RHS identity.
+- The term audit passes with max stored error `0.0`; the diagnostic difference
+  between centered-matrix and GKW-upwind parallel boundary operators on the
+  audit state is `1.091092e-04`.
+- Re-ran the medium production-control CBC comparison:
+  - centered matrix fallback: observed `0.16471725401913284`, residual
+    `-1.428274598086715`,
+  - GKW upwind fallback: observed `0.16471456525100867`, residual
+    `-1.4285434748991326`.
+- Conclusion: the audited drift/drive/field-drive/boundary/normalization
+  conventions are not the visible source of the remaining CBC growth-rate gap.
+  The next round should compare state evolution, phi solve history, RK4/window
+  normalization, initialization, and growth diagnostics directly against a
+  Gyaradax/GKW trace.
+- Regenerated:
+  - `figures/rh_plateau_demo.csv`,
+  - `figures/validation_gate_summary.csv`,
+  - `figures/validation_gate_status.pdf`.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex`.
+- Commands run:
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src/stellarator_gk/physics/rhs_terms.py src/stellarator_gk/solver.py src/stellarator_gk/benchmarks.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_validation_gates.py examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_linear_rhs.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/run_validation_gates.py --cyclone-term-audit --rh-steps 1 --cyclone-steps 1`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+- Verification results:
+  - focused RHS/benchmark tests: 26 passed,
+  - focused ruff: all checks passed,
+  - full ruff: all checks passed,
+  - full pytest suite: 134 passed,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - validation CLI `--cyclone-term-audit` smoke: CBC term parity PASS,
+    reduced RH/CBC growth rows expected OPEN,
+  - validation summary now includes CBC terms PASS and Cyclone growth OPEN
+    (`0.16471456525100867`).
+
+### 2026-05-31: Added DESC/GX Eik Parity and Hardened the CBC Production Gate
+
+- Added a GX DESC-block `eik.out` loader and a DESC/GX-convention geometry
+  evaluator that mirrors the GX field-line normalization while using the
+  current DESC coordinate API.
+- Added `run_desc_gx_eik_external_geometry_gate`, public exports, CLI support,
+  tests, and the matched DSHAPE fixture
+  `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`.
+- The DESC/GX block-eik gate passes with observed maximum field error `0.0`
+  and normalized residual `0.0` at tolerance `2e-6`.
+- Hardened the Cyclone selected-`ky` production-control gate:
+  - target metadata now records GKW finite-difference velocity fallback,
+    zero-boundary finite-difference parallel fallback, and `disp_par=1`,
+  - the runner jits each fixed-step amplitude window and jits the phi solve,
+  - the medium validation-summary run observes `0.16471725401913284` against
+    the GKW/Gyaradax target `0.179`.
+- The Cyclone gate is narrowed but still OPEN with normalized residual
+  `-1.428274598086715`; the next CBC work is a term-level
+  drift/drive/field/normalization audit against GKW/Gyaradax.
+- Regenerated:
+  - `figures/rh_plateau_demo.csv`,
+  - `figures/validation_gate_summary.csv`,
+  - `figures/validation_gate_status.pdf`,
+  - `main.pdf`.
+- Updated `TODO.md`, `STATUS.md`, and the `main.tex` results/validation text to
+  keep DESC-driven optimization examples labeled reduced until CBC passes.
+- Commands run:
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_validation_gates.py examples/generate_validation_gate_figures.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/run_validation_gates.py --desc-gx-eik --rh-steps 1 --cyclone-steps 1`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check examples/run_validation_gates.py`
+- Verification results:
+  - focused benchmark-reference tests: 14 passed,
+  - full ruff: all checks passed,
+  - full pytest suite: 133 passed,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - validation CLI `--desc-gx-eik` smoke: PASS for DESC/GX eik and expected
+    OPEN reduced RH/CBC smoke rows,
+  - validation summary: RH plateau PASS, Cyclone OPEN (`0.16471725401913284`),
+    GX/eik PASS, DESC/eik PASS, DESC/GX eik PASS, GX/GIST PASS.
 
 ### 2026-05-30: Closed the Active RH Late-Time Plateau Gate
 

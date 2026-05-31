@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import csv
 import os
 from pathlib import Path
+import sys
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
 
@@ -36,10 +37,13 @@ from stellarator_gk import (
     build_parallel_grid,
     load_gx_eik_geometry_reference,
     resample_gx_eik_geometry_reference,
+    run_desc_gx_eik_external_geometry_gate,
     run_geometry_to_gx_eik_export_gate,
     run_gx_gist_external_eik_suite_gate,
     run_gx_eik_geometry_gate,
-    run_reduced_cyclone_base_case_gate,
+    run_cyclone_base_case_term_parity_audit,
+    run_cyclone_base_case_trace,
+    run_production_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_rosenbluth_hinton_plateau_gate,
 )
@@ -74,12 +78,15 @@ def main() -> None:
 
     rh_points = _run_rh_plateau_points()
     summary = _run_gate_summary(rh_points[-1])
+    cbc_trace = run_cyclone_base_case_trace(n_z=16, n_vpar=12, n_mu=6, n_windows=4)
 
     _write_rh_csv(output_dir / "rh_plateau_demo.csv", rh_points)
     _write_summary_csv(output_dir / "validation_gate_summary.csv", summary)
+    _write_cyclone_trace_csv(output_dir / "cyclone_trace_reduced.csv", cbc_trace)
     _write_validation_pdf(output_dir / "validation_gate_status.pdf", rh_points, summary)
 
     for path in (
+        "cyclone_trace_reduced.csv",
         "rh_plateau_demo.csv",
         "validation_gate_summary.csv",
         "validation_gate_status.pdf",
@@ -118,16 +125,26 @@ def _run_rh_plateau_points() -> list[RhPlateauPoint]:
 def _run_gate_summary(rh_plateau_point: RhPlateauPoint) -> list[GateSummary]:
     reduced_rh = run_reduced_rosenbluth_hinton_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
     rh_plateau = run_rosenbluth_hinton_plateau_gate()
-    cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
+    cyclone = run_production_cyclone_base_case_gate(
+        n_z=48,
+        n_vpar=32,
+        n_mu=8,
+        steps_per_window=20,
+        n_windows=80,
+    )
+    cbc_terms = run_cyclone_base_case_term_parity_audit(n_z=16, n_vpar=12, n_mu=6)
     eik = _run_eik_gate()
     desc_eik = _run_desc_eik_export_gate()
+    desc_gx_eik = _run_desc_gx_eik_external_gate()
     gx_gist = _run_gx_gist_suite_gate()
     return [
         _summary_from_result("RH endpoint", reduced_rh),
         _summary_from_result("RH plateau", rh_plateau),
         _summary_from_result("Cyclone", cyclone),
+        _summary_from_term_report("CBC terms", cbc_terms, tolerance=5.0e-13),
         _summary_from_result("GX/eik", eik),
         _summary_from_result("DESC/eik", desc_eik),
+        _summary_from_result("DESC/GX eik", desc_gx_eik),
         _summary_from_result("GX/GIST", gx_gist),
     ]
 
@@ -142,6 +159,20 @@ def _summary_from_result(label, result) -> GateSummary:
         residual=float(result.residual),
         tolerance=float(result.target.tolerance),
         notes=result.notes,
+    )
+
+
+def _summary_from_term_report(label, report, *, tolerance: float) -> GateSummary:
+    residual = float(report.max_abs_error) / tolerance
+    return GateSummary(
+        label=label,
+        gate="cyclone_base_case_term_parity",
+        status="PASS" if bool(report.passed) else "OPEN",
+        observed=float(report.max_abs_error),
+        reference=0.0,
+        residual=residual,
+        tolerance=tolerance,
+        notes=report.notes,
     )
 
 
@@ -187,6 +218,16 @@ def _run_desc_eik_export_gate():
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
     return run_geometry_to_gx_eik_export_gate(geometry, fourier)
+
+
+def _run_desc_gx_eik_external_gate():
+    desc_root = Path("relevant-codes/DESC")
+    if desc_root.exists() and str(desc_root) not in sys.path:
+        sys.path.insert(0, str(desc_root))
+    return run_desc_gx_eik_external_geometry_gate(
+        "relevant-codes/DESC/desc/examples/DSHAPE_output.h5",
+        "fixtures/gx_desc_dshape_rho05_alpha0.eik.out",
+    )
 
 
 def _run_gx_gist_suite_gate():
@@ -271,6 +312,37 @@ def _write_summary_csv(path: Path, rows: list[GateSummary]) -> None:
                     row.notes,
                 )
             )
+
+
+def _write_cyclone_trace_csv(path: Path, trace) -> None:
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(
+            (
+                "time",
+                "raw_amplitude",
+                "physical_amplitude",
+                "window_growth",
+                "fitted_growth",
+                "phi_norm",
+                "state_norm",
+                "rhs_norm",
+                "log_normalization",
+            )
+        )
+        for row in zip(
+            trace.times,
+            trace.raw_amplitude,
+            trace.physical_amplitude,
+            trace.window_growth,
+            trace.fitted_growth,
+            trace.phi_norm,
+            trace.state_norm,
+            trace.rhs_norm,
+            trace.log_normalization,
+            strict=True,
+        ):
+            writer.writerow([float(value) for value in row])
 
 
 def _write_validation_pdf(

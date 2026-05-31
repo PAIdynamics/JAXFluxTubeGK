@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-05-29
+Last planned: 2026-05-31
 
 ## Project Goal
 
@@ -298,6 +298,7 @@ src/stellarator_gk/
   - [x] field-line periodicity/twist consistency,
   - [x] AD gradients through geometry arrays for differentiable inputs,
   - [x] extracted DESC DSHAPE fixture loads through the solver geometry contract,
+  - [x] solver-produced DESC/GX eik-convention geometry matches the DSHAPE `eik.out` fixture field by field,
   - [ ] finite differences against DESC/SIMSOPT geometry quantities for a small fixture.
 
 ## Phase 5: Physics Primitives
@@ -460,6 +461,12 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Replace the RH/CBC post-step parallel modal-damping default with an in-residual GKW/Gyaradax-scaled `disp_par` recurrence-control term.
 - [x] Correct the Cyclone selected-`ky` gate to use the GKW cell-centered `s` grid, `nperiod=5`, the single-mode `ky=0.5` convention, and a production-control wrapper that stores only late-window amplitudes.
 - [x] Close the active RH late-time plateau gate by adding GKW finite-difference parallel/velocity fallbacks, direct fourth-difference `disp_par`/`disp_vp` recurrence operators, exact zonal initialization, and a late-window mean-convergence check.
+- [x] Harden the production-control Cyclone selected-`ky` gate with GKW finite-difference velocity and zero-boundary parallel fallback backends, jitted window advancement, and documented GKW/GX tolerance reporting.
+- [x] Add the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, including open-boundary shift maps and fused `disp_par` recurrence control.
+- [x] Add a CBC term-level parity audit for magnetic drift, equilibrium drive, drift-field drive, GKW boundary maps, grid/velocity normalization, and assembled RHS conventions.
+- [x] Add a reduced CBC trace report that records selected-mode raw/physical amplitude, per-window and fitted growth, phi/state/RHS norms, and log-normalization after fixed windows.
+- [ ] Add an external GKW/Gyaradax trace loader or exporter and compare it directly against the reduced CBC trace report.
+- [x] Add a GX DESC-block `eik.out` loader and compare solver-produced DESC/GX-convention geometry against the matched DSHAPE external-format fixture.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
   - fixed `alpha`,
@@ -467,7 +474,8 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - reference geometry arrays.
 - [x] Compare stellarator geometry quantities against precomputed reference data.
 - [ ] Compare solver-computed ITG growth-rate scans against available GS2/GX/GKW-style references.
-- [ ] Compare solver-produced geometry arrays against independent GX/GS2/stella-style `eik` outputs where local fixtures are available.
+- [x] Compare solver-produced geometry arrays against local GX/GS2/GX-DESC-style `eik` outputs where fixtures are available.
+- [ ] Add a truly independently generated DESC/GX eik fixture from an external runner when a compatible GX/DESC script or GS2/stella export path is available.
 - [ ] Add convergence tests over:
   - [x] `N_s`,
   - [x] `N_vparallel`,
@@ -476,7 +484,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, spectral modal damping hooks for experiments only, solver-to-eik field parity reports, a DESC fixture eik-export contract gate, corrected GIST drift-column handling, a three-fixture GX/VMEC GIST external eik-suite gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, GX/eik imported metric, field-parity gate, DESC eik-export gate, and GX/GIST suite pass the solver geometry contract. The reduced RH endpoint and default CBC production gate still run but remain open against production tolerances, so production Cyclone growth-rate agreement, matched DESC geometry parity against an independent external eik output, and ITG scan comparison remain open benchmark tasks.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, GKW finite-difference Cyclone fallback controls, the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, a passing CBC term-level parity audit, a reduced CBC trace CSV/API, spectral modal damping hooks for experiments only, solver-to-eik field parity reports, a DESC fixture eik-export contract gate, a matched DESC/GX block-`eik.out` geometry parity gate, corrected GIST drift-column handling, a three-fixture GX/VMEC GIST external eik-suite gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, CBC term audit, GX/eik imported metric, field-parity gate, DESC eik-export gate, DESC/GX block-eik gate, and GX/GIST suite pass their current contracts. The reduced RH endpoint still runs as a deliberately short smoke gate. The production-control CBC selected-`ky` gate now uses the GKW finite-difference velocity and zero-boundary GKW-upwind parallel fallback path and observes \(\gamma=0.164715\) for the medium documented run against the \(0.179\) GKW/Gyaradax target, but it remains open against the \(0.01\) tolerance. The term audit reports zero stored error in drift, drive, drift-field, boundary-map, grid-normalization, and RHS assembly conventions; the reduced trace artifact records raw/physical amplitude, window/fitted growth, phi/state/RHS norms, and log-normalization for direct future comparison. The next Cyclone work should compare that state evolution, field solve, initialization, and growth-diagnostic/window normalization directly against an external Gyaradax/GKW trace. Direct local Gyaradax import currently requires optional dependencies such as `omegaconf`.
 
 ## Phase 11: CPU Performance and Differentiability Hardening
 
@@ -522,6 +530,8 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 Use the new validation-hardening tools to close the remaining production gaps:
 
-- use the production-control Cyclone selected-`ky` gate to close the remaining growth-rate gap against GKW/GX tolerance checks,
-- compare solver-produced DESC geometry against a matched independent external eik output; GX/VMEC GIST external eik-suite coverage is now in place,
-- keep DESC-driven optimization examples labeled reduced until RH, CBC, and solver-produced eik parity gates pass.
+- compare the Cyclone selected-`ky` time evolution directly against a Gyaradax/GKW trace at matched reduced and production-control resolution, focusing on phi solve history, RK4/window normalization, initialization amplitude/envelope, and late-window growth diagnostic conventions;
+- install or enable the optional Gyaradax runtime dependencies, or export an equivalent GKW diagnostic trace, then compare it against `CycloneTrace` and `figures/cyclone_trace_reduced.csv`;
+- add a production-resolution Cyclone selected-`ky` regression once the observed growth is within the GKW/GX tolerance ladder;
+- replace the matched DESC/GX block-eik fixture with or supplement it by a truly independent external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST path is available;
+- keep DESC-driven optimization examples labeled reduced until the CBC selected-`ky` gate passes alongside the RH plateau and eik parity gates.

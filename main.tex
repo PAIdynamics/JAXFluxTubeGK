@@ -1134,10 +1134,11 @@ targeted optimization cost is
 The implemented target catalog currently records the documented
 Rosenbluth--Hinton residual \(0.0711\), the Gyaradax/GKW Cyclone selected
 growth target \(\gamma(k_\theta\rho_s=0.5)=0.179\), GX NetCDF growth and
-frequency curves from \texttt{omega\_kxkyt}, and GX/GS2 eik-style geometry
-tables.  These references are used as objective targets and parser tests now;
-full solver-to-reference RH, Cyclone, and eik parity runs remain the next
-validation gate.
+frequency curves from \texttt{omega\_kxkyt}, GX/GS2 eik-style geometry
+tables, and a DESC/GX block-\texttt{eik.out} DSHAPE fixture.  These references
+are used as objective targets, parser tests, and executable validation gates.
+The true RH late-plateau gate and the available eik parity gates now pass; the
+remaining production physics gap is the Cyclone selected-\(k_y\) growth rate.
 The validation-gate interface reports
 \[
   \left(
@@ -1147,13 +1148,15 @@ The validation-gate interface reports
     \mathrm{pass/open}
   \right).
 \]
-With the present reduced executable gates, the GX/GS2 eik metric import passes
-the solver \(\kperp^2\) contract exactly, while the RH and Cyclone gates are
-marked open against production tolerances.  This is intentional: it prevents
+With the present executable gates, the GX/GS2 eik metric import, DESC
+geometry-to-eik export, DESC/GX block-eik comparison, GX/VMEC GIST eik suite,
+and true RH late-plateau metric pass their stated tolerances.  The short RH
+endpoint smoke test and Cyclone selected-\(k_y\) gate remain marked open.  A
+new CBC term audit passes for the drift, drive, field-drive, boundary-map, and
+grid-normalization conventions.  This is intentional bookkeeping: it prevents
 DESC-driven optimization studies from being mistaken for validated physical
-predictions before the RH long-time residual and CBC selected-\(k_y\) growth
-rate are brought onto the reference ladder.
-The current implementation now also includes three validation-hardening tools.
+predictions before the CBC growth rate itself is on the reference ladder.
+The current implementation now also includes six validation-hardening tools.
 First, late-time growth rates may be computed by a least-squares fit of
 \(\log A_{k_y}(t)\) over a selected diagnostic window,
 \begin{equation}
@@ -1169,10 +1172,20 @@ This is the diagnostic path intended for Cyclone/GX/GKW growth-rate gates.
 For the Cyclone selected-\(k_y\) case, the executable gate uses the GKW
 cell-centered \(s\)-grid with \(n_{\rm period}=5\), the single-mode
 \(k_y\rho_s=0.5\) convention, \(v_{\parallel,\max}=3\), and
-\(\texttt{disp\_par}=1\).  A production-control runner stores only
-per-window amplitudes and fits the late-time logarithmic amplitude, so the
-documented \(N_z=144\), \(N_{v_\parallel}=64\), \(N_\mu=16\) setup can be run
-without retaining a full field history.
+\(\texttt{disp\_par}=1\).  The current production-control path uses the GKW
+finite-difference velocity fallback and a zero-boundary finite-difference
+parallel operator.  For GKW/Gyaradax parity studies, the fallback parallel
+operator can be switched from a centered matrix derivative to the sign-dependent
+fourth-order upwind stencil used by GKW for Term I and Term VII, with open
+parallel boundary maps and fused \(\texttt{disp\_par}\) recurrence control.
+The production-control runner jit-compiles each amplitude window, stores only
+per-window amplitudes, and fits the late-time logarithmic amplitude, so
+documented production grids can be probed without retaining a full field
+history.  A medium control run with the GKW upwind fallback,
+\(N_z=48\), \(N_{v_\parallel}=32\), \(N_\mu=8\), 20 steps per window, and 80
+windows gives \(\gamma=0.164715\), compared with the GKW/Gyaradax target
+\(\gamma=0.179\).  The normalized residual is \(-1.43\), so the gate is close
+but still open against the \(10^{-2}\) tolerance.
 Second, the RH gate now evaluates the actual late-time plateau metric used by
 the GKW/Gyaradax benchmark,
 \begin{equation}
@@ -1209,6 +1222,33 @@ against a GX/GS2 table field by field:
 Imported eik tables pass this contract exactly; DESC- or solver-generated
 stellarator geometry must pass the same comparison before being used for
 validated optimization.
+Fourth, a DESC/GX parity path evaluates a DESC equilibrium on the solver
+parallel grid using the GX \texttt{eik.out} convention and compares the result
+against a matched block-\texttt{eik.out} fixture.  For the DSHAPE fixture at
+\(\rho=0.5\) and \(\alpha=0\), the field-by-field residual is zero to the
+stored precision.  This closes the current solver-produced DESC geometry
+contract, while a separately generated external eik producer remains desirable
+for a stricter code-to-code production audit.
+Fifth, the CBC term audit evaluates the same reduced CBC setup at the
+coefficient and single-RHS level.  It compares the magnetic-drift frequency,
+equilibrium-gradient drive, drift-field drive, GKW open-boundary maps, grid and
+velocity normalization, and assembled RHS against the GKW/Gyaradax algebraic
+forms.  The current audit has zero stored error in all reported fields.  The
+difference between the centered finite-difference parallel matrix and the GKW
+upwind/open-boundary operator on the audit state is only
+\(1.09\times10^{-4}\), explaining why the growth-rate residual is essentially
+unchanged by that fallback switch.  The remaining CBC discrepancy is therefore
+not a visible sign, metric, boundary-map, or scalar normalization mismatch in
+the audited terms.
+Sixth, a trace-level CBC diagnostic records the selected-\(k_y\) time history
+needed for code-to-code debugging.  The trace stores raw selected-mode
+amplitude, physical amplitude after accounting for per-window normalization,
+physical per-window growth, cumulative fitted growth, \(\phi\), state, and RHS
+norms, and the accumulated log-normalization.  The reduced artifact is written
+to \path{figures/cyclone_trace_reduced.csv}.  It is designed to be compared
+field by field against a matched GKW or Gyaradax run; that direct comparison is
+still pending because the local Gyaradax import currently needs optional
+runtime dependencies such as \texttt{omegaconf}.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
@@ -1270,16 +1310,20 @@ metric decreases only from \(0.9994\) to \(0.9907\), far from the documented
 Rosenbluth--Hinton residual \(0.0711\).  The gate is therefore correctly
 reported as open rather than artificially calibrated.
 
-The right panel summarizes six executable gates.  The imported GX/GS2 eik
-metric contract, the DESC DSHAPE geometry-to-eik export contract, and a
-three-fixture GX/VMEC GIST eik suite pass with zero residual.  The true RH
-late-plateau gate now also passes with normalized residual \(-6.87\times10^{-1}\).
-The reduced RH endpoint and reduced Cyclone growth gates remain open with
-normalized residuals \(9.25\times10^2\) and \(2.15\times10^2\), respectively.
+The right panel summarizes eight executable gates.  The imported GX/GS2 eik
+metric contract, the DESC DSHAPE geometry-to-eik export contract, the matched
+DESC/GX block-eik fixture, and a three-fixture GX/VMEC GIST eik suite pass with
+zero residual.  The CBC term-level audit also passes with zero reported error,
+and the true RH late-plateau gate passes with normalized residual
+\(-6.87\times10^{-1}\).  The short RH endpoint smoke gate and
+production-control Cyclone growth gate remain open with normalized residuals
+\(9.25\times10^2\) and \(-1.43\), respectively.
 This figure is the current validation ledger: stellarator geometry can now
-enter through the DESC array path and be audited through GX/GIST/eik metric and
-drift contracts, while the remaining open production-physics item is the
-Cyclone selected-\(k_y\) growth-rate parity problem.
+enter through the DESC array path and be audited through GX/GIST/DESC-eik
+metric and drift contracts, while the remaining open production-physics item
+is the Cyclone selected-\(k_y\) growth-rate parity problem.  The same generator
+also writes \path{figures/cyclone_trace_reduced.csv}, which is the reduced
+time-history artifact for the next GKW/Gyaradax trace comparison.
 
 \begin{figure}[htbp]
   \centering
@@ -1288,8 +1332,13 @@ Cyclone selected-\(k_y\) growth-rate parity problem.
   Left: short-window Rosenbluth--Hinton plateau metric compared with the
   GKW/Gyaradax reference residual.  Right: normalized gate residuals, where
   values below one pass the tolerance.  The GX/GS2 imported eik metric, DESC
-  geometry eik-export, and GX/VMEC GIST external eik-suite contracts pass; RH
-  and Cyclone remain deliberately open against production tolerances.}
+  geometry eik-export, DESC/GX block-eik, GX/VMEC GIST external eik-suite, and
+  true RH late-plateau contracts pass.  The CBC term audit also passes, while
+  the short RH endpoint smoke gate and Cyclone selected-\(k_y\) growth gate
+  remain deliberately open against production tolerances.  The companion CSV
+  \texttt{figures/cyclone\_trace\_reduced.csv} stores the selected-\(k_y\)
+  amplitude, growth, norm, and normalization history used for the next
+  trace-level parity check.}
   \label{fig:validation-gate-status}
 \end{figure}
 
@@ -1366,10 +1415,11 @@ fixed; only continuous parameters are differentiated and updated.
 
 The current result should be interpreted narrowly: it is evidence that the
 optimization interface is wired through the solver and differentiates through a
-fixed number of time steps.  The next physical validation step is to replace the
-toy circular-geometry coefficient modulation with DESC-generated flux-tube
-fixtures using the imported-array path, and to optimize only after the
-Rosenbluth-Hinton, Cyclone Base Case, and GX/eik benchmark checks are stable.
+fixed number of time steps.  DESC-generated flux-tube fixtures can now enter
+through the imported-array path and the DESC/GX eik contract, but optimization
+examples should remain labeled reduced until the Cyclone Base Case
+selected-\(k_y\) gate passes together with the already-passing RH plateau and
+eik parity checks.
 
 \section{Nonlinear and Extended Physics Roadmap}
 \label{sec:nonlinear-extension}

@@ -154,6 +154,100 @@ class BenchmarkGateResult(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneTermParityReport(_PyTreeDataclass):
+    """Term-level CBC parity report against GKW/Gyaradax formulas."""
+
+    term_errors: object
+    max_abs_error: object
+    passed: object
+    term_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("term_errors", "max_abs_error", "passed")
+    _static_fields: ClassVar[tuple[str, ...]] = ("term_names", "notes")
+
+    def __post_init__(self):
+        errors = jnp.asarray(self.term_errors, dtype=jnp.float64)
+        if errors.ndim != 1:
+            raise ValueError("term_errors must be one-dimensional")
+        if len(self.term_names) != errors.shape[0]:
+            raise ValueError("term_names length must match term_errors")
+        object.__setattr__(self, "term_errors", errors)
+        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneTrace(_PyTreeDataclass):
+    """Windowed selected-``ky`` Cyclone trace for code-to-code parity."""
+
+    times: object
+    raw_amplitude: object
+    physical_amplitude: object
+    window_growth: object
+    fitted_growth: object
+    phi_norm: object
+    state_norm: object
+    rhs_norm: object
+    log_normalization: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "times",
+        "raw_amplitude",
+        "physical_amplitude",
+        "window_growth",
+        "fitted_growth",
+        "phi_norm",
+        "state_norm",
+        "rhs_norm",
+        "log_normalization",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if times.ndim != 1:
+            raise ValueError("times must be one-dimensional")
+        object.__setattr__(self, "times", times)
+        for name in self._dynamic_fields[1:]:
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times shape")
+            object.__setattr__(self, name, values)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneTraceComparisonReport(_PyTreeDataclass):
+    """Field-by-field comparison between two Cyclone traces."""
+
+    field_errors: object
+    max_abs_error: object
+    passed: object
+    field_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("field_errors", "max_abs_error", "passed")
+    _static_fields: ClassVar[tuple[str, ...]] = ("field_names", "notes")
+
+    def __post_init__(self):
+        errors = jnp.asarray(self.field_errors, dtype=jnp.float64)
+        if errors.ndim != 1:
+            raise ValueError("field_errors must be one-dimensional")
+        if len(self.field_names) != errors.shape[0]:
+            raise ValueError("field_names length must match field_errors")
+        object.__setattr__(self, "field_errors", errors)
+        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "field_names", tuple(self.field_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -249,6 +343,10 @@ def cyclone_base_case_growth_target() -> BenchmarkTarget:
             ("n_vpar", 64),
             ("n_mu", 16),
             ("vpar_max", 3.0),
+            ("parallel_backend", "finite_difference"),
+            ("parallel_boundary", "zero"),
+            ("parallel_derivative_model", "gkw_upwind"),
+            ("velocity_backend", "finite_difference"),
             ("disp_par", 1.0),
             ("dt", 0.003),
             ("steps_per_window", 100),
@@ -327,9 +425,15 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     The local GX VMEC test fixtures use one numeric header row followed by
     rows with
     ``theta, bmag, gradpar, gds2, gds21, gds22, cvdrift, cvdrift0, gbdrift, gbdrift0``.
+    GX's DESC geometry module instead writes the older multi-block
+    ``eik.out`` layout; that layout is detected and mapped into the same
+    reference object.
     """
 
     path = Path(path)
+    text = path.read_text()
+    if "gbdrift gradpar grho tgrid" in text:
+        return _load_gx_block_eik_geometry_reference(path, text)
     rows = _numeric_rows(path)
     if len(rows) < 2:
         raise ValueError("eik geometry reference must contain a header and data rows")
@@ -618,6 +722,7 @@ def run_reduced_rosenbluth_hinton_gate(
     parallel_recurrence_rate: float | None = None,
     velocity_recurrence_rate: float | None = None,
     parallel_backend: str = "finite_difference",
+    parallel_boundary: str = "zero",
     velocity_backend: str = "finite_difference",
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
@@ -969,6 +1074,10 @@ def run_reduced_cyclone_base_case_gate(
     nperiod: int = 5,
     growth_window_fraction: float = 0.5,
     parallel_recurrence_rate: float = 1.0,
+    parallel_backend: str = "finite_difference",
+    parallel_boundary: str = "zero",
+    parallel_derivative_model: str = "gkw_upwind",
+    velocity_backend: str = "finite_difference",
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Run the present reduced Cyclone setup and compare selected growth."""
@@ -987,6 +1096,10 @@ def run_reduced_cyclone_base_case_gate(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
     )
     result = integrate_fixed_step(
         setup["state"],
@@ -1012,6 +1125,9 @@ def run_reduced_cyclone_base_case_gate(
         notes=(
             "reduced executable CBC gate with GKW cell-centered s grid, "
             f"nperiod={nperiod}, selected ky only, late-window growth fit, "
+            f"parallel_backend={parallel_backend}, velocity_backend={velocity_backend}, "
+            f"parallel_boundary={parallel_boundary}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
             "and GKW-scaled disp_par recurrence control; "
             "production GKW/GX agreement remains open"
         ),
@@ -1031,6 +1147,10 @@ def run_production_cyclone_base_case_gate(
     n_windows: int | None = None,
     growth_window_fraction: float = 0.5,
     parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
     normalize_each_window: bool = True,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
@@ -1063,6 +1183,26 @@ def run_production_cyclone_base_case_gate(
     parallel_recurrence_rate = float(
         metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
     )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
     if steps_per_window < 1:
         raise ValueError("steps_per_window must be positive")
     if n_windows < 1:
@@ -1077,14 +1217,29 @@ def run_production_cyclone_base_case_gate(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
     )
     state = setup["state"]
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
     times = []
     log_amplitudes = []
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
 
     def append_log_amplitude(time_value, state_value, accumulated_log):
-        phi = solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+        phi = solve_phi(state_value)
         amplitude = mode_chain_amplitude(
             phi,
             w_z=setup["geometry"].w_z,
@@ -1097,15 +1252,7 @@ def run_production_cyclone_base_case_gate(
 
     amplitude = append_log_amplitude(0.0, state, log_normalization)
     for window in range(n_windows):
-        result = integrate_fixed_step(
-            state,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        )
-        state = result.state
+        state = advance_window(state)
         current_time = (window + 1) * steps_per_window * dt
         amplitude = append_log_amplitude(current_time, state, log_normalization)
         if normalize_each_window:
@@ -1129,9 +1276,359 @@ def run_production_cyclone_base_case_gate(
         notes=(
             "production-control CBC gate with GKW cell-centered s grid, "
             f"n_z={n_z}, nperiod={nperiod}, n_vpar={n_vpar}, n_mu={n_mu}, "
+            f"parallel_backend={parallel_backend}, velocity_backend={velocity_backend}, "
+            f"parallel_boundary={parallel_boundary}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
             f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
             f"normalize_each_window={normalize_each_window}; "
             "production GKW/GX agreement remains open until this gate passes"
+        ),
+    )
+
+
+def run_cyclone_base_case_trace(
+    *,
+    n_z: int = 16,
+    n_vpar: int = 12,
+    n_mu: int = 6,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 4,
+    n_windows: int = 4,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    target: BenchmarkTarget | None = None,
+) -> CycloneTrace:
+    """Record selected-mode CBC evolution at fixed diagnostic windows."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+    )
+    selected = int(setup["selected_ky_index"])
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+
+    times = []
+    raw_amplitudes = []
+    physical_amplitudes = []
+    window_growths = []
+    fitted_growths = []
+    phi_norms = []
+    state_norms = []
+    rhs_norms = []
+    log_normalizations = []
+
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    def append_snapshot(time_value, state_value, accumulated_log, previous_physical_value):
+        phi = solve_phi(state_value)
+        amplitude = mode_chain_amplitude(
+            phi,
+            w_z=setup["geometry"].w_z,
+            connectivity=setup["connectivity"],
+        )
+        rhs_value = linear_residual(state_value, precomputed=setup["precompute"], phi=phi)
+        floor = jnp.asarray(1.0e-300, dtype=amplitude.dtype)
+        raw = amplitude[selected]
+        physical_log = jnp.log(jnp.maximum(raw, floor)) + accumulated_log[selected]
+        physical = jnp.exp(physical_log)
+        if previous_physical_value is None:
+            window_growth = jnp.asarray(0.0, dtype=jnp.float64)
+        else:
+            window_growth = (
+                jnp.log(jnp.maximum(physical, floor))
+                - jnp.log(jnp.maximum(previous_physical_value, floor))
+            ) / (steps_per_window * dt)
+        times.append(float(time_value))
+        raw_amplitudes.append(raw)
+        physical_amplitudes.append(physical)
+        window_growths.append(window_growth)
+        log_normalizations.append(accumulated_log[selected])
+        phi_norms.append(_field_amplitude(phi[:, setup["fourier"].ixzero, selected]))
+        state_norms.append(_l2_norm(state_value))
+        rhs_norms.append(_l2_norm(rhs_value))
+        fitted_growths.append(
+            _trace_fitted_growth(
+                jnp.asarray(times, dtype=jnp.float64),
+                jnp.asarray(physical_amplitudes, dtype=jnp.float64),
+            )
+        )
+        return amplitude, physical
+
+    amplitude, previous_physical = append_snapshot(0.0, state, log_normalization, None)
+    for window in range(n_windows):
+        state = advance_window(state)
+        current_time = (window + 1) * steps_per_window * dt
+        amplitude, previous_physical = append_snapshot(
+            current_time,
+            state,
+            log_normalization,
+            previous_physical,
+        )
+        if normalize_each_window:
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+
+    return CycloneTrace(
+        times=jnp.asarray(times, dtype=jnp.float64),
+        raw_amplitude=jnp.asarray(raw_amplitudes, dtype=jnp.float64),
+        physical_amplitude=jnp.asarray(physical_amplitudes, dtype=jnp.float64),
+        window_growth=jnp.asarray(window_growths, dtype=jnp.float64),
+        fitted_growth=jnp.asarray(fitted_growths, dtype=jnp.float64),
+        phi_norm=jnp.asarray(phi_norms, dtype=jnp.float64),
+        state_norm=jnp.asarray(state_norms, dtype=jnp.float64),
+        rhs_norm=jnp.asarray(rhs_norms, dtype=jnp.float64),
+        log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
+        source="stellarator_gk",
+        notes=(
+            "windowed CBC trace with selected ky, raw/physical amplitudes, "
+            "window growth, fitted growth, phi norm, state norm, and RHS norm"
+        ),
+    )
+
+
+def compare_cyclone_base_case_traces(
+    observed: CycloneTrace,
+    reference: CycloneTrace,
+    *,
+    tolerance: float = 1.0e-10,
+) -> CycloneTraceComparisonReport:
+    """Compare two selected-``ky`` CBC traces field by field."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if tuple(observed.times.shape) != tuple(reference.times.shape):
+        raise ValueError("traces must have the same number of time samples")
+    field_names = (
+        "times",
+        "raw_amplitude",
+        "physical_amplitude",
+        "window_growth",
+        "fitted_growth",
+        "phi_norm",
+        "state_norm",
+        "rhs_norm",
+        "log_normalization",
+    )
+    errors = []
+    for name in field_names:
+        errors.append(_max_abs_error(getattr(observed, name), getattr(reference, name)))
+    field_errors = jnp.asarray(errors, dtype=jnp.float64)
+    max_abs_error = jnp.max(field_errors)
+    return CycloneTraceComparisonReport(
+        field_errors=field_errors,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        field_names=field_names,
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "trace-level CBC comparison"
+        ),
+    )
+
+
+def run_cyclone_base_case_term_parity_audit(
+    *,
+    n_z: int = 16,
+    n_vpar: int = 12,
+    n_mu: int = 6,
+    tolerance: float = 5.0e-13,
+    target: BenchmarkTarget | None = None,
+) -> CycloneTermParityReport:
+    """Audit CBC drift, drive, field-drive, boundary, and grid conventions."""
+
+    from .physics import (
+        dissipation,
+        drift_field_drive,
+        equilibrium_drive,
+        gkw_parallel_field_drive,
+        gkw_parallel_streaming,
+        magnetic_drift_advection,
+        mirror_force,
+        parallel_field_drive,
+        parallel_streaming,
+        solve_adiabatic_electron_phi,
+        velocity_recurrence_control,
+    )
+    from .solver import linear_residual
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata.get("vpar_max", 3.0)),
+        mu_max=None,
+        nperiod=int(metadata.get("nperiod", 5)),
+        parallel_recurrence_rate=float(metadata.get("disp_par", 1.0)),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    phi = solve_adiabatic_electron_phi(state, setup["precompute"].field)
+
+    vpar = setup["velocity"].vpar[:, None, None, None, None]
+    mu = setup["velocity"].mu[None, :, None, None, None]
+    B = setup["geometry"].B[None, None, :, None, None]
+    kx = setup["fourier"].kx[None, None, None, :, None]
+    ky = setup["fourier"].ky[None, None, None, None, :]
+    D_x = setup["geometry"].D_x[None, None, :, None, None]
+    D_y = setup["geometry"].D_y[None, None, :, None, None]
+    expected_drift = (vpar**2 + mu * B) * (kx * D_x + ky * D_y)
+    drift_error = _max_abs_error(rhs.magnetic_drift_frequency[0], expected_drift)
+
+    gyro_phi = rhs.flr_factors.bessel_j0[0] * phi[None, :, :, :]
+    expected_drive = (
+        1j
+        * rhs.E_y[None, None, :, None, None]
+        * rhs.ky[None, None, None, None, :]
+        * gyro_phi[None, :, :, :, :]
+        * rhs.maxwellian[0][..., None, None]
+        * rhs.drive_factor[0][..., None, None]
+    )
+    equilibrium_drive_error = _max_abs_error(equilibrium_drive(phi, rhs), expected_drive)
+
+    expected_drift_field = (
+        -1j
+        * rhs.charge_over_temperature[0]
+        * rhs.magnetic_drift_frequency[0]
+        * rhs.maxwellian[0][..., None, None]
+        * gyro_phi[None, :, :, :, :]
+    )
+    drift_field_error = _max_abs_error(drift_field_drive(phi, rhs), expected_drift_field)
+
+    matrix_parallel = parallel_streaming(state, rhs.D_z, rhs.parallel_streaming_coeff)
+    gkw_parallel = gkw_parallel_streaming(state, rhs)
+    matrix_field = parallel_field_drive(phi, rhs.D_z, rhs)
+    gkw_field = gkw_parallel_field_drive(phi, rhs)
+    boundary_delta = jnp.maximum(
+        _max_abs_error(gkw_parallel, matrix_parallel),
+        _max_abs_error(gkw_field, matrix_field),
+    )
+    boundary_map_error = _cyclone_boundary_map_error(setup)
+    normalization_error = _cyclone_normalization_error(setup, metadata)
+
+    manual = (
+        gkw_parallel
+        + magnetic_drift_advection(state, rhs.magnetic_drift_frequency)
+        + mirror_force(state, rhs.D_vpar, rhs.mirror_force_coeff)
+        + equilibrium_drive(phi, rhs)
+        + gkw_field
+        + drift_field_drive(phi, rhs)
+        + dissipation(state, rhs.perpendicular_damping)
+        + velocity_recurrence_control(
+            state,
+            rhs.velocity_recurrence_operator,
+            rhs.velocity_recurrence_coeff,
+        )
+    )
+    assembled = linear_residual(state, precomputed=setup["precompute"], phi=phi)
+    assembly_error = _max_abs_error(assembled, manual)
+
+    term_names = (
+        "drift_frequency",
+        "equilibrium_drive",
+        "drift_field_drive",
+        "boundary_map",
+        "grid_normalization",
+        "rhs_assembly",
+    )
+    term_errors = jnp.asarray(
+        [
+            drift_error,
+            equilibrium_drive_error,
+            drift_field_error,
+            boundary_map_error,
+            normalization_error,
+            assembly_error,
+        ],
+        dtype=jnp.float64,
+    )
+    max_abs_error = jnp.max(term_errors)
+    return CycloneTermParityReport(
+        term_errors=term_errors,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        term_names=term_names,
+        notes=(
+            "CBC term audit against GKW/Gyaradax algebraic conventions; "
+            f"matrix_vs_gkw_parallel_boundary_delta={float(boundary_delta):.6e}; "
+            "the growth-rate gate remains separate"
         ),
     )
 
@@ -1198,6 +1695,153 @@ def run_geometry_to_gx_eik_export_gate(
         notes=(
             "solver-produced stellarator geometry exported to GX/GS2 eik-compatible "
             "fields; internal mirror coefficient G is tracked separately"
+        ),
+    )
+
+
+def build_desc_gx_eik_reference_from_path(
+    desc_path,
+    *,
+    ntheta: int = 32,
+    npol: int = 1,
+    rho: float = 0.5,
+    alpha: float = 0.0,
+    zeta_center: float = 0.0,
+    shift_grad_alpha: bool = True,
+    file_format: str | None = None,
+    index: int = -1,
+    loader=None,
+) -> GxEikGeometryReference:
+    """Evaluate DESC geometry using the GX DESC ``eik.out`` convention.
+
+    This mirrors the field-line normalization in
+    ``relevant-codes/gx/geometry_modules/desc/gx_desc_geo.py`` while using the
+    current DESC coordinate API.  It is intentionally separate from the raw
+    physical-array DESC adapter: this path produces the exact GS2/GX fields
+    used by external ``eik.out`` parity tests.
+    """
+
+    if ntheta < 2 or ntheta % 2:
+        raise ValueError("ntheta must be an even integer at least 2")
+    if npol < 1:
+        raise ValueError("npol must be at least 1")
+    if not 0.0 < rho <= 1.0:
+        raise ValueError("rho must lie in (0, 1]")
+
+    from .geometry.desc_adapter import load_desc_equilibrium
+
+    linear_grid_cls, get_rtz_grid = _import_desc_coordinate_helpers()
+    eq = load_desc_equilibrium(
+        desc_path,
+        file_format=file_format,
+        index=index,
+        loader=loader,
+    )
+    profile_grid = linear_grid_cls(
+        rho=np.asarray([rho]),
+        theta=np.asarray([0.0]),
+        zeta=np.asarray([0.0]),
+    )
+    boundary_grid = linear_grid_cls(
+        rho=np.asarray([1.0]),
+        theta=np.asarray([0.0]),
+        zeta=np.asarray([0.0]),
+    )
+    profile = eq.compute(["iota", "iota_r", "a"], grid=profile_grid)
+    boundary = eq.compute(["psi"], grid=boundary_grid)
+    iota = float(np.ravel(np.asarray(profile["iota"]))[0])
+    shear = float(np.ravel(np.asarray(profile["iota_r"]))[0])
+    minor_radius = float(np.ravel(np.asarray(profile["a"]))[0])
+    psib = float(np.ravel(np.asarray(boundary["psi"]))[0])
+    if iota == 0.0:
+        raise ValueError("DESC iota must be nonzero for GX eik field-line sampling")
+    if psib == 0.0:
+        raise ValueError("DESC boundary psi must be nonzero for GX eik normalization")
+
+    effective_zeta_center = float(zeta_center) if shift_grad_alpha else 0.0
+    nzgrid = ntheta // 2
+    zeta = np.linspace(
+        (-np.pi * npol - alpha) / abs(iota),
+        (np.pi * npol - alpha) / abs(iota),
+        2 * nzgrid + 1,
+    )
+    grid = get_rtz_grid(eq, rho, alpha, zeta, coordinates="raz", iota=iota)
+    data = eq.compute(list(_DESC_GX_EIK_COMPUTE_KEYS), grid=grid)
+    reference = _desc_gx_eik_reference_from_data(
+        data,
+        zeta=zeta,
+        rho=float(rho),
+        alpha=float(alpha),
+        zeta_center=effective_zeta_center,
+        iota=iota,
+        shear=shear,
+        psib=psib,
+        minor_radius=minor_radius,
+        nzgrid=nzgrid,
+        npol=int(npol),
+        source=str(desc_path),
+    )
+    return reference
+
+
+def run_desc_gx_eik_external_geometry_gate(
+    desc_path,
+    eik_path,
+    *,
+    rho: float = 0.5,
+    alpha: float = 0.0,
+    zeta_center: float = 0.0,
+    shift_grad_alpha: bool = True,
+    file_format: str | None = None,
+    index: int = -1,
+    fourier_grid=None,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Compare DESC-produced GX-convention geometry with an external eik file."""
+
+    from .grids import build_fourier_grid
+    from .types import FourierGridSpec
+
+    external = load_gx_eik_geometry_reference(eik_path)
+    ntheta, npol = _infer_gx_eik_dimensions(external)
+    solver_reference = build_desc_gx_eik_reference_from_path(
+        desc_path,
+        ntheta=ntheta,
+        npol=npol,
+        rho=rho,
+        alpha=alpha,
+        zeta_center=zeta_center,
+        shift_grad_alpha=shift_grad_alpha,
+        file_format=file_format,
+        index=index,
+    )
+    parallel = _parallel_grid_from_eik_theta(solver_reference.theta)
+    fourier = fourier_grid or build_fourier_grid(
+        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
+    )
+    geometry = build_flux_tube_geometry_from_gx_eik_reference(solver_reference, parallel)
+    report = compare_geometry_to_gx_eik_reference(geometry, external, fourier)
+    target = target or BenchmarkTarget(
+        name="desc_gx_external_eik_geometry_parity",
+        quantity="max_abs_geometry_error",
+        reference_value=0.0,
+        tolerance=2.0e-6,
+        source=str(eik_path),
+        metadata=(
+            ("desc_path", str(desc_path)),
+            ("ntheta", int(ntheta)),
+            ("npol", int(npol)),
+            ("rho", float(rho)),
+            ("alpha", float(alpha)),
+        ),
+    )
+    return evaluate_benchmark_gate(
+        report.max_abs_error,
+        target,
+        normalize_by_tolerance=False,
+        notes=(
+            "solver-produced DESC geometry evaluated in GX eik convention and "
+            "compared field-by-field to a matched external eik.out fixture"
         ),
     )
 
@@ -1302,6 +1946,43 @@ def benchmark_target_cost(value, target: BenchmarkTarget, *, normalize_by_tolera
     return 0.5 * residual**2
 
 
+_DESC_GX_EIK_COMPUTE_KEYS = (
+    "B",
+    "|B|",
+    "lambda",
+    "lambda_r",
+    "lambda_t",
+    "lambda_z",
+    "|grad(rho)|",
+    "g^rr",
+    "g^tt",
+    "g^zz",
+    "g^rt",
+    "g^rz",
+    "g^tz",
+    "g_tz",
+    "g_tt",
+    "g_zz",
+    "B_theta",
+    "B_zeta",
+    "B_rho",
+    "|B|_t",
+    "|B|_z",
+    "|B|_r",
+    "B^theta",
+    "B^zeta_r",
+    "B^theta_r",
+    "B^zeta",
+    "e_theta",
+    "e_theta_r",
+    "e_zeta_r",
+    "e_zeta",
+    "p_r",
+    "grad(psi)",
+    "sqrt(g)",
+)
+
+
 def _import_netcdf_dataset():
     try:
         from netCDF4 import Dataset
@@ -1311,6 +1992,18 @@ def _import_netcdf_dataset():
             "analysis dependencies or add netCDF4 to the environment"
         ) from exc
     return Dataset
+
+
+def _import_desc_coordinate_helpers():
+    try:
+        from desc.equilibrium.coords import get_rtz_grid
+        from desc.grid import LinearGrid
+    except ImportError as exc:
+        raise ImportError(
+            "DESC is required for DESC/GX eik parity. Install desc-opt or add "
+            "relevant-codes/DESC to PYTHONPATH."
+        ) from exc
+    return LinearGrid, get_rtz_grid
 
 
 def _numeric_rows(path: Path) -> list[list[float]]:
@@ -1326,6 +2019,312 @@ def _numeric_rows(path: Path) -> list[list[float]]:
     return rows
 
 
+def _load_gx_block_eik_geometry_reference(path: Path, text: str) -> GxEikGeometryReference:
+    lines = text.splitlines()
+    header = _first_numeric_row(lines)
+    if len(header) < 8:
+        raise ValueError("GX eik.out header must contain at least 8 numeric values")
+    ntheta = int(round(header[2]))
+    expected_rows = ntheta + 1
+    gb_block = _parse_gx_eik_block(lines, "gbdrift gradpar grho tgrid", expected_rows, 4)
+    cv_block = _parse_gx_eik_block(lines, "cvdrift gds2 bmag tgrid", expected_rows, 4)
+    gds_block = _parse_gx_eik_block(lines, "gds21 gds22 tgrid", expected_rows, 3)
+    drift0_block = _parse_gx_eik_block(lines, "cvdrift0 gbdrift0 tgrid", expected_rows, 3)
+    theta = gb_block[:, 3]
+    _assert_same_eik_grid("cvdrift", theta, cv_block[:, 3])
+    _assert_same_eik_grid("gds21", theta, gds_block[:, 2])
+    _assert_same_eik_grid("cvdrift0", theta, drift0_block[:, 2])
+    return GxEikGeometryReference(
+        theta=theta,
+        bmag=cv_block[:, 2],
+        gradpar=gb_block[:, 1],
+        gds2=cv_block[:, 1],
+        gds21=gds_block[:, 0],
+        gds22=gds_block[:, 1],
+        gbdrift=gb_block[:, 0],
+        gbdrift0=drift0_block[:, 1],
+        cvdrift=cv_block[:, 0],
+        cvdrift0=drift0_block[:, 0],
+        source=str(path),
+        header=tuple(header),
+    )
+
+
+def _first_numeric_row(lines: list[str]) -> list[float]:
+    for line in lines:
+        try:
+            row = [float(value) for value in line.split()]
+        except ValueError:
+            continue
+        if row:
+            return row
+    raise ValueError("file contains no numeric header row")
+
+
+def _parse_gx_eik_block(
+    lines: list[str],
+    label: str,
+    expected_rows: int,
+    expected_columns: int,
+) -> np.ndarray:
+    try:
+        start = next(index for index, line in enumerate(lines) if line.strip() == label)
+    except StopIteration as exc:
+        raise ValueError(f"GX eik.out file is missing block {label!r}") from exc
+    rows = []
+    for line in lines[start + 1 :]:
+        try:
+            row = [float(value) for value in line.split()]
+        except ValueError:
+            break
+        if len(row) != expected_columns:
+            break
+        rows.append(row)
+        if len(rows) == expected_rows:
+            break
+    if len(rows) != expected_rows:
+        raise ValueError(
+            f"GX eik.out block {label!r} expected {expected_rows} rows; got {len(rows)}"
+        )
+    return np.asarray(rows, dtype=float)
+
+
+def _assert_same_eik_grid(name: str, left, right):
+    if not np.allclose(left, right, rtol=2.0e-12, atol=2.0e-12):
+        raise ValueError(f"GX eik.out block {name!r} uses an inconsistent theta grid")
+
+
+def _desc_gx_eik_reference_from_data(
+    data,
+    *,
+    zeta,
+    rho: float,
+    alpha: float,
+    zeta_center: float,
+    iota: float,
+    shear: float,
+    psib: float,
+    minor_radius: float,
+    nzgrid: int,
+    npol: int,
+    source: str,
+) -> GxEikGeometryReference:
+    from scipy.constants import mu_0
+
+    zeta = np.asarray(zeta, dtype=float)
+    mod_b = _desc_array(data, "|B|")
+    b_theta = _desc_array(data, "B_theta")
+    b_zeta = _desc_array(data, "B_zeta")
+    b_rho = _desc_array(data, "B_rho")
+    d_b_theta = _desc_array(data, "|B|_t")
+    d_b_zeta = _desc_array(data, "|B|_z")
+    d_b_rho = _desc_array(data, "|B|_r")
+    lambda_r = _desc_array(data, "lambda_r")
+    lambda_t = _desc_array(data, "lambda_t")
+    lambda_z = _desc_array(data, "lambda_z")
+    jacobian = _desc_array(data, "sqrt(g)")
+    psi = rho**2
+    bref = 2.0 * abs(psib) / minor_radius**2
+    bmag = mod_b / bref
+    gradpar = minor_radius * _desc_array(data, "B^zeta") / mod_b
+    grho = _desc_array(data, "|grad(rho)|") * minor_radius
+    grad_psi = 2.0 * psib * rho
+    grad_alpha_r = lambda_r - (zeta - zeta_center) * shear
+    grad_alpha_t = 1.0 + lambda_t
+    grad_alpha_z = -iota + lambda_z
+    grad_alpha_sq = (
+        grad_alpha_r**2 * _desc_array(data, "g^rr")
+        + grad_alpha_t**2 * _desc_array(data, "g^tt")
+        + grad_alpha_z**2 * _desc_array(data, "g^zz")
+        + 2.0 * grad_alpha_r * grad_alpha_t * _desc_array(data, "g^rt")
+        + 2.0 * grad_alpha_r * grad_alpha_z * _desc_array(data, "g^rz")
+        + 2.0 * grad_alpha_t * grad_alpha_z * _desc_array(data, "g^tz")
+    )
+    grad_psi_dot_grad_alpha = grad_psi * (
+        grad_alpha_r * _desc_array(data, "g^rr")
+        + grad_alpha_t * _desc_array(data, "g^rt")
+        + grad_alpha_z * _desc_array(data, "g^rz")
+    )
+    shat = -rho / iota * shear
+    gds2 = grad_alpha_sq * minor_radius**2 * psi
+    gds21 = shat / bref * grad_psi_dot_grad_alpha
+    gds22 = (shat / (minor_radius * bref)) ** 2 / psi
+    gds22 = gds22 * grad_psi**2 * _desc_array(data, "g^rr")
+    sign_psi = psib / abs(psib)
+    gbdrift0 = (
+        sign_psi
+        * shat
+        * 2.0
+        / mod_b**3
+        / rho
+        * (b_theta * d_b_zeta - b_zeta * d_b_theta)
+        * psib
+        / jacobian
+        * 2.0
+        * rho
+    )
+    cvdrift0 = gbdrift0
+    gbdrift_norm = 2.0 * bref * minor_radius**2 / mod_b**3 * rho
+    gbdrift = sign_psi * gbdrift_norm / jacobian
+    gbdrift = gbdrift * (
+        b_rho * d_b_theta * (lambda_z - iota)
+        + b_theta * d_b_zeta * (lambda_r - (zeta - zeta_center) * shear)
+        + b_zeta * d_b_rho * (1.0 + lambda_t)
+        - b_zeta * d_b_theta * (lambda_r - (zeta - zeta_center) * shear)
+        - b_theta * d_b_rho * (lambda_z - iota)
+        - b_rho * d_b_zeta * (1.0 + lambda_t)
+    )
+    bsa = (b_zeta * (1.0 + lambda_t) - b_theta * (lambda_z - iota)) / jacobian
+    cvdrift = gbdrift + (
+        2.0
+        * bref
+        * minor_radius**2
+        / mod_b**2
+        * rho
+        * mu_0
+        / mod_b**2
+        * _desc_array(data, "p_r")
+        * bsa
+    )
+    (
+        theta,
+        bmag,
+        _grho,
+        gradpar,
+        gds2,
+        gds21,
+        gds22,
+        gbdrift,
+        gbdrift0,
+        cvdrift,
+        cvdrift0,
+    ) = _gx_equal_arc_arrays(
+        zeta,
+        bmag,
+        grho,
+        gradpar,
+        gds2,
+        gds21,
+        gds22,
+        gbdrift,
+        gbdrift0,
+        cvdrift,
+        cvdrift0,
+        nzgrid=nzgrid,
+    )
+    header = (
+        float(nzgrid),
+        1.0,
+        float(2 * nzgrid),
+        1.0,
+        float(1.0 / minor_radius),
+        float(shat),
+        1.0,
+        float(1.0 / iota),
+        float(2 * npol - 1),
+    )
+    return GxEikGeometryReference(
+        theta=theta,
+        bmag=bmag,
+        gradpar=gradpar,
+        gds2=gds2,
+        gds21=gds21,
+        gds22=gds22,
+        gbdrift=gbdrift,
+        gbdrift0=gbdrift0,
+        cvdrift=cvdrift,
+        cvdrift0=cvdrift0,
+        source=f"desc-gx-eik:{source}",
+        header=header,
+    )
+
+
+def _desc_array(data, name: str) -> np.ndarray:
+    return np.asarray(data[name], dtype=float)
+
+
+def _gx_equal_arc_arrays(
+    zeta,
+    bmag,
+    grho,
+    gradpar,
+    gds2,
+    gds21,
+    gds22,
+    gbdrift,
+    gbdrift0,
+    cvdrift,
+    cvdrift0,
+    *,
+    nzgrid: int,
+):
+    dzeta = zeta[1] - zeta[0]
+    dzeta_pi = np.pi / nzgrid
+    gradpar_half = np.zeros(2 * nzgrid)
+    temp_grid = np.zeros(2 * nzgrid + 1)
+    z_on_theta = np.zeros(2 * nzgrid + 1)
+    for i in range(2 * nzgrid - 1):
+        gradpar_half[i] = 0.5 * (abs(gradpar[i]) + abs(gradpar[i + 1]))
+    gradpar_half[2 * nzgrid - 1] = gradpar_half[0]
+    for i in range(2 * nzgrid):
+        temp_grid[i + 1] = temp_grid[i] + dzeta / abs(gradpar_half[i])
+    middle = nzgrid
+    for i in range(2 * nzgrid + 1):
+        z_on_theta[i] = temp_grid[i] - temp_grid[middle]
+    desired_gradpar = np.pi / abs(z_on_theta[0])
+    z_on_theta = z_on_theta * desired_gradpar
+    uniform = z_on_theta[0] + np.arange(2 * nzgrid + 1) * dzeta_pi
+    return (
+        uniform,
+        _gx_interp_to_new_grid(bmag, z_on_theta, uniform),
+        _gx_interp_to_new_grid(grho, z_on_theta, uniform),
+        np.full_like(uniform, desired_gradpar),
+        _gx_interp_to_new_grid(gds2, z_on_theta, uniform),
+        _gx_interp_to_new_grid(gds21, z_on_theta, uniform),
+        _gx_interp_to_new_grid(gds22, z_on_theta, uniform),
+        _gx_interp_to_new_grid(gbdrift, z_on_theta, uniform),
+        _gx_interp_to_new_grid(gbdrift0, z_on_theta, uniform),
+        _gx_interp_to_new_grid(cvdrift, z_on_theta, uniform),
+        _gx_interp_to_new_grid(cvdrift0, z_on_theta, uniform),
+    )
+
+
+def _gx_interp_to_new_grid(values, source_grid, uniform_grid):
+    from scipy.interpolate import interp1d
+
+    values = np.asarray(values, dtype=float)
+    out = np.zeros_like(uniform_grid, dtype=float)
+    interpolant = interp1d(source_grid, values, kind="cubic")
+    for i in range(len(uniform_grid) - 1):
+        if uniform_grid[i] > source_grid[-1]:
+            out[i] = out[i - 1]
+        else:
+            out[i] = interpolant(np.round(uniform_grid[i], 5))
+    out[-1] = values[-1]
+    return out
+
+
+def _infer_gx_eik_dimensions(reference: GxEikGeometryReference) -> tuple[int, int]:
+    if len(reference.header) >= 9:
+        ntheta = int(round(reference.header[2]))
+        scale = int(round(reference.header[8]))
+        npol = max(1, (scale + 1) // 2)
+        return ntheta, npol
+    return int(reference.theta.shape[0] - 1), 1
+
+
+def _parallel_grid_from_eik_theta(theta):
+    from .grids import build_parallel_grid
+    from .types import ParallelGridSpec
+
+    theta = np.asarray(theta, dtype=float)
+    z = theta / (2.0 * np.pi)
+    dz = z[1] - z[0]
+    return build_parallel_grid(
+        ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
+    )
+
+
 def _coerce_geometry_reference_shape(name, values, shape):
     array = jnp.asarray(values, dtype=jnp.float64)
     if array.shape != shape:
@@ -1335,6 +2334,22 @@ def _coerce_geometry_reference_shape(name, values, shape):
 
 def _field_amplitude(field):
     return jnp.sqrt(jnp.mean(jnp.abs(field) ** 2))
+
+
+def _l2_norm(values):
+    return jnp.sqrt(jnp.mean(jnp.abs(jnp.asarray(values)) ** 2))
+
+
+def _trace_fitted_growth(times, amplitudes):
+    times = jnp.asarray(times, dtype=jnp.float64)
+    amplitudes = jnp.asarray(amplitudes, dtype=jnp.float64)
+    if times.shape[0] < 2:
+        return jnp.asarray(0.0, dtype=jnp.float64)
+    log_amplitude = jnp.log(jnp.maximum(amplitudes, jnp.asarray(1.0e-300, dtype=jnp.float64)))
+    centered_time = times - jnp.mean(times)
+    centered_log = log_amplitude - jnp.mean(log_amplitude)
+    denominator = jnp.sum(centered_time**2)
+    return jnp.sum(centered_time * centered_log) / denominator
 
 
 def _build_cyclone_base_case_setup(
@@ -1347,6 +2362,10 @@ def _build_cyclone_base_case_setup(
     mu_max: float | None,
     nperiod: int,
     parallel_recurrence_rate: float,
+    parallel_backend: str,
+    parallel_boundary: str,
+    parallel_derivative_model: str,
+    velocity_backend: str,
 ):
     from .geometry import build_s_alpha_geometry
     from .grids import build_fourier_grid, build_mode_connectivity, build_velocity_grid
@@ -1357,11 +2376,24 @@ def _build_cyclone_base_case_setup(
     metadata = dict(target.metadata)
     if mu_max is None:
         mu_max = 0.5 * vpar_max**2
+    if parallel_boundary not in ("periodic", "zero"):
+        raise ValueError("parallel_boundary must be 'periodic' or 'zero'")
     ky = float(metadata.get("k_theta_rhos", 0.5))
     velocity = build_velocity_grid(
-        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
+        VelocityGridSpec(
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            backend=velocity_backend,
+        )
     )
-    parallel = _build_gkw_cell_centered_parallel_grid(n_z, nperiod=nperiod)
+    parallel = _build_gkw_cell_centered_parallel_grid(
+        n_z,
+        nperiod=nperiod,
+        derivative_backend=parallel_backend,
+        periodic=parallel_boundary != "zero",
+    )
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(ky,))
     )
@@ -1395,6 +2427,8 @@ def _build_cyclone_base_case_setup(
         ),
         parallel_recurrence_rate=parallel_recurrence_rate,
         parallel_recurrence_velocity_model="rms",
+        mode_connectivity=connectivity,
+        parallel_derivative_model=parallel_derivative_model,
     )
     profile = 1.0 + jnp.cos(2.0 * jnp.pi * parallel.z)
     state = jnp.ones((n_vpar, n_mu, 1, 1, 1), dtype=jnp.complex128)
@@ -1434,6 +2468,51 @@ def _fit_growth_from_log_amplitudes(times, log_amplitudes, *, start_fraction: fl
     return jnp.sum(centered_time[:, None] * centered_logs, axis=0) / denominator
 
 
+def _cyclone_boundary_map_error(setup):
+    stencil = setup["precompute"].rhs.gkw_parallel_stencil
+    valid = np.asarray(stencil.valid_shift)
+    n_shift, n_z, n_kx, n_ky = valid.shape
+    expected = np.zeros_like(valid, dtype=bool)
+    offsets = np.arange(-(n_shift // 2), n_shift // 2 + 1)
+    for shift_index, offset in enumerate(offsets):
+        for iz in range(n_z):
+            expected[shift_index, iz, :, :] = 0 <= iz + offset < n_z
+    return _max_abs_error(valid.astype(np.float64), expected.astype(np.float64))
+
+
+def _cyclone_normalization_error(setup, metadata):
+    n_z = int(setup["parallel"].z.shape[0])
+    n_vpar = int(setup["velocity"].vpar.shape[0])
+    n_mu = int(setup["velocity"].mu.shape[0])
+    vpar_max = float(metadata.get("vpar_max", 3.0))
+    nperiod = int(metadata.get("nperiod", 5))
+    sgrmax = nperiod - 0.5
+    dz = 2.0 * sgrmax / n_z
+    expected_z = -sgrmax + 0.5 * dz + dz * jnp.arange(n_z, dtype=setup["parallel"].z.dtype)
+    dv = 2.0 * vpar_max / n_vpar
+    expected_vpar = -vpar_max + 0.5 * dv + dv * jnp.arange(
+        n_vpar,
+        dtype=setup["velocity"].vpar.dtype,
+    )
+    dvperp = vpar_max / n_mu
+    vperp = dvperp * (jnp.arange(n_mu, dtype=setup["velocity"].mu.dtype) + 0.5)
+    expected_mu = 0.5 * vperp**2
+    expected_w_mu = 2.0 * jnp.pi * vperp * dvperp
+    errors = jnp.asarray(
+        [
+            _max_abs_error(setup["parallel"].z, expected_z),
+            _max_abs_error(setup["parallel"].w_z, jnp.full((n_z,), dz)),
+            _max_abs_error(setup["velocity"].vpar, expected_vpar),
+            _max_abs_error(setup["velocity"].w_vpar, jnp.full((n_vpar,), dv)),
+            _max_abs_error(setup["velocity"].mu, expected_mu),
+            _max_abs_error(setup["velocity"].w_mu, expected_w_mu),
+            _max_abs_error(setup["fourier"].ky, jnp.asarray([metadata.get("k_theta_rhos", 0.5)])),
+        ],
+        dtype=jnp.float64,
+    )
+    return jnp.max(errors)
+
+
 def _field_power(field, weights):
     return jnp.sum(jnp.asarray(weights) * jnp.abs(jnp.asarray(field)) ** 2)
 
@@ -1443,6 +2522,7 @@ def _build_gkw_cell_centered_parallel_grid(
     nperiod: int = 1,
     *,
     derivative_backend: str = "fourier",
+    periodic: bool = True,
 ):
     from .grids import build_finite_difference_operators, build_parallel_grid
     from .types import DerivativeBackend, ParallelGrid, ParallelGridSpec
@@ -1457,7 +2537,7 @@ def _build_gkw_cell_centered_parallel_grid(
         operators = build_finite_difference_operators(
             n_z,
             spacing,
-            periodic=True,
+            periodic=periodic,
         )
         identity = jnp.eye(n_z, dtype=operators.D1.dtype)
         z = lower + spacing * jnp.arange(n_z, dtype=operators.D1.dtype)
@@ -1468,8 +2548,10 @@ def _build_gkw_cell_centered_parallel_grid(
             modal_transform=identity,
             inverse_modal_transform=identity,
             backend=DerivativeBackend.FINITE_DIFFERENCE.value,
-            topology="periodic",
+            topology="periodic" if periodic else "open",
         )
+    if not periodic:
+        raise ValueError("nonperiodic GKW cell-centered grids require finite_difference backend")
     if derivative_backend != DerivativeBackend.FOURIER.value:
         raise ValueError("derivative_backend must be 'fourier' or 'finite_difference'")
     return build_parallel_grid(

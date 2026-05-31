@@ -10,7 +10,11 @@ Run from the repository root:
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
 
 import jax
 
@@ -26,9 +30,12 @@ from stellarator_gk import (
     build_parallel_grid,
     load_gx_eik_geometry_reference,
     resample_gx_eik_geometry_reference,
+    run_desc_gx_eik_external_geometry_gate,
     run_geometry_to_gx_eik_export_gate,
     run_gx_gist_external_eik_suite_gate,
     run_gx_eik_geometry_gate,
+    run_cyclone_base_case_term_parity_audit,
+    run_cyclone_base_case_trace,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
@@ -55,10 +62,18 @@ def main() -> None:
     results = [rh, cyclone, eik]
     if args.desc_eik:
         results.append(_run_desc_eik_export_gate(args))
+    if args.desc_gx_eik:
+        results.append(_run_desc_gx_eik_external_gate(args))
     if args.gx_gist_suite:
         results.append(_run_gx_gist_suite_gate(args))
     if args.rh_plateau:
         results.append(_run_rh_plateau_gate(args))
+    term_reports = []
+    if args.cyclone_term_audit:
+        term_reports.append(run_cyclone_base_case_term_parity_audit())
+    traces = []
+    if args.cyclone_trace:
+        traces.append(run_cyclone_base_case_trace(n_windows=args.cyclone_trace_windows))
 
     print("# stellarator_gk reduced validation gates")
     print("gate status observed reference residual tolerance notes")
@@ -72,6 +87,32 @@ def main() -> None:
             f"{result.target.tolerance: .8e} "
             f"{result.notes}"
         )
+    for report in term_reports:
+        tolerance = 5.0e-13
+        status = "PASS" if bool(report.passed) else "OPEN"
+        print(
+            f"cyclone_base_case_term_parity {status} "
+            f"{float(report.max_abs_error): .8e} "
+            f"{0.0: .8e} "
+            f"{float(report.max_abs_error) / tolerance: .8e} "
+            f"{tolerance: .8e} "
+            f"{report.notes}"
+        )
+    for trace in traces:
+        print("# cyclone trace")
+        print("time raw_amp physical_amp window_growth fitted_growth phi_norm state_norm rhs_norm")
+        for row in zip(
+            trace.times,
+            trace.raw_amplitude,
+            trace.physical_amplitude,
+            trace.window_growth,
+            trace.fitted_growth,
+            trace.phi_norm,
+            trace.state_norm,
+            trace.rhs_norm,
+            strict=True,
+        ):
+            print(" ".join(f"{float(value): .8e}" for value in row))
 
 
 def _run_eik_gate(args):
@@ -132,6 +173,18 @@ def _run_desc_eik_export_gate(args):
     return run_geometry_to_gx_eik_export_gate(geometry, fourier)
 
 
+def _run_desc_gx_eik_external_gate(args):
+    desc_root = Path("relevant-codes/DESC")
+    if desc_root.exists() and str(desc_root) not in sys.path:
+        sys.path.insert(0, str(desc_root))
+    return run_desc_gx_eik_external_geometry_gate(
+        args.desc_path,
+        args.desc_gx_eik_reference,
+        rho=args.desc_gx_eik_rho,
+        alpha=args.desc_gx_eik_alpha,
+    )
+
+
 def _run_gx_gist_suite_gate(args):
     return run_gx_gist_external_eik_suite_gate(
         args.gx_gist_reference,
@@ -155,7 +208,11 @@ def _parse_args():
     parser.add_argument("--rh-steps", type=int, default=5)
     parser.add_argument("--cyclone-steps", type=int, default=5)
     parser.add_argument("--rh-plateau", action="store_true")
+    parser.add_argument("--cyclone-term-audit", action="store_true")
+    parser.add_argument("--cyclone-trace", action="store_true")
+    parser.add_argument("--cyclone-trace-windows", type=int, default=4)
     parser.add_argument("--desc-eik", action="store_true")
+    parser.add_argument("--desc-gx-eik", action="store_true")
     parser.add_argument("--gx-gist-suite", action="store_true")
     parser.add_argument("--rh-plateau-n-z", type=int, default=64)
     parser.add_argument("--rh-plateau-n-vpar", type=int, default=64)
@@ -186,6 +243,18 @@ def _parse_args():
         type=Path,
         default=Path("fixtures/desc_geometry_dshape_rho05_alpha0.npz"),
     )
+    parser.add_argument(
+        "--desc-path",
+        type=Path,
+        default=Path("relevant-codes/DESC/desc/examples/DSHAPE_output.h5"),
+    )
+    parser.add_argument(
+        "--desc-gx-eik-reference",
+        type=Path,
+        default=Path("fixtures/gx_desc_dshape_rho05_alpha0.eik.out"),
+    )
+    parser.add_argument("--desc-gx-eik-rho", type=float, default=0.5)
+    parser.add_argument("--desc-gx-eik-alpha", type=float, default=0.0)
     parser.add_argument(
         "--gx-gist-reference",
         type=Path,
