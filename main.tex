@@ -1275,6 +1275,21 @@ Its \texttt{time.dat} file was converted to
 loader-reconstructed full-history fitted growth \(0.160910\).  This is not yet
 the matched production Cyclone trace, but it validates the ingestion path on
 real GKW output.
+The matched selected-\(k_y\) GKW input
+\path{fixtures/gkw_cyclone_selected_ky_linear_input.dat} uses the same
+production-control grid and window settings as the solver/Gyaradax trace:
+\((N_z,N_{v_\parallel},N_\mu)=(48,32,8)\),
+\(n_{\mathrm{period}}=5\), \(\Delta t=0.003\), 20 steps per output window, and
+80 windows.  The resulting compact GKW diagnostic
+\path{fixtures/gkw_cyclone_selected_ky_time.dat} gives late-window mean growth
+\(0.180408\), close to the nominal \(0.179\) target, and reconstructed-amplitude
+late-fit growth \(0.188531\).  In contrast, the solver production gate gives
+\(0.164715\) for the default \(\texttt{cosine2}\) late-fit diagnostic and
+\(0.165973\) for the GKW-native \(\texttt{cosine}\) late-fit diagnostic.  The
+GKW-style late-window-mean diagnostic gives \(0.156742\) and \(0.155721\) for
+the same two initial profiles.  Thus the target is consistent with GKW's
+compact \texttt{time.dat} convention, but a richer GKW amplitude or potential
+history is still needed to isolate the remaining selected-mode history gap.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
@@ -1373,7 +1388,11 @@ full-production CSV pairs with stems
 their physical trace comparisons with maximum errors \(1.33\times10^{-3}\) and
 \(1.02\times10^{-2}\), respectively.  The first real GKW diagnostic conversion
 is \path{figures/gkw_simple_example_time_trace.csv}, generated from the bundled
-linear GKW \texttt{simple\_example}.
+linear GKW \texttt{simple\_example}.  The matched selected-\(k_y\) GKW
+conversion is \path{figures/gkw_cyclone_selected_ky_time_trace.csv}, with
+summary comparisons in
+\path{figures/gkw_cyclone_selected_ky_time_comparison.csv} and
+\path{figures/cyclone_growth_diagnostic_convention_comparison.csv}.
 
 \begin{figure}[htbp]
   \centering

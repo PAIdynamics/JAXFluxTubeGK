@@ -1101,6 +1101,7 @@ def run_reduced_cyclone_base_case_gate(
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
         velocity_backend=velocity_backend,
+        initial_profile="cosine2",
     )
     result = integrate_fixed_step(
         setup["state"],
@@ -1147,12 +1148,14 @@ def run_production_cyclone_base_case_gate(
     steps_per_window: int | None = None,
     n_windows: int | None = None,
     growth_window_fraction: float = 0.5,
+    growth_diagnostic: str = "late_fit",
     parallel_recurrence_rate: float | None = None,
     parallel_backend: str | None = None,
     parallel_boundary: str | None = None,
     parallel_derivative_model: str | None = None,
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
+    initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Run the Cyclone gate with documented production controls.
@@ -1204,10 +1207,17 @@ def run_production_cyclone_base_case_gate(
         if velocity_backend is None
         else velocity_backend
     )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
     if steps_per_window < 1:
         raise ValueError("steps_per_window must be positive")
     if n_windows < 1:
         raise ValueError("n_windows must be positive")
+    if growth_diagnostic not in ("late_fit", "late_mean_window"):
+        raise ValueError("growth_diagnostic must be 'late_fit' or 'late_mean_window'")
 
     setup = _build_cyclone_base_case_setup(
         target,
@@ -1222,6 +1232,7 @@ def run_production_cyclone_base_case_gate(
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
         velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
     )
     state = setup["state"]
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
@@ -1265,12 +1276,21 @@ def run_production_cyclone_base_case_gate(
             state = normalized.state
             log_normalization = normalized.log_normalization
 
-    fitted_growth = _fit_growth_from_log_amplitudes(
-        jnp.asarray(times, dtype=jnp.float64),
-        jnp.stack(log_amplitudes),
-        start_fraction=growth_window_fraction,
-    )
-    observed = fitted_growth[setup["selected_ky_index"]]
+    times_array = jnp.asarray(times, dtype=jnp.float64)
+    log_amplitude_array = jnp.stack(log_amplitudes)
+    selected = int(setup["selected_ky_index"])
+    if growth_diagnostic == "late_fit":
+        fitted_growth = _fit_growth_from_log_amplitudes(
+            times_array,
+            log_amplitude_array,
+            start_fraction=growth_window_fraction,
+        )
+        observed = fitted_growth[selected]
+    else:
+        window_growth = jnp.diff(log_amplitude_array[:, selected]) / jnp.diff(times_array)
+        n_window = window_growth.shape[0]
+        start = max(0, min(int(n_window * growth_window_fraction), n_window - 1))
+        observed = jnp.mean(window_growth[start:])
     return evaluate_benchmark_gate(
         observed,
         target,
@@ -1281,7 +1301,9 @@ def run_production_cyclone_base_case_gate(
             f"parallel_boundary={parallel_boundary}, "
             f"parallel_derivative_model={parallel_derivative_model}, "
             f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
-            f"normalize_each_window={normalize_each_window}; "
+            f"normalize_each_window={normalize_each_window}, "
+            f"initial_profile={initial_profile}, "
+            f"growth_diagnostic={growth_diagnostic}; "
             "production GKW/GX agreement remains open until this gate passes"
         ),
     )
@@ -1304,6 +1326,7 @@ def run_cyclone_base_case_trace(
     parallel_derivative_model: str | None = None,
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
+    initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
 ) -> CycloneTrace:
     """Record selected-mode CBC evolution at fixed diagnostic windows."""
@@ -1344,6 +1367,11 @@ def run_cyclone_base_case_trace(
         if velocity_backend is None
         else velocity_backend
     )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
     setup = _build_cyclone_base_case_setup(
         target,
         n_z=n_z,
@@ -1357,6 +1385,7 @@ def run_cyclone_base_case_trace(
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
         velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
     )
     selected = int(setup["selected_ky_index"])
     state = setup["state"]
@@ -1451,7 +1480,8 @@ def run_cyclone_base_case_trace(
         source="stellarator_gk",
         notes=(
             "windowed CBC trace with selected ky, raw/physical amplitudes, "
-            "window growth, fitted growth, phi norm, state norm, and RHS norm"
+            "window growth, fitted growth, phi norm, state norm, and RHS norm; "
+            f"initial_profile={initial_profile}"
         ),
     )
 
@@ -1690,6 +1720,7 @@ def run_cyclone_base_case_term_parity_audit(
         parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
         parallel_derivative_model="gkw_upwind",
         velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile="cosine2",
     )
     rhs = setup["precompute"].rhs
     state = setup["state"]
@@ -2519,6 +2550,7 @@ def _build_cyclone_base_case_setup(
     parallel_boundary: str,
     parallel_derivative_model: str,
     velocity_backend: str,
+    initial_profile: str,
 ):
     from .geometry import build_s_alpha_geometry
     from .grids import build_fourier_grid, build_mode_connectivity, build_velocity_grid
@@ -2583,7 +2615,12 @@ def _build_cyclone_base_case_setup(
         mode_connectivity=connectivity,
         parallel_derivative_model=parallel_derivative_model,
     )
-    profile = 1.0 + jnp.cos(2.0 * jnp.pi * parallel.z)
+    if initial_profile == "cosine2":
+        profile = 1.0 + jnp.cos(2.0 * jnp.pi * parallel.z)
+    elif initial_profile == "cosine":
+        profile = jnp.cos(2.0 * jnp.pi * parallel.z)
+    else:
+        raise ValueError("initial_profile must be 'cosine2' or 'cosine'")
     state = jnp.ones((n_vpar, n_mu, 1, 1, 1), dtype=jnp.complex128)
     state = 1.0e-4 * state * profile[None, None, :, None, None]
     return {

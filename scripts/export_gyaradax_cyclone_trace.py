@@ -126,6 +126,7 @@ def main() -> None:
         nperiod=args.nperiod,
         steps_per_window=args.steps_per_window,
         n_windows=args.n_windows,
+        initial_profile=args.finit,
     )
     fields = (
         "times",
@@ -186,7 +187,7 @@ def _build_gyaradax_params(gk_params_cls, geometry, args):
         disp_y=0.0,
         idisp=2,
         non_linear=False,
-        finit="cosine2",
+        finit=args.finit,
         amp_init=1.0e-4,
         adiabatic_electrons=True,
         rlt=args.rlt,
@@ -224,7 +225,7 @@ def _run_gyaradax_trace(
 ):
     from stellarator_gk import CycloneTrace
 
-    df = init_f(geometry, finit="cosine2", amp_init_real=1.0e-4)
+    df = init_f(geometry, finit=args.finit, amp_init_real=1.0e-4)
     state = default_state(nky=1)
     phi0 = calculate_phi(geometry, df, params=params)
     amp0 = mode_amplitude(phi0, geometry, params.norm_eps)
@@ -297,7 +298,7 @@ def _run_gyaradax_trace(
         rhs_norm=jnp.asarray(rhs_norms, dtype=jnp.float64),
         log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
         source="gyaradax",
-        notes=f"{args.profile} Gyaradax s-alpha selected-ky trace",
+        notes=f"{args.profile} Gyaradax s-alpha selected-ky trace; finit={args.finit}",
     )
 
 
@@ -357,6 +358,7 @@ def _parse_args():
     parser.add_argument("--vpar-max", type=float, default=3.0)
     parser.add_argument("--disp-par", type=float, default=1.0)
     parser.add_argument("--disp-vp", type=float, default=0.2)
+    parser.add_argument("--finit", choices=("cosine2", "cosine"), default="cosine2")
     parser.add_argument("--tolerance", type=float, default=None)
     args = parser.parse_args()
     return _apply_profile_defaults(args)

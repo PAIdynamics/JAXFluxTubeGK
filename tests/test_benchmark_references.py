@@ -337,6 +337,32 @@ def test_production_cyclone_gate_runs_with_reduced_overrides():
     assert "production-control CBC gate" in cyclone.notes
     assert "nperiod=5" in cyclone.notes
     assert "parallel_derivative_model=gkw_upwind" in cyclone.notes
+    assert "initial_profile=cosine2" in cyclone.notes
+    assert "growth_diagnostic=late_fit" in cyclone.notes
+
+
+def test_production_cyclone_gate_supports_gkw_time_dat_mean_diagnostic():
+    cyclone = run_production_cyclone_base_case_gate(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        growth_diagnostic="late_mean_window",
+    )
+
+    assert jnp.isfinite(cyclone.observed_value)
+    assert "growth_diagnostic=late_mean_window" in cyclone.notes
+
+    with pytest.raises(ValueError, match="growth_diagnostic"):
+        run_production_cyclone_base_case_gate(
+            n_z=8,
+            n_vpar=6,
+            n_mu=4,
+            steps_per_window=1,
+            n_windows=1,
+            growth_diagnostic="unsupported",
+        )
 
 
 def test_cyclone_term_parity_audit_covers_gkw_conventions():
@@ -378,6 +404,31 @@ def test_cyclone_trace_records_window_diagnostics_and_compares():
     assert bool(comparison.passed)
     np.testing.assert_allclose(comparison.max_abs_error, 0.0)
     assert "trace-level CBC comparison" in comparison.notes
+
+
+def test_cyclone_trace_supports_gkw_cosine_initial_profile():
+    trace = run_cyclone_base_case_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine",
+    )
+
+    assert trace.times.shape == (3,)
+    assert jnp.all(jnp.isfinite(trace.physical_amplitude))
+    assert "initial_profile=cosine" in trace.notes
+
+    with pytest.raises(ValueError, match="initial_profile"):
+        run_cyclone_base_case_trace(
+            n_z=8,
+            n_vpar=6,
+            n_mu=4,
+            steps_per_window=1,
+            n_windows=1,
+            initial_profile="unsupported",
+        )
 
 
 def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):

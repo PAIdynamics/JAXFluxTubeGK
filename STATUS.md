@@ -69,10 +69,20 @@ gates yet. A GKW `time.dat` loader now maps GKW linear time/growth diagnostics
 into the same `CycloneTrace` schema by reconstructing relative physical
 amplitude from the reported growth-rate increments; field/state/RHS norms are
 marked unavailable for that compact GKW format. The local serial/no-FFT GKW
-build now succeeds with `gfortran`, and a real GKW `simple_example` run has
-been converted to `figures/gkw_simple_example_time_trace.csv`; it contains 50
-time samples with final GKW-reported window growth `0.184492` and
-loader-reconstructed full-history fitted growth `0.16090982345149119`.
+build now succeeds with `gfortran`. A real GKW `simple_example` run has been
+converted to `figures/gkw_simple_example_time_trace.csv`; it contains 50 time
+samples with final GKW-reported window growth `0.184492` and
+loader-reconstructed full-history fitted growth `0.16090982345149119`. A
+matched linear selected-`ky` GKW run at the production-control grid/window
+settings is now stored in `fixtures/gkw_cyclone_selected_ky_time.dat` and
+`figures/gkw_cyclone_selected_ky_time_trace.csv`; its late-window mean growth
+is `0.180407525`, close to the `0.179` target, while its reconstructed late-fit
+growth is `0.18853144053590817`. The solver production gate now exposes both
+`late_fit` and `late_mean_window` diagnostics plus explicit `cosine2`/`cosine`
+initial-profile controls. The corresponding solver values remain open:
+`0.1647145652510088` (`cosine2`, late fit), `0.15674153067144372`
+(`cosine2`, late mean), `0.1659730160275755` (`cosine`, late fit), and
+`0.15572083125648728` (`cosine`, late mean).
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -98,8 +108,9 @@ The repository currently contains:
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
-- `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, and full production-control profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, and `figures/gkw_simple_example_time_trace.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `fixtures/gkw_cyclone_selected_ky_linear_input.dat` and `fixtures/gkw_cyclone_selected_ky_time.dat`: matched GKW selected-`ky` linear input and compact time diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
@@ -182,16 +193,18 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: use the passing reduced, production-control-smoke, and full
-production-control Gyaradax physical trace checks plus the GKW `time.dat`
-loader to close the remaining production Cyclone growth-rate target/window
-gap while keeping DESC optimization examples labeled as reduced until CBC
-parity passes:
+Goal: use the matched selected-`ky` GKW `time.dat` trace, the passing
+Gyaradax/solver physical trace checks, and the explicit growth-diagnostic
+selector to isolate the remaining production Cyclone growth-history gap while
+keeping DESC optimization examples labeled as reduced until CBC parity passes:
 
-- generate or collect a matched GKW `time.dat` for the selected-`ky` Cyclone
-  setup and load it into `CycloneTrace`,
-- compare GKW, Gyaradax, and solver growth histories using the same late-window
-  fitting convention,
+- compare a richer GKW selected-`ky` amplitude or phi history against the
+  Gyaradax/solver trace, since compact `time.dat` lacks field and norm
+  diagnostics,
+- add a GKW-compatible `cosine2` initialization/restart path or document why
+  GKW's native `cosine` initialization is the only direct compact-trace path,
+- retain both `late_fit` and `late_mean_window` production-gate diagnostics
+  until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
   is within the documented GKW/GX tolerance ladder,
 - supplement the matched DESC/GX block-eik fixture with a truly independent
@@ -200,10 +213,10 @@ parity passes:
 
 Expected file changes:
 
-- matched GKW `time.dat` trace fixture if generated,
-- GKW/Gyaradax/solver growth-history comparison report,
-- any production-resolution diagnostic-window adjustment needed for the scalar
-  Cyclone gate,
+- richer GKW diagnostic export if available,
+- GKW/Gyaradax/solver field or amplitude-history comparison report,
+- any selected-mode initialization or diagnostic-window adjustment needed for
+  the scalar Cyclone gate,
 - any independent eik producer/fixture discovered for DESC/GX geometry,
 - `TODO.md`,
 - `STATUS.md`
@@ -216,6 +229,61 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-31: Added Matched GKW Selected-ky Trace Diagnostics
+
+- Committed the previous production trace/profile and GKW loader tranche as:
+  - `fe934a1 Add production trace profiles and GKW loader`.
+- Added `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, a reproducible
+  serial/no-FFT GKW input matching the production-control selected-`ky` grid:
+  \(N_z=48\), \(N_{v_\parallel}=32\), \(N_\mu=8\), \(n_{\rm period}=5\),
+  \(\Delta t=0.003\), 20 steps per output window, and 80 windows.
+- Ran local GKW and stored:
+  - `fixtures/gkw_cyclone_selected_ky_time.dat`,
+  - `figures/gkw_cyclone_selected_ky_time_trace.csv`.
+- Added an explicit `initial_profile` option to the Cyclone setup, trace, and
+  production gate:
+  - `cosine2`, the existing solver/Gyaradax default \(1+\cos(2\pi s)\),
+  - `cosine`, the native compact GKW `finit='cosine'` path.
+- Added an explicit production-gate `growth_diagnostic` selector:
+  - `late_fit`, the selected-mode least-squares log-amplitude fit,
+  - `late_mean_window`, the GKW `time.dat`-style mean of per-window growth
+    samples.
+- Extended the Gyaradax trace exporter with `--finit` and generated the
+  GKW-style cosine production-control comparison:
+  - `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`,
+  - `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`.
+- Added summary comparison artifacts:
+  - `figures/gkw_cyclone_selected_ky_time_comparison.csv`,
+  - `figures/cyclone_growth_diagnostic_convention_comparison.csv`.
+- Main findings:
+  - matched GKW `time.dat` late-window mean growth is `0.180407525`, close to
+    the `0.179` target,
+  - matched GKW reconstructed-amplitude late fit is `0.18853144053590817`,
+  - solver production gate values are `0.1647145652510088` (`cosine2`,
+    `late_fit`), `0.15674153067144372` (`cosine2`, `late_mean_window`),
+    `0.1659730160275755` (`cosine`, `late_fit`), and
+    `0.15572083125648728` (`cosine`, `late_mean_window`),
+  - Gyaradax/solver production-control `cosine` trace comparison is OPEN at
+    tolerance `2.0e-02`, with max selected-field error `2.63135798e-02`,
+    dominated by per-window growth; fitted growth differs by only
+    `1.27907199e-03`.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex`.
+- Commands run:
+  - `git commit -m "Add production trace profiles and GKW loader"`
+  - `/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gkw/gkw.x`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -c "... load_gkw_time_dat_trace ..."`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 .venv/bin/python scripts/export_gyaradax_cyclone_trace.py --profile production-control --finit cosine --output figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv --comparison-output figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+- Verification results:
+  - matched GKW selected-`ky` run completed successfully,
+  - focused benchmark tests: 21 passed,
+  - full ruff: all checks passed,
+  - full pytest suite: 140 passed,
+  - `main.tex` built successfully with existing underfull-box warnings only.
 
 ### 2026-05-31: Added Production-Control Gyaradax Trace and GKW Loader
 
