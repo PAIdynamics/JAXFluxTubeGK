@@ -15,6 +15,8 @@ from stellarator_gk import (
     ParallelGridSpec,
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
+    ParallelPhiTrace,
+    audit_parallel_phi_profile_alignment,
     benchmark_target_cost,
     benchmark_target_residual,
     build_desc_gx_eik_reference_from_path,
@@ -542,6 +544,44 @@ def test_gkw_parallel_phi_trace_loader_compares_row_normalized_profiles(tmp_path
     np.testing.assert_allclose(normalized_report.max_abs_error, 0.0)
 
 
+def test_parallel_phi_profile_audit_detects_output_order_shift():
+    observed = ParallelPhiTrace(
+        times=(0.1, 0.2),
+        z=(0.0, 1.0, 2.0),
+        phi_power=((0.0, 1.0, 0.0), (0.0, 2.0, 0.0)),
+        source="observed",
+    )
+    shifted_reference = ParallelPhiTrace(
+        times=(0.1, 0.2),
+        z=(0.0, 1.0, 2.0),
+        phi_power=((0.0, 0.0, 1.0), (0.0, 0.0, 2.0)),
+        source="shifted-reference",
+    )
+
+    audit = audit_parallel_phi_profile_alignment(
+        observed,
+        shifted_reference,
+        tolerance=1.0e-12,
+    )
+
+    assert bool(audit.passed)
+    assert int(audit.best_shift) == 2
+    np.testing.assert_allclose(audit.best_aligned_max_error, 0.0)
+    np.testing.assert_allclose(audit.best_shift_profile_errors, 0.0)
+    assert float(jnp.max(audit.direct_profile_errors)) > 0.9
+    np.testing.assert_allclose(audit.total_power_ratio, jnp.asarray([1.0, 1.0]))
+    np.testing.assert_allclose(audit.peak_z_error, jnp.asarray([-1.0, -1.0]))
+    np.testing.assert_allclose(audit.second_moment_error, jnp.asarray([0.0, 0.0]))
+    assert int(audit.worst_time_index) == 0
+    assert int(audit.worst_z_index) == 1
+    np.testing.assert_allclose(audit.worst_time, 0.1)
+    np.testing.assert_allclose(audit.worst_z, 1.0)
+    np.testing.assert_allclose(audit.worst_signed_error, 1.0)
+    np.testing.assert_allclose(audit.worst_observed_value, 1.0)
+    np.testing.assert_allclose(audit.worst_reference_value, 0.0)
+    assert "alignment/normalization audit" in audit.notes
+
+
 def test_gkw_parallel_phi_loader_reads_matched_selected_ky_fixture():
     path = ROOT / "fixtures/gkw_cyclone_selected_ky_parallel_phi.dat"
     time_path = ROOT / "fixtures/gkw_cyclone_selected_ky_time.dat"
@@ -563,6 +603,7 @@ def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
         steps_per_window=2,
         n_windows=2,
         initial_profile="cosine",
+        normalization_model="gkw_unweighted",
     )
     comparison = compare_parallel_phi_traces(trace, trace)
 
@@ -572,7 +613,19 @@ def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
     assert jnp.all(jnp.isfinite(trace.phi_power))
     assert jnp.all(trace.phi_power >= 0.0)
     assert "initial_profile=cosine" in trace.notes
+    assert "normalization_model=gkw_unweighted" in trace.notes
+    np.testing.assert_allclose(jnp.sum(trace.phi_power, axis=1), 1.0, rtol=2e-12, atol=2e-12)
     assert bool(comparison.passed)
+
+    with pytest.raises(ValueError, match="normalization_model"):
+        run_cyclone_base_case_parallel_phi_trace(
+            n_z=8,
+            n_vpar=6,
+            n_mu=4,
+            steps_per_window=1,
+            n_windows=1,
+            normalization_model="unsupported",
+        )
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

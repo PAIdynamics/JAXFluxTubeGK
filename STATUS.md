@@ -87,12 +87,22 @@ diagnostic from the same matched run is now stored in
 `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat` and loaded through the
 public `ParallelPhiTrace` API. The solver-side selected-`ky` parallel
 `|phi|^2` trace uses the same production-control grid/window settings and the
-GKW-native `cosine` initialization. Its row-normalized profile comparison is
-still OPEN: maximum profile-shape error `3.38801745e-02`, mean row error
+GKW-native `cosine` initialization. The trace now supports GKW's unweighted
+field normalization, which removes the raw total-power scale mismatch: the
+mean solver/GKW total-power ratio is `1.0000000565887992` with maximum
+deviation below `1.7e-06`. The row-normalized profile comparison is still
+OPEN: maximum profile-shape error `3.38801745e-02`, mean row error
 `1.84122540e-02`, and final-row error `2.20871902e-02` at exploratory
-tolerance `2.0e-02`. This confirms that the remaining CBC gap includes a
-parallel mode-structure mismatch, not only a compact `time.dat` growth-window
-or scalar normalization convention.
+tolerance `2.0e-02`. Reversing the output order and circularly shifting the
+GKW rows do not reduce the best-aligned error (`best_shift=0`). The localized
+audit now identifies the worst signed shape error at `t=3.72`, `z=0.09375`:
+the solver normalized value is `0.35697806498567025` while GKW's is
+`0.3230978904417056`, with signed error `3.38801745e-02` and negative
+profile-width error in that row. This confirms that the remaining CBC gap
+includes a real central-curvature/width mismatch in the parallel mode
+structure, not only a compact `time.dat` growth-window, scalar normalization,
+output-ordering convention, center-of-power shift, or boundary-edge
+concentration.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -210,9 +220,9 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- use the matched GKW `parallel_phi.dat` profile comparison to audit GKW
-  field-normalization, output-order, and parallel-boundary details not visible
-  in compact `time.dat`,
+- compare the localized GKW `parallel_phi.dat` central-curvature/width
+  mismatch against the selected-mode parallel derivative, GKW-upwind boundary,
+  and field-solve assembly,
 - only patch GKW or add a restart/state-injection path for `cosine2` if the
   native `cosine` profile comparison cannot isolate the discrepancy,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
@@ -240,6 +250,55 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added GKW Parallel-Phi Alignment Audit
+
+- Committed the previous parallel-phi profile tranche as:
+  - `3ab8279 Add GKW parallel phi profile comparison`.
+- Added `ParallelPhiProfileAudit` and
+  `audit_parallel_phi_profile_alignment`.
+- Extended the audit with localized profile diagnostics:
+  - peak-position error,
+  - profile-width/second-moment error,
+  - global worst `(time,z)` signed shape error and corresponding solver/GKW
+    profile values.
+- Added `normalization_model='gkw_unweighted'` to
+  `run_cyclone_base_case_parallel_phi_trace` so the solver trace can mimic the
+  unweighted GKW field norm used by `normalise.F90`.
+- Regenerated
+  `figures/gkw_cyclone_parallel_phi_profile_comparison.csv` with the
+  GKW-unweighted normalization model.
+- Main findings:
+  - total-power ratio is now near unity: mean `1.0000000565887992`, maximum
+    `1.0000016391456865`, minimum `0.9999986687417727`,
+  - direct, reversed, and best circular-shift profile errors are identical to
+    stored precision,
+  - the global best circular shift is `0`,
+  - center-of-power error is tiny, with mean `-1.0985865346851282e-08`,
+  - edge-fraction error is small, with mean `-2.496145394523138e-04`,
+  - the worst localized signed profile error is `3.38801745e-02` at `t=3.72`,
+    `z=0.09375`, where the solver value is `0.35697806498567025` and the GKW
+    value is `0.3230978904417056`,
+  - the second-moment/profile-width error is negative in that row
+    (`-2.0768273362321468e-02`), indicating a central-width/curvature
+    mismatch rather than a boundary-localized discrepancy,
+  - the profile comparison remains OPEN with maximum error
+    `3.38801745e-02`.
+- Interpretation: the remaining Cyclone selected-`ky` profile gap is not
+  primarily caused by raw field normalization, reversed/shifted output order,
+  center-of-profile displacement, or boundary-edge concentration. The next
+  check should compare the selected-mode parallel derivative and field-solve
+  assembly at the central profile locations against the GKW/Gyaradax
+  convention.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/compare_gkw_parallel_phi_profile.py`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_parallel_phi_profile_audit_detects_output_order_shift tests/test_benchmark_references.py::test_gkw_parallel_phi_trace_loader_compares_row_normalized_profiles -q`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_parallel_phi_trace_records_gkw_style_profiles tests/test_benchmark_references.py::test_parallel_phi_profile_audit_detects_output_order_shift -q`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `uv run --extra dev python examples/compare_gkw_parallel_phi_profile.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
 
 ### 2026-05-31: Added GKW Parallel-Phi Profile Comparison
 

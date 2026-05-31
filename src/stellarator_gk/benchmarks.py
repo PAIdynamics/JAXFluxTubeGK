@@ -319,6 +319,101 @@ class ParallelPhiTraceComparisonReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class ParallelPhiProfileAudit(_PyTreeDataclass):
+    """Alignment and normalization audit for parallel ``|phi|^2`` profiles."""
+
+    direct_profile_errors: object
+    reversed_profile_errors: object
+    best_shift_profile_errors: object
+    circular_shift_errors: object
+    best_shift: object
+    best_aligned_max_error: object
+    total_power_ratio: object
+    center_of_power_error: object
+    edge_fraction_error: object
+    peak_z_error: object
+    second_moment_error: object
+    worst_time_index: object
+    worst_z_index: object
+    worst_time: object
+    worst_z: object
+    worst_signed_error: object
+    worst_observed_value: object
+    worst_reference_value: object
+    passed: object
+    normalized_profiles: bool = True
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "direct_profile_errors",
+        "reversed_profile_errors",
+        "best_shift_profile_errors",
+        "circular_shift_errors",
+        "best_shift",
+        "best_aligned_max_error",
+        "total_power_ratio",
+        "center_of_power_error",
+        "edge_fraction_error",
+        "peak_z_error",
+        "second_moment_error",
+        "worst_time_index",
+        "worst_z_index",
+        "worst_time",
+        "worst_z",
+        "worst_signed_error",
+        "worst_observed_value",
+        "worst_reference_value",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("normalized_profiles", "notes")
+
+    def __post_init__(self):
+        direct = jnp.asarray(self.direct_profile_errors, dtype=jnp.float64)
+        if direct.ndim != 1:
+            raise ValueError("direct_profile_errors must be one-dimensional")
+        object.__setattr__(self, "direct_profile_errors", direct)
+        for name in (
+            "reversed_profile_errors",
+            "best_shift_profile_errors",
+            "total_power_ratio",
+            "center_of_power_error",
+            "edge_fraction_error",
+            "peak_z_error",
+            "second_moment_error",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != direct.shape:
+                raise ValueError(f"{name} must match direct_profile_errors shape")
+            object.__setattr__(self, name, values)
+        shift_errors = jnp.asarray(self.circular_shift_errors, dtype=jnp.float64)
+        if shift_errors.ndim != 1:
+            raise ValueError("circular_shift_errors must be one-dimensional")
+        object.__setattr__(self, "circular_shift_errors", shift_errors)
+        object.__setattr__(self, "best_shift", jnp.asarray(self.best_shift, dtype=jnp.int32))
+        object.__setattr__(
+            self,
+            "best_aligned_max_error",
+            jnp.asarray(self.best_aligned_max_error, dtype=jnp.float64),
+        )
+        for name in (
+            "worst_time",
+            "worst_z",
+            "worst_signed_error",
+            "worst_observed_value",
+            "worst_reference_value",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(
+            self,
+            "worst_time_index",
+            jnp.asarray(self.worst_time_index, dtype=jnp.int32),
+        )
+        object.__setattr__(self, "worst_z_index", jnp.asarray(self.worst_z_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -1798,14 +1893,17 @@ def run_cyclone_base_case_parallel_phi_trace(
     initial_profile: str | None = None,
     include_initial: bool = False,
     physical_power: bool = False,
+    normalization_model: str = "weighted",
     target: BenchmarkTarget | None = None,
 ) -> ParallelPhiTrace:
     """Run the selected-``ky`` CBC setup and record ``|phi(z)|^2`` profiles.
 
     The default output cadence mirrors GKW ``parallel_phi.dat``: only the
-    post-window profiles are stored.  With ``normalize_each_window=True`` the
-    stored raw profiles use the same scalar-normalized state used for the next
-    window; ``physical_power=True`` re-applies the accumulated scalar factor.
+    post-window profiles are stored.  ``normalization_model='weighted'`` uses
+    the solver's quadrature-weighted mode-chain amplitude, while
+    ``'gkw_unweighted'`` uses GKW's unweighted field norm for this single-mode
+    diagnostic.  ``physical_power=True`` re-applies the accumulated scalar
+    factor.
     """
 
     from .physics import solve_adiabatic_electron_phi
@@ -1816,6 +1914,8 @@ def run_cyclone_base_case_parallel_phi_trace(
         raise ValueError("steps_per_window must be positive")
     if n_windows < 1:
         raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
 
     target = target or cyclone_base_case_growth_target()
     metadata = dict(target.metadata)
@@ -1900,11 +2000,14 @@ def run_cyclone_base_case_parallel_phi_trace(
         current_time = (window + 1) * steps_per_window * dt
         phi = solve_phi(state)
         if normalize_each_window:
-            amplitude = mode_chain_amplitude(
-                phi,
-                w_z=setup["geometry"].w_z,
-                connectivity=setup["connectivity"],
-            )
+            if normalization_model == "weighted":
+                amplitude = mode_chain_amplitude(
+                    phi,
+                    w_z=setup["geometry"].w_z,
+                    connectivity=setup["connectivity"],
+                )
+            else:
+                amplitude = jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
             normalized = normalize_by_ky_amplitude(
                 state,
                 amplitude,
@@ -1925,7 +2028,8 @@ def run_cyclone_base_case_parallel_phi_trace(
             "selected-ky CBC parallel |phi|^2 profile trace; "
             f"initial_profile={initial_profile}, "
             f"normalize_each_window={normalize_each_window}, "
-            f"physical_power={physical_power}"
+            f"physical_power={physical_power}, "
+            f"normalization_model={normalization_model}"
         ),
     )
 
@@ -1973,6 +2077,140 @@ def compare_parallel_phi_traces(
         notes=(
             f"observed={observed.source}; reference={reference.source}; "
             "parallel |phi|^2 profile comparison"
+        ),
+    )
+
+
+def audit_parallel_phi_profile_alignment(
+    observed: ParallelPhiTrace,
+    reference: ParallelPhiTrace,
+    *,
+    tolerance: float = 1.0e-2,
+    time_tolerance: float = 1.0e-8,
+    z_tolerance: float = 1.0e-12,
+    normalize_profiles: bool = True,
+    power_floor: float = 1.0e-300,
+) -> ParallelPhiProfileAudit:
+    """Audit profile mismatch against simple output-order and normalization causes.
+
+    The direct comparison checks the profiles as written.  The reversed and
+    circular-shift comparisons are diagnostic only: they test whether a
+    plausible file-output ordering convention could explain the mismatch.
+    Total-power, center-of-power, and edge-fraction diagnostics are reported
+    from the raw and row-normalized profiles.
+    """
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if time_tolerance < 0.0:
+        raise ValueError("time_tolerance must be nonnegative")
+    if z_tolerance < 0.0:
+        raise ValueError("z_tolerance must be nonnegative")
+    if power_floor <= 0.0:
+        raise ValueError("power_floor must be positive")
+    if tuple(observed.phi_power.shape) != tuple(reference.phi_power.shape):
+        raise ValueError("parallel phi traces must have matching phi_power shapes")
+
+    observed_raw = jnp.asarray(observed.phi_power, dtype=jnp.float64)
+    reference_raw = jnp.asarray(reference.phi_power, dtype=jnp.float64)
+    observed_profiles = observed_raw
+    reference_profiles = reference_raw
+    if normalize_profiles:
+        observed_profiles = _normalize_profile_rows(observed_profiles, floor=power_floor)
+        reference_profiles = _normalize_profile_rows(reference_profiles, floor=power_floor)
+
+    direct_profile_errors = jnp.max(jnp.abs(observed_profiles - reference_profiles), axis=1)
+    reversed_profiles = reference_profiles[:, ::-1]
+    reversed_profile_errors = jnp.max(jnp.abs(observed_profiles - reversed_profiles), axis=1)
+    n_z = observed_profiles.shape[1]
+    shifted_profiles = jnp.stack(
+        [jnp.roll(reference_profiles, shift, axis=1) for shift in range(n_z)],
+        axis=0,
+    )
+    shift_errors = jnp.max(jnp.abs(observed_profiles[None, :, :] - shifted_profiles), axis=(1, 2))
+    best_shift = jnp.argmin(shift_errors)
+    best_shift_profile_errors = jnp.max(
+        jnp.abs(observed_profiles - shifted_profiles[best_shift]),
+        axis=1,
+    )
+
+    observed_total = jnp.sum(observed_raw, axis=1)
+    reference_total = jnp.sum(reference_raw, axis=1)
+    floor = jnp.asarray(power_floor, dtype=observed_total.dtype)
+    total_power_ratio = observed_total / jnp.maximum(reference_total, floor)
+    observed_shape = _normalize_profile_rows(observed_raw, floor=power_floor)
+    reference_shape = _normalize_profile_rows(reference_raw, floor=power_floor)
+    z = jnp.asarray(observed.z, dtype=jnp.float64)
+    observed_center = jnp.sum(observed_shape * z[None, :], axis=1)
+    reference_center = jnp.sum(reference_shape * z[None, :], axis=1)
+    center_of_power_error = observed_center - reference_center
+    observed_second_moment = jnp.sum(
+        observed_shape * (z[None, :] - observed_center[:, None]) ** 2,
+        axis=1,
+    )
+    reference_second_moment = jnp.sum(
+        reference_shape * (z[None, :] - reference_center[:, None]) ** 2,
+        axis=1,
+    )
+    second_moment_error = observed_second_moment - reference_second_moment
+    peak_z_error = (
+        z[jnp.argmax(observed_shape, axis=1)]
+        - z[jnp.argmax(reference_shape, axis=1)]
+    )
+    edge_fraction_error = (
+        observed_shape[:, 0]
+        + observed_shape[:, -1]
+        - reference_shape[:, 0]
+        - reference_shape[:, -1]
+    )
+    signed_profile_error = observed_profiles - reference_profiles
+    flat_worst_index = jnp.argmax(jnp.abs(signed_profile_error))
+    worst_time_index = flat_worst_index // n_z
+    worst_z_index = flat_worst_index % n_z
+    worst_signed_error = signed_profile_error[worst_time_index, worst_z_index]
+    worst_observed_value = observed_profiles[worst_time_index, worst_z_index]
+    worst_reference_value = reference_profiles[worst_time_index, worst_z_index]
+
+    best_aligned_max_error = jnp.min(
+        jnp.asarray(
+            [
+                jnp.max(direct_profile_errors),
+                jnp.max(reversed_profile_errors),
+                jnp.min(shift_errors),
+            ],
+            dtype=jnp.float64,
+        )
+    )
+    time_error = _max_abs_error(observed.times, reference.times)
+    z_error = _max_abs_error(observed.z, reference.z)
+    passed = jnp.logical_and(
+        best_aligned_max_error <= tolerance,
+        jnp.logical_and(time_error <= time_tolerance, z_error <= z_tolerance),
+    )
+    return ParallelPhiProfileAudit(
+        direct_profile_errors=direct_profile_errors,
+        reversed_profile_errors=reversed_profile_errors,
+        best_shift_profile_errors=best_shift_profile_errors,
+        circular_shift_errors=shift_errors,
+        best_shift=best_shift,
+        best_aligned_max_error=best_aligned_max_error,
+        total_power_ratio=total_power_ratio,
+        center_of_power_error=center_of_power_error,
+        edge_fraction_error=edge_fraction_error,
+        peak_z_error=peak_z_error,
+        second_moment_error=second_moment_error,
+        worst_time_index=worst_time_index,
+        worst_z_index=worst_z_index,
+        worst_time=observed.times[worst_time_index],
+        worst_z=observed.z[worst_z_index],
+        worst_signed_error=worst_signed_error,
+        worst_observed_value=worst_observed_value,
+        worst_reference_value=worst_reference_value,
+        passed=passed,
+        normalized_profiles=normalize_profiles,
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "parallel |phi|^2 profile alignment/normalization audit"
         ),
     )
 
