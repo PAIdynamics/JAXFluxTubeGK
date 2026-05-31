@@ -249,6 +249,76 @@ class CycloneTraceComparisonReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class ParallelPhiTrace(_PyTreeDataclass):
+    """Parallel profile history of the selected-mode electrostatic field energy."""
+
+    times: object
+    z: object
+    phi_power: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("times", "z", "phi_power")
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        z = jnp.asarray(self.z, dtype=jnp.float64)
+        phi_power = jnp.asarray(self.phi_power, dtype=jnp.float64)
+        if times.ndim != 1:
+            raise ValueError("times must be one-dimensional")
+        if z.ndim != 1:
+            raise ValueError("z must be one-dimensional")
+        if phi_power.ndim != 2:
+            raise ValueError("phi_power must have shape (n_time,n_z)")
+        if phi_power.shape != (times.shape[0], z.shape[0]):
+            raise ValueError("phi_power shape must match times and z")
+        if times.shape[0] == 0 or z.shape[0] == 0:
+            raise ValueError("parallel phi trace must not be empty")
+        object.__setattr__(self, "times", times)
+        object.__setattr__(self, "z", z)
+        object.__setattr__(self, "phi_power", phi_power)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ParallelPhiTraceComparisonReport(_PyTreeDataclass):
+    """Comparison between two parallel ``|phi|^2`` profile histories."""
+
+    profile_errors: object
+    max_abs_error: object
+    time_error: object
+    z_error: object
+    passed: object
+    normalized_profiles: bool = True
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "profile_errors",
+        "max_abs_error",
+        "time_error",
+        "z_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("normalized_profiles", "notes")
+
+    def __post_init__(self):
+        errors = jnp.asarray(self.profile_errors, dtype=jnp.float64)
+        if errors.ndim != 1:
+            raise ValueError("profile_errors must be one-dimensional")
+        object.__setattr__(self, "profile_errors", errors)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "time_error", jnp.asarray(self.time_error, dtype=jnp.float64))
+        object.__setattr__(self, "z_error", jnp.asarray(self.z_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -1644,6 +1714,269 @@ def load_gkw_time_dat_trace(
     )
 
 
+def load_gkw_parallel_phi_trace(
+    path,
+    *,
+    time_path=None,
+    times=None,
+    z=None,
+    source: str | None = None,
+    notes: str = "",
+) -> ParallelPhiTrace:
+    """Load GKW ``parallel_phi.dat`` into a parallel ``|phi|^2`` trace.
+
+    GKW writes one row per large output step.  Each row contains
+    ``sum_{kx,ky} |phi(kx,ky,s)|^2 / (n_kx n_ky)`` on the global parallel
+    grid.  The compact file does not store times or grid coordinates, so they
+    may be supplied explicitly or, for times, read from the matching
+    ``time.dat`` file.
+    """
+
+    if time_path is not None and times is not None:
+        raise ValueError("supply either time_path or times, not both")
+    path = Path(path)
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError("GKW parallel_phi.dat contains no rows")
+    n_z = len(rows[0])
+    if n_z == 0 or any(len(row) != n_z for row in rows):
+        raise ValueError("GKW parallel_phi.dat rows must have a consistent nonzero length")
+    phi_power_np = np.asarray(rows, dtype=float)
+    if not np.all(np.isfinite(phi_power_np)):
+        raise ValueError("GKW parallel_phi.dat contains non-finite values")
+    if np.any(phi_power_np < 0.0):
+        raise ValueError("GKW parallel_phi.dat contains negative |phi|^2 values")
+    n_time = phi_power_np.shape[0]
+
+    if time_path is not None:
+        times_np = _gkw_time_dat_times(time_path)
+    elif times is not None:
+        times_np = np.asarray(times, dtype=float)
+    else:
+        times_np = np.arange(n_time, dtype=float)
+    if times_np.shape != (n_time,):
+        raise ValueError("times must have one entry per parallel_phi row")
+    if n_time > 1 and np.any(np.diff(times_np) <= 0.0):
+        raise ValueError("parallel phi trace times must be strictly increasing")
+
+    if z is None:
+        z_np = np.arange(n_z, dtype=float)
+    else:
+        z_np = np.asarray(z, dtype=float)
+    if z_np.shape != (n_z,):
+        raise ValueError("z must have one entry per parallel_phi column")
+
+    trace_notes = "GKW parallel_phi.dat trace; values are mode-averaged |phi|^2"
+    if notes:
+        trace_notes = f"{trace_notes}; {notes}"
+    return ParallelPhiTrace(
+        times=times_np,
+        z=z_np,
+        phi_power=phi_power_np,
+        source=source or str(path),
+        notes=trace_notes,
+    )
+
+
+def run_cyclone_base_case_parallel_phi_trace(
+    *,
+    n_z: int = 16,
+    n_vpar: int = 12,
+    n_mu: int = 6,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 4,
+    n_windows: int = 4,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    initial_profile: str | None = None,
+    include_initial: bool = False,
+    physical_power: bool = False,
+    target: BenchmarkTarget | None = None,
+) -> ParallelPhiTrace:
+    """Run the selected-``ky`` CBC setup and record ``|phi(z)|^2`` profiles.
+
+    The default output cadence mirrors GKW ``parallel_phi.dat``: only the
+    post-window profiles are stored.  With ``normalize_each_window=True`` the
+    stored raw profiles use the same scalar-normalized state used for the next
+    window; ``physical_power=True`` re-applies the accumulated scalar factor.
+    """
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    times_out = []
+    profiles = []
+
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    def append_profile(time_value, phi_value, accumulated_log):
+        power = jnp.abs(phi_value[:, ixzero, selected]) ** 2
+        if physical_power:
+            power = power * jnp.exp(2.0 * accumulated_log[selected])
+        times_out.append(float(time_value))
+        profiles.append(power)
+
+    if include_initial:
+        append_profile(0.0, solve_phi(state), log_normalization)
+
+    for window in range(n_windows):
+        state = advance_window(state)
+        current_time = (window + 1) * steps_per_window * dt
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = mode_chain_amplitude(
+                phi,
+                w_z=setup["geometry"].w_z,
+                connectivity=setup["connectivity"],
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+        append_profile(current_time, phi, log_normalization)
+
+    return ParallelPhiTrace(
+        times=jnp.asarray(times_out, dtype=jnp.float64),
+        z=setup["parallel"].z,
+        phi_power=jnp.stack(profiles),
+        source="stellarator_gk",
+        notes=(
+            "selected-ky CBC parallel |phi|^2 profile trace; "
+            f"initial_profile={initial_profile}, "
+            f"normalize_each_window={normalize_each_window}, "
+            f"physical_power={physical_power}"
+        ),
+    )
+
+
+def compare_parallel_phi_traces(
+    observed: ParallelPhiTrace,
+    reference: ParallelPhiTrace,
+    *,
+    tolerance: float = 1.0e-2,
+    time_tolerance: float = 1.0e-8,
+    z_tolerance: float = 1.0e-12,
+    normalize_profiles: bool = True,
+) -> ParallelPhiTraceComparisonReport:
+    """Compare two parallel ``|phi|^2`` traces at matching time and grid nodes."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if time_tolerance < 0.0:
+        raise ValueError("time_tolerance must be nonnegative")
+    if z_tolerance < 0.0:
+        raise ValueError("z_tolerance must be nonnegative")
+    if tuple(observed.phi_power.shape) != tuple(reference.phi_power.shape):
+        raise ValueError("parallel phi traces must have matching phi_power shapes")
+
+    observed_profiles = jnp.asarray(observed.phi_power, dtype=jnp.float64)
+    reference_profiles = jnp.asarray(reference.phi_power, dtype=jnp.float64)
+    if normalize_profiles:
+        observed_profiles = _normalize_profile_rows(observed_profiles)
+        reference_profiles = _normalize_profile_rows(reference_profiles)
+    profile_errors = jnp.max(jnp.abs(observed_profiles - reference_profiles), axis=1)
+    max_abs_error = jnp.max(profile_errors)
+    time_error = _max_abs_error(observed.times, reference.times)
+    z_error = _max_abs_error(observed.z, reference.z)
+    passed = jnp.logical_and(
+        max_abs_error <= tolerance,
+        jnp.logical_and(time_error <= time_tolerance, z_error <= z_tolerance),
+    )
+    return ParallelPhiTraceComparisonReport(
+        profile_errors=profile_errors,
+        max_abs_error=max_abs_error,
+        time_error=time_error,
+        z_error=z_error,
+        passed=passed,
+        normalized_profiles=normalize_profiles,
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "parallel |phi|^2 profile comparison"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -2201,6 +2534,24 @@ def _numeric_rows(path: Path) -> list[list[float]]:
         except ValueError:
             continue
     return rows
+
+
+def _gkw_time_dat_times(path) -> np.ndarray:
+    rows = _numeric_rows(Path(path))
+    if not rows:
+        raise ValueError("GKW time.dat contains no rows")
+    if any(len(row) < 2 for row in rows):
+        raise ValueError("GKW time.dat rows must contain at least time and growth")
+    times = np.asarray([row[0] for row in rows], dtype=float)
+    if not np.all(np.isfinite(times)):
+        raise ValueError("GKW time.dat contains non-finite times")
+    return times
+
+
+def _normalize_profile_rows(values, floor: float = 1.0e-300):
+    values = jnp.asarray(values, dtype=jnp.float64)
+    row_sum = jnp.sum(values, axis=1, keepdims=True)
+    return values / jnp.maximum(row_sum, jnp.asarray(floor, dtype=values.dtype))
 
 
 def _load_gx_block_eik_geometry_reference(path: Path, text: str) -> GxEikGeometryReference:

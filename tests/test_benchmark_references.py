@@ -27,9 +27,11 @@ from stellarator_gk import (
     cyclone_base_case_growth_target,
     compare_cyclone_base_case_traces,
     compare_geometry_to_gx_eik_reference,
+    compare_parallel_phi_traces,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
     load_cyclone_trace_csv,
+    load_gkw_parallel_phi_trace,
     load_gkw_time_dat_trace,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
@@ -38,6 +40,7 @@ from stellarator_gk import (
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_term_parity_audit,
+    run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
@@ -501,6 +504,75 @@ def test_gkw_time_dat_trace_loader_rejects_invalid_time_grid(tmp_path):
 
     with pytest.raises(ValueError, match="strictly increasing"):
         load_gkw_time_dat_trace(path)
+
+
+def test_gkw_parallel_phi_trace_loader_compares_row_normalized_profiles(tmp_path):
+    phi_path = tmp_path / "parallel_phi.dat"
+    time_path = tmp_path / "time.dat"
+    phi_path.write_text("1.0 2.0 1.0\n2.0 4.0 2.0\n")
+    time_path.write_text("0.1 0.2\n0.2 0.3\n")
+
+    reference = load_gkw_parallel_phi_trace(
+        phi_path,
+        time_path=time_path,
+        z=(-1.0, 0.0, 1.0),
+        source="gkw-parphi-fixture",
+    )
+    scaled = load_gkw_parallel_phi_trace(
+        phi_path,
+        times=(0.1, 0.2),
+        z=(-1.0, 0.0, 1.0),
+        source="scaled",
+    )
+    scaled = replace(scaled, phi_power=10.0 * scaled.phi_power)
+    normalized_report = compare_parallel_phi_traces(reference, scaled)
+    absolute_report = compare_parallel_phi_traces(
+        reference,
+        scaled,
+        normalize_profiles=False,
+    )
+
+    assert reference.times.shape == (2,)
+    assert reference.z.shape == (3,)
+    assert reference.phi_power.shape == (2, 3)
+    assert reference.source == "gkw-parphi-fixture"
+    assert "parallel_phi.dat" in reference.notes
+    assert bool(normalized_report.passed)
+    assert not bool(absolute_report.passed)
+    np.testing.assert_allclose(normalized_report.max_abs_error, 0.0)
+
+
+def test_gkw_parallel_phi_loader_reads_matched_selected_ky_fixture():
+    path = ROOT / "fixtures/gkw_cyclone_selected_ky_parallel_phi.dat"
+    time_path = ROOT / "fixtures/gkw_cyclone_selected_ky_time.dat"
+    trace = load_gkw_parallel_phi_trace(path, time_path=time_path)
+
+    assert trace.times.shape == (80,)
+    assert trace.phi_power.shape == (80, 48)
+    assert jnp.all(jnp.isfinite(trace.phi_power))
+    assert jnp.all(trace.phi_power >= 0.0)
+    np.testing.assert_allclose(trace.times[0], 0.06)
+    np.testing.assert_allclose(trace.times[-1], 4.79997)
+
+
+def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
+    trace = run_cyclone_base_case_parallel_phi_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine",
+    )
+    comparison = compare_parallel_phi_traces(trace, trace)
+
+    assert trace.times.shape == (2,)
+    np.testing.assert_allclose(trace.times, jnp.asarray([0.006, 0.012]))
+    assert trace.phi_power.shape == (2, 8)
+    assert jnp.all(jnp.isfinite(trace.phi_power))
+    assert jnp.all(trace.phi_power >= 0.0)
+    assert "initial_profile=cosine" in trace.notes
+    assert bool(comparison.passed)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():
