@@ -98,6 +98,9 @@ def _run_rh_plateau_gate(args):
         t_start=args.rh_t_start,
         diagnostic_interval=args.rh_diagnostic_interval,
         parallel_recurrence_rate=args.rh_disp_par,
+        velocity_recurrence_rate=args.rh_disp_vp,
+        parallel_backend=args.rh_parallel_backend,
+        velocity_backend=args.rh_velocity_backend,
         z_modal_damping=args.rh_z_modal_damping,
         vpar_modal_damping=args.rh_vpar_modal_damping,
         mu_modal_damping=args.rh_mu_modal_damping,
@@ -154,13 +157,16 @@ def _parse_args():
     parser.add_argument("--rh-plateau", action="store_true")
     parser.add_argument("--desc-eik", action="store_true")
     parser.add_argument("--gx-gist-suite", action="store_true")
-    parser.add_argument("--rh-plateau-n-z", type=int, default=16)
-    parser.add_argument("--rh-plateau-n-vpar", type=int, default=16)
-    parser.add_argument("--rh-plateau-n-mu", type=int, default=8)
+    parser.add_argument("--rh-plateau-n-z", type=int, default=64)
+    parser.add_argument("--rh-plateau-n-vpar", type=int, default=64)
+    parser.add_argument("--rh-plateau-n-mu", type=int, default=16)
     parser.add_argument("--rh-t-end", type=float, default=100.0)
     parser.add_argument("--rh-t-start", type=float, default=80.0)
     parser.add_argument("--rh-diagnostic-interval", type=float, default=1.0)
     parser.add_argument("--rh-disp-par", type=float, default=0.01)
+    parser.add_argument("--rh-disp-vp", type=float, default=0.08)
+    parser.add_argument("--rh-parallel-backend", default="finite_difference")
+    parser.add_argument("--rh-velocity-backend", default="finite_difference")
     parser.add_argument("--cyclone-disp-par", type=float, default=1.0)
     parser.add_argument("--rh-z-modal-damping", type=float, default=0.0)
     parser.add_argument("--rh-vpar-modal-damping", type=float, default=0.0)

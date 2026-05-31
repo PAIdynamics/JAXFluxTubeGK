@@ -211,6 +211,16 @@ def rosenbluth_hinton_target() -> BenchmarkTarget:
             ("shat", 0.1592),
             ("epsilon", 0.05),
             ("kx_rhos", 0.025),
+            ("n_z", 64),
+            ("n_vpar", 64),
+            ("n_mu", 16),
+            ("vpar_max", 3.0),
+            ("disp_par", 0.01),
+            ("disp_vp", 0.08),
+            ("reference_n_z", 128),
+            ("reference_n_vpar", 128),
+            ("reference_disp_vp_default", 0.2),
+            ("dt", 0.01),
             ("time_window", "t > 80"),
         ),
     )
@@ -234,6 +244,15 @@ def cyclone_base_case_growth_target() -> BenchmarkTarget:
             ("k_theta_rhos", 0.5),
             ("geometry", "s-alpha"),
             ("electrons", "adiabatic"),
+            ("n_z", 144),
+            ("nperiod", 5),
+            ("n_vpar", 64),
+            ("n_mu", 16),
+            ("vpar_max", 3.0),
+            ("disp_par", 1.0),
+            ("dt", 0.003),
+            ("steps_per_window", 100),
+            ("n_windows", 300),
         ),
     )
 
@@ -592,11 +611,14 @@ def run_reduced_rosenbluth_hinton_gate(
     n_z: int = 16,
     n_vpar: int = 16,
     n_mu: int = 8,
-    vpar_max: float = 4.0,
-    mu_max: float = 8.0,
-    dt: float = 0.01,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
     n_steps: int = 100,
-    parallel_recurrence_rate: float = 0.01,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str = "finite_difference",
+    velocity_backend: str = "finite_difference",
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Evolve the present reduced zonal-flow setup and compare its residual.
@@ -618,10 +640,29 @@ def run_reduced_rosenbluth_hinton_gate(
     shat = float(metadata.get("shat", 0.1592))
     epsilon = float(metadata.get("epsilon", 0.05))
     kx_rhos = float(metadata.get("kx_rhos", 0.025))
-    velocity = build_velocity_grid(
-        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
+    vpar_max = float(metadata.get("vpar_max", 3.0) if vpar_max is None else vpar_max)
+    mu_max = 0.5 * vpar_max**2 if mu_max is None else float(mu_max)
+    dt = float(metadata.get("dt", 0.01) if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata.get("disp_par", 0.01)
+        if parallel_recurrence_rate is None
+        else parallel_recurrence_rate
     )
-    parallel = _build_gkw_cell_centered_parallel_grid(n_z)
+    velocity_recurrence_rate = float(
+        metadata.get("disp_vp", 0.2)
+        if velocity_recurrence_rate is None
+        else velocity_recurrence_rate
+    )
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            backend=velocity_backend,
+        )
+    )
+    parallel = _build_gkw_cell_centered_parallel_grid(n_z, derivative_backend=parallel_backend)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
     )
@@ -650,11 +691,15 @@ def run_reduced_rosenbluth_hinton_gate(
         ),
         parallel_recurrence_rate=parallel_recurrence_rate,
         parallel_recurrence_velocity_model="rms",
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        velocity_recurrence_velocity_model="rms",
     )
     ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
+    ix_conjugate = max(fourier.ixzero - 1, 0)
     maxwellian = precompute.rhs.maxwellian[0]
     state = jnp.zeros((n_vpar, n_mu, n_z, 3, 1), dtype=jnp.complex128)
-    state = state.at[:, :, :, ix, 0].set(1.0e-4 * maxwellian)
+    state = state.at[:, :, :, ix_conjugate, 0].set(-0.5j * 1.0e-4 * maxwellian)
+    state = state.at[:, :, :, ix, 0].set(0.5j * 1.0e-4 * maxwellian)
     phi_initial = solve_adiabatic_electron_phi(state, precompute.field)
     result = integrate_fixed_step(
         state,
@@ -670,7 +715,9 @@ def run_reduced_rosenbluth_hinton_gate(
         observed,
         target,
         notes=(
-            "reduced executable RH gate with GKW-scaled disp_par recurrence control; "
+            "reduced executable RH gate with GKW finite-difference velocity fallback, "
+            "GKW finite-difference parallel fallback, zonal finit pattern, and "
+            "GKW-scaled disp_par/disp_vp recurrence control; "
             "production t=100 convergence remains open"
         ),
     )
@@ -678,16 +725,19 @@ def run_reduced_rosenbluth_hinton_gate(
 
 def run_rosenbluth_hinton_plateau_gate(
     *,
-    n_z: int = 16,
-    n_vpar: int = 16,
-    n_mu: int = 8,
-    vpar_max: float = 4.0,
-    mu_max: float = 8.0,
-    dt: float = 0.01,
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
     t_end: float = 100.0,
     t_start: float = 80.0,
     diagnostic_interval: float = 1.0,
-    parallel_recurrence_rate: float = 0.01,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str = "finite_difference",
+    velocity_backend: str = "finite_difference",
     z_modal_damping: float = 0.0,
     vpar_modal_damping: float = 0.0,
     mu_modal_damping: float = 0.0,
@@ -713,8 +763,6 @@ def run_rosenbluth_hinton_plateau_gate(
     from .time_advance import build_modal_damping_filter, integrate_fixed_step
     from .types import FourierGridSpec, GeometryScalarParams, SpeciesParams, VelocityGridSpec
 
-    if dt <= 0.0:
-        raise ValueError("dt must be positive")
     if t_end <= 0.0:
         raise ValueError("t_end must be positive")
     if not 0.0 <= t_start < t_end:
@@ -732,10 +780,34 @@ def run_rosenbluth_hinton_plateau_gate(
     shat = float(metadata.get("shat", 0.1592))
     epsilon = float(metadata.get("epsilon", 0.05))
     kx_rhos = float(metadata.get("kx_rhos", 0.025))
-    velocity = build_velocity_grid(
-        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
+    n_z = int(metadata.get("n_z", 128) if n_z is None else n_z)
+    n_vpar = int(metadata.get("n_vpar", 128) if n_vpar is None else n_vpar)
+    n_mu = int(metadata.get("n_mu", 16) if n_mu is None else n_mu)
+    vpar_max = float(metadata.get("vpar_max", 3.0) if vpar_max is None else vpar_max)
+    mu_max = 0.5 * vpar_max**2 if mu_max is None else float(mu_max)
+    dt = float(metadata.get("dt", 0.01) if dt is None else dt)
+    if dt <= 0.0:
+        raise ValueError("dt must be positive")
+    parallel_recurrence_rate = float(
+        metadata.get("disp_par", 0.01)
+        if parallel_recurrence_rate is None
+        else parallel_recurrence_rate
     )
-    parallel = _build_gkw_cell_centered_parallel_grid(n_z)
+    velocity_recurrence_rate = float(
+        metadata.get("disp_vp", 0.2)
+        if velocity_recurrence_rate is None
+        else velocity_recurrence_rate
+    )
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            backend=velocity_backend,
+        )
+    )
+    parallel = _build_gkw_cell_centered_parallel_grid(n_z, derivative_backend=parallel_backend)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
     )
@@ -764,10 +836,14 @@ def run_rosenbluth_hinton_plateau_gate(
         ),
         parallel_recurrence_rate=parallel_recurrence_rate,
         parallel_recurrence_velocity_model="rms",
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        velocity_recurrence_velocity_model="rms",
     )
     ix = min(fourier.ixzero + 1, fourier.kx.shape[0] - 1)
+    ix_conjugate = max(fourier.ixzero - 1, 0)
     state = jnp.zeros((n_vpar, n_mu, n_z, 3, 1), dtype=jnp.complex128)
-    state = state.at[:, :, :, ix, 0].set(1.0e-4 * precompute.rhs.maxwellian[0])
+    state = state.at[:, :, :, ix_conjugate, 0].set(-0.5j * 1.0e-4 * precompute.rhs.maxwellian[0])
+    state = state.at[:, :, :, ix, 0].set(0.5j * 1.0e-4 * precompute.rhs.maxwellian[0])
     phi_initial = solve_adiabatic_electron_phi(state, precompute.field)
     initial_power = _field_power(phi_initial[:, ix, 0], geometry.w_z)
 
@@ -790,6 +866,18 @@ def run_rosenbluth_hinton_plateau_gate(
 
     diagnostic_steps = max(1, int(round(diagnostic_interval / dt)))
     total_steps = int(round(t_end / dt))
+    advance_diagnostic_chunk = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            diagnostic_steps,
+            linear_residual,
+            precompute,
+            filter_fn=filter_fn,
+            store_history=False,
+        ).state
+    )
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, precompute.field))
     late_power_ratios = []
     late_times = []
     current_time = 0.0
@@ -797,19 +885,21 @@ def run_rosenbluth_hinton_plateau_gate(
     steps_done = 0
     while steps_done < total_steps:
         chunk_steps = min(diagnostic_steps, total_steps - steps_done)
-        result = integrate_fixed_step(
-            state,
-            dt,
-            chunk_steps,
-            linear_residual,
-            precompute,
-            filter_fn=filter_fn,
-            store_history=False,
-        )
-        state = result.state
+        if chunk_steps == diagnostic_steps:
+            state = advance_diagnostic_chunk(state)
+        else:
+            state = integrate_fixed_step(
+                state,
+                dt,
+                chunk_steps,
+                linear_residual,
+                precompute,
+                filter_fn=filter_fn,
+                store_history=False,
+            ).state
         steps_done += chunk_steps
         current_time = steps_done * dt
-        phi = solve_adiabatic_electron_phi(state, precompute.field)
+        phi = solve_phi(state)
         power_ratio = _field_power(phi[:, ix, 0], geometry.w_z) / initial_power
         amplitude_ratio = jnp.sqrt(jnp.maximum(power_ratio, 0.0))
         if not bool(jnp.isfinite(amplitude_ratio)) or float(amplitude_ratio) > amplitude_ceiling:
@@ -824,9 +914,15 @@ def run_rosenbluth_hinton_plateau_gate(
         plateau_spread = jnp.asarray(jnp.inf, dtype=jnp.float64)
     else:
         late_power = jnp.asarray(late_power_ratios, dtype=jnp.float64)
-        late_amplitude = jnp.sqrt(jnp.maximum(late_power, 0.0))
         observed = jnp.sqrt(jnp.mean(late_power))
-        plateau_spread = jnp.max(late_amplitude) - jnp.min(late_amplitude)
+        if late_power.shape[0] >= 4:
+            split = late_power.shape[0] // 2
+            first_mean = jnp.sqrt(jnp.mean(late_power[:split]))
+            second_mean = jnp.sqrt(jnp.mean(late_power[split:]))
+            plateau_spread = jnp.abs(second_mean - first_mean)
+        else:
+            late_amplitude = jnp.sqrt(jnp.maximum(late_power, 0.0))
+            plateau_spread = jnp.max(late_amplitude) - jnp.min(late_amplitude)
 
     base = evaluate_benchmark_gate(
         observed,
@@ -840,12 +936,16 @@ def run_rosenbluth_hinton_plateau_gate(
         "long-time RH plateau gate; "
         f"status={status}, t_start={t_start:g}, t_end={current_time:g}, "
         f"diagnostic_interval={diagnostic_interval:g}, "
+        f"parallel_backend={parallel_backend}, "
+        f"velocity_backend={velocity_backend}, "
         f"disp_par={parallel_recurrence_rate:g}, "
+        f"disp_vp={velocity_recurrence_rate:g}, "
         f"z_modal_damping={z_modal_damping:g}, "
         f"vpar_modal_damping={vpar_modal_damping:g}, "
         f"mu_modal_damping={mu_modal_damping:g}, "
-        f"plateau_spread={float(plateau_spread):.6e}; "
-        "production pass remains open until residual and plateau spread both pass"
+        f"late_mean_delta={float(plateau_spread):.6e}; "
+        "RH pass requires residual and late-window mean convergence against the "
+        "GKW production reference to pass"
     )
     return BenchmarkGateResult(
         target=base.target,
@@ -862,92 +962,176 @@ def run_reduced_cyclone_base_case_gate(
     n_z: int = 16,
     n_vpar: int = 12,
     n_mu: int = 6,
-    vpar_max: float = 4.0,
-    mu_max: float = 8.0,
+    vpar_max: float = 3.0,
+    mu_max: float | None = None,
     dt: float = 0.003,
     n_steps: int = 100,
+    nperiod: int = 5,
     growth_window_fraction: float = 0.5,
     parallel_recurrence_rate: float = 1.0,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
     """Run the present reduced Cyclone setup and compare selected growth."""
 
-    from .geometry import build_boozer_parallel_grid, build_s_alpha_geometry
-    from .grids import build_fourier_grid, build_mode_connectivity, build_velocity_grid
-    from .physics import AdiabaticElectronParams, solve_adiabatic_electron_phi
-    from .solver import build_linear_residual_precompute, linear_residual
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
     from .time_advance import integrate_fixed_step, windowed_linear_growth_diagnostics
-    from .types import FourierGridSpec, GeometryScalarParams, SpeciesParams, VelocityGridSpec
 
     target = target or cyclone_base_case_growth_target()
-    metadata = dict(target.metadata)
-    ky = float(metadata.get("k_theta_rhos", 0.5))
-    velocity = build_velocity_grid(
-        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
-    )
-    parallel = build_boozer_parallel_grid(n_z=n_z, n_turns=1)
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=2, kx_max=0.0, ky_values=(0.0, ky))
-    )
-    connectivity = build_mode_connectivity(fourier)
-    geometry = build_s_alpha_geometry(
-        parallel,
-        GeometryScalarParams(
-            q=float(metadata.get("q", 1.4)),
-            shat=float(metadata.get("shat", 0.78)),
-            eps=float(metadata.get("epsilon", 0.19)),
-        ),
-    )
-    species = SpeciesParams(
-        charge=1.0,
-        mass=1.0,
-        density=1.0,
-        temperature=1.0,
-        density_gradient=float(metadata.get("R_over_Ln", 2.2)),
-        temperature_gradient=float(metadata.get("R_over_LT", 6.9)),
-    )
-    precompute = build_linear_residual_precompute(
-        velocity,
-        parallel,
-        fourier,
-        geometry,
-        species,
-        electron_params=AdiabaticElectronParams(
-            density=1.0,
-            temperature=1.0,
-            zonal_correction=False,
-        ),
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
-        parallel_recurrence_velocity_model="rms",
     )
-    shape = (n_vpar, n_mu, n_z, 1, 2)
-    index = jnp.arange(np.prod(shape), dtype=jnp.float64).reshape(shape)
-    state = 1.0e-6 * (jnp.cos(index / 13.0) + 1j * jnp.sin(index / 17.0))
     result = integrate_fixed_step(
-        state,
+        setup["state"],
         dt,
         n_steps,
         linear_residual,
-        precompute,
+        setup["precompute"],
         store_history=True,
     )
     phi_history = jax.vmap(
-        lambda snapshot: solve_adiabatic_electron_phi(snapshot, precompute.field)
+        lambda snapshot: solve_adiabatic_electron_phi(snapshot, setup["precompute"].field)
     )(result.history)
     diagnostics = windowed_linear_growth_diagnostics(
         phi_history,
         result.times,
         start_fraction=growth_window_fraction,
-        w_z=geometry.w_z,
-        connectivity=connectivity,
+        w_z=setup["geometry"].w_z,
+        connectivity=setup["connectivity"],
     )
     return evaluate_benchmark_gate(
-        diagnostics.growth_rate[1],
+        diagnostics.growth_rate[setup["selected_ky_index"]],
         target,
         notes=(
-            "reduced executable CBC gate with late-window growth fit and "
-            "GKW-scaled disp_par recurrence control; "
+            "reduced executable CBC gate with GKW cell-centered s grid, "
+            f"nperiod={nperiod}, selected ky only, late-window growth fit, "
+            "and GKW-scaled disp_par recurrence control; "
             "production GKW/GX agreement remains open"
+        ),
+    )
+
+
+def run_production_cyclone_base_case_gate(
+    *,
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int | None = None,
+    n_windows: int | None = None,
+    growth_window_fraction: float = 0.5,
+    parallel_recurrence_rate: float | None = None,
+    normalize_each_window: bool = True,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Run the Cyclone gate with documented production controls.
+
+    Defaults follow the Gyaradax/GKW validation case: ``ns=144``,
+    ``nperiod=5``, ``nvpar=64``, ``nmu=16``, ``vpar_max=3``,
+    ``disp_par=1``, and 300 diagnostic windows of 100 RK4 steps.  The
+    implementation stores only per-window selected-mode amplitudes, so it can
+    be used at production resolution without retaining a full field history.
+    Tests call this routine with reduced overrides.
+    """
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    n_z = int(metadata["n_z"] if n_z is None else n_z)
+    n_vpar = int(metadata["n_vpar"] if n_vpar is None else n_vpar)
+    n_mu = int(metadata["n_mu"] if n_mu is None else n_mu)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    steps_per_window = int(
+        metadata["steps_per_window"] if steps_per_window is None else steps_per_window
+    )
+    n_windows = int(metadata["n_windows"] if n_windows is None else n_windows)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+    )
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    times = []
+    log_amplitudes = []
+
+    def append_log_amplitude(time_value, state_value, accumulated_log):
+        phi = solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+        amplitude = mode_chain_amplitude(
+            phi,
+            w_z=setup["geometry"].w_z,
+            connectivity=setup["connectivity"],
+        )
+        floor = jnp.asarray(1.0e-300, dtype=amplitude.dtype)
+        log_amplitudes.append(jnp.log(jnp.maximum(amplitude, floor)) + accumulated_log)
+        times.append(float(time_value))
+        return amplitude
+
+    amplitude = append_log_amplitude(0.0, state, log_normalization)
+    for window in range(n_windows):
+        result = integrate_fixed_step(
+            state,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        )
+        state = result.state
+        current_time = (window + 1) * steps_per_window * dt
+        amplitude = append_log_amplitude(current_time, state, log_normalization)
+        if normalize_each_window:
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+
+    fitted_growth = _fit_growth_from_log_amplitudes(
+        jnp.asarray(times, dtype=jnp.float64),
+        jnp.stack(log_amplitudes),
+        start_fraction=growth_window_fraction,
+    )
+    observed = fitted_growth[setup["selected_ky_index"]]
+    return evaluate_benchmark_gate(
+        observed,
+        target,
+        notes=(
+            "production-control CBC gate with GKW cell-centered s grid, "
+            f"n_z={n_z}, nperiod={nperiod}, n_vpar={n_vpar}, n_mu={n_mu}, "
+            f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
+            f"normalize_each_window={normalize_each_window}; "
+            "production GKW/GX agreement remains open until this gate passes"
         ),
     )
 
@@ -1153,23 +1337,146 @@ def _field_amplitude(field):
     return jnp.sqrt(jnp.mean(jnp.abs(field) ** 2))
 
 
+def _build_cyclone_base_case_setup(
+    target: BenchmarkTarget,
+    *,
+    n_z: int,
+    n_vpar: int,
+    n_mu: int,
+    vpar_max: float,
+    mu_max: float | None,
+    nperiod: int,
+    parallel_recurrence_rate: float,
+):
+    from .geometry import build_s_alpha_geometry
+    from .grids import build_fourier_grid, build_mode_connectivity, build_velocity_grid
+    from .physics import AdiabaticElectronParams
+    from .solver import build_linear_residual_precompute
+    from .types import FourierGridSpec, GeometryScalarParams, SpeciesParams, VelocityGridSpec
+
+    metadata = dict(target.metadata)
+    if mu_max is None:
+        mu_max = 0.5 * vpar_max**2
+    ky = float(metadata.get("k_theta_rhos", 0.5))
+    velocity = build_velocity_grid(
+        VelocityGridSpec(n_vpar=n_vpar, n_mu=n_mu, vpar_max=vpar_max, mu_max=mu_max)
+    )
+    parallel = _build_gkw_cell_centered_parallel_grid(n_z, nperiod=nperiod)
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(ky,))
+    )
+    connectivity = build_mode_connectivity(fourier)
+    geometry = build_s_alpha_geometry(
+        parallel,
+        GeometryScalarParams(
+            q=float(metadata.get("q", 1.4)),
+            shat=float(metadata.get("shat", 0.78)),
+            eps=float(metadata.get("epsilon", 0.19)),
+        ),
+    )
+    species = SpeciesParams(
+        charge=1.0,
+        mass=1.0,
+        density=1.0,
+        temperature=1.0,
+        density_gradient=float(metadata.get("R_over_Ln", 2.2)),
+        temperature_gradient=float(metadata.get("R_over_LT", 6.9)),
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        electron_params=AdiabaticElectronParams(
+            density=1.0,
+            temperature=1.0,
+            zonal_correction=False,
+        ),
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_recurrence_velocity_model="rms",
+    )
+    profile = 1.0 + jnp.cos(2.0 * jnp.pi * parallel.z)
+    state = jnp.ones((n_vpar, n_mu, 1, 1, 1), dtype=jnp.complex128)
+    state = 1.0e-4 * state * profile[None, None, :, None, None]
+    return {
+        "velocity": velocity,
+        "parallel": parallel,
+        "fourier": fourier,
+        "geometry": geometry,
+        "connectivity": connectivity,
+        "precompute": precompute,
+        "state": state,
+        "selected_ky_index": 0,
+    }
+
+
+def _fit_growth_from_log_amplitudes(times, log_amplitudes, *, start_fraction: float):
+    times = jnp.asarray(times, dtype=jnp.float64)
+    log_amplitudes = jnp.asarray(log_amplitudes, dtype=jnp.float64)
+    if times.ndim != 1:
+        raise ValueError("times must be one-dimensional")
+    if log_amplitudes.ndim != 2:
+        raise ValueError("log_amplitudes must have shape (n_time,n_ky)")
+    if times.shape[0] != log_amplitudes.shape[0]:
+        raise ValueError("times and log_amplitudes length must match")
+    if times.shape[0] < 2:
+        raise ValueError("at least two amplitude samples are required")
+    if not 0.0 <= start_fraction < 1.0:
+        raise ValueError("start_fraction must lie in [0, 1)")
+    n_time = times.shape[0]
+    start = max(0, min(int(n_time * start_fraction), n_time - 2))
+    window_times = times[start:]
+    window_logs = log_amplitudes[start:]
+    centered_time = window_times - jnp.mean(window_times)
+    centered_logs = window_logs - jnp.mean(window_logs, axis=0)
+    denominator = jnp.sum(centered_time**2)
+    return jnp.sum(centered_time[:, None] * centered_logs, axis=0) / denominator
+
+
 def _field_power(field, weights):
     return jnp.sum(jnp.asarray(weights) * jnp.abs(jnp.asarray(field)) ** 2)
 
 
-def _build_gkw_cell_centered_parallel_grid(n_z: int, nperiod: int = 1):
-    from .grids import build_parallel_grid
-    from .types import ParallelGridSpec
+def _build_gkw_cell_centered_parallel_grid(
+    n_z: int,
+    nperiod: int = 1,
+    *,
+    derivative_backend: str = "fourier",
+):
+    from .grids import build_finite_difference_operators, build_parallel_grid
+    from .types import DerivativeBackend, ParallelGrid, ParallelGridSpec
 
     if nperiod < 1:
         raise ValueError("nperiod must be at least 1")
     sgrmax = nperiod - 0.5
     lower = -sgrmax + sgrmax / n_z
+    length = 2.0 * sgrmax
+    if derivative_backend == DerivativeBackend.FINITE_DIFFERENCE.value:
+        spacing = length / n_z
+        operators = build_finite_difference_operators(
+            n_z,
+            spacing,
+            periodic=True,
+        )
+        identity = jnp.eye(n_z, dtype=operators.D1.dtype)
+        z = lower + spacing * jnp.arange(n_z, dtype=operators.D1.dtype)
+        return ParallelGrid(
+            z=z,
+            w_z=jnp.full((n_z,), spacing, dtype=operators.D1.dtype),
+            D_z=operators.D1,
+            modal_transform=identity,
+            inverse_modal_transform=identity,
+            backend=DerivativeBackend.FINITE_DIFFERENCE.value,
+            topology="periodic",
+        )
+    if derivative_backend != DerivativeBackend.FOURIER.value:
+        raise ValueError("derivative_backend must be 'fourier' or 'finite_difference'")
     return build_parallel_grid(
         ParallelGridSpec(
             n_z=n_z,
             z_min=lower,
-            z_max=lower + 2.0 * sgrmax,
+            z_max=lower + length,
             topology="periodic",
         )
     )

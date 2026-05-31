@@ -27,6 +27,7 @@ from stellarator_gk import (
     parallel_field_drive,
     parallel_recurrence_control,
     parallel_streaming,
+    velocity_recurrence_control,
 )
 
 
@@ -205,6 +206,76 @@ def test_parallel_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
     np.testing.assert_allclose(
         precompute.rhs.parallel_recurrence_coeff,
         jnp.broadcast_to(expected, precompute.rhs.parallel_recurrence_coeff.shape),
+        rtol=1e-13,
+        atol=1e-13,
+    )
+
+
+def test_gkw_scaled_velocity_recurrence_control_is_negative_semidefinite():
+    velocity, parallel, fourier, geometry, species, _precompute, _residual_precompute = _setup()
+    rate = 0.2
+    precompute = build_linear_rhs_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        velocity_recurrence_rate=rate,
+    )
+    shape = (
+        velocity.vpar.shape[0],
+        velocity.mu.shape[0],
+        parallel.z.shape[0],
+        fourier.kx.shape[0],
+        fourier.ky.shape[0],
+    )
+    profile = velocity.vpar**4 - velocity.vpar**2
+    distribution = jnp.ones(shape, dtype=jnp.complex128) * profile[:, None, None, None, None]
+
+    term = velocity_recurrence_control(
+        distribution,
+        precompute.velocity_recurrence_operator,
+        precompute.velocity_recurrence_coeff,
+    )
+    energy_rate = jnp.real(jnp.vdot(distribution, term))
+
+    assert precompute.velocity_recurrence_operator.shape == velocity.D_vpar.shape
+    assert precompute.velocity_recurrence_coeff.shape == (
+        1,
+        velocity.mu.shape[0],
+        parallel.z.shape[0],
+    )
+    assert energy_rate < 0.0
+
+
+def test_velocity_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
+    velocity, _parallel, _fourier, _geometry, _species, _precompute, _residual_precompute = _setup()
+    rate = 0.3
+    precompute = build_linear_rhs_precompute(
+        velocity,
+        _parallel,
+        _fourier,
+        _geometry,
+        _species,
+        velocity_recurrence_rate=rate,
+    )
+
+    mu_abs = jnp.abs(velocity.mu)[None, :, None]
+    safe_mu_abs = jnp.where(mu_abs > 1.0e-300, mu_abs, 1.0)
+    scale = jnp.where(
+        mu_abs > 1.0e-300,
+        jnp.abs(precompute.mirror_force_coeff) / safe_mu_abs,
+        0.0,
+    )
+    expected = rate * jnp.sqrt(jnp.mean(velocity.mu**2)) * jnp.max(
+        scale,
+        axis=1,
+        keepdims=True,
+    )
+
+    np.testing.assert_allclose(
+        precompute.velocity_recurrence_coeff,
+        jnp.broadcast_to(expected, precompute.velocity_recurrence_coeff.shape),
         rtol=1e-13,
         atol=1e-13,
     )

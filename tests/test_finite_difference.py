@@ -3,8 +3,10 @@ import numpy as np
 
 from stellarator_gk import (
     ParallelGridSpec,
+    VelocityGridSpec,
     build_finite_difference_operators,
     build_parallel_grid,
+    build_velocity_grid,
 )
 
 
@@ -58,3 +60,22 @@ def test_periodic_finite_difference_differentiates_smooth_periodic_data():
 
     np.testing.assert_allclose(ops.D1 @ f, exact, rtol=2e-5, atol=2e-5)
 
+
+def test_finite_difference_velocity_grid_matches_gkw_cell_centers_and_weights():
+    grid = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=4,
+            vpar_max=3.0,
+            mu_max=4.5,
+            backend="finite_difference",
+        )
+    )
+
+    np.testing.assert_allclose(grid.vpar[0], -3.0 + 3.0 / 8.0)
+    np.testing.assert_allclose(grid.vpar[-1], 3.0 - 3.0 / 8.0)
+    np.testing.assert_allclose(jnp.sum(grid.w_vpar), 6.0)
+    np.testing.assert_allclose(jnp.sum(grid.w_mu), 2.0 * np.pi * 4.5)
+    assert grid.D_vpar.shape == (8, 8)
+    assert grid.D_mu.shape == (4, 4)
+    assert grid.backend == "finite_difference"

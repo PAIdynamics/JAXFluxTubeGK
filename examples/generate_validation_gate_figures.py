@@ -117,22 +117,14 @@ def _run_rh_plateau_points() -> list[RhPlateauPoint]:
 
 def _run_gate_summary(rh_plateau_point: RhPlateauPoint) -> list[GateSummary]:
     reduced_rh = run_reduced_rosenbluth_hinton_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
+    rh_plateau = run_rosenbluth_hinton_plateau_gate()
     cyclone = run_reduced_cyclone_base_case_gate(n_z=8, n_vpar=6, n_mu=4, n_steps=5)
     eik = _run_eik_gate()
     desc_eik = _run_desc_eik_export_gate()
     gx_gist = _run_gx_gist_suite_gate()
     return [
         _summary_from_result("RH endpoint", reduced_rh),
-        GateSummary(
-            label="RH plateau",
-            gate="rosenbluth_hinton_q13_eps005",
-            status="PASS" if rh_plateau_point.passed else "OPEN",
-            observed=rh_plateau_point.observed,
-            reference=rh_plateau_point.reference,
-            residual=rh_plateau_point.residual,
-            tolerance=1.0e-3,
-            notes=rh_plateau_point.notes,
-        ),
+        _summary_from_result("RH plateau", rh_plateau),
         _summary_from_result("Cyclone", cyclone),
         _summary_from_result("GX/eik", eik),
         _summary_from_result("DESC/eik", desc_eik),

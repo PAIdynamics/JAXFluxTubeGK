@@ -78,6 +78,7 @@ from .benchmarks import (
     run_geometry_to_gx_eik_export_gate,
     run_gx_gist_external_eik_suite_gate,
     run_gx_eik_geometry_gate,
+    run_production_cyclone_base_case_gate,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
@@ -191,6 +192,7 @@ from .physics import (
     thermodynamic_drive_factor,
     thermal_speed,
     truncated_gamma0_from_laguerre,
+    velocity_recurrence_control,
     velocity_grid_to_spectral,
 )
 from .solver import (
@@ -375,6 +377,7 @@ __all__ = [
     "run_geometry_to_gx_eik_export_gate",
     "run_gx_gist_external_eik_suite_gate",
     "run_gx_eik_geometry_gate",
+    "run_production_cyclone_base_case_gate",
     "run_rosenbluth_hinton_plateau_gate",
     "run_reduced_cyclone_base_case_gate",
     "run_reduced_rosenbluth_hinton_gate",
@@ -399,6 +402,7 @@ __all__ = [
     "thermal_speed",
     "total_radial_flux",
     "truncated_gamma0_from_laguerre",
+    "velocity_recurrence_control",
     "TimeAdvanceResult",
     "toy_gradient_descent_step",
     "velocity_grid_to_spectral",

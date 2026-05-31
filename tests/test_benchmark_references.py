@@ -34,6 +34,7 @@ from stellarator_gk import (
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
+    run_production_cyclone_base_case_gate,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
@@ -53,6 +54,17 @@ def test_named_benchmark_targets_and_costs_are_differentiable():
     np.testing.assert_allclose(cyclone.reference_value, 0.179)
     assert rh.quantity == "zonal_residual"
     assert cyclone.quantity == "selected_growth_rate"
+    cyclone_metadata = dict(cyclone.metadata)
+    rh_metadata = dict(rh.metadata)
+    assert rh_metadata["n_z"] == 64
+    assert rh_metadata["n_vpar"] == 64
+    assert rh_metadata["n_mu"] == 16
+    assert rh_metadata["disp_vp"] == 0.08
+    assert rh_metadata["reference_n_z"] == 128
+    assert cyclone_metadata["nperiod"] == 5
+    assert cyclone_metadata["n_z"] == 144
+    assert cyclone_metadata["n_vpar"] == 64
+    assert cyclone_metadata["n_mu"] == 16
     assert rosenbluth_hinton_residual(1.3, 0.05) > rh.reference_value
 
     value = jnp.asarray(0.2)
@@ -252,6 +264,24 @@ def test_reduced_rh_and_cyclone_validation_gates_run_and_report_current_gap():
     assert "production" in rh.notes
     assert "production" in cyclone.notes
     assert "window" in cyclone.notes
+    assert "nperiod=5" in cyclone.notes
+    assert "selected ky only" in cyclone.notes
+
+
+def test_production_cyclone_gate_runs_with_reduced_overrides():
+    cyclone = run_production_cyclone_base_case_gate(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+    )
+
+    assert cyclone.target.name == "cyclone_base_case_gkw_kt05"
+    assert jnp.isfinite(cyclone.observed_value)
+    assert jnp.isfinite(cyclone.cost)
+    assert "production-control CBC gate" in cyclone.notes
+    assert "nperiod=5" in cyclone.notes
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

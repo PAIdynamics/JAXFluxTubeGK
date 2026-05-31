@@ -19,14 +19,24 @@ from .types import (
 
 
 def build_velocity_grid(spec: VelocityGridSpec) -> VelocityGrid:
-    """Build Chebyshev-Lobatto velocity nodes, weights, derivatives, and transforms."""
+    """Build velocity nodes, weights, derivatives, and transforms."""
 
-    vpar, w_vpar, d_vpar, t_vpar, ti_vpar = _chebyshev_collocation(
-        spec.n_vpar, -spec.vpar_max, spec.vpar_max, spec.dtype
-    )
-    mu, w_mu, d_mu, t_mu, ti_mu = _chebyshev_collocation(
-        spec.n_mu, 0.0, spec.mu_max, spec.dtype
-    )
+    if spec.backend == DerivativeBackend.CHEBYSHEV.value:
+        vpar, w_vpar, d_vpar, t_vpar, ti_vpar = _chebyshev_collocation(
+            spec.n_vpar, -spec.vpar_max, spec.vpar_max, spec.dtype
+        )
+        mu, w_mu, d_mu, t_mu, ti_mu = _chebyshev_collocation(
+            spec.n_mu, 0.0, spec.mu_max, spec.dtype
+        )
+    elif spec.backend == DerivativeBackend.FINITE_DIFFERENCE.value:
+        vpar, w_vpar, d_vpar, t_vpar, ti_vpar = _gkw_velocity_collocation(
+            spec.n_vpar, spec.vpar_max, spec.dtype
+        )
+        mu, w_mu, d_mu, t_mu, ti_mu = _gkw_mu_collocation(
+            spec.n_mu, spec.mu_max, spec.dtype
+        )
+    else:
+        raise ValueError(f"unsupported velocity backend {spec.backend!r}")
     return VelocityGrid(
         vpar=vpar,
         mu=mu,
@@ -38,7 +48,7 @@ def build_velocity_grid(spec: VelocityGridSpec) -> VelocityGrid:
         vpar_inverse_modal_transform=ti_vpar,
         mu_modal_transform=t_mu,
         mu_inverse_modal_transform=ti_mu,
-        backend=DerivativeBackend.CHEBYSHEV.value,
+        backend=spec.backend,
     )
 
 
@@ -170,6 +180,40 @@ def _chebyshev_collocation(n: int, lower: float, upper: float, dtype: str):
         jnp.asarray(derivative, dtype=jax_dtype),
         jnp.asarray(modal, dtype=jax_dtype),
         jnp.asarray(inverse_modal, dtype=jax_dtype),
+    )
+
+
+def _gkw_velocity_collocation(n: int, vpar_max: float, dtype: str):
+    spacing = 2.0 * float(vpar_max) / n
+    nodes = -float(vpar_max) + spacing * (np.arange(n, dtype=float) + 0.5)
+    weights = np.full(n, spacing, dtype=float)
+    operators = build_finite_difference_operators(n, spacing, periodic=False, dtype=dtype)
+    identity = np.eye(n, dtype=float)
+    jax_dtype = jnp.dtype(dtype)
+    return (
+        jnp.asarray(nodes, dtype=jax_dtype),
+        jnp.asarray(weights, dtype=jax_dtype),
+        operators.D1,
+        jnp.asarray(identity, dtype=jax_dtype),
+        jnp.asarray(identity, dtype=jax_dtype),
+    )
+
+
+def _gkw_mu_collocation(n: int, mu_max: float, dtype: str):
+    vperp_max = np.sqrt(2.0 * float(mu_max))
+    spacing = vperp_max / n
+    vperp = spacing * (np.arange(n, dtype=float) + 0.5)
+    nodes = 0.5 * vperp**2
+    weights = 2.0 * np.pi * vperp * spacing
+    derivative = _barycentric_derivative_matrix(nodes)
+    identity = np.eye(n, dtype=float)
+    jax_dtype = jnp.dtype(dtype)
+    return (
+        jnp.asarray(nodes, dtype=jax_dtype),
+        jnp.asarray(weights, dtype=jax_dtype),
+        jnp.asarray(derivative, dtype=jax_dtype),
+        jnp.asarray(identity, dtype=jax_dtype),
+        jnp.asarray(identity, dtype=jax_dtype),
     )
 
 

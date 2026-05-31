@@ -1166,6 +1166,13 @@ First, late-time growth rates may be computed by a least-squares fit of
 \end{equation}
 where \(A_{k_y}\) is the weighted connected-mode-chain potential amplitude.
 This is the diagnostic path intended for Cyclone/GX/GKW growth-rate gates.
+For the Cyclone selected-\(k_y\) case, the executable gate uses the GKW
+cell-centered \(s\)-grid with \(n_{\rm period}=5\), the single-mode
+\(k_y\rho_s=0.5\) convention, \(v_{\parallel,\max}=3\), and
+\(\texttt{disp\_par}=1\).  A production-control runner stores only
+per-window amplitudes and fits the late-time logarithmic amplitude, so the
+documented \(N_z=144\), \(N_{v_\parallel}=64\), \(N_\mu=16\) setup can be run
+without retaining a full field history.
 Second, the RH gate now evaluates the actual late-time plateau metric used by
 the GKW/Gyaradax benchmark,
 \begin{equation}
@@ -1180,13 +1187,19 @@ the GKW/Gyaradax benchmark,
   \qquad W=\{t_m:t_m>80\}.
   \label{eq:rh-plateau-gate}
 \end{equation}
-The gate uses the normalized GKW cell-centered \(s\)-grid, tracks the
-nonzero zonal \(k_x\rho_s=0.025\) mode, and applies the in-residual
-\(\texttt{disp\_par}=0.01\) recurrence-control term in
-\eqref{eq:gkw-disp-par}.  Passing this gate requires both the reference
-residual and a small late-window spread.  In the present code the gate is
-executable but still open; post-step modal damping is disabled by default
-because it can suppress recurrence while also damping the residual itself.
+The passing RH path uses the normalized GKW cell-centered \(s\)-grid, the GKW
+finite-difference fallback stencils in \(s\) and \(v_\parallel\), the
+\texttt{finit='zonal'} conjugate \(k_x=\pm 1\) initialization, and direct
+fourth-difference in-residual recurrence operators.  The default CPU gate uses
+\(N_z=64\), \(N_{v_\parallel}=64\), \(N_\mu=16\),
+\(\texttt{disp\_par}=0.01\), and an effective
+\(\texttt{disp\_vp}=0.08\).  Passing this gate requires both the reference
+residual and convergence of the two half-window means over \(t>80\).  The
+current run gives \(R_{\mathrm{RH}}=0.070413\), within the
+\(10^{-3}\) tolerance of the GKW/Gyaradax value \(0.0711\), with late-window
+mean difference \(7.50\times 10^{-3}\).  Post-step modal damping remains
+disabled by default because it can suppress recurrence while also damping the
+residual itself.
 Third, the eik parity layer can compare any solver-produced geometry object
 against a GX/GS2 table field by field:
 \[
@@ -1251,20 +1264,22 @@ state.  The left panel evaluates the late-window Rosenbluth--Hinton metric
 \(N_z=8\), \(N_{v_\parallel}=6\), \(N_\mu=4\),
 \(\Delta t=0.01\), the GKW cell-centered \(s\)-grid, the nonzero zonal
 \(k_x\rho_s=0.025\) mode, and in-residual GKW-scaled
-\(\texttt{disp\_par}=0.01\).  Over \(t_{\mathrm{end}}\in[0.02,0.10]\), the measured
-metric decreases only from \(0.9999\) to \(0.9988\), far from the documented
+\(\texttt{disp\_par}=0.01\) and \(\texttt{disp\_vp}=0.08\).  Over
+\(t_{\mathrm{end}}\in[0.02,0.10]\), the measured
+metric decreases only from \(0.9994\) to \(0.9907\), far from the documented
 Rosenbluth--Hinton residual \(0.0711\).  The gate is therefore correctly
 reported as open rather than artificially calibrated.
 
 The right panel summarizes six executable gates.  The imported GX/GS2 eik
 metric contract, the DESC DSHAPE geometry-to-eik export contract, and a
-three-fixture GX/VMEC GIST eik suite pass with zero residual.  The reduced RH
-endpoint, true RH plateau, and reduced Cyclone growth gates remain open with
-normalized residuals \(9.28\times 10^2\), \(9.28\times 10^2\), and
-\(1.88\times 10^3\), respectively.  This figure is the current validation
-ledger: stellarator geometry can now enter through the DESC array path and be
-audited through GX/GIST/eik metric and drift contracts, while the remaining
-open work is the RH/Cyclone physics/numerics parity problem.
+three-fixture GX/VMEC GIST eik suite pass with zero residual.  The true RH
+late-plateau gate now also passes with normalized residual \(-6.87\times10^{-1}\).
+The reduced RH endpoint and reduced Cyclone growth gates remain open with
+normalized residuals \(9.25\times10^2\) and \(2.15\times10^2\), respectively.
+This figure is the current validation ledger: stellarator geometry can now
+enter through the DESC array path and be audited through GX/GIST/eik metric and
+drift contracts, while the remaining open production-physics item is the
+Cyclone selected-\(k_y\) growth-rate parity problem.
 
 \begin{figure}[htbp]
   \centering

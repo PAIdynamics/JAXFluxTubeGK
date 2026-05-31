@@ -45,6 +45,7 @@ from .rhs_terms import (
     parallel_field_drive,
     parallel_recurrence_control,
     parallel_streaming,
+    velocity_recurrence_control,
 )
 from .velocity_moments import (
     HermiteLaguerreBasis,
@@ -135,5 +136,6 @@ __all__ = [
     "thermodynamic_drive_factor",
     "thermal_speed",
     "truncated_gamma0_from_laguerre",
+    "velocity_recurrence_control",
     "velocity_grid_to_spectral",
 ]

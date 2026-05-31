@@ -158,8 +158,8 @@ class VelocityGridSpec(_PyTreeDataclass):
     def __post_init__(self):
         backend = DerivativeBackend(self.backend)
         object.__setattr__(self, "backend", backend.value)
-        if backend is not DerivativeBackend.CHEBYSHEV:
-            raise ValueError("VelocityGridSpec currently supports only chebyshev")
+        if backend not in (DerivativeBackend.CHEBYSHEV, DerivativeBackend.FINITE_DIFFERENCE):
+            raise ValueError("VelocityGridSpec supports chebyshev or finite_difference")
         if self.n_vpar < 2:
             raise ValueError("n_vpar must be at least 2")
         if self.n_mu < 2:

@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 ## Current State
 
@@ -38,13 +38,19 @@ metric gate; the eik metric contract passes, while RH and CBC are reported as
 open against production tolerances until the physics/numerics gap is closed. A
 follow-up hardening pass adds late-window growth fitting, a calibrated reduced
 RH crossing regression hook, and solver-geometry-to-GX/GS2-eik field parity
-reports. The active RH path has now been replaced by a true late-time plateau
-gate with an in-residual GKW/Gyaradax-scaled `disp_par` recurrence-control
-term; it is executable but still OPEN because the late residual does not yet
-match the production RH value. A reduced validation-gate example now writes CSV
-summaries and a paper figure that show the current RH, Cyclone, GX/eik,
-DESC/eik, and GX/GIST gate status in `main.tex`. The stellarator-geometry path
-now includes a solver-produced DESC fixture export gate for GX/GS2
+reports. The active RH path now passes a true late-time plateau gate over
+`t>80` by using GKW finite-difference fallback stencils in `s` and
+`v_parallel`, exact zonal initialization, direct fourth-difference
+`disp_par`/`disp_vp` recurrence operators inside the residual, and a
+late-window mean-convergence check. The passing CPU gate observes
+`0.07041301423095102` against the GKW/Gyaradax RH target `0.0711`. The Cyclone
+selected-`ky` gate now uses the GKW cell-centered `s` grid, `nperiod=5`, and
+single-mode `ky=0.5` convention, with a separate production-control
+amplitude-window runner. It is still OPEN.
+A reduced validation-gate example now writes CSV summaries and a paper figure
+that show the current RH, Cyclone, GX/eik, DESC/eik, and GX/GIST gate status in
+`main.tex`. The stellarator-geometry path now includes a solver-produced DESC
+fixture export gate for GX/GS2
 eik-compatible fields, so DESC arrays can be audited through the same
 metric/drift and `k_perp^2` contract before they are used in optimization. The
 external stellarator eik path now also checks three independent GX/VMEC GIST
@@ -145,33 +151,105 @@ For implementation work, use the GKW source modules as the authoritative source 
 ## Next Implementation Round
 
 Goal: close the remaining production physics gaps exposed by the executable
-validation gates after the in-residual `disp_par` recurrence-control update,
-and move from eik export self-contracts to matched DESC geometry parity:
+validation gates after the passing RH plateau update, and move from eik export
+self-contracts to matched DESC geometry parity:
 
-- diagnose and close the remaining RH residual gap beyond the implemented
-  GKW/Gyaradax-compatible recurrence-control term,
-- bring the Cyclone selected-`ky` growth rate onto the GKW/GX tolerance ladder using late-window fitting,
+- use the production-control Cyclone selected-`ky` gate to close the remaining
+  growth-rate gap against the GKW/GX tolerance ladder,
 - compare solver-produced DESC geometry against a matched independent field-by-field eik output,
 - use passing gates as prerequisites for DESC-driven optimization examples.
 
 Expected file changes:
 
-- RH residual parity work beyond the implemented GKW/Gyaradax `disp_par`
-  recurrence-control model, including finite-difference/upwind or velocity-grid
-  parity if needed,
-- Cyclone production-resolution setup and calibrated growth extraction,
+- Cyclone physics/numerics parity after the GKW-aligned selected-`ky`
+  production-control setup,
 - matched DESC/GX-convention stellarator geometry comparison fixtures,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
-- RH long-time plateau tolerance test promoted from OPEN to PASS,
 - Cyclone selected-`ky` growth-rate tolerance test promoted from OPEN to PASS,
 - matched DESC solver-produced geometry parity tolerance test,
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-30: Closed the Active RH Late-Time Plateau Gate
+
+- Added a GKW finite-difference velocity backend:
+  - cell-centered \(v_\parallel\) nodes,
+  - GKW \(2\pi v_\perp\,\Delta v_\perp\) `mu` quadrature weights,
+  - zero-fill finite-difference \(v_\parallel\) derivative fallback.
+- Added in-residual GKW `disp_vp` velocity recurrence control alongside the
+  existing `disp_par` path.
+- Corrected finite-difference recurrence operators to use the direct GKW
+  fourth-difference stencil `[-1, 4, -6, 4, -1] / (12 h)` instead of `D1^4`.
+- Updated the RH setup to use:
+  - finite-difference fallback stencils in both `s` and `v_parallel`,
+  - exact GKW/Gyaradax `finit='zonal'` conjugate \(k_x=\pm1\) initialization,
+  - `disp_par=0.01`, effective `disp_vp=0.08`,
+  - the documented \(t>80\) residual metric,
+  - a two-half late-window mean-convergence check.
+- The default RH plateau gate now passes:
+  - observed `0.07041301423095102`,
+  - target `0.0711`,
+  - normalized residual `-0.6869857690489783`,
+  - late-window mean delta `7.498586e-03`.
+- Regenerated:
+  - `figures/rh_plateau_demo.csv`,
+  - `figures/validation_gate_summary.csv`,
+  - `figures/validation_gate_status.pdf`.
+- Commands run:
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/physics/rhs_terms.py src/stellarator_gk/grids.py src/stellarator_gk/types.py examples/generate_validation_gate_figures.py examples/run_validation_gates.py tests/test_benchmark_references.py tests/test_finite_difference.py tests/test_linear_rhs.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_finite_difference.py tests/test_linear_rhs.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -u -c "from stellarator_gk import run_rosenbluth_hinton_plateau_gate; g=run_rosenbluth_hinton_plateau_gate(t_end=100,t_start=80,diagnostic_interval=1); print(float(g.observed_value), float(g.residual), bool(g.passed)); print(g.notes)"`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+- Verification results:
+  - RH plateau default gate: PASS,
+  - focused finite-difference/linear-RHS/benchmark tests: 29 passed,
+  - full pytest suite: 131 passed,
+  - full ruff: all checks passed,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - validation summary: RH plateau PASS, RH endpoint OPEN, Cyclone OPEN,
+    GX/eik PASS, DESC/eik PASS, GX/GIST PASS.
+
+### 2026-05-30: Corrected Cyclone Selected-`ky` Benchmark Setup
+
+- Committed the previous recurrence/eik hardening checkpoint:
+  - commit `4e2cf9d` (`Add GKW recurrence and external eik gates`).
+- Corrected the Cyclone gate to use the normalized GKW cell-centered parallel
+  coordinate instead of feeding a Boozer-angle grid into the \(s\)-alpha
+  geometry.
+- Updated the Cyclone setup to use the documented selected-mode convention:
+  `nperiod=5`, single `ky=0.5`, `vpar_max=3.0`, default
+  `mu_max=vpar_max^2/2`, cosine2 initial condition, and `disp_par=1.0`.
+- Added `run_production_cyclone_base_case_gate`, a memory-light production
+  control path that keeps only per-window selected-mode amplitudes and fits the
+  late-window growth rate. Tests exercise it with reduced overrides.
+- Regenerated the validation summary/figure. The corrected reduced Cyclone
+  smoke gate remains OPEN, now with observed growth `-1.9691178816845982`
+  against the GKW/Gyaradax target `0.179`.
+- Commands run:
+  - `.venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `.venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `.venv/bin/python -m pytest`
+  - `git diff --check`
+- Verification results:
+  - focused benchmark-reference tests: 12 passed,
+  - focused ruff: all checks passed,
+  - full ruff: all checks passed,
+  - full pytest suite: 128 passed,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - `git diff --check`: clean,
+  - validation summary: RH endpoint OPEN, RH plateau OPEN, Cyclone OPEN
+    (`-1.9691178816845982`), GX/eik PASS, DESC/eik PASS, GX/GIST PASS.
 
 ### 2026-05-29: Added In-Residual GKW `disp_par` Recurrence Control
 

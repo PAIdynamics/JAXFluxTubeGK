@@ -13,6 +13,7 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from ..types import FourierGrid, ParallelGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
 from .primitives import (
@@ -46,6 +47,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
     perpendicular_damping: object
     parallel_recurrence_operator: object
     parallel_recurrence_coeff: object
+    velocity_recurrence_operator: object
+    velocity_recurrence_coeff: object
     n_species: int
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
@@ -63,6 +66,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
         "perpendicular_damping",
         "parallel_recurrence_operator",
         "parallel_recurrence_coeff",
+        "velocity_recurrence_operator",
+        "velocity_recurrence_coeff",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("n_species",)
 
@@ -82,6 +87,8 @@ def build_linear_rhs_precompute(
     perpendicular_damping=None,
     parallel_recurrence_rate: float = 0.0,
     parallel_recurrence_velocity_model: str = "rms",
+    velocity_recurrence_rate: float = 0.0,
+    velocity_recurrence_velocity_model: str = "rms",
 ) -> LinearRHSPrecompute:
     """Precompute geometry/species coefficients used by the linear RHS terms."""
 
@@ -152,6 +159,16 @@ def build_linear_rhs_precompute(
         parallel_recurrence_rate,
         parallel_recurrence_velocity_model,
     )
+    velocity_recurrence_operator = _gkw_velocity_recurrence_operator(
+        velocity_grid,
+        dtype=jnp.asarray(geometry.B).dtype,
+    )
+    velocity_recurrence_coeff = _velocity_recurrence_coefficient(
+        velocity_grid.mu,
+        mirror,
+        velocity_recurrence_rate,
+        velocity_recurrence_velocity_model,
+    )
 
     return LinearRHSPrecompute(
         D_z=parallel_grid.D_z,
@@ -168,6 +185,8 @@ def build_linear_rhs_precompute(
         perpendicular_damping=damping,
         parallel_recurrence_operator=recurrence_operator,
         parallel_recurrence_coeff=recurrence_coeff,
+        velocity_recurrence_operator=velocity_recurrence_operator,
+        velocity_recurrence_coeff=velocity_recurrence_coeff,
         n_species=n_species,
     )
 
@@ -301,6 +320,29 @@ def parallel_recurrence_control(distribution, operator, coefficient):
     return _restore_distribution_shape(result, original_ndim)
 
 
+def velocity_recurrence_control(distribution, operator, coefficient):
+    """Return the GKW-scaled parallel-velocity recurrence-control term."""
+
+    distribution = jnp.asarray(distribution)
+    coefficient = jnp.asarray(coefficient)
+    if coefficient.ndim == 2:
+        n_species = 1
+        coefficient_s = coefficient[None, ...]
+    elif coefficient.ndim == 3:
+        n_species = int(coefficient.shape[0])
+        coefficient_s = coefficient
+    else:
+        raise ValueError(
+            "velocity_recurrence_coeff must have shape (n_mu,n_z) "
+            "or (n_species,n_mu,n_z)"
+        )
+    original_ndim = distribution.ndim
+    distribution_s = _distribution_with_species_axis(distribution, n_species)
+    d4_distribution = _vpar_derivative(distribution_s, operator)
+    result = coefficient_s[:, None, :, :, None, None] * d4_distribution
+    return _restore_distribution_shape(result, original_ndim)
+
+
 def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute):
     """Assemble the linear RHS for a supplied electrostatic potential."""
 
@@ -316,6 +358,11 @@ def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute)
             distribution,
             precompute.parallel_recurrence_operator,
             precompute.parallel_recurrence_coeff,
+        )
+        + velocity_recurrence_control(
+            distribution,
+            precompute.velocity_recurrence_operator,
+            precompute.velocity_recurrence_coeff,
         )
     )
 
@@ -456,10 +503,57 @@ def _gkw_parallel_recurrence_operator(parallel_grid: ParallelGrid, *, dtype):
     scaling.
     """
 
+    if parallel_grid.backend == "finite_difference":
+        spacing = float(jnp.sum(jnp.asarray(parallel_grid.w_z)) / parallel_grid.D_z.shape[0])
+        return _finite_difference_recurrence_operator(
+            parallel_grid.D_z.shape[0],
+            spacing,
+            periodic=True,
+            dtype=dtype,
+        )
     d_z = jnp.asarray(parallel_grid.D_z, dtype=dtype)
     d4 = d_z @ d_z @ d_z @ d_z
     spacing = jnp.sum(jnp.asarray(parallel_grid.w_z, dtype=dtype)) / d_z.shape[0]
     return -(spacing**3 / 12.0) * d4
+
+
+def _gkw_velocity_recurrence_operator(velocity_grid: VelocityGrid, *, dtype):
+    """Return the GKW-scaled fourth derivative operator in ``v_parallel``."""
+
+    if velocity_grid.backend == "finite_difference":
+        spacing = float(jnp.sum(jnp.asarray(velocity_grid.w_vpar)) / velocity_grid.vpar.shape[0])
+        return _finite_difference_recurrence_operator(
+            velocity_grid.vpar.shape[0],
+            spacing,
+            periodic=False,
+            dtype=dtype,
+        )
+    d_vpar = jnp.asarray(velocity_grid.D_vpar, dtype=dtype)
+    d4 = d_vpar @ d_vpar @ d_vpar @ d_vpar
+    vpar = jnp.asarray(velocity_grid.vpar, dtype=dtype)
+    spacing = (jnp.max(vpar) - jnp.min(vpar)) / jnp.asarray(vpar.shape[0] - 1, dtype=dtype)
+    if velocity_grid.backend == "finite_difference":
+        spacing = jnp.sum(jnp.asarray(velocity_grid.w_vpar, dtype=dtype)) / vpar.shape[0]
+    return -(spacing**3 / 12.0) * d4
+
+
+def _finite_difference_recurrence_operator(n: int, spacing: float, *, periodic: bool, dtype):
+    matrix = np.zeros((n, n), dtype=float)
+    coefficients = {
+        -2: -1.0 / (12.0 * spacing),
+        -1: 4.0 / (12.0 * spacing),
+        0: -6.0 / (12.0 * spacing),
+        1: 4.0 / (12.0 * spacing),
+        2: -1.0 / (12.0 * spacing),
+    }
+    for row in range(n):
+        for offset, value in coefficients.items():
+            col = row + offset
+            if periodic:
+                matrix[row, col % n] += value
+            elif 0 <= col < n:
+                matrix[row, col] += value
+    return jnp.asarray(matrix, dtype=dtype)
 
 
 def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity_model: str):
@@ -488,6 +582,34 @@ def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity
             raise ValueError("parallel_coeff must have shape (n_vpar,n_z) or (n_species,n_vpar,n_z)")
         speed = jnp.broadcast_to(speed, parallel_coeff.shape)
     return jnp.asarray(rate, dtype=parallel_coeff.dtype) * speed
+
+
+def _velocity_recurrence_coefficient(mu, mirror_coeff, rate: float, velocity_model: str):
+    if rate < 0.0:
+        raise ValueError("velocity_recurrence_rate must be nonnegative")
+    if velocity_model not in ("local", "rms"):
+        raise ValueError("velocity_recurrence_velocity_model must be 'local' or 'rms'")
+    mirror_coeff = jnp.asarray(mirror_coeff)
+    if velocity_model == "local":
+        speed = jnp.abs(mirror_coeff)
+    else:
+        mu = jnp.asarray(mu, dtype=mirror_coeff.dtype)
+        rms = jnp.sqrt(jnp.mean(mu**2))
+        eps = jnp.asarray(1.0e-300, dtype=mirror_coeff.dtype)
+        if mirror_coeff.ndim == 2:
+            mu_abs = jnp.abs(mu)[:, None]
+            safe_mu_abs = jnp.where(mu_abs > eps, mu_abs, 1.0)
+            scale = jnp.where(mu_abs > eps, jnp.abs(mirror_coeff) / safe_mu_abs, 0.0)
+            speed = rms * jnp.max(scale, axis=0, keepdims=True)
+        elif mirror_coeff.ndim == 3:
+            mu_abs = jnp.abs(mu)[None, :, None]
+            safe_mu_abs = jnp.where(mu_abs > eps, mu_abs, 1.0)
+            scale = jnp.where(mu_abs > eps, jnp.abs(mirror_coeff) / safe_mu_abs, 0.0)
+            speed = rms * jnp.max(scale, axis=1, keepdims=True)
+        else:
+            raise ValueError("mirror_coeff must have shape (n_mu,n_z) or (n_species,n_mu,n_z)")
+        speed = jnp.broadcast_to(speed, mirror_coeff.shape)
+    return jnp.asarray(rate, dtype=mirror_coeff.dtype) * speed
 
 
 def _as_species_tuple(species: SpeciesParams | tuple[SpeciesParams, ...]):
