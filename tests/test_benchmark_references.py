@@ -29,6 +29,7 @@ from stellarator_gk import (
     compare_geometry_to_gx_eik_reference,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
+    load_cyclone_trace_csv,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -46,6 +47,7 @@ from stellarator_gk import (
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
     single_surface_benchmark_objective,
+    write_cyclone_trace_csv,
 )
 
 
@@ -375,6 +377,33 @@ def test_cyclone_trace_records_window_diagnostics_and_compares():
     assert bool(comparison.passed)
     np.testing.assert_allclose(comparison.max_abs_error, 0.0)
     assert "trace-level CBC comparison" in comparison.notes
+
+
+def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):
+    trace = run_cyclone_base_case_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+    )
+    path = tmp_path / "trace.csv"
+
+    write_cyclone_trace_csv(path, trace)
+    loaded = load_cyclone_trace_csv(path, source="roundtrip")
+    shifted_raw = replace(loaded, raw_amplitude=2.0 * loaded.raw_amplitude)
+    physical_report = compare_cyclone_base_case_traces(
+        trace,
+        shifted_raw,
+        field_names=("times", "physical_amplitude", "window_growth", "fitted_growth"),
+    )
+    full_report = compare_cyclone_base_case_traces(trace, shifted_raw)
+
+    assert path.read_text().splitlines()[0].startswith("time,raw_amplitude")
+    assert loaded.source == "roundtrip"
+    np.testing.assert_allclose(loaded.physical_amplitude, trace.physical_amplitude)
+    assert bool(physical_report.passed)
+    assert not bool(full_report.passed)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

@@ -54,12 +54,19 @@ stored error for magnetic drift, equilibrium drive, drift-field drive, GKW
 boundary maps, grid/velocity normalization, and assembled RHS conventions; the
 new reduced CBC trace diagnostic records selected-`ky` raw and physical
 amplitudes, per-window and fitted growth, phi/state/RHS norms, and
-log-normalization for direct external comparison. The next CBC work is
-comparison of that trace against a matched Gyaradax/GKW run.
+log-normalization for direct external comparison. Gyaradax runtime dependencies
+are enabled through the optional `reference` extra and installed in the local
+`.venv`. A reduced Gyaradax trace exporter now compares the
+normalization-independent physical fields against `CycloneTrace`; the reduced
+comparison passes with maximum error `1.23687934e-02` at tolerance `2.0e-02`
+for time, physical amplitude, window growth, and fitted growth. Raw amplitudes
+and raw norm diagnostics are still normalization-convention dependent and are
+not production parity gates yet.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
-windowed selected-`ky` evolution. The stellarator-geometry path now includes a
+windowed selected-`ky` evolution and Gyaradax comparison CSVs. The
+stellarator-geometry path now includes a
 solver-produced DESC fixture export gate for GX/GS2 eik-compatible fields, so
 DESC arrays can be audited through the same metric/drift and `k_perp^2`
 contract before they are used in optimization. The external stellarator eik
@@ -80,7 +87,8 @@ The repository currently contains:
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, and `figures/cyclone_trace_reduced.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax reduced-trace exporter and `CycloneTrace` comparison script.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, and `figures/gyaradax_cyclone_trace_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
@@ -163,16 +171,17 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: compare the new reduced Cyclone trace artifact against an external
-Gyaradax/GKW trace, then use any mismatch to close the remaining production
-physics gap while keeping DESC optimization examples labeled as reduced until
-CBC parity passes:
+Goal: extend the reduced Gyaradax trace pass to production-control and GKW
+diagnostic traces, then use any remaining mismatch to close the production
+Cyclone growth-rate gap while keeping DESC optimization examples labeled as
+reduced until CBC parity passes:
 
-- install or enable optional Gyaradax runtime dependencies, or export an
-  equivalent GKW diagnostic trace, and compare selected-`ky` time evolution
-  against `CycloneTrace` at matched reduced and production-control resolution,
-  focusing on phi solve history, RK4/window normalization, initialization
-  amplitude/envelope, and late-window growth diagnostics,
+- run the Gyaradax trace exporter at production-control resolution and compare
+  physical amplitude/growth histories against `CycloneTrace`,
+- add normalization-equivalent physical phi/state/RHS norm comparisons instead
+  of raw normalized norm comparisons,
+- export or load an equivalent GKW diagnostic trace into the same
+  `CycloneTrace` schema,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
   is within the documented GKW/GX tolerance ladder,
 - supplement the matched DESC/GX block-eik fixture with a truly independent
@@ -181,8 +190,9 @@ CBC parity passes:
 
 Expected file changes:
 
-- external Gyaradax/GKW trace fixture, exporter, or loader,
-- trace-level comparison tests/reports against `CycloneTrace`,
+- production-control Gyaradax trace fixture/report,
+- GKW trace exporter or loader if available,
+- normalization-equivalent physical trace diagnostics,
 - any independent eik producer/fixture discovered for DESC/GX geometry,
 - `TODO.md`,
 - `STATUS.md`
@@ -195,6 +205,65 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-31: Enabled Gyaradax Trace Export and Comparison
+
+- Committed the previous validation/trace tranche as:
+  - `7ad50c6 Add CBC trace diagnostics and eik parity fixture`.
+- Installed missing local Gyaradax runtime dependencies into `.venv`:
+  - `omegaconf`,
+  - `einops`,
+  - transitive `antlr4-python3-runtime` and `pyyaml`.
+  The first direct `python -m pip` attempt failed because this uv-managed
+  virtual environment does not include `pip`; `uv pip install` succeeded after
+  allowing uv to use its package cache.
+- Added a project optional dependency extra `reference` for those Gyaradax
+  runtime dependencies.
+- Added reusable `CycloneTrace` CSV helpers:
+  - `write_cyclone_trace_csv`,
+  - `load_cyclone_trace_csv`.
+- Extended `compare_cyclone_base_case_traces` with selectable fields so
+  normalization-independent physical fields can be compared separately from raw
+  normalized amplitudes and raw norm diagnostics.
+- Added `scripts/export_gyaradax_cyclone_trace.py`, which:
+  - imports local `relevant-codes/gyaradax`,
+  - builds a reduced s-alpha Cyclone selected-`ky` run,
+  - exports `figures/gyaradax_cyclone_trace_reduced.csv`,
+  - compares time, physical amplitude, window growth, and fitted growth against
+    the solver's `CycloneTrace`,
+  - writes `figures/gyaradax_cyclone_trace_comparison.csv`.
+- The reduced Gyaradax physical trace comparison passes:
+  - max selected-field error `1.23687934e-02`,
+  - tolerance `2.0e-02`,
+  - compared fields: `times`, `physical_amplitude`, `window_growth`,
+    `fitted_growth`.
+- Raw amplitudes, log-normalization, and raw phi/state/RHS norms are not yet
+  pass criteria because Gyaradax normalizes the state to exactly unit raw
+  amplitude at window boundaries, while this solver records the raw amplitude
+  after its own per-window scale convention.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex`.
+- Commands run:
+  - `git commit -m "Add CBC trace diagnostics and eik parity fixture"`
+  - `.venv/bin/python -m pip install omegaconf einops`
+  - `uv pip install --python .venv/bin/python omegaconf einops`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib PYTHONPATH=relevant-codes/gyaradax .venv/bin/python - <<'PY' ...`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/generate_validation_gate_figures.py scripts/export_gyaradax_cyclone_trace.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 .venv/bin/python scripts/export_gyaradax_cyclone_trace.py`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 uv run --extra dev --extra reference python scripts/export_gyaradax_cyclone_trace.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python examples/generate_validation_gate_figures.py`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+- Verification results:
+  - focused benchmark tests: 17 passed,
+  - full pytest suite: 136 passed,
+  - full ruff: all checks passed,
+  - documented Gyaradax exporter command passed and wrote both Gyaradax trace
+    CSVs,
+  - validation figure generator passed with the public trace CSV writer,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - reduced Gyaradax/CycloneTrace physical comparison PASS:
+    `max_abs_error=1.23687934e-02`, tolerance `2.0e-02`.
 
 ### 2026-05-31: Added CBC Trace-Level Diagnostics
 

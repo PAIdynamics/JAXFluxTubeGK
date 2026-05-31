@@ -74,6 +74,7 @@ from .benchmarks import (
     geometry_to_gx_eik_reference,
     gx_eik_kperp2,
     gx_growth_rate_target,
+    load_cyclone_trace_csv,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -91,6 +92,7 @@ from .benchmarks import (
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
+    write_cyclone_trace_csv,
 )
 from .operators import (
     dense_eigensystem,
@@ -361,6 +363,7 @@ __all__ = [
     "linear_growth_diagnostics",
     "linear_growth_objectives",
     "linear_operator_action",
+    "load_cyclone_trace_csv",
     "load_gx_eik_geometry_reference",
     "load_gx_growth_rate_reference",
     "load_desc_equilibrium",
@@ -434,6 +437,7 @@ __all__ = [
     "unflatten_state",
     "weighted_quasilinear_proxy",
     "windowed_linear_growth_diagnostics",
+    "write_cyclone_trace_csv",
 ]
 
 __version__ = "0.1.0"

@@ -46,6 +46,7 @@ from stellarator_gk import (
     run_production_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_rosenbluth_hinton_plateau_gate,
+    write_cyclone_trace_csv,
 )
 
 
@@ -82,7 +83,7 @@ def main() -> None:
 
     _write_rh_csv(output_dir / "rh_plateau_demo.csv", rh_points)
     _write_summary_csv(output_dir / "validation_gate_summary.csv", summary)
-    _write_cyclone_trace_csv(output_dir / "cyclone_trace_reduced.csv", cbc_trace)
+    write_cyclone_trace_csv(output_dir / "cyclone_trace_reduced.csv", cbc_trace)
     _write_validation_pdf(output_dir / "validation_gate_status.pdf", rh_points, summary)
 
     for path in (
@@ -312,37 +313,6 @@ def _write_summary_csv(path: Path, rows: list[GateSummary]) -> None:
                     row.notes,
                 )
             )
-
-
-def _write_cyclone_trace_csv(path: Path, trace) -> None:
-    with path.open("w", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(
-            (
-                "time",
-                "raw_amplitude",
-                "physical_amplitude",
-                "window_growth",
-                "fitted_growth",
-                "phi_norm",
-                "state_norm",
-                "rhs_norm",
-                "log_normalization",
-            )
-        )
-        for row in zip(
-            trace.times,
-            trace.raw_amplitude,
-            trace.physical_amplitude,
-            trace.window_growth,
-            trace.fitted_growth,
-            trace.phi_norm,
-            trace.state_norm,
-            trace.rhs_norm,
-            trace.log_normalization,
-            strict=True,
-        ):
-            writer.writerow([float(value) for value in row])
 
 
 def _write_validation_pdf(

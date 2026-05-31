@@ -10,3 +10,6 @@ Provides-Extra: dev
 Requires-Dist: matplotlib>=3.8; extra == "dev"
 Requires-Dist: pytest>=8; extra == "dev"
 Requires-Dist: ruff>=0.6; extra == "dev"
+Provides-Extra: reference
+Requires-Dist: einops>=0.8; extra == "reference"
+Requires-Dist: omegaconf>=2.3; extra == "reference"

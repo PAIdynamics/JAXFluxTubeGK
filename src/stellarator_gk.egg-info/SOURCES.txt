@@ -1,5 +1,6 @@
 pyproject.toml
 src/stellarator_gk/__init__.py
+src/stellarator_gk/benchmarks.py
 src/stellarator_gk/diagnostics.py
 src/stellarator_gk/grids.py
 src/stellarator_gk/objectives.py
@@ -16,6 +17,7 @@ src/stellarator_gk.egg-info/requires.txt
 src/stellarator_gk.egg-info/top_level.txt
 src/stellarator_gk/geometry/__init__.py
 src/stellarator_gk/geometry/analytic.py
+src/stellarator_gk/geometry/desc_adapter.py
 src/stellarator_gk/geometry/flux_tube.py
 src/stellarator_gk/physics/__init__.py
 src/stellarator_gk/physics/primitives.py
@@ -23,7 +25,9 @@ src/stellarator_gk/physics/quasineutrality.py
 src/stellarator_gk/physics/rhs_terms.py
 src/stellarator_gk/physics/velocity_moments.py
 tests/test_analytic_geometry.py
+tests/test_benchmark_references.py
 tests/test_benchmark_validation.py
+tests/test_desc_adapter.py
 tests/test_finite_difference.py
 tests/test_flux_tube_geometry.py
 tests/test_fourier_modes.py

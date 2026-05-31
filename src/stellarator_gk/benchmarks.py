@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -1460,6 +1461,7 @@ def compare_cyclone_base_case_traces(
     reference: CycloneTrace,
     *,
     tolerance: float = 1.0e-10,
+    field_names: tuple[str, ...] | None = None,
 ) -> CycloneTraceComparisonReport:
     """Compare two selected-``ky`` CBC traces field by field."""
 
@@ -1467,7 +1469,7 @@ def compare_cyclone_base_case_traces(
         raise ValueError("tolerance must be positive")
     if tuple(observed.times.shape) != tuple(reference.times.shape):
         raise ValueError("traces must have the same number of time samples")
-    field_names = (
+    allowed_fields = (
         "times",
         "raw_amplitude",
         "physical_amplitude",
@@ -1478,6 +1480,15 @@ def compare_cyclone_base_case_traces(
         "rhs_norm",
         "log_normalization",
     )
+    if field_names is None:
+        field_names = allowed_fields
+    else:
+        field_names = tuple(field_names)
+        unknown = tuple(name for name in field_names if name not in allowed_fields)
+        if unknown:
+            raise ValueError(f"unknown trace fields: {unknown}")
+        if not field_names:
+            raise ValueError("field_names must not be empty")
     errors = []
     for name in field_names:
         errors.append(_max_abs_error(getattr(observed, name), getattr(reference, name)))
@@ -1493,6 +1504,58 @@ def compare_cyclone_base_case_traces(
             "trace-level CBC comparison"
         ),
     )
+
+
+def write_cyclone_trace_csv(path, trace: CycloneTrace) -> None:
+    """Write a ``CycloneTrace`` to the project CSV interchange format."""
+
+    path = Path(path)
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(_cyclone_trace_csv_columns())
+        for row in zip(
+            *(getattr(trace, name) for name in CycloneTrace._dynamic_fields),
+            strict=True,
+        ):
+            writer.writerow([float(value) for value in row])
+
+
+def load_cyclone_trace_csv(path, *, source: str | None = None, notes: str = "") -> CycloneTrace:
+    """Load a ``CycloneTrace`` from the project CSV interchange format."""
+
+    path = Path(path)
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise ValueError("Cyclone trace CSV contains no rows")
+    column_map = _cyclone_trace_csv_column_map(rows[0])
+    missing = tuple(name for name in CycloneTrace._dynamic_fields if name not in column_map)
+    if missing:
+        raise ValueError(f"Cyclone trace CSV is missing columns: {missing}")
+    values = {
+        name: jnp.asarray([float(row[column_map[name]]) for row in rows], dtype=jnp.float64)
+        for name in CycloneTrace._dynamic_fields
+    }
+    return CycloneTrace(
+        **values,
+        source=source or str(path),
+        notes=notes,
+    )
+
+
+def _cyclone_trace_csv_columns() -> tuple[str, ...]:
+    return ("time", *CycloneTrace._dynamic_fields[1:])
+
+
+def _cyclone_trace_csv_column_map(header: dict[str, object]) -> dict[str, str]:
+    names = set(header)
+    column_map = {}
+    for name in CycloneTrace._dynamic_fields:
+        if name in names:
+            column_map[name] = name
+    if "times" not in column_map and "time" in names:
+        column_map["times"] = "time"
+    return column_map
 
 
 def run_cyclone_base_case_term_parity_audit(
