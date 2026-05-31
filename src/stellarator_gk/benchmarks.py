@@ -1538,6 +1538,82 @@ def load_cyclone_trace_csv(path, *, source: str | None = None, notes: str = "") 
     )
 
 
+def load_gkw_time_dat_trace(
+    path,
+    *,
+    source: str | None = None,
+    notes: str = "",
+    amplitude0: float = 1.0,
+    initial_time: float = 0.0,
+) -> CycloneTrace:
+    """Load a linear GKW ``time.dat`` growth history into ``CycloneTrace``.
+
+    GKW writes ``time`` and ``growth_rate`` for linear runs, with an optional
+    third column for either real frequency or normalization depending on input
+    flags.  The compact file does not contain field or state norms, so those
+    unsupported diagnostics are filled with zeros and should not be used as
+    parity fields for GKW ``time.dat`` comparisons.
+    """
+
+    if amplitude0 <= 0.0:
+        raise ValueError("amplitude0 must be positive")
+    rows: list[tuple[float, float]] = []
+    path = Path(path)
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        parts = line.replace(",", " ").split()
+        if len(parts) < 2:
+            raise ValueError("GKW time.dat rows must contain at least time and growth")
+        rows.append((float(parts[0]), float(parts[1])))
+    if not rows:
+        raise ValueError("GKW time.dat contains no rows")
+
+    data = np.asarray(rows, dtype=float)
+    if not np.all(np.isfinite(data)):
+        raise ValueError("GKW time.dat contains non-finite values")
+    times_np = data[:, 0]
+    growth_np = data[:, 1]
+    if times_np[0] < initial_time or np.any(np.diff(times_np) <= 0.0):
+        raise ValueError("GKW time.dat times must be strictly increasing")
+
+    amplitudes = []
+    previous_time = float(initial_time)
+    amplitude = float(amplitude0)
+    for time, growth in rows:
+        amplitude *= float(np.exp(growth * (time - previous_time)))
+        amplitudes.append(amplitude)
+        previous_time = time
+
+    times = jnp.asarray(times_np, dtype=jnp.float64)
+    physical_amplitude = jnp.asarray(amplitudes, dtype=jnp.float64)
+    fitted_growth = jnp.asarray(
+        [
+            _trace_fitted_growth(times[: index + 1], physical_amplitude[: index + 1])
+            for index in range(times.shape[0])
+        ],
+        dtype=jnp.float64,
+    )
+    zeros = jnp.zeros_like(times)
+    trace_notes = "GKW time.dat trace; field/state/RHS norms unavailable"
+    if notes:
+        trace_notes = f"{trace_notes}; {notes}"
+    return CycloneTrace(
+        times=times,
+        raw_amplitude=physical_amplitude,
+        physical_amplitude=physical_amplitude,
+        window_growth=jnp.asarray(growth_np, dtype=jnp.float64),
+        fitted_growth=fitted_growth,
+        phi_norm=zeros,
+        state_norm=zeros,
+        rhs_norm=zeros,
+        log_normalization=zeros,
+        source=source or str(path),
+        notes=trace_notes,
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 

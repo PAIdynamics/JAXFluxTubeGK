@@ -30,6 +30,7 @@ from stellarator_gk import (
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
     load_cyclone_trace_csv,
+    load_gkw_time_dat_trace,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -412,6 +413,43 @@ def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):
     np.testing.assert_allclose(loaded.physical_amplitude, trace.physical_amplitude)
     assert bool(physical_report.passed)
     assert not bool(full_report.passed)
+
+
+def test_gkw_time_dat_trace_loader_reconstructs_relative_amplitude(tmp_path):
+    path = tmp_path / "time.dat"
+    path.write_text(
+        "\n".join(
+            (
+                "! time growth optional_frequency",
+                "0.0 0.0 0.0",
+                "1.0 2.0e-1 1.0e-2",
+                "2.0 2.0e-1 1.0e-2",
+            )
+        )
+    )
+
+    trace = load_gkw_time_dat_trace(path, source="gkw-fixture")
+    comparison = compare_cyclone_base_case_traces(
+        trace,
+        trace,
+        field_names=("times", "physical_amplitude", "window_growth", "fitted_growth"),
+    )
+
+    np.testing.assert_allclose(trace.times, jnp.asarray([0.0, 1.0, 2.0]))
+    np.testing.assert_allclose(trace.window_growth, jnp.asarray([0.0, 0.2, 0.2]))
+    np.testing.assert_allclose(trace.physical_amplitude, jnp.exp(jnp.asarray([0.0, 0.2, 0.4])))
+    np.testing.assert_allclose(trace.fitted_growth[-1], 0.2)
+    assert trace.source == "gkw-fixture"
+    assert "field/state/RHS norms unavailable" in trace.notes
+    assert bool(comparison.passed)
+
+
+def test_gkw_time_dat_trace_loader_rejects_invalid_time_grid(tmp_path):
+    path = tmp_path / "time.dat"
+    path.write_text("1.0 0.2\n0.5 0.2\n")
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        load_gkw_time_dat_trace(path)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

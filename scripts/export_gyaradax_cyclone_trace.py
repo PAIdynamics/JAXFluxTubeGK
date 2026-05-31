@@ -1,4 +1,4 @@
-"""Export and compare a reduced Gyaradax Cyclone selected-ky trace.
+"""Export and compare Gyaradax Cyclone selected-ky traces.
 
 Run from the repository root after installing Gyaradax runtime dependencies:
 
@@ -9,12 +9,66 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 import sys
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+
+
+@dataclass(frozen=True)
+class TraceProfile:
+    label: str
+    n_z: int
+    n_vpar: int
+    n_mu: int
+    steps_per_window: int
+    n_windows: int
+    tolerance: float
+    output: Path
+    comparison_output: Path
+
+
+_TRACE_PROFILES = {
+    "reduced": TraceProfile(
+        label="reduced",
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        tolerance=2.0e-2,
+        output=Path("figures/gyaradax_cyclone_trace_reduced.csv"),
+        comparison_output=Path("figures/gyaradax_cyclone_trace_comparison.csv"),
+    ),
+    "production-control-smoke": TraceProfile(
+        label="production-control smoke",
+        n_z=48,
+        n_vpar=32,
+        n_mu=8,
+        steps_per_window=20,
+        n_windows=4,
+        tolerance=2.0e-2,
+        output=Path("figures/gyaradax_cyclone_trace_production_control_smoke.csv"),
+        comparison_output=Path(
+            "figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv"
+        ),
+    ),
+    "production-control": TraceProfile(
+        label="production-control",
+        n_z=48,
+        n_vpar=32,
+        n_mu=8,
+        steps_per_window=20,
+        n_windows=80,
+        tolerance=2.0e-2,
+        output=Path("figures/gyaradax_cyclone_trace_production_control.csv"),
+        comparison_output=Path(
+            "figures/gyaradax_cyclone_trace_production_control_comparison.csv"
+        ),
+    ),
+}
 
 
 def main() -> None:
@@ -93,9 +147,11 @@ def main() -> None:
     status = "PASS" if bool(report.passed) else "OPEN"
     print(f"wrote {output}")
     print(f"wrote {comparison_output}")
+    label = _TRACE_PROFILES[args.profile].label
     print(
-        f"reduced Gyaradax/CycloneTrace physical comparison {status}: "
-        f"max_abs_error={float(report.max_abs_error):.8e}, tolerance={args.tolerance:.8e}"
+        f"{label} Gyaradax/CycloneTrace physical comparison {status}: "
+        f"max_abs_error={float(report.max_abs_error):.8e}, "
+        f"tolerance={args.tolerance:.8e}"
     )
 
 
@@ -241,7 +297,7 @@ def _run_gyaradax_trace(
         rhs_norm=jnp.asarray(rhs_norms, dtype=jnp.float64),
         log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
         source="gyaradax",
-        notes="reduced Gyaradax s-alpha selected-ky trace",
+        notes=f"{args.profile} Gyaradax s-alpha selected-ky trace",
     )
 
 
@@ -269,18 +325,27 @@ def _write_comparison_csv(path: Path, report, tolerance: float) -> None:
 
 def _parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--profile",
+        choices=tuple(_TRACE_PROFILES),
+        default="reduced",
+        help=(
+            "named resolution/time profile; explicit size and output flags "
+            "override the selected profile"
+        ),
+    )
     parser.add_argument("--gyaradax-root", type=Path, default=Path("relevant-codes/gyaradax"))
-    parser.add_argument("--output", type=Path, default=Path("figures/gyaradax_cyclone_trace_reduced.csv"))
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--comparison-output",
         type=Path,
-        default=Path("figures/gyaradax_cyclone_trace_comparison.csv"),
+        default=None,
     )
-    parser.add_argument("--n-z", type=int, default=8)
-    parser.add_argument("--n-vpar", type=int, default=6)
-    parser.add_argument("--n-mu", type=int, default=4)
-    parser.add_argument("--steps-per-window", type=int, default=2)
-    parser.add_argument("--n-windows", type=int, default=3)
+    parser.add_argument("--n-z", type=int, default=None)
+    parser.add_argument("--n-vpar", type=int, default=None)
+    parser.add_argument("--n-mu", type=int, default=None)
+    parser.add_argument("--steps-per-window", type=int, default=None)
+    parser.add_argument("--n-windows", type=int, default=None)
     parser.add_argument("--dt", type=float, default=0.003)
     parser.add_argument("--nperiod", type=int, default=5)
     parser.add_argument("--q", type=float, default=1.4)
@@ -292,8 +357,24 @@ def _parse_args():
     parser.add_argument("--vpar-max", type=float, default=3.0)
     parser.add_argument("--disp-par", type=float, default=1.0)
     parser.add_argument("--disp-vp", type=float, default=0.2)
-    parser.add_argument("--tolerance", type=float, default=2.0e-2)
-    return parser.parse_args()
+    parser.add_argument("--tolerance", type=float, default=None)
+    args = parser.parse_args()
+    return _apply_profile_defaults(args)
+
+
+def _apply_profile_defaults(args):
+    profile = _TRACE_PROFILES[args.profile]
+    args.n_z = profile.n_z if args.n_z is None else args.n_z
+    args.n_vpar = profile.n_vpar if args.n_vpar is None else args.n_vpar
+    args.n_mu = profile.n_mu if args.n_mu is None else args.n_mu
+    if args.steps_per_window is None:
+        args.steps_per_window = profile.steps_per_window
+    args.n_windows = profile.n_windows if args.n_windows is None else args.n_windows
+    args.tolerance = profile.tolerance if args.tolerance is None else args.tolerance
+    args.output = profile.output if args.output is None else args.output
+    if args.comparison_output is None:
+        args.comparison_output = profile.comparison_output
+    return args
 
 
 if __name__ == "__main__":

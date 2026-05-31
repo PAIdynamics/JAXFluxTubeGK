@@ -1,0 +1,8 @@
+field,max_abs_error,tolerance,status,notes
+times,7.105427357601002e-14,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_amplitude,5.103149540377702e-06,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+window_growth,0.010186567743231123,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+fitted_growth,0.001999080416328791,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_phi_norm,1.701049846792712e-06,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_state_norm,1.7312726414025787e-06,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_rhs_norm,0.0001877472907816911,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison

@@ -56,13 +56,23 @@ new reduced CBC trace diagnostic records selected-`ky` raw and physical
 amplitudes, per-window and fitted growth, phi/state/RHS norms, and
 log-normalization for direct external comparison. Gyaradax runtime dependencies
 are enabled through the optional `reference` extra and installed in the local
-`.venv`. A reduced Gyaradax trace exporter now compares the
+`.venv`. The Gyaradax trace exporter now supports named profiles and compares
 normalization-independent physical fields against `CycloneTrace`; the reduced
-comparison passes with maximum error `1.23687934e-02` at tolerance `2.0e-02`
-for time, physical amplitude, window growth, fitted growth, physical phi norm,
-physical state norm, and physical RHS norm. Raw amplitudes and raw
-log-normalization are still normalization-convention dependent and are not
-production parity gates yet.
+comparison passes with maximum error `1.23687934e-02`, the
+production-control-grid smoke comparison passes with maximum error
+`1.32907879e-03`, and the full 80-window production-control comparison passes
+with maximum error `1.01865677e-02`, all at tolerance `2.0e-02`, for time,
+physical amplitude, window growth, fitted growth, physical phi norm, physical
+state norm, and physical RHS norm. Raw amplitudes and raw log-normalization
+are still normalization-convention dependent and are not production parity
+gates yet. A GKW `time.dat` loader now maps GKW linear time/growth diagnostics
+into the same `CycloneTrace` schema by reconstructing relative physical
+amplitude from the reported growth-rate increments; field/state/RHS norms are
+marked unavailable for that compact GKW format. The local serial/no-FFT GKW
+build now succeeds with `gfortran`, and a real GKW `simple_example` run has
+been converted to `figures/gkw_simple_example_time_trace.csv`; it contains 50
+time samples with final GKW-reported window growth `0.184492` and
+loader-reconstructed full-history fitted growth `0.16090982345149119`.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -88,8 +98,8 @@ The repository currently contains:
 - `examples/desc_fixture_optimization_loop.py`: runnable reduced benchmark-target optimization loop on the extracted DESC DSHAPE fixture.
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
-- `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax reduced-trace exporter and `CycloneTrace` comparison script.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, and `figures/gyaradax_cyclone_trace_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, and full production-control profiles.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, and `figures/gkw_simple_example_time_trace.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
@@ -172,15 +182,16 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: extend the reduced Gyaradax physical trace pass to production-control
-and GKW diagnostic traces, then use any remaining mismatch to close the
-production Cyclone growth-rate gap while keeping DESC optimization examples
-labeled as reduced until CBC parity passes:
+Goal: use the passing reduced, production-control-smoke, and full
+production-control Gyaradax physical trace checks plus the GKW `time.dat`
+loader to close the remaining production Cyclone growth-rate target/window
+gap while keeping DESC optimization examples labeled as reduced until CBC
+parity passes:
 
-- run the Gyaradax trace exporter at production-control resolution and compare
-  physical amplitude/growth histories against `CycloneTrace`,
-- export or load an equivalent GKW diagnostic trace into the same
-  `CycloneTrace` schema,
+- generate or collect a matched GKW `time.dat` for the selected-`ky` Cyclone
+  setup and load it into `CycloneTrace`,
+- compare GKW, Gyaradax, and solver growth histories using the same late-window
+  fitting convention,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
   is within the documented GKW/GX tolerance ladder,
 - supplement the matched DESC/GX block-eik fixture with a truly independent
@@ -189,9 +200,10 @@ labeled as reduced until CBC parity passes:
 
 Expected file changes:
 
-- production-control Gyaradax trace fixture/report,
-- GKW trace exporter or loader if available,
-- production-resolution physical trace diagnostics,
+- matched GKW `time.dat` trace fixture if generated,
+- GKW/Gyaradax/solver growth-history comparison report,
+- any production-resolution diagnostic-window adjustment needed for the scalar
+  Cyclone gate,
 - any independent eik producer/fixture discovered for DESC/GX geometry,
 - `TODO.md`,
 - `STATUS.md`
@@ -204,6 +216,71 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-05-31: Added Production-Control Gyaradax Trace and GKW Loader
+
+- Committed the normalization-equivalent trace comparison tranche as:
+  - `081e836 Add physical norm trace parity`.
+- Added named profiles to `scripts/export_gyaradax_cyclone_trace.py`:
+  - `reduced`,
+  - `production-control-smoke`,
+  - `production-control`.
+- The `production-control-smoke` profile uses the production grid/window
+  controls \(N_z=48\), \(N_{v_\parallel}=32\), \(N_\mu=8\), 20 steps per
+  window, and four windows. It writes:
+  - `figures/gyaradax_cyclone_trace_production_control_smoke.csv`,
+  - `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`.
+- The full `production-control` profile uses the same grid/window controls and
+  80 windows. It writes:
+  - `figures/gyaradax_cyclone_trace_production_control.csv`,
+  - `figures/gyaradax_cyclone_trace_production_control_comparison.csv`.
+- The production-control smoke comparison passes with maximum selected-field
+  error `1.32907879e-03` at tolerance `2.0e-02`; the dominant errors are the
+  per-window and fitted growth fields. Physical amplitude, physical phi norm,
+  physical state norm, and physical RHS norm errors remain below `1.5e-05`.
+- The full production-control comparison passes with maximum selected-field
+  error `1.01865677e-02` at tolerance `2.0e-02`; per-window growth is the
+  largest field error, fitted growth differs by `1.99908042e-03`, and physical
+  norm errors remain below `1.9e-04`.
+- Added `load_gkw_time_dat_trace`, which reads GKW linear `time.dat` files,
+  reconstructs relative physical amplitude from the reported growth-rate
+  increments, and fills unavailable field/state/RHS norm diagnostics with
+  zeros under an explicit note.
+- Built the local GKW reference executable with the documented serial/no-FFT
+  `gfortran` path and ran the bundled linear `simple_example` in
+  `/private/tmp/gkw_simple_example_run`.
+- Converted that real GKW `time.dat` into
+  `figures/gkw_simple_example_time_trace.csv`; the converted trace has 50
+  samples, final GKW-reported window growth `0.184492`, and full-history fitted
+  growth `0.16090982345149119`.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex`.
+- Commands run:
+  - `git commit -m "Add physical norm trace parity"`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check scripts/export_gyaradax_cyclone_trace.py`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 .venv/bin/python scripts/export_gyaradax_cyclone_trace.py`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 .venv/bin/python scripts/export_gyaradax_cyclone_trace.py --profile production-control-smoke`
+  - `MPLCONFIGDIR=/tmp/stellarator_gk_matplotlib JAX_ENABLE_X64=1 .venv/bin/python scripts/export_gyaradax_cyclone_trace.py --profile production-control`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m ruff check src tests scripts examples`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -m pytest`
+  - `latexmk -pdf -interaction=nonstopmode main.tex`
+  - `git diff --check`
+  - `make FC=gfortran FFLAGS="-O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`
+  - `/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gkw/gkw.x`
+  - `JAX_ENABLE_X64=1 .venv/bin/python -c "... load_gkw_time_dat_trace ..."`
+- Verification results:
+  - full ruff: all checks passed,
+  - reduced Gyaradax comparison: PASS, max error `1.23687934e-02`,
+  - production-control smoke Gyaradax comparison: PASS, max error
+    `1.32907879e-03`,
+  - full production-control Gyaradax comparison: PASS, max error
+    `1.01865677e-02`,
+  - focused benchmark tests: 19 passed,
+  - full pytest suite: 138 passed,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - whitespace check passed,
+  - GKW serial/no-FFT build succeeded,
+  - GKW `simple_example` completed successfully.
 
 ### 2026-05-31: Added Normalization-Equivalent Trace Norms
 
