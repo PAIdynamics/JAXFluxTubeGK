@@ -395,7 +395,15 @@ def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):
     physical_report = compare_cyclone_base_case_traces(
         trace,
         shifted_raw,
-        field_names=("times", "physical_amplitude", "window_growth", "fitted_growth"),
+        field_names=(
+            "times",
+            "physical_amplitude",
+            "window_growth",
+            "fitted_growth",
+            "physical_phi_norm",
+            "physical_state_norm",
+            "physical_rhs_norm",
+        ),
     )
     full_report = compare_cyclone_base_case_traces(trace, shifted_raw)
 

@@ -1469,17 +1469,7 @@ def compare_cyclone_base_case_traces(
         raise ValueError("tolerance must be positive")
     if tuple(observed.times.shape) != tuple(reference.times.shape):
         raise ValueError("traces must have the same number of time samples")
-    allowed_fields = (
-        "times",
-        "raw_amplitude",
-        "physical_amplitude",
-        "window_growth",
-        "fitted_growth",
-        "phi_norm",
-        "state_norm",
-        "rhs_norm",
-        "log_normalization",
-    )
+    allowed_fields = _cyclone_trace_comparison_fields()
     if field_names is None:
         field_names = allowed_fields
     else:
@@ -1491,7 +1481,12 @@ def compare_cyclone_base_case_traces(
             raise ValueError("field_names must not be empty")
     errors = []
     for name in field_names:
-        errors.append(_max_abs_error(getattr(observed, name), getattr(reference, name)))
+        errors.append(
+            _max_abs_error(
+                _cyclone_trace_comparison_field(observed, name),
+                _cyclone_trace_comparison_field(reference, name),
+            )
+        )
     field_errors = jnp.asarray(errors, dtype=jnp.float64)
     max_abs_error = jnp.max(field_errors)
     return CycloneTraceComparisonReport(
@@ -1545,6 +1540,25 @@ def load_cyclone_trace_csv(path, *, source: str | None = None, notes: str = "") 
 
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
+
+
+def _cyclone_trace_comparison_fields() -> tuple[str, ...]:
+    return (
+        *CycloneTrace._dynamic_fields,
+        "physical_phi_norm",
+        "physical_state_norm",
+        "physical_rhs_norm",
+    )
+
+
+def _cyclone_trace_comparison_field(trace: CycloneTrace, name: str):
+    if name == "physical_phi_norm":
+        return trace.phi_norm * jnp.exp(trace.log_normalization)
+    if name == "physical_state_norm":
+        return trace.state_norm * jnp.exp(trace.log_normalization)
+    if name == "physical_rhs_norm":
+        return trace.rhs_norm * jnp.exp(trace.log_normalization)
+    return getattr(trace, name)
 
 
 def _cyclone_trace_csv_column_map(header: dict[str, object]) -> dict[str, str]:

@@ -73,7 +73,15 @@ def main() -> None:
         steps_per_window=args.steps_per_window,
         n_windows=args.n_windows,
     )
-    fields = ("times", "physical_amplitude", "window_growth", "fitted_growth")
+    fields = (
+        "times",
+        "physical_amplitude",
+        "window_growth",
+        "fitted_growth",
+        "physical_phi_norm",
+        "physical_state_norm",
+        "physical_rhs_norm",
+    )
     report = compare_cyclone_base_case_traces(
         current,
         trace,

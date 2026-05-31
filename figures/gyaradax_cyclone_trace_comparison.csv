@@ -3,3 +3,6 @@ times,3.469446951953614e-18,0.02,PASS,observed=stellarator_gk; reference=gyarada
 physical_amplitude,5.232490973877853e-07,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
 window_growth,0.012368793433026326,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
 fitted_growth,0.012368793433026548,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_phi_norm,1.7441636579571158e-07,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_state_norm,1.9576735492678687e-07,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+physical_rhs_norm,8.54902532931856e-08,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison

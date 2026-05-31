@@ -1249,12 +1249,13 @@ norms, and the accumulated log-normalization.  The reduced solver artifact is
 written to \path{figures/cyclone_trace_reduced.csv}.  A companion Gyaradax
 exporter writes \path{figures/gyaradax_cyclone_trace_reduced.csv} and compares
 the normalization-independent fields \(t\), physical amplitude, per-window
-growth, and fitted growth.  On the reduced grid
+growth, fitted growth, and the physical \(\phi\), state, and RHS norms obtained
+by multiplying raw norms by \(\exp(\ell_{\mathrm{norm}})\).  On the reduced grid
 \((N_z,N_{v_\parallel},N_\mu)=(8,6,4)\), two steps per window, and three
 windows, this comparison passes with maximum error \(1.24\times10^{-2}\) at
-tolerance \(2\times10^{-2}\).  Raw amplitudes, log-normalization, and raw
-\(\phi\)/state/RHS norms are not yet used as pass criteria because Gyaradax and
-this solver store per-window normalization factors differently.
+tolerance \(2\times10^{-2}\).  Raw amplitudes and raw log-normalization are not
+yet used as pass criteria because Gyaradax and this solver store per-window
+normalization factors differently.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
