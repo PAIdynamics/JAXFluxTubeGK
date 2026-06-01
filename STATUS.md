@@ -171,6 +171,17 @@ is `0.13945213935812423` versus GKW `0.188741`. The row-normalized
 `2.9625447419939166e-02` but remains above the current `2.0e-02` exploratory
 tolerance. Initialization mismatch is therefore no longer the dominant
 remaining explanation.
+The selected-`ky` gap audit now combines the patched GKW `cosin2` time/profile
+fixtures with the solver `cosine2`/`gkw_igh` traces in one aligned diagnostic.
+It reports solver late-fit growth `0.1648622859363632` versus GKW
+`0.18741518752345235`, late-fit delta `0.02255290158708914`, late-window mean
+delta `0.021761822842616324`, final-window growth delta
+`0.049288860641875765`, maximum row-normalized profile error
+`0.029625447419939166`, and total-power ratio mean
+`0.9999999827218208` with maximum deviation `1.953378815588991e-06`.
+This rules out field total-power normalization as the remaining dominant
+cause; the next narrowed target is the evolved velocity-space/distribution
+state, using GKW `distr*.dat` slices or a final-state/restart dump.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -204,9 +215,10 @@ The repository currently contains:
 - `examples/audit_cyclone_matdat_matrix.py`: reduced Cyclone `matdat.F90` sparse matrix/source convention audit.
 - `examples/audit_cyclone_coefficient_source.py`: production-control selected-`ky` GKW Term II/IV/V/VII/VIII coefficient/source audit.
 - `examples/audit_cyclone_igh_arakawa.py`: production-control selected-`ky` GKW `ltrapping_arakawa` fused Term I/IV audit.
+- `examples/audit_cyclone_cosin2_gap.py`: combined patched-GKW `cosin2` selected-`ky` growth/profile gap audit.
 - `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, and writes a matched selected-`ky` input.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
@@ -297,14 +309,13 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- use the patched GKW `cosin2` fixtures as the primary selected-`ky`
-  comparison while retaining the native `finit='cosine'` fixtures as a
-  cross-check,
-- diagnose the remaining `cosine2`/`cosin2` growth-history and parallel
-  mode-structure gap now that the initialization mismatch has been removed,
-- inspect any remaining production GKW conventions that affect the evolved
-  mode history rather than the already-passing term, RK4, normalization,
-  field-packing, matrix-format, fused-`igh`, and initialization checks,
+- compare evolved GKW velocity-space/distribution diagnostics (`distr*.dat` or
+  a restart/state dump) against the solver selected-`ky` state at the same
+  final time,
+- add a loader for GKW peak-\(\phi\) velocity-space slices if `distr*.dat`
+  contains enough information for the next parity check,
+- otherwise add a non-destructive GKW final-state or restart dump patch and
+  compare the full normalized distribution state,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -330,6 +341,51 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added Patched-`cosin2` Selected-`ky` Gap Audit
+
+- Committed the previous `gkw_igh`/patched-GKW tranche as:
+  - `69821dc Add GKW cosin2 Cyclone reference path`.
+- Added `CycloneSelectedKyGapAudit`,
+  `audit_cyclone_selected_ky_gap`, and
+  `run_cyclone_base_case_cosin2_gap_audit`.
+- Added `examples/audit_cyclone_cosin2_gap.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_gap_audit.csv`.
+- The audit aligns solver post-window samples with patched GKW `cosin2`
+  `time.dat`/`parallel_phi.dat` samples, then reports late-fit growth,
+  late-window mean growth, final-window growth, profile-shape error,
+  worst `(t,z)`, and total-power normalization.
+- Production-control audit results:
+  - solver late-fit growth: `0.1648622859363632`,
+  - patched GKW late-fit growth: `0.18741518752345235`,
+  - late-fit delta: `0.02255290158708914`,
+  - late-window mean delta: `0.021761822842616324`,
+  - final-window growth delta: `0.049288860641875765`,
+  - maximum row-normalized profile error: `0.029625447419939166`,
+  - worst profile point: \(t=3.78\), \(z=-0.09375\),
+  - total-power ratio mean: `0.9999999827218208`,
+  - maximum total-power deviation: `1.953378815588991e-06`.
+- Interpretation: the combined audit confirms that the remaining selected-`ky`
+  gap is not caused by the native-vs-`cosine2` initialization convention, field
+  output ordering, or total-power normalization. The next narrowed target is
+  the evolved velocity-space/distribution state, using GKW `distr*.dat` slices
+  if sufficient or a non-destructive final-state/restart dump otherwise.
+- Verification run this round:
+  - `uv run pytest tests/test_benchmark_references.py::test_cyclone_selected_ky_gap_audit_aligns_post_window_samples tests/test_benchmark_references.py::test_cosin2_gap_audit_runner_accepts_matched_reduced_fixtures -q`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_gap.py`
+  - `python -m py_compile src/stellarator_gk/benchmarks.py examples/audit_cyclone_cosin2_gap.py`
+  - `uv run python examples/audit_cyclone_cosin2_gap.py`
+  - `uv run ruff check src tests examples scripts`
+  - `uv run pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Verification results:
+  - focused gap-audit tests: 2 passed,
+  - full pytest suite: 159 passed,
+  - focused and full ruff: all checks passed,
+  - production audit example completed and wrote the CSV above.
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - whitespace check passed.
 
 ### 2026-06-01: Added Non-Destructive GKW `cosin2` Reference Path
 

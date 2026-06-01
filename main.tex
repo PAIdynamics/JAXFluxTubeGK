@@ -1451,10 +1451,15 @@ is \(0.156237\) versus \(0.177999\); and the final-window growth is
 \(\texttt{parallel\_phi.dat}\) profile error improves to
 \(2.96\times10^{-2}\), with worst signed error at \(t=3.78\),
 \(z=-0.09375\).  The corresponding CSV artifacts are the \(\texttt{gkw\_cosin2}\)
-time and parallel-profile comparisons under \path{figures/}.  Thus the
-initialization convention is no longer the dominant remaining explanation; the
-next audit should target production GKW conventions that affect the evolved
-mode history.
+time and parallel-profile comparisons under \path{figures/}.  A combined
+post-window gap audit, \path{figures/gkw_cosin2_cyclone_gap_audit.csv},
+reports the aligned late-fit pair \(0.164862\) versus \(0.187415\), late-window
+mean delta \(2.18\times10^{-2}\), final-window delta \(4.93\times10^{-2}\),
+and total-power ratio \(0.99999998\pm1.95\times10^{-6}\).  Thus the
+initialization and field-normalization conventions are no longer the dominant
+remaining explanations; the next audit should compare the evolved
+velocity-space distribution state, either through GKW \(\texttt{distr*.dat}\)
+slices or through a non-destructive final-state dump.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

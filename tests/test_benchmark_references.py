@@ -20,9 +20,12 @@ from stellarator_gk import (
     CycloneIghArakawaAudit,
     CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
+    CycloneSelectedKyGapAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
+    CycloneTrace,
     ParallelPhiTrace,
+    audit_cyclone_selected_ky_gap,
     audit_parallel_phi_profile_alignment,
     benchmark_target_cost,
     benchmark_target_residual,
@@ -50,6 +53,7 @@ from stellarator_gk import (
     run_cyclone_base_case_diagnostic_packing_audit,
     run_cyclone_base_case_igh_arakawa_audit,
     run_cyclone_base_case_matdat_matrix_audit,
+    run_cyclone_base_case_cosin2_gap_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
@@ -597,6 +601,62 @@ def test_parallel_phi_profile_audit_detects_output_order_shift():
     assert "alignment/normalization audit" in audit.notes
 
 
+def test_cyclone_selected_ky_gap_audit_aligns_post_window_samples():
+    solver_trace = CycloneTrace(
+        times=(0.0, 1.0, 2.0),
+        raw_amplitude=(1.0, np.exp(0.1), np.exp(0.3)),
+        physical_amplitude=(1.0, np.exp(0.1), np.exp(0.3)),
+        window_growth=(0.0, 0.1, 0.2),
+        fitted_growth=(0.0, 0.1, 0.15),
+        phi_norm=(0.0, 0.0, 0.0),
+        state_norm=(0.0, 0.0, 0.0),
+        rhs_norm=(0.0, 0.0, 0.0),
+        log_normalization=(0.0, 0.0, 0.0),
+        source="solver",
+    )
+    reference_trace = CycloneTrace(
+        times=(1.0, 2.0),
+        raw_amplitude=(1.0, np.exp(0.2)),
+        physical_amplitude=(1.0, np.exp(0.2)),
+        window_growth=(0.1, 0.2),
+        fitted_growth=(0.0, 0.2),
+        phi_norm=(0.0, 0.0),
+        state_norm=(0.0, 0.0),
+        rhs_norm=(0.0, 0.0),
+        log_normalization=(0.0, 0.0),
+        source="reference",
+    )
+    solver_profile = ParallelPhiTrace(
+        times=(1.0, 2.0),
+        z=(-0.5, 0.5),
+        phi_power=((0.25, 0.75), (0.5, 0.5)),
+        source="solver-profile",
+    )
+    reference_profile = ParallelPhiTrace(
+        times=(1.0, 2.0),
+        z=(-0.5, 0.5),
+        phi_power=((0.25, 0.75), (0.5, 0.5)),
+        source="reference-profile",
+    )
+
+    audit = audit_cyclone_selected_ky_gap(
+        solver_trace,
+        reference_trace,
+        solver_profile,
+        reference_profile,
+        growth_tolerance=1.0e-12,
+        profile_tolerance=1.0e-12,
+    )
+
+    assert isinstance(audit, CycloneSelectedKyGapAudit)
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.times, jnp.asarray([1.0, 2.0]))
+    np.testing.assert_allclose(audit.window_growth_delta, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.late_fit_delta, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.max_profile_error, 0.0, atol=1.0e-14)
+    assert "selected-ky growth/profile gap audit" in audit.notes
+
+
 def test_gkw_parallel_phi_loader_reads_matched_selected_ky_fixture():
     path = ROOT / "fixtures/gkw_cyclone_selected_ky_parallel_phi.dat"
     time_path = ROOT / "fixtures/gkw_cyclone_selected_ky_time.dat"
@@ -656,6 +716,57 @@ def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
             n_windows=1,
             normalization_model="unsupported",
         )
+
+
+def test_cosin2_gap_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
+    solver_trace = run_cyclone_base_case_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    solver_profile = run_cyclone_base_case_parallel_phi_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    time_path = tmp_path / "time.dat"
+    phi_path = tmp_path / "parallel_phi.dat"
+    with time_path.open("w") as handle:
+        for time, growth in zip(
+            np.asarray(solver_trace.times[1:]),
+            np.asarray(solver_trace.window_growth[1:]),
+            strict=True,
+        ):
+            handle.write(f"{time:.16e} {growth:.16e}\n")
+    with phi_path.open("w") as handle:
+        for row in np.asarray(solver_profile.phi_power):
+            handle.write(" ".join(f"{value:.16e}" for value in row) + "\n")
+
+    audit = run_cyclone_base_case_cosin2_gap_audit(
+        gkw_time_path=time_path,
+        gkw_parallel_phi_path=phi_path,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        growth_tolerance=1.0e-10,
+        profile_tolerance=1.0e-10,
+    )
+
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.late_mean_delta, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(audit.max_profile_error, 0.0, atol=1.0e-12)
 
 
 def test_cyclone_profile_operator_audit_checks_selected_mode_assembly():

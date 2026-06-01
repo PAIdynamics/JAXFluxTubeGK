@@ -1,0 +1,17 @@
+metric,value
+solver_late_fit_growth,0.1648622859363632
+reference_late_fit_growth,0.18741518752345235
+late_fit_delta,0.02255290158708914
+solver_late_mean_growth,0.15623725215738368
+reference_late_mean_growth,0.177999075
+late_mean_delta,0.021761822842616324
+final_window_growth_delta,0.049288860641875765
+first_profile_error,0.017781715194528813
+max_profile_error,0.029625447419939166
+late_profile_error,0.018546193345992446
+worst_time,3.7800000000000002
+worst_z,-0.09375
+worst_signed_profile_error,0.029625447419939166
+total_power_ratio_mean,0.9999999827218208
+total_power_ratio_max_deviation,1.953378815588991e-06
+passed,False

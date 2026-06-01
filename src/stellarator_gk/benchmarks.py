@@ -418,6 +418,82 @@ class ParallelPhiProfileAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneSelectedKyGapAudit(_PyTreeDataclass):
+    """Combined growth/profile audit for the production selected-``ky`` gap."""
+
+    times: object
+    solver_window_growth: object
+    reference_window_growth: object
+    window_growth_delta: object
+    profile_errors: object
+    total_power_ratio: object
+    solver_late_fit_growth: object
+    reference_late_fit_growth: object
+    late_fit_delta: object
+    solver_late_mean_growth: object
+    reference_late_mean_growth: object
+    late_mean_delta: object
+    final_window_growth_delta: object
+    first_profile_error: object
+    max_profile_error: object
+    late_profile_error: object
+    worst_time: object
+    worst_z: object
+    worst_signed_profile_error: object
+    total_power_ratio_mean: object
+    total_power_ratio_max_deviation: object
+    passed: object
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "times",
+        "solver_window_growth",
+        "reference_window_growth",
+        "window_growth_delta",
+        "profile_errors",
+        "total_power_ratio",
+        "solver_late_fit_growth",
+        "reference_late_fit_growth",
+        "late_fit_delta",
+        "solver_late_mean_growth",
+        "reference_late_mean_growth",
+        "late_mean_delta",
+        "final_window_growth_delta",
+        "first_profile_error",
+        "max_profile_error",
+        "late_profile_error",
+        "worst_time",
+        "worst_z",
+        "worst_signed_profile_error",
+        "total_power_ratio_mean",
+        "total_power_ratio_max_deviation",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("notes",)
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if times.ndim != 1:
+            raise ValueError("times must be one-dimensional")
+        object.__setattr__(self, "times", times)
+        for name in (
+            "solver_window_growth",
+            "reference_window_growth",
+            "window_growth_delta",
+            "profile_errors",
+            "total_power_ratio",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times")
+            object.__setattr__(self, name, values)
+        for name in self._dynamic_fields[6:-1]:
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneProfileOperatorAudit(_PyTreeDataclass):
     """Selected-mode operator audit at a localized Cyclone profile mismatch."""
 
@@ -2760,6 +2836,183 @@ def audit_parallel_phi_profile_alignment(
             f"observed={observed.source}; reference={reference.source}; "
             "parallel |phi|^2 profile alignment/normalization audit"
         ),
+    )
+
+
+def audit_cyclone_selected_ky_gap(
+    solver_trace: CycloneTrace,
+    reference_trace: CycloneTrace,
+    solver_profile: ParallelPhiTrace,
+    reference_profile: ParallelPhiTrace,
+    *,
+    growth_window_fraction: float = 0.5,
+    growth_tolerance: float = 1.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    normalize_profiles: bool = True,
+) -> CycloneSelectedKyGapAudit:
+    """Summarize the remaining selected-``ky`` growth/profile discrepancy.
+
+    GKW ``time.dat`` and ``parallel_phi.dat`` do not contain the explicit
+    ``t=0`` sample that the solver trace records.  This audit aligns the
+    post-window samples before comparing window growth and profile histories.
+    """
+
+    if not 0.0 <= growth_window_fraction < 1.0:
+        raise ValueError("growth_window_fraction must lie in [0, 1)")
+    if growth_tolerance <= 0.0:
+        raise ValueError("growth_tolerance must be positive")
+    if profile_tolerance <= 0.0:
+        raise ValueError("profile_tolerance must be positive")
+
+    solver_time, solver_growth, solver_amplitude = _post_window_trace_view(
+        solver_trace,
+        reference_trace.times,
+    )
+    reference_time = jnp.asarray(reference_trace.times, dtype=jnp.float64)
+    reference_growth = jnp.asarray(reference_trace.window_growth, dtype=jnp.float64)
+    reference_amplitude = jnp.asarray(reference_trace.physical_amplitude, dtype=jnp.float64)
+    if solver_growth.shape != reference_growth.shape:
+        raise ValueError("solver and reference traces must have matching post-window samples")
+    time_error = _max_abs_error(solver_time, reference_time)
+    if float(time_error) > 1.0e-8:
+        raise ValueError("solver and reference trace times do not align")
+
+    profile_report = compare_parallel_phi_traces(
+        solver_profile,
+        reference_profile,
+        tolerance=profile_tolerance,
+        normalize_profiles=normalize_profiles,
+    )
+    profile_audit = audit_parallel_phi_profile_alignment(
+        solver_profile,
+        reference_profile,
+        tolerance=profile_tolerance,
+        normalize_profiles=normalize_profiles,
+    )
+    if tuple(profile_report.profile_errors.shape) != tuple(reference_time.shape):
+        raise ValueError("profile trace and time trace lengths must match")
+
+    solver_late_fit = _late_fit_from_samples(
+        solver_time,
+        solver_amplitude,
+        growth_window_fraction,
+    )
+    reference_late_fit = _late_fit_from_samples(
+        reference_time,
+        reference_amplitude,
+        growth_window_fraction,
+    )
+    solver_late_mean = _late_mean_from_samples(solver_growth, growth_window_fraction)
+    reference_late_mean = _late_mean_from_samples(reference_growth, growth_window_fraction)
+    window_growth_delta = reference_growth - solver_growth
+    late_fit_delta = reference_late_fit - solver_late_fit
+    late_mean_delta = reference_late_mean - solver_late_mean
+    final_window_growth_delta = reference_growth[-1] - solver_growth[-1]
+    profile_errors = jnp.asarray(profile_report.profile_errors, dtype=jnp.float64)
+    total_power_ratio = jnp.asarray(profile_audit.total_power_ratio, dtype=jnp.float64)
+    total_power_ratio_mean = jnp.mean(total_power_ratio)
+    total_power_ratio_max_deviation = jnp.max(jnp.abs(total_power_ratio - 1.0))
+    passed = jnp.logical_and(
+        jnp.abs(late_fit_delta) <= growth_tolerance,
+        profile_report.max_abs_error <= profile_tolerance,
+    )
+    return CycloneSelectedKyGapAudit(
+        times=reference_time,
+        solver_window_growth=solver_growth,
+        reference_window_growth=reference_growth,
+        window_growth_delta=window_growth_delta,
+        profile_errors=profile_errors,
+        total_power_ratio=total_power_ratio,
+        solver_late_fit_growth=solver_late_fit,
+        reference_late_fit_growth=reference_late_fit,
+        late_fit_delta=late_fit_delta,
+        solver_late_mean_growth=solver_late_mean,
+        reference_late_mean_growth=reference_late_mean,
+        late_mean_delta=late_mean_delta,
+        final_window_growth_delta=final_window_growth_delta,
+        first_profile_error=profile_errors[0],
+        max_profile_error=profile_report.max_abs_error,
+        late_profile_error=profile_errors[-1],
+        worst_time=profile_audit.worst_time,
+        worst_z=profile_audit.worst_z,
+        worst_signed_profile_error=profile_audit.worst_signed_error,
+        total_power_ratio_mean=total_power_ratio_mean,
+        total_power_ratio_max_deviation=total_power_ratio_max_deviation,
+        passed=passed,
+        notes=(
+            f"solver={solver_trace.source}; reference={reference_trace.source}; "
+            "selected-ky growth/profile gap audit"
+        ),
+    )
+
+
+def run_cyclone_base_case_cosin2_gap_audit(
+    *,
+    gkw_time_path=None,
+    gkw_parallel_phi_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    growth_window_fraction: float = 0.5,
+    growth_tolerance: float = 1.0e-2,
+    profile_tolerance: float = 2.0e-2,
+) -> CycloneSelectedKyGapAudit:
+    """Run the solver and compare against the patched GKW ``cosin2`` fixtures."""
+
+    gkw_time_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+        if gkw_time_path is None
+        else gkw_time_path
+    )
+    gkw_parallel_phi_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat"
+        if gkw_parallel_phi_path is None
+        else gkw_parallel_phi_path
+    )
+    solver_trace = run_cyclone_base_case_trace(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    solver_profile = run_cyclone_base_case_parallel_phi_trace(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    reference_trace = load_gkw_time_dat_trace(
+        gkw_time_path,
+        source="gkw:cosin2:time.dat",
+        notes="patched selected-ky production-control cosin2 run",
+    )
+    reference_profile = load_gkw_parallel_phi_trace(
+        gkw_parallel_phi_path,
+        time_path=gkw_time_path,
+        z=np.asarray(solver_profile.z),
+        source="gkw:cosin2:parallel_phi.dat",
+        notes="patched selected-ky production-control cosin2 run",
+    )
+    return audit_cyclone_selected_ky_gap(
+        solver_trace,
+        reference_trace,
+        solver_profile,
+        reference_profile,
+        growth_window_fraction=growth_window_fraction,
+        growth_tolerance=growth_tolerance,
+        profile_tolerance=profile_tolerance,
     )
 
 
@@ -5299,6 +5552,31 @@ def _trace_fitted_growth(times, amplitudes):
     centered_log = log_amplitude - jnp.mean(log_amplitude)
     denominator = jnp.sum(centered_time**2)
     return jnp.sum(centered_time * centered_log) / denominator
+
+
+def _post_window_trace_view(solver_trace: CycloneTrace, reference_times):
+    solver_times = jnp.asarray(solver_trace.times, dtype=jnp.float64)
+    reference_times = jnp.asarray(reference_times, dtype=jnp.float64)
+    solver_growth = jnp.asarray(solver_trace.window_growth, dtype=jnp.float64)
+    solver_amplitude = jnp.asarray(solver_trace.physical_amplitude, dtype=jnp.float64)
+    if solver_times.shape == reference_times.shape:
+        return solver_times, solver_growth, solver_amplitude
+    if solver_times.shape[0] == reference_times.shape[0] + 1:
+        return solver_times[1:], solver_growth[1:], solver_amplitude[1:]
+    raise ValueError("solver trace must either match reference times or include one initial sample")
+
+
+def _late_mean_from_samples(values, start_fraction: float):
+    values = jnp.asarray(values, dtype=jnp.float64)
+    start = max(0, min(int(values.shape[0] * start_fraction), values.shape[0] - 1))
+    return jnp.mean(values[start:])
+
+
+def _late_fit_from_samples(times, amplitudes, start_fraction: float):
+    times = jnp.asarray(times, dtype=jnp.float64)
+    amplitudes = jnp.asarray(amplitudes, dtype=jnp.float64)
+    start = max(0, min(int(times.shape[0] * start_fraction), times.shape[0] - 2))
+    return _trace_fitted_growth(times[start:], amplitudes[start:])
 
 
 def _build_cyclone_base_case_setup(
