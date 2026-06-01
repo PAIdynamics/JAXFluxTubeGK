@@ -1460,6 +1460,68 @@ initialization and field-normalization conventions are no longer the dominant
 remaining explanations; the next audit should compare the evolved
 velocity-space distribution state, either through GKW \(\texttt{distr*.dat}\)
 slices or through a non-destructive final-state dump.
+
+That velocity-space audit is now available in
+\path{figures/gkw_cosin2_cyclone_velocity_slice_audit.csv}.  It loads GKW
+\(\texttt{distr1.dat}\)--\(\texttt{distr4.dat}\), which contain the final
+peak-\(\phi\) slice
+\[
+  \left(v_\parallel,\sqrt{2B\mu},
+  \Im\!\left[\frac{f\,\Delta\mu\,\Delta v_\parallel}{\phi}\right],
+  \Re\!\left[\frac{f\,\Delta\mu\,\Delta v_\parallel}{\phi}\right]\right),
+\]
+and compares it with the same diagnostic computed from the solver state at
+\(t=4.8\).  The velocity grids agree to GKW output precision:
+\(\|v_\parallel-v_\parallel^{\mathrm{GKW}}\|_\infty=5.0\times10^{-5}\) and
+\(\|v_\perp-v_\perp^{\mathrm{GKW}}\|_\infty=4.66\times10^{-5}\).  The
+normalized distribution slice remains open, with complex maximum error
+\(3.53\times10^{-2}\), complex \(L^2\) error \(8.46\times10^{-3}\), and
+relative \(L^2\) error \(3.78\times10^{-1}\).  Because GKW allocates
+\(\texttt{global\_vpar\_mu(n\_vpar,n\_mu)}\) but
+\(\texttt{output\_slice\_2d}\) writes rows over the second Fortran index and
+columns over the first, the file layout is \(N_\mu\times N_{v_\parallel}\):
+\(\mu\) rows and \(v_\parallel\) columns.  A follow-on convention audit,
+\path{figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv}, keeps this
+direct convention as the baseline and tests transposition-like C/F reshapes,
+\(\mu\) reversal, \(v_\parallel\) reversal, one-cell shifts, conjugation, sign
+flips, and \(\pm i\) phase rotations.  The best simple variant is
+\(v_\parallel\)-column reversal with no phase change, reducing the maximum
+error to \(1.85\times10^{-2}\) and the \(L^2\) error to \(5.53\times10^{-3}\).
+An even/odd decomposition in \(v_\parallel\) gives the same diagnosis: the
+odd same-sign \(L^2\) error is \(6.67\times10^{-3}\), while the odd
+opposite-sign \(L^2\) error is \(1.90\times10^{-3}\).
+The follow-on odd-\(v_\parallel\) RHS sign audit,
+\path{figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv}, keeps GKW's
+one-based \(k=1,\ldots,N_{v_\parallel}\) convention with
+\(v_{\parallel,k}=-v_{\max}+(k-\tfrac12)\Delta v\), and tests controlled sign
+flips of only the fused \(\texttt{igh}\) Term I/IV block and the parallel
+field-drive Term VII block.  A global \(\texttt{igh}\) sign reversal is ruled
+out: flipping it increases the direct final-slice maximum error to
+\(1.71\times10^{1}\).  Flipping only Term VII is not yet adopted as physics,
+but it is diagnostic: the direct Fortran layout becomes the best layout and
+the direct maximum error decreases from \(3.53\times10^{-2}\) to
+\(2.01\times10^{-2}\), with relative \(L^2\) error \(2.69\times10^{-1}\).
+The remaining debugging target is therefore the true Term VII
+\(\texttt{vpgrphi\_3\_newbc}\) source, matrix-insertion, and field-variable
+convention across \path{linear_terms.F90}, \path{matdat.F90}, and
+\path{dist.F90::get_phi}, rather than a broad velocity-grid transpose or a
+global \(\texttt{igh}\) sign flip.
+The next field-convention ladder,
+\path{figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv},
+varies the potential supplied to Term V, Term VII, and Term VIII separately.
+It rules out a global field-variable convention: applying \(-\phi\),
+\(\phi^\ast\), or \(-\phi^\ast\) to all three field terms worsens the direct
+slice error to \(1.28\times10^{-1}\), \(7.48\times10^{-2}\), and
+\(1.15\times10^{-1}\).  The best diagnostic variant is local to Term VII:
+using \(\phi^\ast\) only in \(\texttt{vpgrphi\_3\_newbc}\) reduces the direct
+maximum error to \(1.60\times10^{-2}\), with complex \(L^2\) error
+\(5.11\times10^{-3}\) and relative \(L^2\) error \(2.29\times10^{-1}\).
+The corresponding \(-\phi^\ast\) test is close but worse
+\((1.70\times10^{-2})\).  This remains a diagnostic comparison, not an adopted
+RHS change; it points next to the Term VII complex phase path through
+\path{linear_terms.F90::add_element}, \path{matdat.F90}, complex-real matrix
+storage, \(k_y\)/Fourier signs, and the \(\texttt{iphi}\) field variable read
+by \path{dist.F90::get_phi}.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

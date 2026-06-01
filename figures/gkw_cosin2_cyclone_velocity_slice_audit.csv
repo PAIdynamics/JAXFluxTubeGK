@@ -1,0 +1,13 @@
+metric,value
+vpar_error,5.0000000000105516e-05
+vperp_error,4.664794806363837e-05
+real_max_abs_error,0.032260602362433624
+imag_max_abs_error,0.021464898760242965
+complex_max_abs_error,0.035348895748192916
+complex_l2_error,0.00845562568878207
+complex_relative_l2_error,0.378493904183015
+observed_l2_norm,0.023575570972117522
+reference_l2_norm,0.022340189882406877
+time_error,0.0
+peak_z_error,0.0
+passed,False

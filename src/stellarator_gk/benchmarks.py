@@ -494,6 +494,320 @@ class CycloneSelectedKyGapAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GkwVelocitySpaceSlice(_PyTreeDataclass):
+    """Peak-``phi`` velocity-space slice using GKW ``distr*.dat`` normalization."""
+
+    vpar: object
+    vperp: object
+    real_part: object
+    imag_part: object
+    time: object = np.nan
+    peak_z: object = np.nan
+    peak_z_index: object = -1
+    source: str = ""
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "vpar",
+        "vperp",
+        "real_part",
+        "imag_part",
+        "time",
+        "peak_z",
+        "peak_z_index",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        vpar = jnp.asarray(self.vpar, dtype=jnp.float64)
+        if vpar.ndim != 2 or 0 in vpar.shape:
+            raise ValueError("vpar must have nonempty shape (n_mu,n_vpar)")
+        object.__setattr__(self, "vpar", vpar)
+        for name in ("vperp", "real_part", "imag_part"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != vpar.shape:
+                raise ValueError(f"{name} must match vpar shape")
+            object.__setattr__(self, name, values)
+        object.__setattr__(self, "time", jnp.asarray(self.time, dtype=jnp.float64))
+        object.__setattr__(self, "peak_z", jnp.asarray(self.peak_z, dtype=jnp.float64))
+        object.__setattr__(self, "peak_z_index", jnp.asarray(self.peak_z_index, dtype=jnp.int32))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneVelocitySpaceSliceAudit(_PyTreeDataclass):
+    """Selected-``ky`` comparison against GKW peak-``phi`` velocity slices."""
+
+    vpar_error: object
+    vperp_error: object
+    real_max_abs_error: object
+    imag_max_abs_error: object
+    complex_max_abs_error: object
+    complex_l2_error: object
+    complex_relative_l2_error: object
+    observed_l2_norm: object
+    reference_l2_norm: object
+    time_error: object
+    peak_z_error: object
+    passed: object
+    shape: tuple[int, int]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "vpar_error",
+        "vperp_error",
+        "real_max_abs_error",
+        "imag_max_abs_error",
+        "complex_max_abs_error",
+        "complex_l2_error",
+        "complex_relative_l2_error",
+        "observed_l2_norm",
+        "reference_l2_norm",
+        "time_error",
+        "peak_z_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("shape", "notes")
+
+    def __post_init__(self):
+        for name in self._dynamic_fields[:-1]:
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        if len(self.shape) != 2 or any(int(value) < 1 for value in self.shape):
+            raise ValueError("shape must be a positive (n_mu,n_vpar) tuple")
+        object.__setattr__(self, "shape", tuple(int(value) for value in self.shape))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class VelocitySliceConventionAudit(_PyTreeDataclass):
+    """Debug simple indexing/layout/phase conventions for velocity slices."""
+
+    max_abs_errors: object
+    l2_errors: object
+    best_variant_index: object
+    best_max_abs_error: object
+    best_l2_error: object
+    direct_max_abs_error: object
+    direct_l2_error: object
+    even_max_abs_error: object
+    even_l2_error: object
+    odd_same_sign_max_abs_error: object
+    odd_same_sign_l2_error: object
+    odd_opposite_sign_max_abs_error: object
+    odd_opposite_sign_l2_error: object
+    variant_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "max_abs_errors",
+        "l2_errors",
+        "best_variant_index",
+        "best_max_abs_error",
+        "best_l2_error",
+        "direct_max_abs_error",
+        "direct_l2_error",
+        "even_max_abs_error",
+        "even_l2_error",
+        "odd_same_sign_max_abs_error",
+        "odd_same_sign_l2_error",
+        "odd_opposite_sign_max_abs_error",
+        "odd_opposite_sign_l2_error",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("variant_names", "notes")
+
+    def __post_init__(self):
+        errors = jnp.asarray(self.max_abs_errors, dtype=jnp.float64)
+        l2_errors = jnp.asarray(self.l2_errors, dtype=jnp.float64)
+        if errors.ndim != 1 or l2_errors.shape != errors.shape:
+            raise ValueError("max_abs_errors and l2_errors must be matching one-dimensional arrays")
+        if len(self.variant_names) != errors.shape[0]:
+            raise ValueError("variant_names length must match errors")
+        object.__setattr__(self, "max_abs_errors", errors)
+        object.__setattr__(self, "l2_errors", l2_errors)
+        object.__setattr__(
+            self,
+            "best_variant_index",
+            jnp.asarray(self.best_variant_index, dtype=jnp.int32),
+        )
+        for name in (
+            "best_max_abs_error",
+            "best_l2_error",
+            "direct_max_abs_error",
+            "direct_l2_error",
+            "even_max_abs_error",
+            "even_l2_error",
+            "odd_same_sign_max_abs_error",
+            "odd_same_sign_l2_error",
+            "odd_opposite_sign_max_abs_error",
+            "odd_opposite_sign_l2_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "variant_names", tuple(self.variant_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneVparOddSignAudit(_PyTreeDataclass):
+    """Controlled RHS sign audit for odd-in-``v_parallel`` Cyclone terms."""
+
+    direct_max_abs_errors: object
+    direct_l2_errors: object
+    direct_relative_l2_errors: object
+    best_layout_max_abs_errors: object
+    best_layout_l2_errors: object
+    peak_z_values: object
+    best_direct_variant_index: object
+    best_layout_variant_index: object
+    baseline_direct_max_abs_error: object
+    field_flip_direct_max_abs_error: object
+    direct_improvement_factor: object
+    rhs_variant_names: tuple[str, ...]
+    best_layout_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "direct_max_abs_errors",
+        "direct_l2_errors",
+        "direct_relative_l2_errors",
+        "best_layout_max_abs_errors",
+        "best_layout_l2_errors",
+        "peak_z_values",
+        "best_direct_variant_index",
+        "best_layout_variant_index",
+        "baseline_direct_max_abs_error",
+        "field_flip_direct_max_abs_error",
+        "direct_improvement_factor",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "rhs_variant_names",
+        "best_layout_names",
+        "notes",
+    )
+
+    def __post_init__(self):
+        direct = jnp.asarray(self.direct_max_abs_errors, dtype=jnp.float64)
+        if direct.ndim != 1:
+            raise ValueError("direct_max_abs_errors must be one-dimensional")
+        n_variant = direct.shape[0]
+        if len(self.rhs_variant_names) != n_variant:
+            raise ValueError("rhs_variant_names length must match errors")
+        if len(self.best_layout_names) != n_variant:
+            raise ValueError("best_layout_names length must match errors")
+        object.__setattr__(self, "direct_max_abs_errors", direct)
+        for name in (
+            "direct_l2_errors",
+            "direct_relative_l2_errors",
+            "best_layout_max_abs_errors",
+            "best_layout_l2_errors",
+            "peak_z_values",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != direct.shape:
+                raise ValueError(f"{name} must match direct_max_abs_errors")
+            object.__setattr__(self, name, values)
+        for name in ("best_direct_variant_index", "best_layout_variant_index"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.int32))
+        for name in (
+            "baseline_direct_max_abs_error",
+            "field_flip_direct_max_abs_error",
+            "direct_improvement_factor",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "rhs_variant_names", tuple(self.rhs_variant_names))
+        object.__setattr__(self, "best_layout_names", tuple(self.best_layout_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneTermVIIFieldConventionAudit(_PyTreeDataclass):
+    """Distinguish Term VII sign from broader field-variable conventions."""
+
+    direct_max_abs_errors: object
+    direct_l2_errors: object
+    direct_relative_l2_errors: object
+    best_layout_max_abs_errors: object
+    best_layout_l2_errors: object
+    peak_z_values: object
+    best_direct_variant_index: object
+    best_layout_variant_index: object
+    baseline_direct_max_abs_error: object
+    term_vii_only_direct_max_abs_error: object
+    all_field_direct_max_abs_error: object
+    nonparallel_field_direct_max_abs_error: object
+    term_vii_only_improvement_factor: object
+    variant_names: tuple[str, ...]
+    best_layout_names: tuple[str, ...]
+    term_v_phi_variants: tuple[str, ...]
+    term_vii_phi_variants: tuple[str, ...]
+    term_viii_phi_variants: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "direct_max_abs_errors",
+        "direct_l2_errors",
+        "direct_relative_l2_errors",
+        "best_layout_max_abs_errors",
+        "best_layout_l2_errors",
+        "peak_z_values",
+        "best_direct_variant_index",
+        "best_layout_variant_index",
+        "baseline_direct_max_abs_error",
+        "term_vii_only_direct_max_abs_error",
+        "all_field_direct_max_abs_error",
+        "nonparallel_field_direct_max_abs_error",
+        "term_vii_only_improvement_factor",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "variant_names",
+        "best_layout_names",
+        "term_v_phi_variants",
+        "term_vii_phi_variants",
+        "term_viii_phi_variants",
+        "notes",
+    )
+
+    def __post_init__(self):
+        direct = jnp.asarray(self.direct_max_abs_errors, dtype=jnp.float64)
+        if direct.ndim != 1:
+            raise ValueError("direct_max_abs_errors must be one-dimensional")
+        n_variant = direct.shape[0]
+        for name in (
+            "variant_names",
+            "best_layout_names",
+            "term_v_phi_variants",
+            "term_vii_phi_variants",
+            "term_viii_phi_variants",
+        ):
+            if len(getattr(self, name)) != n_variant:
+                raise ValueError(f"{name} length must match errors")
+            object.__setattr__(self, name, tuple(getattr(self, name)))
+        object.__setattr__(self, "direct_max_abs_errors", direct)
+        for name in (
+            "direct_l2_errors",
+            "direct_relative_l2_errors",
+            "best_layout_max_abs_errors",
+            "best_layout_l2_errors",
+            "peak_z_values",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != direct.shape:
+                raise ValueError(f"{name} must match direct_max_abs_errors")
+            object.__setattr__(self, name, values)
+        for name in ("best_direct_variant_index", "best_layout_variant_index"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.int32))
+        for name in (
+            "baseline_direct_max_abs_error",
+            "term_vii_only_direct_max_abs_error",
+            "all_field_direct_max_abs_error",
+            "nonparallel_field_direct_max_abs_error",
+            "term_vii_only_improvement_factor",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneProfileOperatorAudit(_PyTreeDataclass):
     """Selected-mode operator audit at a localized Cyclone profile mismatch."""
 
@@ -2489,6 +2803,54 @@ def load_gkw_parallel_phi_trace(
     )
 
 
+def load_gkw_velocity_space_slice(
+    distr1_path,
+    distr2_path,
+    distr3_path,
+    distr4_path,
+    *,
+    time_path=None,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwVelocitySpaceSlice:
+    """Load GKW final ``distr*.dat`` velocity-space diagnostic files.
+
+    GKW writes rows in ``(n_mu,n_vpar)`` order after selecting the parallel
+    point with maximum ``|phi|``.  The files store
+    ``v_parallel``, ``sqrt(2 B mu)``, and the imaginary/real parts of
+    ``f * intmu * intvp / phi``.
+    """
+
+    vpar = _load_gkw_distr_array(distr1_path, "distr1.dat")
+    vperp = _load_gkw_distr_array(distr2_path, "distr2.dat")
+    imag_part = _load_gkw_distr_array(distr3_path, "distr3.dat")
+    real_part = _load_gkw_distr_array(distr4_path, "distr4.dat")
+    shape = vpar.shape
+    for name, values in (
+        ("distr2.dat", vperp),
+        ("distr3.dat", imag_part),
+        ("distr4.dat", real_part),
+    ):
+        if values.shape != shape:
+            raise ValueError(f"{name} shape must match distr1.dat")
+
+    time = np.nan
+    if time_path is not None:
+        time = float(_gkw_time_dat_times(time_path)[-1])
+    slice_notes = "GKW distr*.dat velocity-space slice"
+    if notes:
+        slice_notes = f"{slice_notes}; {notes}"
+    return GkwVelocitySpaceSlice(
+        vpar=vpar,
+        vperp=vperp,
+        real_part=real_part,
+        imag_part=imag_part,
+        time=time,
+        source=source or str(Path(distr1_path).parent),
+        notes=slice_notes,
+    )
+
+
 def run_cyclone_base_case_parallel_phi_trace(
     *,
     n_z: int = 16,
@@ -2657,6 +3019,708 @@ def run_cyclone_base_case_parallel_phi_trace(
             f"normalize_each_window={normalize_each_window}, "
             f"physical_power={physical_power}, "
             f"normalization_model={normalization_model}"
+        ),
+    )
+
+
+def run_cyclone_base_case_velocity_space_slice(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> GkwVelocitySpaceSlice:
+    """Run the selected-``ky`` CBC setup and return the GKW ``distr*.dat`` slice."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    phi = solve_phi(state)
+    for _window in range(n_windows):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = solve_phi(state)
+
+    mode_phi = phi[:, ixzero, selected]
+    peak_z_index = int(np.asarray(jnp.argmax(jnp.abs(mode_phi))))
+    peak_phi = mode_phi[peak_z_index]
+    floor = jnp.asarray(1.0e-300, dtype=jnp.float64)
+    peak_phi = jnp.where(jnp.abs(peak_phi) > floor, peak_phi, floor + 0.0j)
+    weighted = (
+        state[:, :, peak_z_index, ixzero, selected]
+        * setup["velocity"].w_vpar[:, None]
+        * setup["velocity"].w_mu[None, :]
+        / peak_phi
+    )
+    weighted_mu_vpar = jnp.transpose(weighted)
+    vpar = jnp.broadcast_to(setup["velocity"].vpar[None, :], weighted_mu_vpar.shape)
+    vperp = jnp.sqrt(
+        2.0
+        * setup["geometry"].B[peak_z_index]
+        * jnp.maximum(setup["velocity"].mu[:, None], 0.0)
+    )
+    vperp = jnp.broadcast_to(vperp, weighted_mu_vpar.shape)
+    final_time = n_windows * steps_per_window * dt
+    return GkwVelocitySpaceSlice(
+        vpar=vpar,
+        vperp=vperp,
+        real_part=jnp.real(weighted_mu_vpar),
+        imag_part=jnp.imag(weighted_mu_vpar),
+        time=final_time,
+        peak_z=setup["parallel"].z[peak_z_index],
+        peak_z_index=peak_z_index,
+        source="stellarator_gk",
+        notes=(
+            "selected-ky CBC velocity-space slice with GKW distr*.dat normalization; "
+            f"initial_profile={initial_profile}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
+            f"normalize_each_window={normalize_each_window}, "
+            f"normalization_model={normalization_model}"
+        ),
+    )
+
+
+def run_cyclone_base_case_cosin2_vpar_odd_sign_audit(
+    *,
+    reference_slice: GkwVelocitySpaceSlice | None = None,
+    gkw_distr1_path=None,
+    gkw_distr2_path=None,
+    gkw_distr3_path=None,
+    gkw_distr4_path=None,
+    gkw_time_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    target: BenchmarkTarget | None = None,
+) -> CycloneVparOddSignAudit:
+    """Compare controlled odd-``v_parallel`` RHS sign variants to GKW slices."""
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    if reference_slice is None:
+        gkw_distr1_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat"
+            if gkw_distr1_path is None
+            else gkw_distr1_path
+        )
+        gkw_distr2_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat"
+            if gkw_distr2_path is None
+            else gkw_distr2_path
+        )
+        gkw_distr3_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat"
+            if gkw_distr3_path is None
+            else gkw_distr3_path
+        )
+        gkw_distr4_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat"
+            if gkw_distr4_path is None
+            else gkw_distr4_path
+        )
+        gkw_time_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+            if gkw_time_path is None
+            else gkw_time_path
+        )
+        reference_slice = load_gkw_velocity_space_slice(
+            gkw_distr1_path,
+            gkw_distr2_path,
+            gkw_distr3_path,
+            gkw_distr4_path,
+            time_path=gkw_time_path,
+            source="gkw:cosin2:distr*.dat",
+            notes="patched selected-ky production-control cosin2 final output",
+        )
+
+    variants = (
+        ("baseline", 1.0, 1.0),
+        ("flip_igh", -1.0, 1.0),
+        ("flip_parallel_field_drive", 1.0, -1.0),
+        ("flip_igh_and_parallel_field_drive", -1.0, -1.0),
+    )
+    direct_max = []
+    direct_l2 = []
+    direct_relative = []
+    best_layout_max = []
+    best_layout_l2 = []
+    peak_z = []
+    best_layout_names = []
+    for _name, igh_sign, field_sign in variants:
+        observed = _run_cyclone_base_case_velocity_space_slice_with_odd_signs(
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            n_windows=n_windows,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            target=target,
+            igh_sign=igh_sign,
+            parallel_field_drive_sign=field_sign,
+        )
+        direct_report = audit_cyclone_velocity_space_slice(
+            observed,
+            reference_slice,
+            tolerance=1.0,
+            grid_tolerance=1.0e-4,
+        )
+        convention_report = audit_velocity_space_slice_conventions(observed, reference_slice)
+        direct_max.append(direct_report.complex_max_abs_error)
+        direct_l2.append(direct_report.complex_l2_error)
+        direct_relative.append(direct_report.complex_relative_l2_error)
+        best_layout_max.append(convention_report.best_max_abs_error)
+        best_layout_l2.append(convention_report.best_l2_error)
+        peak_z.append(observed.peak_z)
+        best_layout_names.append(
+            convention_report.variant_names[int(convention_report.best_variant_index)]
+        )
+
+    direct_max_array = jnp.asarray(direct_max, dtype=jnp.float64)
+    best_layout_max_array = jnp.asarray(best_layout_max, dtype=jnp.float64)
+    field_flip_index = 2
+    improvement = direct_max_array[0] / jnp.maximum(
+        direct_max_array[field_flip_index],
+        jnp.asarray(1.0e-300, dtype=direct_max_array.dtype),
+    )
+    return CycloneVparOddSignAudit(
+        direct_max_abs_errors=direct_max_array,
+        direct_l2_errors=jnp.asarray(direct_l2, dtype=jnp.float64),
+        direct_relative_l2_errors=jnp.asarray(direct_relative, dtype=jnp.float64),
+        best_layout_max_abs_errors=best_layout_max_array,
+        best_layout_l2_errors=jnp.asarray(best_layout_l2, dtype=jnp.float64),
+        peak_z_values=jnp.asarray(peak_z, dtype=jnp.float64),
+        best_direct_variant_index=jnp.argmin(direct_max_array),
+        best_layout_variant_index=jnp.argmin(best_layout_max_array),
+        baseline_direct_max_abs_error=direct_max_array[0],
+        field_flip_direct_max_abs_error=direct_max_array[field_flip_index],
+        direct_improvement_factor=improvement,
+        rhs_variant_names=tuple(name for name, _igh_sign, _field_sign in variants),
+        best_layout_names=tuple(best_layout_names),
+        notes=(
+            "controlled odd-vpar RHS sign audit; variants flip only the fused "
+            "linear_terms.F90:igh Term I/IV block and/or vpgrphi_3_newbc Term VII; "
+            "GKW velocity columns use one-based k=1..N with "
+            "vpgr=-vmax+(k-1/2)*dv"
+        ),
+    )
+
+
+def run_cyclone_base_case_cosin2_term_vii_field_convention_audit(
+    *,
+    reference_slice: GkwVelocitySpaceSlice | None = None,
+    gkw_distr1_path=None,
+    gkw_distr2_path=None,
+    gkw_distr3_path=None,
+    gkw_distr4_path=None,
+    gkw_time_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    target: BenchmarkTarget | None = None,
+) -> CycloneTermVIIFieldConventionAudit:
+    """Audit whether the selected-ky gap is a global or Term VII field convention."""
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    if reference_slice is None:
+        gkw_distr1_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat"
+            if gkw_distr1_path is None
+            else gkw_distr1_path
+        )
+        gkw_distr2_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat"
+            if gkw_distr2_path is None
+            else gkw_distr2_path
+        )
+        gkw_distr3_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat"
+            if gkw_distr3_path is None
+            else gkw_distr3_path
+        )
+        gkw_distr4_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat"
+            if gkw_distr4_path is None
+            else gkw_distr4_path
+        )
+        gkw_time_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+            if gkw_time_path is None
+            else gkw_time_path
+        )
+        reference_slice = load_gkw_velocity_space_slice(
+            gkw_distr1_path,
+            gkw_distr2_path,
+            gkw_distr3_path,
+            gkw_distr4_path,
+            time_path=gkw_time_path,
+            source="gkw:cosin2:distr*.dat",
+            notes="patched selected-ky production-control cosin2 final output",
+        )
+
+    variants = (
+        ("baseline", "identity", "identity", "identity"),
+        ("flip_all_field_terms", "negative", "negative", "negative"),
+        ("flip_term_v_and_viii_only", "negative", "identity", "negative"),
+        ("flip_term_vii_only", "identity", "negative", "identity"),
+        ("conjugate_all_field_terms", "conjugate", "conjugate", "conjugate"),
+        ("conjugate_term_vii_only", "identity", "conjugate", "identity"),
+        (
+            "negative_conjugate_all_field_terms",
+            "negative_conjugate",
+            "negative_conjugate",
+            "negative_conjugate",
+        ),
+        (
+            "negative_conjugate_term_vii_only",
+            "identity",
+            "negative_conjugate",
+            "identity",
+        ),
+    )
+    direct_max = []
+    direct_l2 = []
+    direct_relative = []
+    best_layout_max = []
+    best_layout_l2 = []
+    peak_z = []
+    best_layout_names = []
+    for name, term_v_variant, term_vii_variant, term_viii_variant in variants:
+        observed = _run_cyclone_base_case_velocity_space_slice_with_odd_signs(
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            n_windows=n_windows,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            target=target,
+            igh_sign=1.0,
+            parallel_field_drive_sign=1.0,
+            term_v_phi_variant=term_v_variant,
+            term_vii_phi_variant=term_vii_variant,
+            term_viii_phi_variant=term_viii_variant,
+            source_label=f"term_vii_field_convention:{name}",
+        )
+        direct_report = audit_cyclone_velocity_space_slice(
+            observed,
+            reference_slice,
+            tolerance=1.0,
+            grid_tolerance=1.0e-4,
+        )
+        convention_report = audit_velocity_space_slice_conventions(observed, reference_slice)
+        direct_max.append(direct_report.complex_max_abs_error)
+        direct_l2.append(direct_report.complex_l2_error)
+        direct_relative.append(direct_report.complex_relative_l2_error)
+        best_layout_max.append(convention_report.best_max_abs_error)
+        best_layout_l2.append(convention_report.best_l2_error)
+        peak_z.append(observed.peak_z)
+        best_layout_names.append(
+            convention_report.variant_names[int(convention_report.best_variant_index)]
+        )
+
+    direct_max_array = jnp.asarray(direct_max, dtype=jnp.float64)
+    best_layout_max_array = jnp.asarray(best_layout_max, dtype=jnp.float64)
+    term_vii_only_index = 3
+    improvement = direct_max_array[0] / jnp.maximum(
+        direct_max_array[term_vii_only_index],
+        jnp.asarray(1.0e-300, dtype=direct_max_array.dtype),
+    )
+    return CycloneTermVIIFieldConventionAudit(
+        direct_max_abs_errors=direct_max_array,
+        direct_l2_errors=jnp.asarray(direct_l2, dtype=jnp.float64),
+        direct_relative_l2_errors=jnp.asarray(direct_relative, dtype=jnp.float64),
+        best_layout_max_abs_errors=best_layout_max_array,
+        best_layout_l2_errors=jnp.asarray(best_layout_l2, dtype=jnp.float64),
+        peak_z_values=jnp.asarray(peak_z, dtype=jnp.float64),
+        best_direct_variant_index=jnp.argmin(direct_max_array),
+        best_layout_variant_index=jnp.argmin(best_layout_max_array),
+        baseline_direct_max_abs_error=direct_max_array[0],
+        term_vii_only_direct_max_abs_error=direct_max_array[term_vii_only_index],
+        all_field_direct_max_abs_error=direct_max_array[1],
+        nonparallel_field_direct_max_abs_error=direct_max_array[2],
+        term_vii_only_improvement_factor=improvement,
+        variant_names=tuple(name for name, _term_v, _term_vii, _term_viii in variants),
+        best_layout_names=tuple(best_layout_names),
+        term_v_phi_variants=tuple(term_v for _name, term_v, _term_vii, _term_viii in variants),
+        term_vii_phi_variants=tuple(
+            term_vii for _name, _term_v, term_vii, _term_viii in variants
+        ),
+        term_viii_phi_variants=tuple(
+            term_viii for _name, _term_v, _term_vii, term_viii in variants
+        ),
+        notes=(
+            "field-variable convention audit for Terms V, VII, and VIII; "
+            "dist.F90::get_phi stores fdis(iphi) directly, so this distinguishes "
+            "global phi sign/conjugation from an isolated vpgrphi_3_newbc Term VII convention"
+        ),
+    )
+
+
+_FIELD_PHI_VARIANTS = ("identity", "negative", "conjugate", "negative_conjugate")
+
+
+def _validate_field_phi_variant(variant: str) -> str:
+    if variant not in _FIELD_PHI_VARIANTS:
+        raise ValueError(f"unsupported phi variant {variant!r}; expected one of {_FIELD_PHI_VARIANTS}")
+    return variant
+
+
+def _apply_field_phi_variant(phi, variant: str):
+    variant = _validate_field_phi_variant(variant)
+    if variant == "identity":
+        return phi
+    if variant == "negative":
+        return -phi
+    if variant == "conjugate":
+        return jnp.conj(phi)
+    return -jnp.conj(phi)
+
+
+def _run_cyclone_base_case_velocity_space_slice_with_odd_signs(
+    *,
+    n_z: int,
+    n_vpar: int,
+    n_mu: int,
+    vpar_max: float | None,
+    mu_max: float | None,
+    dt: float | None,
+    nperiod: int | None,
+    steps_per_window: int,
+    n_windows: int,
+    parallel_recurrence_rate: float | None,
+    velocity_recurrence_rate: float | None,
+    parallel_backend: str | None,
+    parallel_boundary: str | None,
+    velocity_backend: str | None,
+    normalize_each_window: bool,
+    normalization_model: str,
+    target: BenchmarkTarget | None,
+    igh_sign: float,
+    parallel_field_drive_sign: float,
+    term_v_phi_variant: str = "identity",
+    term_vii_phi_variant: str = "identity",
+    term_viii_phi_variant: str = "identity",
+    source_label: str | None = None,
+) -> GkwVelocitySpaceSlice:
+    from .physics import (
+        dissipation,
+        drift_field_drive,
+        equilibrium_drive,
+        gkw_igh_streaming_mirror,
+        gkw_parallel_field_drive,
+        magnetic_drift_advection,
+        solve_adiabatic_electron_phi,
+    )
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    term_v_phi_variant = _validate_field_phi_variant(term_v_phi_variant)
+    term_vii_phi_variant = _validate_field_phi_variant(term_vii_phi_variant)
+    term_viii_phi_variant = _validate_field_phi_variant(term_viii_phi_variant)
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        "gkw_igh",
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_igh",
+        velocity_backend=velocity_backend,
+        initial_profile="cosine2",
+    )
+    rhs = setup["precompute"].rhs
+    field = setup["precompute"].field
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, field))
+
+    def residual_with_signs(state_value, precomputed=None, phi=None):
+        del precomputed
+        phi_value = solve_adiabatic_electron_phi(state_value, field) if phi is None else phi
+        phi_term_v = _apply_field_phi_variant(phi_value, term_v_phi_variant)
+        phi_term_vii = _apply_field_phi_variant(phi_value, term_vii_phi_variant)
+        phi_term_viii = _apply_field_phi_variant(phi_value, term_viii_phi_variant)
+        return (
+            igh_sign * gkw_igh_streaming_mirror(state_value, rhs)
+            + magnetic_drift_advection(state_value, rhs.magnetic_drift_frequency)
+            + equilibrium_drive(phi_term_v, rhs)
+            + parallel_field_drive_sign * gkw_parallel_field_drive(phi_term_vii, rhs)
+            + drift_field_drive(phi_term_viii, rhs)
+            + dissipation(state_value, rhs.perpendicular_damping)
+        )
+
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                residual_with_signs,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    phi = solve_phi(state)
+    for _window in range(n_windows):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = solve_phi(state)
+
+    mode_phi = phi[:, ixzero, selected]
+    peak_z_index = int(np.asarray(jnp.argmax(jnp.abs(mode_phi))))
+    peak_phi = mode_phi[peak_z_index]
+    floor = jnp.asarray(1.0e-300, dtype=jnp.float64)
+    peak_phi = jnp.where(jnp.abs(peak_phi) > floor, peak_phi, floor + 0.0j)
+    weighted = (
+        state[:, :, peak_z_index, ixzero, selected]
+        * setup["velocity"].w_vpar[:, None]
+        * setup["velocity"].w_mu[None, :]
+        / peak_phi
+    )
+    weighted_mu_vpar = jnp.transpose(weighted)
+    vpar = jnp.broadcast_to(setup["velocity"].vpar[None, :], weighted_mu_vpar.shape)
+    vperp = jnp.sqrt(
+        2.0
+        * setup["geometry"].B[peak_z_index]
+        * jnp.maximum(setup["velocity"].mu[:, None], 0.0)
+    )
+    vperp = jnp.broadcast_to(vperp, weighted_mu_vpar.shape)
+    final_time = n_windows * steps_per_window * dt
+    return GkwVelocitySpaceSlice(
+        vpar=vpar,
+        vperp=vperp,
+        real_part=jnp.real(weighted_mu_vpar),
+        imag_part=jnp.imag(weighted_mu_vpar),
+        time=final_time,
+        peak_z=setup["parallel"].z[peak_z_index],
+        peak_z_index=peak_z_index,
+        source=(
+            f"stellarator_gk:{source_label or 'vpar_odd_sign_audit'}:"
+            f"igh_sign={igh_sign:g}:parallel_field_drive_sign={parallel_field_drive_sign:g}"
+        ),
+        notes=(
+            "selected-ky CBC velocity-space slice with controlled odd-vpar RHS sign flips; "
+            f"normalize_each_window={normalize_each_window}, "
+            f"normalization_model={normalization_model}, "
+            f"term_v_phi_variant={term_v_phi_variant}, "
+            f"term_vii_phi_variant={term_vii_phi_variant}, "
+            f"term_viii_phi_variant={term_viii_phi_variant}"
         ),
     )
 
@@ -2946,6 +4010,161 @@ def audit_cyclone_selected_ky_gap(
     )
 
 
+def audit_cyclone_velocity_space_slice(
+    observed: GkwVelocitySpaceSlice,
+    reference: GkwVelocitySpaceSlice,
+    *,
+    tolerance: float = 2.0e-2,
+    grid_tolerance: float = 1.0e-4,
+    time_tolerance: float = 1.0e-8,
+    peak_z_tolerance: float | None = None,
+) -> CycloneVelocitySpaceSliceAudit:
+    """Compare two GKW-normalized selected-``ky`` velocity-space slices."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if grid_tolerance < 0.0:
+        raise ValueError("grid_tolerance must be nonnegative")
+    if time_tolerance < 0.0:
+        raise ValueError("time_tolerance must be nonnegative")
+    if peak_z_tolerance is not None and peak_z_tolerance < 0.0:
+        raise ValueError("peak_z_tolerance must be nonnegative")
+    if tuple(observed.vpar.shape) != tuple(reference.vpar.shape):
+        raise ValueError("velocity-space slices must have matching shapes")
+
+    observed_complex = jnp.asarray(observed.real_part) + 1j * jnp.asarray(observed.imag_part)
+    reference_complex = jnp.asarray(reference.real_part) + 1j * jnp.asarray(reference.imag_part)
+    delta = observed_complex - reference_complex
+    vpar_error = _max_abs_error(observed.vpar, reference.vpar)
+    vperp_error = _max_abs_error(observed.vperp, reference.vperp)
+    real_error = _max_abs_error(observed.real_part, reference.real_part)
+    imag_error = _max_abs_error(observed.imag_part, reference.imag_part)
+    complex_max = jnp.max(jnp.abs(delta))
+    complex_l2 = _l2_norm(delta)
+    observed_l2 = _l2_norm(observed_complex)
+    reference_l2 = _l2_norm(reference_complex)
+    complex_relative = complex_l2 / jnp.maximum(
+        reference_l2,
+        jnp.asarray(1.0e-300, dtype=reference_l2.dtype),
+    )
+    observed_time = jnp.asarray(observed.time, dtype=jnp.float64)
+    reference_time = jnp.asarray(reference.time, dtype=jnp.float64)
+    time_error = jnp.where(
+        jnp.logical_and(jnp.isfinite(observed_time), jnp.isfinite(reference_time)),
+        jnp.abs(observed_time - reference_time),
+        jnp.asarray(0.0, dtype=jnp.float64),
+    )
+    observed_peak_z = jnp.asarray(observed.peak_z, dtype=jnp.float64)
+    reference_peak_z = jnp.asarray(reference.peak_z, dtype=jnp.float64)
+    peak_z_error = jnp.where(
+        jnp.logical_and(jnp.isfinite(observed_peak_z), jnp.isfinite(reference_peak_z)),
+        jnp.abs(observed_peak_z - reference_peak_z),
+        jnp.asarray(0.0, dtype=jnp.float64),
+    )
+    peak_pass = (
+        jnp.asarray(True)
+        if peak_z_tolerance is None
+        else peak_z_error <= jnp.asarray(peak_z_tolerance, dtype=jnp.float64)
+    )
+    passed = jnp.logical_and(
+        complex_max <= tolerance,
+        jnp.logical_and(
+            jnp.maximum(vpar_error, vperp_error) <= grid_tolerance,
+            jnp.logical_and(time_error <= time_tolerance, peak_pass),
+        ),
+    )
+    return CycloneVelocitySpaceSliceAudit(
+        vpar_error=vpar_error,
+        vperp_error=vperp_error,
+        real_max_abs_error=real_error,
+        imag_max_abs_error=imag_error,
+        complex_max_abs_error=complex_max,
+        complex_l2_error=complex_l2,
+        complex_relative_l2_error=complex_relative,
+        observed_l2_norm=observed_l2,
+        reference_l2_norm=reference_l2,
+        time_error=time_error,
+        peak_z_error=peak_z_error,
+        passed=passed,
+        shape=tuple(int(value) for value in observed.vpar.shape),
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "GKW-normalized velocity-space slice comparison"
+        ),
+    )
+
+
+def audit_velocity_space_slice_conventions(
+    observed: GkwVelocitySpaceSlice,
+    reference: GkwVelocitySpaceSlice,
+) -> VelocitySliceConventionAudit:
+    """Check simple Fortran/Python indexing, layout, and phase conventions.
+
+    GKW allocates the diagnostic work array as ``(n_vpar,n_mu)`` but
+    ``output_slice_2d`` writes rows over the second Fortran index and columns
+    over the first.  Therefore the text files are expected to load as
+    ``(n_mu,n_vpar)`` in NumPy.  This diagnostic keeps that direct convention as
+    the baseline and tests common mistakes: axis reversals, one-cell circular
+    shifts from 1-based/0-based thinking, C/F-order reshapes, and simple complex
+    sign/phase/conjugation variants.
+    """
+
+    if tuple(observed.vpar.shape) != tuple(reference.vpar.shape):
+        raise ValueError("velocity-space slices must have matching shapes")
+    observed_complex = jnp.asarray(observed.real_part) + 1j * jnp.asarray(observed.imag_part)
+    reference_complex = jnp.asarray(reference.real_part) + 1j * jnp.asarray(reference.imag_part)
+    spatial_variants = _velocity_slice_spatial_variants(observed_complex)
+    phase_variants = (
+        ("identity", lambda values: values),
+        ("negative", lambda values: -values),
+        ("conjugate", jnp.conj),
+        ("negative_conjugate", lambda values: -jnp.conj(values)),
+        ("i_times", lambda values: 1j * values),
+        ("minus_i_times", lambda values: -1j * values),
+    )
+    names = []
+    max_errors = []
+    l2_errors = []
+    for spatial_name, spatial_values in spatial_variants:
+        for phase_name, phase_fn in phase_variants:
+            variant = phase_fn(spatial_values)
+            delta = variant - reference_complex
+            names.append(f"{spatial_name}:{phase_name}")
+            max_errors.append(jnp.max(jnp.abs(delta)))
+            l2_errors.append(_l2_norm(delta))
+
+    max_error_array = jnp.asarray(max_errors, dtype=jnp.float64)
+    l2_error_array = jnp.asarray(l2_errors, dtype=jnp.float64)
+    best_index = jnp.argmin(max_error_array)
+    observed_even = 0.5 * (observed_complex + observed_complex[:, ::-1])
+    reference_even = 0.5 * (reference_complex + reference_complex[:, ::-1])
+    observed_odd = 0.5 * (observed_complex - observed_complex[:, ::-1])
+    reference_odd = 0.5 * (reference_complex - reference_complex[:, ::-1])
+    even_delta = observed_even - reference_even
+    odd_same_delta = observed_odd - reference_odd
+    odd_opposite_delta = observed_odd + reference_odd
+    return VelocitySliceConventionAudit(
+        max_abs_errors=max_error_array,
+        l2_errors=l2_error_array,
+        best_variant_index=best_index,
+        best_max_abs_error=max_error_array[best_index],
+        best_l2_error=l2_error_array[best_index],
+        direct_max_abs_error=max_error_array[0],
+        direct_l2_error=l2_error_array[0],
+        even_max_abs_error=jnp.max(jnp.abs(even_delta)),
+        even_l2_error=_l2_norm(even_delta),
+        odd_same_sign_max_abs_error=jnp.max(jnp.abs(odd_same_delta)),
+        odd_same_sign_l2_error=_l2_norm(odd_same_delta),
+        odd_opposite_sign_max_abs_error=jnp.max(jnp.abs(odd_opposite_delta)),
+        odd_opposite_sign_l2_error=_l2_norm(odd_opposite_delta),
+        variant_names=tuple(names),
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "velocity-space convention audit for Fortran row/column and 1-based indexing"
+        ),
+    )
+
+
 def run_cyclone_base_case_cosin2_gap_audit(
     *,
     gkw_time_path=None,
@@ -3014,6 +4233,141 @@ def run_cyclone_base_case_cosin2_gap_audit(
         growth_tolerance=growth_tolerance,
         profile_tolerance=profile_tolerance,
     )
+
+
+def run_cyclone_base_case_cosin2_velocity_slice_audit(
+    *,
+    gkw_distr1_path=None,
+    gkw_distr2_path=None,
+    gkw_distr3_path=None,
+    gkw_distr4_path=None,
+    gkw_time_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    tolerance: float = 2.0e-2,
+    grid_tolerance: float = 1.0e-4,
+) -> CycloneVelocitySpaceSliceAudit:
+    """Compare the solver final state with patched GKW ``cosin2`` ``distr*.dat``."""
+
+    gkw_distr1_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat"
+        if gkw_distr1_path is None
+        else gkw_distr1_path
+    )
+    gkw_distr2_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat"
+        if gkw_distr2_path is None
+        else gkw_distr2_path
+    )
+    gkw_distr3_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat"
+        if gkw_distr3_path is None
+        else gkw_distr3_path
+    )
+    gkw_distr4_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat"
+        if gkw_distr4_path is None
+        else gkw_distr4_path
+    )
+    gkw_time_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+        if gkw_time_path is None
+        else gkw_time_path
+    )
+    observed = run_cyclone_base_case_velocity_space_slice(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    reference = load_gkw_velocity_space_slice(
+        gkw_distr1_path,
+        gkw_distr2_path,
+        gkw_distr3_path,
+        gkw_distr4_path,
+        time_path=gkw_time_path,
+        source="gkw:cosin2:distr*.dat",
+        notes="patched selected-ky production-control cosin2 final output",
+    )
+    return audit_cyclone_velocity_space_slice(
+        observed,
+        reference,
+        tolerance=tolerance,
+        grid_tolerance=grid_tolerance,
+    )
+
+
+def run_cyclone_base_case_cosin2_velocity_convention_audit(
+    *,
+    gkw_distr1_path=None,
+    gkw_distr2_path=None,
+    gkw_distr3_path=None,
+    gkw_distr4_path=None,
+    gkw_time_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+) -> VelocitySliceConventionAudit:
+    """Run the patched GKW ``cosin2`` velocity-slice convention audit."""
+
+    gkw_distr1_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat"
+        if gkw_distr1_path is None
+        else gkw_distr1_path
+    )
+    gkw_distr2_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat"
+        if gkw_distr2_path is None
+        else gkw_distr2_path
+    )
+    gkw_distr3_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat"
+        if gkw_distr3_path is None
+        else gkw_distr3_path
+    )
+    gkw_distr4_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat"
+        if gkw_distr4_path is None
+        else gkw_distr4_path
+    )
+    gkw_time_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+        if gkw_time_path is None
+        else gkw_time_path
+    )
+    observed = run_cyclone_base_case_velocity_space_slice(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    reference = load_gkw_velocity_space_slice(
+        gkw_distr1_path,
+        gkw_distr2_path,
+        gkw_distr3_path,
+        gkw_distr4_path,
+        time_path=gkw_time_path,
+        source="gkw:cosin2:distr*.dat",
+        notes="patched selected-ky production-control cosin2 final output",
+    )
+    return audit_velocity_space_slice_conventions(observed, reference)
 
 
 def run_cyclone_base_case_profile_operator_audit(
@@ -5024,6 +6378,46 @@ def _numeric_rows(path: Path) -> list[list[float]]:
         except ValueError:
             continue
     return rows
+
+
+def _load_gkw_distr_array(path, name: str) -> np.ndarray:
+    rows = _numeric_rows(Path(path))
+    if not rows:
+        raise ValueError(f"GKW {name} contains no numeric rows")
+    n_column = len(rows[0])
+    if n_column == 0 or any(len(row) != n_column for row in rows):
+        raise ValueError(f"GKW {name} rows must have a consistent nonzero length")
+    values = np.asarray(rows, dtype=float)
+    if values.ndim != 2 or 0 in values.shape:
+        raise ValueError(f"GKW {name} must be a nonempty two-dimensional array")
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"GKW {name} contains non-finite values")
+    return values
+
+
+def _velocity_slice_spatial_variants(values):
+    values = jnp.asarray(values)
+    numpy_values = np.asarray(values)
+    fortran_flat_c_shape = jnp.asarray(
+        np.reshape(np.ravel(numpy_values, order="F"), numpy_values.shape, order="C"),
+        dtype=values.dtype,
+    )
+    c_flat_fortran_shape = jnp.asarray(
+        np.reshape(np.ravel(numpy_values, order="C"), numpy_values.shape, order="F"),
+        dtype=values.dtype,
+    )
+    return (
+        ("direct_mu_rows_vpar_columns", values),
+        ("reverse_vpar_columns", values[:, ::-1]),
+        ("reverse_mu_rows", values[::-1, :]),
+        ("reverse_mu_rows_vpar_columns", values[::-1, ::-1]),
+        ("roll_vpar_minus_1", jnp.roll(values, -1, axis=1)),
+        ("roll_vpar_plus_1", jnp.roll(values, 1, axis=1)),
+        ("roll_mu_minus_1", jnp.roll(values, -1, axis=0)),
+        ("roll_mu_plus_1", jnp.roll(values, 1, axis=0)),
+        ("fortran_flatten_c_reshape", fortran_flat_c_shape),
+        ("c_flatten_fortran_reshape", c_flat_fortran_shape),
+    )
 
 
 def _gkw_time_dat_times(path) -> np.ndarray:

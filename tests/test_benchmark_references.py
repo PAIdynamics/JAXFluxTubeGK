@@ -21,12 +21,19 @@ from stellarator_gk import (
     CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
     CycloneSelectedKyGapAudit,
+    CycloneTermVIIFieldConventionAudit,
+    CycloneVelocitySpaceSliceAudit,
+    CycloneVparOddSignAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
     CycloneTrace,
+    GkwVelocitySpaceSlice,
     ParallelPhiTrace,
+    VelocitySliceConventionAudit,
     audit_cyclone_selected_ky_gap,
+    audit_cyclone_velocity_space_slice,
     audit_parallel_phi_profile_alignment,
+    audit_velocity_space_slice_conventions,
     benchmark_target_cost,
     benchmark_target_residual,
     build_desc_gx_eik_reference_from_path,
@@ -45,6 +52,7 @@ from stellarator_gk import (
     load_cyclone_trace_csv,
     load_gkw_parallel_phi_trace,
     load_gkw_time_dat_trace,
+    load_gkw_velocity_space_slice,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -54,6 +62,10 @@ from stellarator_gk import (
     run_cyclone_base_case_igh_arakawa_audit,
     run_cyclone_base_case_matdat_matrix_audit,
     run_cyclone_base_case_cosin2_gap_audit,
+    run_cyclone_base_case_cosin2_velocity_convention_audit,
+    run_cyclone_base_case_cosin2_velocity_slice_audit,
+    run_cyclone_base_case_cosin2_term_vii_field_convention_audit,
+    run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
@@ -62,6 +74,7 @@ from stellarator_gk import (
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
+    run_cyclone_base_case_velocity_space_slice,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
@@ -767,6 +780,293 @@ def test_cosin2_gap_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
     assert bool(audit.passed)
     np.testing.assert_allclose(audit.late_mean_delta, 0.0, atol=1.0e-12)
     np.testing.assert_allclose(audit.max_profile_error, 0.0, atol=1.0e-12)
+
+
+def test_gkw_velocity_space_slice_loader_reads_distr_files(tmp_path):
+    vpar = np.broadcast_to(np.array([-1.0, 0.0, 1.0]), (2, 3))
+    vperp = np.broadcast_to(np.array([[0.25], [0.75]]), (2, 3))
+    imag = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
+    real = -imag
+    paths = [tmp_path / f"distr{index}.dat" for index in range(1, 5)]
+    for path, values in zip(paths, (vpar, vperp, imag, real), strict=True):
+        np.savetxt(path, values)
+    time_path = tmp_path / "time.dat"
+    time_path.write_text("1.0 0.1\n2.0 0.2\n")
+
+    loaded = load_gkw_velocity_space_slice(*paths, time_path=time_path, source="fixture")
+
+    assert isinstance(loaded, GkwVelocitySpaceSlice)
+    np.testing.assert_allclose(loaded.vpar, vpar)
+    np.testing.assert_allclose(loaded.vperp, vperp)
+    np.testing.assert_allclose(loaded.real_part, real)
+    np.testing.assert_allclose(loaded.imag_part, imag)
+    np.testing.assert_allclose(loaded.time, 2.0)
+    assert "distr*.dat velocity-space slice" in loaded.notes
+
+
+def test_gkw_velocity_space_slice_loader_reads_matched_cosin2_fixture():
+    loaded = load_gkw_velocity_space_slice(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat",
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat",
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat",
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat",
+        time_path=ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat",
+    )
+
+    assert loaded.vpar.shape == (8, 32)
+    np.testing.assert_allclose(loaded.vpar[0, 0], -2.90625, atol=5.0e-5)
+    np.testing.assert_allclose(loaded.vpar[-1, -1], 2.90625, atol=5.0e-5)
+    np.testing.assert_allclose(loaded.time, 4.8)
+    assert float(jnp.max(jnp.abs(loaded.real_part))) > 0.0
+    assert float(jnp.max(jnp.abs(loaded.imag_part))) > 0.0
+
+
+def test_cyclone_velocity_space_slice_audit_accepts_matched_slice():
+    observed = GkwVelocitySpaceSlice(
+        vpar=((0.0, 1.0), (0.0, 1.0)),
+        vperp=((0.5, 0.5), (1.5, 1.5)),
+        real_part=((0.1, 0.2), (0.3, 0.4)),
+        imag_part=((0.0, -0.1), (-0.2, -0.3)),
+        time=1.0,
+        peak_z=0.25,
+        source="observed",
+    )
+    reference = GkwVelocitySpaceSlice(
+        vpar=((0.0, 1.0), (0.0, 1.0)),
+        vperp=((0.5, 0.5), (1.5, 1.5)),
+        real_part=((0.1, 0.2), (0.3, 0.4)),
+        imag_part=((0.0, -0.1), (-0.2, -0.3)),
+        time=1.0,
+        peak_z=0.25,
+        source="reference",
+    )
+
+    audit = audit_cyclone_velocity_space_slice(observed, reference, tolerance=1.0e-12)
+
+    assert isinstance(audit, CycloneVelocitySpaceSliceAudit)
+    assert bool(audit.passed)
+    assert audit.shape == (2, 2)
+    np.testing.assert_allclose(audit.complex_max_abs_error, 0.0, atol=1.0e-14)
+    assert "velocity-space slice comparison" in audit.notes
+
+
+def test_velocity_space_slice_convention_audit_keeps_direct_baseline():
+    reference = GkwVelocitySpaceSlice(
+        vpar=((0.0, 1.0), (0.0, 1.0)),
+        vperp=((0.5, 0.5), (1.5, 1.5)),
+        real_part=((0.1, 0.2), (0.3, 0.4)),
+        imag_part=((0.0, -0.1), (-0.2, -0.3)),
+        source="reference",
+    )
+    audit = audit_velocity_space_slice_conventions(reference, reference)
+
+    assert isinstance(audit, VelocitySliceConventionAudit)
+    assert audit.variant_names[0] == "direct_mu_rows_vpar_columns:identity"
+    assert audit.variant_names[int(audit.best_variant_index)] == audit.variant_names[0]
+    np.testing.assert_allclose(audit.direct_max_abs_error, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.best_max_abs_error, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.even_max_abs_error, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.odd_same_sign_max_abs_error, 0.0, atol=1.0e-14)
+    assert float(audit.odd_opposite_sign_max_abs_error) > 0.0
+
+
+def test_velocity_space_slice_convention_audit_detects_one_based_axis_shift():
+    reference = GkwVelocitySpaceSlice(
+        vpar=np.broadcast_to(np.arange(4.0), (3, 4)),
+        vperp=np.broadcast_to(np.arange(3.0)[:, None], (3, 4)),
+        real_part=np.arange(12.0).reshape(3, 4),
+        imag_part=-np.arange(12.0).reshape(3, 4),
+        source="reference",
+    )
+    observed = GkwVelocitySpaceSlice(
+        vpar=reference.vpar,
+        vperp=reference.vperp,
+        real_part=jnp.roll(reference.real_part, 1, axis=1),
+        imag_part=jnp.roll(reference.imag_part, 1, axis=1),
+        source="observed",
+    )
+
+    audit = audit_velocity_space_slice_conventions(observed, reference)
+
+    assert audit.variant_names[int(audit.best_variant_index)] == "roll_vpar_minus_1:identity"
+    np.testing.assert_allclose(audit.best_max_abs_error, 0.0, atol=1.0e-14)
+    assert float(audit.direct_max_abs_error) > 0.0
+
+
+def test_cosin2_velocity_slice_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
+    solver_slice = run_cyclone_base_case_velocity_space_slice(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    paths = [tmp_path / f"distr{index}.dat" for index in range(1, 5)]
+    for path, values in zip(
+        paths,
+        (
+            solver_slice.vpar,
+            solver_slice.vperp,
+            solver_slice.imag_part,
+            solver_slice.real_part,
+        ),
+        strict=True,
+    ):
+        np.savetxt(path, np.asarray(values), fmt="%.16e")
+    time_path = tmp_path / "time.dat"
+    time_path.write_text(f"{float(solver_slice.time):.16e} 0.0\n")
+
+    audit = run_cyclone_base_case_cosin2_velocity_slice_audit(
+        gkw_distr1_path=paths[0],
+        gkw_distr2_path=paths[1],
+        gkw_distr3_path=paths[2],
+        gkw_distr4_path=paths[3],
+        gkw_time_path=time_path,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        tolerance=1.0e-10,
+        grid_tolerance=1.0e-10,
+    )
+
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.complex_max_abs_error, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(audit.time_error, 0.0, atol=1.0e-14)
+
+
+def test_cosin2_velocity_convention_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
+    solver_slice = run_cyclone_base_case_velocity_space_slice(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    paths = [tmp_path / f"distr{index}.dat" for index in range(1, 5)]
+    for path, values in zip(
+        paths,
+        (
+            solver_slice.vpar,
+            solver_slice.vperp,
+            solver_slice.imag_part,
+            solver_slice.real_part,
+        ),
+        strict=True,
+    ):
+        np.savetxt(path, np.asarray(values), fmt="%.16e")
+    time_path = tmp_path / "time.dat"
+    time_path.write_text(f"{float(solver_slice.time):.16e} 0.0\n")
+
+    audit = run_cyclone_base_case_cosin2_velocity_convention_audit(
+        gkw_distr1_path=paths[0],
+        gkw_distr2_path=paths[1],
+        gkw_distr3_path=paths[2],
+        gkw_distr4_path=paths[3],
+        gkw_time_path=time_path,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+    )
+
+    assert audit.variant_names[int(audit.best_variant_index)] == audit.variant_names[0]
+    np.testing.assert_allclose(audit.best_max_abs_error, 0.0, atol=1.0e-12)
+
+
+def test_cosin2_vpar_odd_sign_audit_runs_reduced_against_matched_reference():
+    reference = run_cyclone_base_case_velocity_space_slice(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+
+    audit = run_cyclone_base_case_cosin2_vpar_odd_sign_audit(
+        reference_slice=reference,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneVparOddSignAudit)
+    assert audit.rhs_variant_names == (
+        "baseline",
+        "flip_igh",
+        "flip_parallel_field_drive",
+        "flip_igh_and_parallel_field_drive",
+    )
+    assert len(leaves) == len(CycloneVparOddSignAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.direct_max_abs_errors.shape == (4,)
+    assert audit.best_layout_max_abs_errors.shape == (4,)
+    assert audit.best_layout_names[0] == "direct_mu_rows_vpar_columns:identity"
+    assert int(audit.best_direct_variant_index) == 0
+    np.testing.assert_allclose(audit.baseline_direct_max_abs_error, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(audit.direct_max_abs_errors[0], 0.0, atol=1.0e-12)
+    assert "one-based k=1..N" in audit.notes
+
+
+def test_cosin2_term_vii_field_convention_audit_runs_reduced_against_matched_reference():
+    reference = run_cyclone_base_case_velocity_space_slice(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+
+    audit = run_cyclone_base_case_cosin2_term_vii_field_convention_audit(
+        reference_slice=reference,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneTermVIIFieldConventionAudit)
+    assert audit.variant_names == (
+        "baseline",
+        "flip_all_field_terms",
+        "flip_term_v_and_viii_only",
+        "flip_term_vii_only",
+        "conjugate_all_field_terms",
+        "conjugate_term_vii_only",
+        "negative_conjugate_all_field_terms",
+        "negative_conjugate_term_vii_only",
+    )
+    assert audit.term_vii_phi_variants[3] == "negative"
+    assert len(leaves) == len(CycloneTermVIIFieldConventionAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.term_vii_phi_variants[7] == "negative_conjugate"
+    assert audit.direct_max_abs_errors.shape == (8,)
+    assert audit.best_layout_max_abs_errors.shape == (8,)
+    assert audit.best_layout_names[0] == "direct_mu_rows_vpar_columns:identity"
+    assert int(audit.best_direct_variant_index) == 0
+    np.testing.assert_allclose(audit.baseline_direct_max_abs_error, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(audit.direct_max_abs_errors[0], 0.0, atol=1.0e-12)
+    assert "dist.F90::get_phi" in audit.notes
+    assert "field-variable" in audit.notes
 
 
 def test_cyclone_profile_operator_audit_checks_selected_mode_assembly():

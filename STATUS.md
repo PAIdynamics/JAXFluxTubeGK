@@ -182,6 +182,55 @@ delta `0.021761822842616324`, final-window growth delta
 This rules out field total-power normalization as the remaining dominant
 cause; the next narrowed target is the evolved velocity-space/distribution
 state, using GKW `distr*.dat` slices or a final-state/restart dump.
+The next velocity-space audit is now in place. GKW `distr1.dat`--`distr4.dat`
+from the patched `cosin2` run are stored as fixtures and loaded as the peak-\(\phi\)
+slice \((v_\parallel,\sqrt{2B\mu},\Im[f\,\Delta\mu\,\Delta v_\parallel/\phi],
+\Re[f\,\Delta\mu\,\Delta v_\parallel/\phi])\). The matching solver diagnostic
+uses the same final time, peak-\(\phi\) point, velocity weights, and
+normalization. The production-control audit reports `vpar_error=5.0e-05`,
+`vperp_error=4.664794806363837e-05`, `time_error=0.0`,
+`complex_max_abs_error=0.035348895748192916`, and
+`complex_relative_l2_error=0.378493904183015`. The follow-on convention audit
+uses GKW's actual Fortran output contract: `global_vpar_mu(n_vpar,n_mu)` is
+written by `output_slice_2d` as `mu` rows and \(v_\parallel\) columns. It finds
+that a \(v_\parallel\)-column reversal is the best simple variant, reducing
+the max error to `0.018543579974657488` and \(L^2\) error to
+`0.005533740922357686`; direct ordering has max error
+`0.035348895748192916` and \(L^2\) error `0.00845562568878207`. Transpose,
+`mu` reversal, one-cell shifts, conjugation, sign flips, and \(\pm i\) phase
+rotations do not beat the \(v_\parallel\)-reversed direct comparison. The
+even/odd decomposition shows the same structure: the even-part error is
+`0.01647851294172267` max / `0.005197749203708426` \(L^2\), the odd same-sign
+error is `0.02430342389518037` max / `0.006669408444842744` \(L^2\), and the
+odd opposite-sign error drops to `0.00606276656656781` max /
+`0.0018988659276327384` \(L^2\). A controlled odd-\(v_\parallel\) RHS sign
+audit now keeps GKW's 1-based `k=1,\ldots,nvpar` and
+`vpgr=-vpmax+(k-0.5)*dvp` ordering explicit while flipping only selected odd
+RHS blocks. It rules out a global fused `ltrapping_arakawa`/`igh` sign
+reversal: flipping the fused Term I/IV block increases the direct final-slice
+max error to `17.078737087702983`. Flipping only the parallel field-drive
+Term VII path (`vpgrphi_3_newbc`) is diagnostic but informative: it makes the
+direct Fortran layout the best layout, moves the peak point from `z=0.09375`
+to `z=-0.09375`, and reduces the direct complex max error from
+`0.035348895748192916` to `0.02010162421775191` with relative \(L^2\) error
+`0.2691199000880014`. The next target is therefore the true Term VII
+source/matrix/field-variable convention across `linear_terms.F90`,
+`matdat.F90`, and `dist.F90::get_phi`, not a broad velocity-grid transpose or
+global `igh` sign flip. A Term VII field-variable convention audit now varies
+the potential supplied to Terms V, VII, and VIII. It rules out a global field
+sign or conjugation convention: global sign, global conjugation, and global
+negative-conjugation all worsen the direct final-slice error
+(`0.12796120197506905`, `0.07481363070580742`, and
+`0.11470706992462161`). The best diagnostic variant is Term VII-only
+conjugation, with direct max error `0.01596045557377426`, \(L^2\) error
+`0.005113660917074626`, and relative \(L^2\) error
+`0.2288996174155926`; Term VII-only negative-conjugation is close but worse
+at `0.016980699849443844`. This is still diagnostic and is not adopted as a
+physics change. The remaining narrowed target is the Term VII complex phase
+path through `vpgrphi_3_newbc`, `add_element`, `matdat.F90`, complex-real
+matrix conventions, \(k_y\)/Fourier signs, and `dist.F90::get_phi`. A full
+normalized state/restart or multi-time velocity-slice dump remains useful if
+this final peak slice is not enough to localize the cumulative discrepancy.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -216,11 +265,15 @@ The repository currently contains:
 - `examples/audit_cyclone_coefficient_source.py`: production-control selected-`ky` GKW Term II/IV/V/VII/VIII coefficient/source audit.
 - `examples/audit_cyclone_igh_arakawa.py`: production-control selected-`ky` GKW `ltrapping_arakawa` fused Term I/IV audit.
 - `examples/audit_cyclone_cosin2_gap.py`: combined patched-GKW `cosin2` selected-`ky` growth/profile gap audit.
+- `examples/audit_cyclone_cosin2_velocity_slice.py`: patched-GKW `cosin2` selected-`ky` `distr*.dat` velocity-space slice audit.
+- `examples/audit_cyclone_cosin2_vpar_odd_signs.py`: controlled odd-\(v_\parallel\) RHS sign audit against patched-GKW `cosin2` velocity slices.
+- `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`: controlled Term VII field-variable convention audit against patched-GKW `cosin2` velocity slices.
 - `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, and writes a matched selected-`ky` input.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
+- `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat` through `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`: patched GKW final-output velocity-space slices for the selected-`ky` `cosin2` run.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
@@ -309,13 +362,16 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- compare evolved GKW velocity-space/distribution diagnostics (`distr*.dat` or
-  a restart/state dump) against the solver selected-`ky` state at the same
-  final time,
-- add a loader for GKW peak-\(\phi\) velocity-space slices if `distr*.dat`
-  contains enough information for the next parity check,
-- otherwise add a non-destructive GKW final-state or restart dump patch and
-  compare the full normalized distribution state,
+- use the new GKW `distr*.dat` loader, solver-side peak-\(\phi\) slice
+  diagnostic, and convention audit to localize the remaining
+  evolved-distribution error; the current best simple variant is a
+  \(v_\parallel\)-column reversal, not a transpose or phase/sign rotation,
+- audit \(v_\parallel\)-odd dynamics/sign conventions in parallel streaming,
+  parallel field drive, and the fused `igh` backend with explicit Fortran
+  1-based indexing checks,
+- add a non-destructive GKW final-state/restart or multi-time velocity-slice
+  dump if the final peak slice is insufficient to identify the cumulative
+  source of the distribution mismatch,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -341,6 +397,167 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added Term VII Field-Convention Audit
+
+- Added `CycloneTermVIIFieldConventionAudit` and
+  `run_cyclone_base_case_cosin2_term_vii_field_convention_audit`.
+- Added `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`, which
+  writes:
+  - `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`.
+- The audit keeps the same patched-GKW `cosin2`, selected-`ky`,
+  production-control setup as the velocity-slice and odd-sign audits, but
+  varies the `phi` convention supplied to Term V, Term VII, and Term VIII.
+- Production-control x64 audit result:
+  - baseline direct max / \(L^2\) / relative \(L^2\):
+    `0.035348895748192916` / `0.008455625688782069` /
+    `0.378493904183015`,
+  - global sign direct max: `0.12796120197506905`,
+  - global conjugation direct max: `0.07481363070580742`,
+  - global negative-conjugation direct max: `0.11470706992462161`,
+  - Term VII-only sign direct max: `0.02010162421775191`,
+  - Term VII-only conjugation direct max / \(L^2\) / relative \(L^2\):
+    `0.01596045557377426` / `0.005113660917074626` /
+    `0.2288996174155926`,
+  - Term VII-only negative-conjugation direct max:
+    `0.016980699849443844`.
+- Interpretation: a global field-variable sign/conjugation convention is ruled
+  out. The strongest diagnostic signal is local to Term VII and points to a
+  complex phase or conjugation convention in `vpgrphi_3_newbc` insertion or
+  output normalization, not to a broad `phi` sign change. No physics sign or
+  conjugation change has been adopted yet.
+- Verification run this round:
+  - `python -m py_compile src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_term_vii_field_conventions.py`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_term_vii_field_conventions.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_cosin2_term_vii_field_convention_audit_runs_reduced_against_matched_reference -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/audit_cyclone_cosin2_term_vii_field_conventions.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run pytest -q` (`168 passed in 193.54s`)
+  - `git diff --check`
+- Next action:
+  inspect the Term VII complex phase path through `linear_terms.F90::add_element`,
+  `matdat.F90`, complex-real matrix storage, \(k_y\)/Fourier signs, and
+  `dist.F90::get_phi`; add multi-time or restart-state velocity diagnostics if
+  the final peak-\(\phi\) slice remains ambiguous.
+
+### 2026-06-01: Added Odd-\(v_\parallel\) RHS Sign Audit
+
+- Added `CycloneVparOddSignAudit` and
+  `run_cyclone_base_case_cosin2_vpar_odd_sign_audit`.
+- Added `examples/audit_cyclone_cosin2_vpar_odd_signs.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`.
+- The audit keeps GKW's Fortran velocity ordering explicit:
+  `k=1,\ldots,nvpar` and `vpgr=-vpmax+(k-0.5)*dvp`, while testing controlled
+  sign flips of the fused `linear_terms.F90::igh` Term I/IV block and the
+  `linear_terms.F90::vpgrphi_3_newbc` Term VII parallel field-drive block.
+- Production-control x64 audit result:
+  - baseline direct max / \(L^2\) / relative \(L^2\):
+    `0.035348895748192916` / `0.00845562568878207` /
+    `0.37849390418301498`,
+  - baseline best simple layout: `reverse_vpar_columns:identity`, with max
+    `0.018543579974657488`,
+  - `flip_igh` direct max: `17.078737087702983`,
+  - `flip_parallel_field_drive` direct max / \(L^2\) / relative \(L^2\):
+    `0.02010162421775191` / `0.006012189669100319` /
+    `0.2691199000880014`,
+  - `flip_parallel_field_drive` best layout:
+    `direct_mu_rows_vpar_columns:identity`,
+  - `flip_igh_and_parallel_field_drive` direct max: `17.078063622294973`.
+- Interpretation: a global fused `igh` sign reversal is ruled out. A diagnostic
+  flip of only Term VII improves the direct velocity slice and removes the
+  post-processing preference for \(v_\parallel\)-column reversal, so the next
+  narrowed target is the true Term VII source/matrix/field-variable convention
+  through `linear_terms.F90`, `matdat.F90`, and `dist.F90::get_phi`.
+- Verification run this round:
+  - `python -m py_compile src/stellarator_gk/benchmarks.py tests/test_benchmark_references.py`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_cosin2_vpar_odd_sign_audit_runs_reduced_against_matched_reference -q`
+  - `python -m py_compile examples/audit_cyclone_cosin2_vpar_odd_signs.py`
+  - `uv run ruff check examples/audit_cyclone_cosin2_vpar_odd_signs.py`
+  - `JAX_ENABLE_X64=1 uv run python examples/audit_cyclone_cosin2_vpar_odd_signs.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_cosin2_vpar_odd_sign_audit_runs_reduced_against_matched_reference tests/test_benchmark_references.py::test_cosin2_velocity_convention_audit_runner_accepts_matched_reduced_fixtures tests/test_benchmark_references.py::test_cosin2_velocity_slice_audit_runner_accepts_matched_reduced_fixtures -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run pytest -q`
+  - `git diff --check`
+- Verification results:
+  - focused odd-sign audit test: 1 passed,
+  - focused velocity/convention/odd-sign tests: 3 passed,
+  - full pytest suite: 167 passed,
+  - focused ruff: all checks passed,
+  - production x64 audit example completed and wrote the CSV above,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - whitespace check passed.
+
+### 2026-06-01: Added GKW `distr*.dat` Velocity-Slice Audit
+
+- Committed the previous selected-`ky` gap-audit tranche as:
+  - `d9fa9f9 Add Cyclone cosin2 gap audit`.
+- Copied the patched GKW `cosin2` final-output velocity diagnostics into:
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`.
+- Added `GkwVelocitySpaceSlice`, `CycloneVelocitySpaceSliceAudit`,
+  `load_gkw_velocity_space_slice`, `run_cyclone_base_case_velocity_space_slice`,
+  `audit_cyclone_velocity_space_slice`, and
+  `run_cyclone_base_case_cosin2_velocity_slice_audit`.
+- Added `examples/audit_cyclone_cosin2_velocity_slice.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`.
+- Production-control audit results:
+  - `vpar_error`: `5.0000000000105516e-05`,
+  - `vperp_error`: `4.664794806363837e-05`,
+  - `time_error`: `0.0`,
+  - `real_max_abs_error`: `0.032260602362433624`,
+  - `imag_max_abs_error`: `0.021464898760242965`,
+  - `complex_max_abs_error`: `0.035348895748192916`,
+  - `complex_l2_error`: `0.00845562568878207`,
+  - `complex_relative_l2_error`: `0.378493904183015`,
+  - `observed_l2_norm`: `0.023575570972117522`,
+  - `reference_l2_norm`: `0.022340189882406877`.
+- Added `VelocitySliceConventionAudit`,
+  `audit_velocity_space_slice_conventions`, and
+  `run_cyclone_base_case_cosin2_velocity_convention_audit`.
+- The convention audit explicitly respects GKW's Fortran output:
+  `global_vpar_mu(n_vpar,n_mu)` is written by `output_slice_2d` with rows over
+  the second index and columns over the first. It then tests
+  \(v_\parallel\)-column reversal, `mu`-row reversal, one-cell axis rolls,
+  C/F-order flatten/reshape variants, conjugation, sign flips, and \(\pm i\)
+  phase rotations.
+- Production-control convention audit result:
+  - best variant: `reverse_vpar_columns:identity`,
+  - best max error: `0.018543579974657488`,
+  - best \(L^2\) error: `0.005533740922357686`,
+  - direct max error: `0.035348895748192916`,
+  - direct \(L^2\) error: `0.00845562568878207`.
+- Even/odd \(v_\parallel\) decomposition:
+  - even max / \(L^2\): `0.01647851294172267` / `0.005197749203708426`,
+  - odd same-sign max / \(L^2\): `0.02430342389518037` / `0.006669408444842744`,
+  - odd opposite-sign max / \(L^2\): `0.00606276656656781` / `0.0018988659276327384`.
+- Interpretation: the remaining final-slice mismatch is dominated by a
+  \(v_\parallel\)-order/sign issue, not a Fortran row/column transpose,
+  one-based off-by-one shift, `mu` ordering, or simple complex phase/sign
+  convention. The next narrowed target is the \(v_\parallel\)-odd dynamics in
+  parallel streaming, parallel field drive, and the fused
+  `ltrapping_arakawa`/`igh` backend.
+- Verification run this round:
+  - `uv run pytest tests/test_benchmark_references.py::test_gkw_velocity_space_slice_loader_reads_distr_files tests/test_benchmark_references.py::test_gkw_velocity_space_slice_loader_reads_matched_cosin2_fixture tests/test_benchmark_references.py::test_cyclone_velocity_space_slice_audit_accepts_matched_slice tests/test_benchmark_references.py::test_cosin2_velocity_slice_audit_runner_accepts_matched_reduced_fixtures -q`
+  - `uv run pytest tests/test_benchmark_references.py::test_velocity_space_slice_convention_audit_keeps_direct_baseline tests/test_benchmark_references.py::test_velocity_space_slice_convention_audit_detects_one_based_axis_shift tests/test_benchmark_references.py::test_cosin2_velocity_convention_audit_runner_accepts_matched_reduced_fixtures -q`
+  - `uv run python examples/audit_cyclone_cosin2_velocity_slice.py`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_velocity_slice.py`
+  - `python -m py_compile src/stellarator_gk/benchmarks.py examples/audit_cyclone_cosin2_velocity_slice.py`
+  - `uv run ruff check src tests examples scripts`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run pytest -q`
+  - `git diff --check`
+- Verification results:
+  - focused velocity-slice tests: 4 passed,
+  - focused convention tests: 3 passed,
+  - full pytest suite: 163 passed,
+  - focused ruff: all checks passed,
+  - full ruff: all checks passed,
+  - production audit example completed and wrote the CSV above,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - whitespace check passed.
 
 ### 2026-06-01: Added Patched-`cosin2` Selected-`ky` Gap Audit
 

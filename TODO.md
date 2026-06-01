@@ -491,7 +491,18 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add a combined selected-`ky` gap audit that aligns solver post-window samples with the patched GKW `cosin2` `time.dat`/`parallel_phi.dat` fixtures and reports late-fit growth, late-window mean, final-window growth, profile-shape error, worst `(t,z)`, and total-power normalization.
 - [x] Document that the direct compact GKW trace path is `finit='cosine'`; `cosine2` would require a GKW source patch or restart/state-injection path because the original `finit` selector is a six-character Fortran option and has no native `cosine2` branch.
 - [x] Diagnose the remaining `cosine2`/`cosin2` growth and parallel-profile gap after the initialization mismatch is removed: aligned late-fit growth remains low by \(2.26\times10^{-2}\), late-window mean by \(2.18\times10^{-2}\), and row-normalized profile error peaks at \(2.96\times10^{-2}\), while total-power normalization agrees to \(2\times10^{-6}\).
-- [ ] Compare the evolved GKW velocity-space/distribution diagnostics (`distr*.dat` or an explicit restart/state dump) against the solver state at the same selected-`ky` time, since field normalization, output ordering, initialization, and source-level term conventions are now ruled out as dominant causes.
+- [x] Compare the evolved GKW velocity-space/distribution diagnostics (`distr*.dat` or an explicit restart/state dump) against the solver state at the same selected-`ky` time, since field normalization, output ordering, initialization, and source-level term conventions are now ruled out as dominant causes.
+- [x] Add a loader for GKW peak-\(\phi\) `distr*.dat` velocity-space slices and a solver-side final-slice diagnostic with the same \(f\,\Delta\mu\,\Delta v_\parallel/\phi\) normalization.
+- [x] Run the patched `cosin2` velocity-slice audit: velocity grids and final time match GKW (`v_\parallel` error \(5.0\times10^{-5}\), \(v_\perp\) error \(4.7\times10^{-5}\), time error zero), but the normalized distribution remains open with complex max error \(3.53\times10^{-2}\) and relative \(L^2\) error \(3.78\times10^{-1}\).
+- [x] Add a velocity-slice convention audit that explicitly respects GKW's Fortran layout: `global_vpar_mu(n_vpar,n_mu)` is written as `mu` rows and \(v_\parallel\) columns by `output_slice_2d`.
+- [x] Use the convention audit to identify that reversing the \(v_\parallel\) columns is the best simple convention, reducing the complex max error from \(3.53\times10^{-2}\) to \(1.85\times10^{-2}\).
+- [x] Add even/odd \(v_\parallel\) decomposition to the convention audit; the odd opposite-sign \(L^2\) error is \(1.90\times10^{-3}\), much lower than the odd same-sign \(6.67\times10^{-3}\).
+- [x] Add a controlled \(v_\parallel\)-odd RHS sign audit for the evolved state, keeping GKW's 1-based `k=1,\ldots,nvpar` ordering and `vpgr=-v_{\max}+(k-1/2)\Delta v` explicit.
+- [x] Use the sign audit to rule out a global fused `ltrapping_arakawa`/`igh` sign reversal: flipping the fused Term I/IV block blows up the final-slice error to \(\sim 17\).
+- [x] Use the sign audit to narrow the remaining issue to the parallel field-drive path: flipping only `vpgrphi_3_newbc`/Term VII makes the direct Fortran layout the best layout and reduces the direct complex max error from \(3.53\times10^{-2}\) to \(2.01\times10^{-2}\), but this is diagnostic only and is not yet a physics change.
+- [x] Add a Term VII field-variable convention audit across Terms V, VII, and VIII. It rules out a global `phi` sign/conjugation convention: global sign, global conjugation, and global negative-conjugation all worsen the direct slice error. The best diagnostic variant is Term VII-only conjugation, reducing the direct max error from \(3.53\times10^{-2}\) to \(1.60\times10^{-2}\), with Term VII-only negative-conjugation close at \(1.70\times10^{-2}\).
+- [ ] Inspect the true GKW Term VII complex phase path across `linear_terms.F90::vpgrphi_3_newbc`, `linear_terms.F90::add_element`, `matdat.F90`, `index_function.F90`, field-equation packing, and `dist.F90::get_phi`; determine whether the Term VII-only conjugation improvement comes from a \(k_y\)/Fourier convention, complex-real matrix convention, eigenvector/output phase convention, or final peak-\(\phi\) slice bias.
+- [ ] Add a non-destructive GKW final-state/restart or multi-time velocity-slice dump if needed to localize the full evolved-distribution mismatch beyond the final peak-\(\phi\) `distr*.dat` slice.
 - [x] Add a GX DESC-block `eik.out` loader and compare solver-produced DESC/GX-convention geometry against the matched DSHAPE external-format fixture.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
@@ -558,10 +569,11 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 Use the new validation-hardening tools to close the remaining production gaps:
 
-- compare evolved GKW velocity-space/distribution diagnostics (`distr*.dat` or a restart/state dump) against the solver's selected-`ky` state at the same final time;
-- if `distr*.dat` is sufficient, add a loader for GKW's peak-\(\phi\) velocity-space slices and a solver-side slice diagnostic with the same \(f\,\Delta\mu\,\Delta v_\parallel/\phi\) normalization;
-- if `distr*.dat` is insufficient, add a non-destructive GKW final-state or restart dump patch and compare the full normalized distribution state;
-- keep both production Cyclone diagnostics (`late_fit` and `late_mean_window`) available until the GKW/Gyaradax selected-mode history gap is isolated;
-- add a production-resolution Cyclone selected-`ky` regression once the observed growth is within the GKW/GX tolerance ladder;
-- replace the matched DESC/GX block-eik fixture with or supplement it by a truly independent external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST path is available;
-- keep DESC-driven optimization examples labeled reduced until the CBC selected-`ky` gate passes alongside the RH plateau and eik parity gates.
+- [x] Use the GKW `distr*.dat` loader, solver-side peak-\(\phi\) slice diagnostic, convention audit, and controlled odd-\(v_\parallel\) RHS sign audit to localize the remaining evolved-distribution error.
+- [x] Add the Term VII field-variable convention ladder for Terms V, VII, and VIII; global field sign/conjugation conventions are ruled out, while Term VII-only conjugation is the best diagnostic variant so far.
+- [ ] Inspect Term VII (`vpgrphi_3_newbc`) at source and matrix-insertion level with the complex phase/conjugation result in mind, especially `add_element`, `matdat.F90`, the complex-real split, \(k_y\) sign conventions, and the `iphi` field variable used by `dist.F90::get_phi`.
+- [ ] Add a non-destructive GKW final-state/restart or multi-time velocity-slice dump if the final peak-\(\phi\) slice is insufficient to identify the cumulative source of the distribution mismatch.
+- [ ] Keep both production Cyclone diagnostics (`late_fit` and `late_mean_window`) available until the GKW/Gyaradax selected-mode history gap is isolated.
+- [ ] Add a production-resolution Cyclone selected-`ky` regression once the observed growth is within the GKW/GX tolerance ladder.
+- [ ] Replace the matched DESC/GX block-eik fixture with or supplement it by a truly independent external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST path is available.
+- [ ] Keep DESC-driven optimization examples labeled reduced until the CBC selected-`ky` gate passes alongside the RH plateau and eik parity gates.
