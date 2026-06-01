@@ -174,7 +174,9 @@ class CycloneTermParityReport(_PyTreeDataclass):
         if len(self.term_names) != errors.shape[0]:
             raise ValueError("term_names length must match term_errors")
         object.__setattr__(self, "term_errors", errors)
-        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(
+            self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64)
+        )
         object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
         object.__setattr__(self, "term_names", tuple(self.term_names))
 
@@ -242,7 +244,9 @@ class CycloneTraceComparisonReport(_PyTreeDataclass):
         if len(self.field_names) != errors.shape[0]:
             raise ValueError("field_names length must match field_errors")
         object.__setattr__(self, "field_errors", errors)
-        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(
+            self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64)
+        )
         object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
         object.__setattr__(self, "field_names", tuple(self.field_names))
 
@@ -1444,9 +1448,7 @@ def run_reduced_rosenbluth_hinton_gate(
         )
     )
     parallel = _build_gkw_cell_centered_parallel_grid(n_z, derivative_backend=parallel_backend)
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,)))
     geometry = build_s_alpha_geometry(
         parallel,
         GeometryScalarParams(q=q, shat=shat, eps=epsilon),
@@ -1589,9 +1591,7 @@ def run_rosenbluth_hinton_plateau_gate(
         )
     )
     parallel = _build_gkw_cell_centered_parallel_grid(n_z, derivative_backend=parallel_backend)
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=1, kx_max=kx_rhos, ky_values=(0.0,)))
     geometry = build_s_alpha_geometry(
         parallel,
         GeometryScalarParams(q=q, shat=shat, eps=epsilon),
@@ -1628,9 +1628,7 @@ def run_rosenbluth_hinton_plateau_gate(
     phi_initial = solve_adiabatic_electron_phi(state, precompute.field)
     initial_power = _field_power(phi_initial[:, ix, 0], geometry.w_z)
 
-    use_filter = any(
-        rate > 0.0 for rate in (z_modal_damping, vpar_modal_damping, mu_modal_damping)
-    )
+    use_filter = any(rate > 0.0 for rate in (z_modal_damping, vpar_modal_damping, mu_modal_damping))
     filter_fn = (
         build_modal_damping_filter(
             dt=dt,
@@ -1648,17 +1646,21 @@ def run_rosenbluth_hinton_plateau_gate(
     diagnostic_steps = max(1, int(round(diagnostic_interval / dt)))
     total_steps = int(round(t_end / dt))
     advance_diagnostic_chunk = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            diagnostic_steps,
-            linear_residual,
-            precompute,
-            filter_fn=filter_fn,
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                diagnostic_steps,
+                linear_residual,
+                precompute,
+                filter_fn=filter_fn,
+                store_history=False,
+            ).state
+        )
     )
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, precompute.field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, precompute.field)
+    )
     late_power_ratios = []
     late_times = []
     current_time = 0.0
@@ -1884,9 +1886,7 @@ def run_production_cyclone_base_case_gate(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
     if steps_per_window < 1:
         raise ValueError("steps_per_window must be positive")
@@ -1917,16 +1917,20 @@ def run_production_cyclone_base_case_gate(
     times = []
     log_amplitudes = []
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
 
     def append_log_amplitude(time_value, state_value, accumulated_log):
         phi = solve_phi(state_value)
@@ -2050,9 +2054,7 @@ def run_cyclone_base_case_trace(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
     setup = _build_cyclone_base_case_setup(
         target,
@@ -2083,16 +2085,20 @@ def run_cyclone_base_case_trace(
     rhs_norms = []
     log_normalizations = []
 
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     def append_snapshot(time_value, state_value, accumulated_log, previous_physical_value):
@@ -2208,8 +2214,7 @@ def compare_cyclone_base_case_traces(
         passed=max_abs_error <= tolerance,
         field_names=field_names,
         notes=(
-            f"observed={observed.source}; reference={reference.source}; "
-            "trace-level CBC comparison"
+            f"observed={observed.source}; reference={reference.source}; trace-level CBC comparison"
         ),
     )
 
@@ -2464,9 +2469,7 @@ def run_cyclone_base_case_parallel_phi_trace(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -2491,16 +2494,20 @@ def run_cyclone_base_case_parallel_phi_trace(
     times_out = []
     profiles = []
 
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     def append_profile(time_value, phi_value, accumulated_log):
@@ -2671,10 +2678,7 @@ def audit_parallel_phi_profile_alignment(
         axis=1,
     )
     second_moment_error = observed_second_moment - reference_second_moment
-    peak_z_error = (
-        z[jnp.argmax(observed_shape, axis=1)]
-        - z[jnp.argmax(reference_shape, axis=1)]
-    )
+    peak_z_error = z[jnp.argmax(observed_shape, axis=1)] - z[jnp.argmax(reference_shape, axis=1)]
     edge_fraction_error = (
         observed_shape[:, 0]
         + observed_shape[:, -1]
@@ -2817,9 +2821,7 @@ def run_cyclone_base_case_profile_operator_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -2842,16 +2844,20 @@ def run_cyclone_base_case_profile_operator_audit(
     selected = int(setup["selected_ky_index"])
     ixzero = int(setup["fourier"].ixzero)
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     phi = solve_phi(state)
@@ -2899,7 +2905,9 @@ def run_cyclone_base_case_profile_operator_audit(
     )
 
     numerator = adiabatic_density_numerator(state, setup["precompute"].field)
-    reconstructed_phi = solve_adiabatic_electron_phi_from_density(numerator, setup["precompute"].field)
+    reconstructed_phi = solve_adiabatic_electron_phi_from_density(
+        numerator, setup["precompute"].field
+    )
     field_residual = adiabatic_quasineutrality_residual_from_density(
         phi,
         numerator,
@@ -3036,9 +3044,7 @@ def run_cyclone_base_case_term_i_fortran_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -3061,16 +3067,20 @@ def run_cyclone_base_case_term_i_fortran_audit(
     selected = int(setup["selected_ky_index"])
     ixzero = int(setup["fourier"].ixzero)
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     phi = solve_phi(state)
@@ -3228,9 +3238,7 @@ def run_cyclone_base_case_time_normalization_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -3253,22 +3261,28 @@ def run_cyclone_base_case_time_normalization_audit(
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
     window_duration = steps_per_window * dt
 
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
 
     def rhs_fn(state_value):
         return linear_residual(state_value, precomputed=setup["precompute"])
 
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
-    reference_rk4_step = jax.jit(lambda state_value: _gkw_rk4_step_reference(state_value, dt, rhs_fn))
+    reference_rk4_step = jax.jit(
+        lambda state_value: _gkw_rk4_step_reference(state_value, dt, rhs_fn)
+    )
     solver_rk4_step = jax.jit(lambda state_value: rk4_step(state_value, dt, rhs_fn))
 
     times = [0.0]
@@ -3463,9 +3477,7 @@ def run_cyclone_base_case_diagnostic_packing_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -3487,16 +3499,20 @@ def run_cyclone_base_case_diagnostic_packing_audit(
     selected = int(setup["selected_ky_index"])
     ixzero = int(setup["fourier"].ixzero)
     log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
-    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     phi = solve_phi(state)
@@ -3639,9 +3655,7 @@ def run_cyclone_base_case_matdat_matrix_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -3795,9 +3809,7 @@ def run_cyclone_base_case_coefficient_source_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -3826,14 +3838,16 @@ def run_cyclone_base_case_coefficient_source_audit(
         )
     )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     phi = solve_phi(state)
@@ -3864,9 +3878,8 @@ def run_cyclone_base_case_coefficient_source_audit(
 
     source = _cyclone_source_term_arrays(setup, metadata)
     term_ii = -1j * source["drift_frequency"] * state
-    term_iv = (
-        source["mirror_coeff"][None, :, :, None, None]
-        * _apply_first_axis_matrix(rhs.D_vpar, state)
+    term_iv = source["mirror_coeff"][None, :, :, None, None] * _apply_first_axis_matrix(
+        rhs.D_vpar, state
     )
     term_v = source["equilibrium_drive_coeff"] * phi[None, None, :, :, :]
     term_vii = _gkw_fortran_term_vii_reference(
@@ -4027,9 +4040,7 @@ def run_cyclone_base_case_igh_arakawa_audit(
         else velocity_backend
     )
     initial_profile = str(
-        metadata.get("initial_profile", "cosine2")
-        if initial_profile is None
-        else initial_profile
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
     )
 
     setup = _build_cyclone_base_case_setup(
@@ -4041,6 +4052,7 @@ def run_cyclone_base_case_igh_arakawa_audit(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
         parallel_backend=parallel_backend,
         parallel_boundary=parallel_boundary,
         parallel_derivative_model="gkw_upwind",
@@ -4059,14 +4071,16 @@ def run_cyclone_base_case_igh_arakawa_audit(
         )
     )
     advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            dt,
-            steps_per_window,
-            linear_residual,
-            setup["precompute"],
-            store_history=False,
-        ).state
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
     )
 
     phi = solve_phi(state)
@@ -4127,7 +4141,9 @@ def run_cyclone_base_case_igh_arakawa_audit(
         selected,
     )
     max_delta = jnp.max(delta_profile)
-    fused_scale = jnp.max(jnp.maximum(fused_profile, jnp.asarray(1.0e-300, dtype=fused_profile.dtype)))
+    fused_scale = jnp.max(
+        jnp.maximum(fused_profile, jnp.asarray(1.0e-300, dtype=fused_profile.dtype))
+    )
     relative_delta = max_delta / fused_scale
     z_index = int(jnp.argmin(jnp.abs(setup["parallel"].z - target_z)))
 
@@ -5206,7 +5222,9 @@ def _gkw_compress_triplets(rows, cols, values, *, n_rows: int):
 
 def _gkw_apply_compressed_triplets(compressed, vector):
     vector = np.asarray(vector)
-    out = np.zeros((compressed["iac"].shape[0] - 1,), dtype=np.result_type(compressed["values"], vector))
+    out = np.zeros(
+        (compressed["iac"].shape[0] - 1,), dtype=np.result_type(compressed["values"], vector)
+    )
     for row in range(out.shape[0]):
         start = compressed["iac"][row]
         stop = compressed["iac"][row + 1]
@@ -5260,6 +5278,7 @@ def _build_cyclone_base_case_setup(
     parallel_derivative_model: str,
     velocity_backend: str,
     initial_profile: str,
+    velocity_recurrence_rate: float = 0.0,
 ):
     from .geometry import build_s_alpha_geometry
     from .grids import build_fourier_grid, build_mode_connectivity, build_velocity_grid
@@ -5288,9 +5307,7 @@ def _build_cyclone_base_case_setup(
         derivative_backend=parallel_backend,
         periodic=parallel_boundary != "zero",
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(ky,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(ky,)))
     connectivity = build_mode_connectivity(fourier)
     geometry = build_s_alpha_geometry(
         parallel,
@@ -5321,6 +5338,8 @@ def _build_cyclone_base_case_setup(
         ),
         parallel_recurrence_rate=parallel_recurrence_rate,
         parallel_recurrence_velocity_model="rms",
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        velocity_recurrence_velocity_model="rms",
         mode_connectivity=connectivity,
         parallel_derivative_model=parallel_derivative_model,
     )
@@ -5389,9 +5408,14 @@ def _cyclone_normalization_error(setup, metadata):
     dz = 2.0 * sgrmax / n_z
     expected_z = -sgrmax + 0.5 * dz + dz * jnp.arange(n_z, dtype=setup["parallel"].z.dtype)
     dv = 2.0 * vpar_max / n_vpar
-    expected_vpar = -vpar_max + 0.5 * dv + dv * jnp.arange(
-        n_vpar,
-        dtype=setup["velocity"].vpar.dtype,
+    expected_vpar = (
+        -vpar_max
+        + 0.5 * dv
+        + dv
+        * jnp.arange(
+            n_vpar,
+            dtype=setup["velocity"].vpar.dtype,
+        )
     )
     dvperp = vpar_max / n_mu
     vperp = dvperp * (jnp.arange(n_mu, dtype=setup["velocity"].mu.dtype) + 0.5)
@@ -5445,9 +5469,9 @@ def _cyclone_source_term_arrays(setup, metadata):
     drift_frequency = (vpar_5**2 + mu_5 * B_5) * (kx * D_x + ky * D_y)
     energy = vpar[:, None, None] ** 2 + 2.0 * mu[None, :, None] * B[None, None, :]
     maxwellian_value = jnp.exp(-energy) / jnp.pi**1.5
-    drive_factor = float(metadata.get("R_over_Ln", 2.2)) + float(
-        metadata.get("R_over_LT", 6.9)
-    ) * (energy - 1.5)
+    drive_factor = float(metadata.get("R_over_Ln", 2.2)) + float(metadata.get("R_over_LT", 6.9)) * (
+        energy - 1.5
+    )
     bessel_j0 = rhs.flr_factors.bessel_j0[0]
     equilibrium_drive_coeff = (
         1j
@@ -5475,10 +5499,7 @@ def _cyclone_source_term_arrays(setup, metadata):
         * rhs.maxwellian[0]
     )
     drift_field_coeff = (
-        -1j
-        * drift_frequency
-        * maxwellian_value[..., None, None]
-        * bessel_j0[None, :, :, :, :]
+        -1j * drift_frequency * maxwellian_value[..., None, None] * bessel_j0[None, :, :, :, :]
     )
     current_drift_field_coeff = (
         -rhs.charge_over_temperature[0]
@@ -5574,9 +5595,7 @@ def _gkw_fortran_igh_reference(state, setup, *, disp_par: float, disp_vp: float)
 
     def add(out, row_iv, row_imu, row_iz, col_iv, col_iz, value):
         if 0 <= col_iv < n_vpar and 0 <= col_iz < n_z:
-            out[row_iv, row_imu, row_iz, 0, 0] += (
-                value * state_np[col_iv, row_imu, col_iz, 0, 0]
-            )
+            out[row_iv, row_imu, row_iz, 0, 0] += value * state_np[col_iv, row_imu, col_iz, 0, 0]
 
     for iv in range(n_vpar):
         for imu in range(n_mu):
@@ -5808,19 +5827,27 @@ def _gkw_igh_two(out, *, row_iv, row_imu, row_iz, dum, position, hh, add):
     iz = row_iz
     imu = row_imu
     if position == -1:
-        val = fac * dum * (
-            -2.0 * hh(iz - 1, imu, iv)
-            - 3.0 * hh(iz, imu, iv)
-            + 6.0 * hh(iz + 1, imu, iv)
-            - hh(iz + 2, imu, iv)
+        val = (
+            fac
+            * dum
+            * (
+                -2.0 * hh(iz - 1, imu, iv)
+                - 3.0 * hh(iz, imu, iv)
+                + 6.0 * hh(iz + 1, imu, iv)
+                - hh(iz + 2, imu, iv)
+            )
         )
         entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
         entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
-        val = -fac * dum * (
-            hh(iz, imu, iv - 2)
-            - 8.0 * hh(iz, imu, iv - 1)
-            + 8.0 * hh(iz, imu, iv + 1)
-            - hh(iz, imu, iv + 2)
+        val = (
+            -fac
+            * dum
+            * (
+                hh(iz, imu, iv - 2)
+                - 8.0 * hh(iz, imu, iv - 1)
+                + 8.0 * hh(iz, imu, iv + 1)
+                - hh(iz, imu, iv + 2)
+            )
         )
         entries += (
             (iv, iz - 1, -2.0 * val),
@@ -5829,19 +5856,27 @@ def _gkw_igh_two(out, *, row_iv, row_imu, row_iz, dum, position, hh, add):
             (iv, iz + 2, -val),
         )
     elif position == 1:
-        val = fac * dum * (
-            hh(iz - 2, imu, iv)
-            - 6.0 * hh(iz - 1, imu, iv)
-            + 3.0 * hh(iz, imu, iv)
-            + 2.0 * hh(iz + 1, imu, iv)
+        val = (
+            fac
+            * dum
+            * (
+                hh(iz - 2, imu, iv)
+                - 6.0 * hh(iz - 1, imu, iv)
+                + 3.0 * hh(iz, imu, iv)
+                + 2.0 * hh(iz + 1, imu, iv)
+            )
         )
         entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
         entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
-        val = -fac * dum * (
-            hh(iz, imu, iv - 2)
-            - 8.0 * hh(iz, imu, iv - 1)
-            + 8.0 * hh(iz, imu, iv + 1)
-            - hh(iz, imu, iv + 2)
+        val = (
+            -fac
+            * dum
+            * (
+                hh(iz, imu, iv - 2)
+                - 8.0 * hh(iz, imu, iv - 1)
+                + 8.0 * hh(iz, imu, iv + 1)
+                - hh(iz, imu, iv + 2)
+            )
         )
         entries += (
             (iv, iz - 2, val),
@@ -5866,7 +5901,9 @@ def _gkw_igh_diffus(out, *, row_iv, row_imu, row_iz, kdiff, dum, dx, direction, 
         add(out, row_iv, row_imu, row_iz, col_iv, col_iz, coefficient * weight)
 
 
-def _gkw_fortran_term_i_reference(state, parallel_coeff, recurrence_coeff, stencil, vpar, recurrence_rate: float):
+def _gkw_fortran_term_i_reference(
+    state, parallel_coeff, recurrence_coeff, stencil, vpar, recurrence_rate: float
+):
     state_np = np.asarray(state)
     parallel_np = np.asarray(parallel_coeff, dtype=float)
     recurrence_np = np.asarray(recurrence_coeff, dtype=float)
@@ -5916,7 +5953,9 @@ def _gkw_fortran_term_i_reference(state, parallel_coeff, recurrence_coeff, stenc
     )
 
 
-def _gkw_fortran_term_i_coefficients(position_class: int, dum: float, recurrence: float, spacing: float):
+def _gkw_fortran_term_i_coefficients(
+    position_class: int, dum: float, recurrence: float, spacing: float
+):
     ds = float(spacing)
     rec = abs(float(recurrence))
     if dum > 0.0:

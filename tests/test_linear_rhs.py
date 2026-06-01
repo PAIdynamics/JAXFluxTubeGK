@@ -20,6 +20,7 @@ from stellarator_gk import (
     dissipation,
     drift_field_drive,
     equilibrium_drive,
+    gkw_igh_streaming_mirror,
     linear_residual,
     linear_residual_from_phi,
     magnetic_drift_advection,
@@ -28,6 +29,11 @@ from stellarator_gk import (
     parallel_recurrence_control,
     parallel_streaming,
     velocity_recurrence_control,
+)
+from stellarator_gk.benchmarks import (
+    _build_cyclone_base_case_setup,
+    _gkw_fortran_igh_reference,
+    cyclone_base_case_growth_target,
 )
 
 
@@ -49,9 +55,7 @@ def _setup(species=None, *, n_z=16, zonal_correction=False):
     parallel = build_parallel_grid(
         ParallelGridSpec(n_z=n_z, z_min=0.0, z_max=1.0, topology="periodic")
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.4))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.4)))
     geometry = build_s_alpha_geometry(
         parallel,
         GeometryScalarParams(q=1.3, shat=0.7, eps=0.18),
@@ -125,7 +129,9 @@ def test_streaming_and_mirror_terms_match_manufactured_derivatives():
 
     streaming = parallel_streaming(distribution_z, parallel.D_z, streaming_coeff)
     expected_streaming = -2.0 * jnp.pi * jnp.cos(2.0 * jnp.pi * z)
-    expected_streaming = jnp.ones_like(distribution_z) * expected_streaming[None, None, :, None, None]
+    expected_streaming = (
+        jnp.ones_like(distribution_z) * expected_streaming[None, None, :, None, None]
+    )
 
     v_profile = vpar**4 - 2.0 * vpar**2 + 0.5 * vpar
     distribution_v = jnp.ones_like(distribution_z) * v_profile[:, None, None, None, None]
@@ -197,10 +203,14 @@ def test_parallel_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
         jnp.abs(residual_precompute.rhs.parallel_streaming_coeff) / safe_v_abs,
         0.0,
     )
-    expected = rate * jnp.sqrt(jnp.mean(velocity.vpar**2)) * jnp.max(
-        scale,
-        axis=1,
-        keepdims=True,
+    expected = (
+        rate
+        * jnp.sqrt(jnp.mean(velocity.vpar**2))
+        * jnp.max(
+            scale,
+            axis=1,
+            keepdims=True,
+        )
     )
 
     np.testing.assert_allclose(
@@ -267,10 +277,14 @@ def test_velocity_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
         jnp.abs(precompute.mirror_force_coeff) / safe_mu_abs,
         0.0,
     )
-    expected = rate * jnp.sqrt(jnp.mean(velocity.mu**2)) * jnp.max(
-        scale,
-        axis=1,
-        keepdims=True,
+    expected = (
+        rate
+        * jnp.sqrt(jnp.mean(velocity.mu**2))
+        * jnp.max(
+            scale,
+            axis=1,
+            keepdims=True,
+        )
     )
 
     np.testing.assert_allclose(
@@ -279,6 +293,41 @@ def test_velocity_recurrence_rms_coefficient_matches_gkw_idisp2_scaling():
         rtol=1e-13,
         atol=1e-13,
     )
+
+
+def test_gkw_igh_backend_matches_fortran_style_reference_operator():
+    target = cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=8,
+        n_vpar=8,
+        n_mu=4,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=float(metadata.get("disp_vp", 0.2)),
+        parallel_backend="finite_difference",
+        parallel_boundary="zero",
+        parallel_derivative_model="gkw_igh",
+        velocity_backend="finite_difference",
+        initial_profile="cosine",
+    )
+    state = setup["state"]
+    rhs = setup["precompute"].rhs
+    expected, _hamiltonian, _parallel_diffusion, _velocity_diffusion = _gkw_fortran_igh_reference(
+        state,
+        setup,
+        disp_par=float(metadata["disp_par"]),
+        disp_vp=float(metadata.get("disp_vp", 0.2)),
+    )
+
+    observed = gkw_igh_streaming_mirror(state, rhs)
+    jit_observed = jax.jit(lambda values: gkw_igh_streaming_mirror(values, rhs))(state)
+
+    np.testing.assert_allclose(observed, expected, rtol=3e-13, atol=3e-13)
+    np.testing.assert_allclose(jit_observed, expected, rtol=3e-13, atol=3e-13)
 
 
 def test_drift_and_field_drive_terms_match_formulae():
@@ -319,7 +368,9 @@ def test_drift_and_field_drive_terms_match_formulae():
         * precompute.maxwellian[0][..., None, None]
         * dz_gyro_phi[None, :, :, :, :]
     )
-    np.testing.assert_allclose(parallel_field_drive(phi, precompute.D_z, precompute), expected_parallel)
+    np.testing.assert_allclose(
+        parallel_field_drive(phi, precompute.D_z, precompute), expected_parallel
+    )
 
     expected_drift_drive = (
         -(species.charge / species.temperature)
@@ -389,9 +440,7 @@ def test_residual_gradients_flow_through_geometry_arrays_and_species_parameters(
     parallel = build_parallel_grid(
         ParallelGridSpec(n_z=n_z, z_min=z_min, z_max=z_min + 1.0, topology="periodic")
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.4))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.4)))
     base_geometry = build_s_alpha_geometry(
         parallel,
         GeometryScalarParams(q=1.3, shat=0.7, eps=0.18),
@@ -437,9 +486,9 @@ def test_residual_gradients_flow_through_geometry_arrays_and_species_parameters(
     finite_difference_geometry = (
         objective(geometry_scale + step, species) - objective(geometry_scale - step, species)
     ) / (2.0 * step)
-    finite_difference_t = (objective(geometry_scale, t_plus) - objective(geometry_scale, t_minus)) / (
-        2.0 * step
-    )
+    finite_difference_t = (
+        objective(geometry_scale, t_plus) - objective(geometry_scale, t_minus)
+    ) / (2.0 * step)
 
     assert jnp.isfinite(grad_geometry)
     assert jnp.isfinite(grad_species.temperature)

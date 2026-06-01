@@ -276,10 +276,10 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- implement an optional matrix-free GKW `ltrapping_arakawa` fused `igh` backend
-  for the solver residual, including the combined Term I/IV Hamiltonian
-  stencil and `disp_vp=0.2`, then rerun the production selected-`ky`
-  growth/profile gates,
+- rerun the production selected-`ky` growth/profile gates with the optional
+  matrix-free GKW `ltrapping_arakawa` fused `igh` backend
+  (`parallel_derivative_model="gkw_igh"`), then compare the resulting
+  growth/history/profile diagnostics with the matched GKW traces,
 - add a non-destructive GKW `cosine2` patch or restart/state-injection path
   only if the remaining native `finit='cosine'` profile comparison still
   cannot isolate the discrepancy,
@@ -308,6 +308,46 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Implemented Optional GKW Fused `igh` RHS Backend
+
+- Committed the previous `igh` audit tranche as:
+  - `4e6a6d8 Add Cyclone igh Arakawa audit`.
+- Added `GKWArakawaIghStencil`, `build_gkw_igh_stencil`, and
+  `gkw_igh_streaming_mirror`.
+- Added `parallel_derivative_model="gkw_igh"` to the linear RHS precompute and
+  residual assembly. In this backend, GKW's fused `linear_terms.F90::igh`
+  action replaces the separated parallel-streaming, mirror-force,
+  `disp_par`, and `disp_vp` pieces; Term VII still uses the GKW upwind field
+  derivative.
+- The fused backend precomputes source-shift weights for
+  \(\Delta v_\parallel,\Delta z\in[-2,2]\), including the combined Term I/IV
+  Hamiltonian stencil and in-operator `disp_par`/`disp_vp` fourth-difference
+  diffusion on the GKW finite-difference fallback grid.
+- Added a direct regression test comparing the matrix-free backend against the
+  source-reconstructed Fortran-style `igh` action, including a JIT call.
+- Fixed the Cyclone setup helper so `velocity_recurrence_rate` can be passed to
+  the `igh` audit/backend path without changing existing GKW-upwind call sites.
+- Updated `TODO.md` and `main.tex` to record that the fused backend exists and
+  that the next step is a production selected-`ky` growth/profile rerun with
+  `parallel_derivative_model="gkw_igh"`.
+- Verification run this round:
+  - `python -m py_compile src/stellarator_gk/physics/rhs_terms.py src/stellarator_gk/benchmarks.py`
+  - `uv run ruff format src/stellarator_gk/physics/rhs_terms.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py src/stellarator_gk/benchmarks.py tests/test_linear_rhs.py`
+  - `uv run pytest tests/test_linear_rhs.py::test_gkw_igh_backend_matches_fortran_style_reference_operator -q`
+  - `uv run pytest tests/test_linear_rhs.py -q`
+  - `uv run ruff check src/stellarator_gk/physics/rhs_terms.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py src/stellarator_gk/benchmarks.py tests/test_linear_rhs.py`
+  - `uv run pytest tests/test_linear_rhs.py tests/test_benchmark_references.py::test_cyclone_igh_arakawa_audit_quantifies_fused_path_gap -q`
+  - `uv run ruff check src tests examples scripts`
+  - `uv run pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification results:
+  - focused fused-`igh` backend test: 1 passed,
+  - linear RHS suite: 12 passed,
+  - focused RHS plus `igh` benchmark audit suite: 13 passed,
+  - full pytest suite: 152 passed,
+  - focused and full ruff: all checks passed,
+  - `main.tex` built successfully with existing underfull-box warnings only.
 
 ### 2026-06-01: Added GKW `ltrapping_arakawa` `igh` Audit
 

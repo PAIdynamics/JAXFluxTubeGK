@@ -840,6 +840,27 @@ and select them by \(\operatorname{sign}(a_{\parallel,s})\).  At a boundary, a s
 
 For the fallback mirror term in \(v_\parallel\), use the centered fourth-order derivative in the interior and zero-padding/no-flux style boundary behavior, matching GKW velocity-space conventions.  Every derivative routine must have manufactured-solution tests in both spectral and fallback modes.
 
+For production GKW parity with \(\texttt{ltrapping\_arakawa}\), the fallback
+also exposes a fused matrix-free \(\texttt{igh}\) operator.  This operator does
+not apply Term I and Term IV as two independent derivatives.  Instead it
+precomputes row-local source-shift weights \(C_{\Delta v,\Delta z}\) with
+\(\Delta v,\Delta z\in[-2,2]\) and applies
+\begin{equation}
+  \left(\mathcal{L}_{\mathrm{igh}} f\right)_{a,b,j,k_x,k_y}
+  =
+  \sum_{\Delta v=-2}^{2}
+  \sum_{\Delta z=-2}^{2}
+  C_{\Delta v,\Delta z;a,b,j,k_x,k_y}\,
+  f_{a+\Delta v,b,j+\Delta z,k_x',k_y}.
+  \label{eq:gkw-igh-backend}
+\end{equation}
+The shifted \(k_x'\) is obtained from the same GKW mode-connectivity maps used
+by the upwind fallback.  The coefficients include the Arakawa Hamiltonian
+stencil for \(H=v_\parallel^2/2+\mu B\) and the in-operator
+\(\texttt{disp\_par}\) and \(\texttt{disp\_vp}\) fourth-difference diffusion
+terms.  This backend is a parity/debug path for the GKW finite-difference
+grid; the differentiable spectral target remains the default solver route.
+
 \section{Residual Assembly and Precomputation}
 
 \subsection{Precomputed coefficient arrays}
@@ -1396,10 +1417,16 @@ by local profile delta \(3.58\times10^{-4}\), maximum profile delta
 \(1.51\times10^{-3}\), and relative envelope \(1.26\times10^{-1}\).  The
 parallel and velocity diffusion components of \texttt{igh} peak at
 \(7.04\times10^{-3}\) and \(7.60\times10^{-4}\), respectively; the CSV is
-\path{figures/cyclone_igh_arakawa_audit.csv}.  The next implementation step is
-to promote this source reconstruction into an optional matrix-free GKW
-\texttt{igh} RHS backend and rerun the production selected-\(k_y\)
-growth/profile gates.
+\path{figures/cyclone_igh_arakawa_audit.csv}.  The source reconstruction has
+now been promoted into an optional matrix-free solver backend,
+\(\texttt{parallel\_derivative\_model}=\texttt{gkw\_igh}\).  In this backend
+the fused \texttt{igh} action replaces the separated parallel-streaming,
+mirror-force, \(\texttt{disp\_par}\), and \(\texttt{disp\_vp}\) terms while the
+parallel field drive still uses the GKW upwind derivative.  A direct reduced
+test compares the backend against the reconstructed Fortran-style
+\texttt{igh} action, including a JIT call, to roundoff.  The next validation
+step is to rerun the production selected-\(k_y\) growth/profile gates with
+this backend enabled.
 The direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or

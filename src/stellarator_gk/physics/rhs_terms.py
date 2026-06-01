@@ -108,6 +108,26 @@ class GKWParallelStencil(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GKWArakawaIghStencil(_PyTreeDataclass):
+    """Precomputed sparse shift table for GKW's fused ``igh`` operator."""
+
+    coefficients: object
+    valid_v_shift: object
+    spacing_z: float
+    spacing_vpar: float
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("coefficients", "valid_v_shift")
+    _static_fields: ClassVar[tuple[str, ...]] = ("spacing_z", "spacing_vpar")
+
+    def __post_init__(self):
+        if self.spacing_z <= 0.0:
+            raise ValueError("spacing_z must be positive")
+        if self.spacing_vpar <= 0.0:
+            raise ValueError("spacing_vpar must be positive")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class LinearRHSPrecompute(_PyTreeDataclass):
     """Precomputed coefficients for the linear electrostatic RHS."""
 
@@ -128,6 +148,7 @@ class LinearRHSPrecompute(_PyTreeDataclass):
     velocity_recurrence_operator: object
     velocity_recurrence_coeff: object
     gkw_parallel_stencil: GKWParallelStencil
+    gkw_igh_stencil: GKWArakawaIghStencil
     parallel_derivative_model: str
     n_species: int
 
@@ -149,14 +170,17 @@ class LinearRHSPrecompute(_PyTreeDataclass):
         "velocity_recurrence_operator",
         "velocity_recurrence_coeff",
         "gkw_parallel_stencil",
+        "gkw_igh_stencil",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("parallel_derivative_model", "n_species")
 
     def __post_init__(self):
         if self.n_species < 1:
             raise ValueError("n_species must be at least 1")
-        if self.parallel_derivative_model not in ("matrix", "gkw_upwind"):
-            raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_upwind'")
+        if self.parallel_derivative_model not in ("matrix", "gkw_upwind", "gkw_igh"):
+            raise ValueError(
+                "parallel_derivative_model must be 'matrix', 'gkw_upwind', or 'gkw_igh'"
+            )
 
 
 def build_linear_rhs_precompute(
@@ -177,8 +201,8 @@ def build_linear_rhs_precompute(
 ) -> LinearRHSPrecompute:
     """Precompute geometry/species coefficients used by the linear RHS terms."""
 
-    if parallel_derivative_model not in ("matrix", "gkw_upwind"):
-        raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_upwind'")
+    if parallel_derivative_model not in ("matrix", "gkw_upwind", "gkw_igh"):
+        raise ValueError("parallel_derivative_model must be 'matrix', 'gkw_upwind', or 'gkw_igh'")
     species_tuple = _as_species_tuple(species)
     n_species = len(species_tuple)
     kperp2 = _k_perp_squared(geometry, fourier_grid)
@@ -256,9 +280,9 @@ def build_linear_rhs_precompute(
         velocity_recurrence_rate,
         velocity_recurrence_velocity_model,
     )
-    if parallel_derivative_model == "gkw_upwind":
+    if parallel_derivative_model in ("gkw_upwind", "gkw_igh"):
         if mode_connectivity is None:
-            raise ValueError("mode_connectivity is required for gkw_upwind parallel derivatives")
+            raise ValueError("mode_connectivity is required for GKW parallel derivative models")
         gkw_parallel_stencil = build_gkw_parallel_stencil(
             parallel_grid,
             fourier_grid,
@@ -269,6 +293,26 @@ def build_linear_rhs_precompute(
         gkw_parallel_stencil = _empty_gkw_parallel_stencil(
             parallel_grid,
             fourier_grid,
+            dtype=jnp.asarray(geometry.B).dtype,
+        )
+    if parallel_derivative_model == "gkw_igh":
+        gkw_igh_stencil = build_gkw_igh_stencil(
+            velocity_grid,
+            parallel_grid,
+            fourier_grid,
+            geometry,
+            mode_connectivity,
+            parallel,
+            recurrence_coeff,
+            velocity_recurrence_coeff,
+            dtype=jnp.asarray(geometry.B).dtype,
+        )
+    else:
+        gkw_igh_stencil = _empty_gkw_igh_stencil(
+            velocity_grid,
+            parallel_grid,
+            fourier_grid,
+            n_species,
             dtype=jnp.asarray(geometry.B).dtype,
         )
 
@@ -290,6 +334,7 @@ def build_linear_rhs_precompute(
         velocity_recurrence_operator=velocity_recurrence_operator,
         velocity_recurrence_coeff=velocity_recurrence_coeff,
         gkw_parallel_stencil=gkw_parallel_stencil,
+        gkw_igh_stencil=gkw_igh_stencil,
         parallel_derivative_model=parallel_derivative_model,
         n_species=n_species,
     )
@@ -361,6 +406,438 @@ def _empty_gkw_parallel_stencil(
         valid_shift=jnp.zeros(shape, dtype=bool),
         spacing=1.0,
     )
+
+
+def build_gkw_igh_stencil(
+    velocity_grid: VelocityGrid,
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    geometry,
+    mode_connectivity,
+    parallel_coeff,
+    parallel_recurrence_coeff,
+    velocity_recurrence_coeff,
+    *,
+    dtype=None,
+) -> GKWArakawaIghStencil:
+    """Build GKW's fused Arakawa ``igh`` shift table.
+
+    This is a production-parity backend for the GKW/Gyaradax finite-difference
+    path.  It precomputes the row-local Hamiltonian bracket coefficients and
+    the in-operator ``disp_par``/``disp_vp`` recurrence terms as source-shift
+    weights over ``delta_vpar, delta_z in [-2, 2]``.
+    """
+
+    if velocity_grid.backend != "finite_difference":
+        raise ValueError("gkw_igh requires a finite_difference velocity grid")
+    if parallel_grid.backend != "finite_difference":
+        raise ValueError("gkw_igh requires a finite_difference parallel grid")
+
+    vpar = np.asarray(velocity_grid.vpar, dtype=float)
+    mu = np.asarray(velocity_grid.mu, dtype=float)
+    z = np.asarray(parallel_grid.z, dtype=float)
+    b_field = np.asarray(geometry.B, dtype=float)
+    parallel_np = np.asarray(parallel_coeff, dtype=float)
+    parallel_rec_np = np.asarray(parallel_recurrence_coeff, dtype=float)
+    velocity_rec_np = np.asarray(velocity_recurrence_coeff, dtype=float)
+    if parallel_np.ndim != 3:
+        raise ValueError("parallel_coeff must have shape (n_species,n_vpar,n_z)")
+    if parallel_rec_np.shape != parallel_np.shape:
+        raise ValueError("parallel_recurrence_coeff must match parallel_coeff")
+    if velocity_rec_np.ndim != 3:
+        raise ValueError("velocity_recurrence_coeff must have shape (n_species,n_mu,n_z)")
+
+    n_species, n_vpar, n_z = parallel_np.shape
+    n_mu = mu.shape[0]
+    n_kx = int(jnp.asarray(fourier_grid.kx).shape[0])
+    n_ky = int(jnp.asarray(fourier_grid.ky).shape[0])
+    if vpar.shape != (n_vpar,) or z.shape != (n_z,) or b_field.shape != (n_z,):
+        raise ValueError("gkw_igh grid and geometry shapes are inconsistent")
+    if velocity_rec_np.shape != (n_species, n_mu, n_z):
+        raise ValueError("velocity_recurrence_coeff must have shape (n_species,n_mu,n_z)")
+    if n_vpar < 5 or n_z < 5:
+        raise ValueError("gkw_igh requires at least five vpar and z points")
+
+    spacing_z = float(jnp.sum(jnp.asarray(parallel_grid.w_z)) / n_z)
+    spacing_vpar = float(jnp.sum(jnp.asarray(velocity_grid.w_vpar)) / n_vpar)
+    if not np.allclose(np.diff(vpar), spacing_vpar, rtol=2.0e-12, atol=2.0e-12):
+        raise ValueError("gkw_igh requires a uniform finite-difference vpar grid")
+    if not np.allclose(np.diff(z), spacing_z, rtol=2.0e-12, atol=2.0e-12):
+        raise ValueError("gkw_igh requires a uniform finite-difference parallel grid")
+
+    ixplus = np.asarray(mode_connectivity.ixplus, dtype=np.int32)
+    ixminus = np.asarray(mode_connectivity.ixminus, dtype=np.int32)
+    iyzero = int(mode_connectivity.iyzero)
+    if ixplus.shape != (n_kx, n_ky) or ixminus.shape != (n_kx, n_ky):
+        raise ValueError("mode_connectivity shape must match the Fourier grid")
+    position_class = _gkw_parallel_position_classes(ixplus, ixminus, iyzero, n_z)
+
+    dtype = jnp.asarray(geometry.B).dtype if dtype is None else dtype
+    coefficients = np.zeros(
+        (5, 5, n_species, n_vpar, n_mu, n_z, n_kx, n_ky),
+        dtype=float,
+    )
+    valid_v_shift = np.zeros((5, n_vpar), dtype=bool)
+    row_v = np.arange(n_vpar)
+    for offset_index, delta_v in enumerate(range(-2, 3)):
+        valid_v_shift[offset_index] = (0 <= row_v + delta_v) & (row_v + delta_v < n_vpar)
+
+    parallel_scale = _gkw_parallel_scale_from_coeff(vpar, parallel_np)
+
+    def vpar_at(index):
+        return float(vpar[0] + index * spacing_vpar)
+
+    def hh(iz, imu, iv):
+        iz_ref = min(max(iz, 0), n_z - 1)
+        return 0.5 * vpar_at(iv) ** 2 + mu[imu] * b_field[iz_ref]
+
+    def add_value(ispecies, row_iv, row_imu, row_iz, ix, iy, col_iv, col_iz, value):
+        delta_v = col_iv - row_iv
+        delta_z = col_iz - row_iz
+        if -2 <= delta_v <= 2 and -2 <= delta_z <= 2:
+            coefficients[
+                delta_v + 2,
+                delta_z + 2,
+                ispecies,
+                row_iv,
+                row_imu,
+                row_iz,
+                ix,
+                iy,
+            ] += value
+
+    for ispecies in range(n_species):
+        for iv in range(n_vpar):
+            for imu in range(n_mu):
+                for iz in range(n_z):
+                    dum = parallel_scale[ispecies, iz] / (spacing_z * spacing_vpar)
+                    dum2 = -parallel_np[ispecies, iv, iz]
+                    for ix in range(n_kx):
+                        for iy in range(n_ky):
+                            position = int(position_class[iz, ix, iy])
+                            if position in (-2, 2):
+                                if dum2 * position < 0.0:
+                                    _add_gkw_igh_zero_two_coefficients(
+                                        add_value,
+                                        ispecies,
+                                        iv,
+                                        imu,
+                                        iz,
+                                        ix,
+                                        iy,
+                                        dum,
+                                        position,
+                                        hh,
+                                    )
+                                elif dum2 * position > 0.0:
+                                    _add_gkw_igh_jhg_coefficients(
+                                        add_value,
+                                        ispecies,
+                                        iv,
+                                        imu,
+                                        iz,
+                                        ix,
+                                        iy,
+                                        dum,
+                                        hh,
+                                    )
+                            elif position in (-1, 1):
+                                if dum2 * position < 0.0:
+                                    _add_gkw_igh_two_coefficients(
+                                        add_value,
+                                        ispecies,
+                                        iv,
+                                        imu,
+                                        iz,
+                                        ix,
+                                        iy,
+                                        dum,
+                                        position,
+                                        hh,
+                                    )
+                                elif dum2 * position > 0.0:
+                                    _add_gkw_igh_jhg_coefficients(
+                                        add_value,
+                                        ispecies,
+                                        iv,
+                                        imu,
+                                        iz,
+                                        ix,
+                                        iy,
+                                        dum,
+                                        hh,
+                                    )
+                            else:
+                                _add_gkw_igh_jhg_coefficients(
+                                    add_value,
+                                    ispecies,
+                                    iv,
+                                    imu,
+                                    iz,
+                                    ix,
+                                    iy,
+                                    dum,
+                                    hh,
+                                )
+                                _add_gkw_igh_diffusion_coefficients(
+                                    add_value,
+                                    ispecies,
+                                    iv,
+                                    imu,
+                                    iz,
+                                    ix,
+                                    iy,
+                                    parallel_rec_np[ispecies, iv, iz],
+                                    spacing_z,
+                                    "z",
+                                )
+                                _add_gkw_igh_diffusion_coefficients(
+                                    add_value,
+                                    ispecies,
+                                    iv,
+                                    imu,
+                                    iz,
+                                    ix,
+                                    iy,
+                                    velocity_rec_np[ispecies, imu, iz],
+                                    spacing_vpar,
+                                    "vpar",
+                                )
+
+    return GKWArakawaIghStencil(
+        coefficients=jnp.asarray(coefficients, dtype=dtype),
+        valid_v_shift=jnp.asarray(valid_v_shift, dtype=bool),
+        spacing_z=spacing_z,
+        spacing_vpar=spacing_vpar,
+    )
+
+
+def _empty_gkw_igh_stencil(
+    velocity_grid: VelocityGrid,
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    n_species: int,
+    *,
+    dtype,
+) -> GKWArakawaIghStencil:
+    n_vpar = int(jnp.asarray(velocity_grid.vpar).shape[0])
+    n_mu = int(jnp.asarray(velocity_grid.mu).shape[0])
+    n_z = int(jnp.asarray(parallel_grid.z).shape[0])
+    n_kx = int(jnp.asarray(fourier_grid.kx).shape[0])
+    n_ky = int(jnp.asarray(fourier_grid.ky).shape[0])
+    return GKWArakawaIghStencil(
+        coefficients=jnp.zeros((5, 5, n_species, n_vpar, n_mu, n_z, n_kx, n_ky), dtype=dtype),
+        valid_v_shift=jnp.zeros((5, n_vpar), dtype=bool),
+        spacing_z=1.0,
+        spacing_vpar=1.0,
+    )
+
+
+def _gkw_parallel_scale_from_coeff(vpar: np.ndarray, parallel_coeff: np.ndarray) -> np.ndarray:
+    valid = np.abs(vpar) > 1.0e-300
+    if not np.any(valid):
+        return np.zeros((parallel_coeff.shape[0], parallel_coeff.shape[2]), dtype=float)
+    return np.mean(parallel_coeff[:, valid, :] / vpar[None, valid, None], axis=1)
+
+
+def _add_gkw_igh_jhg_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, hh):
+    d1 = dum / 6.0
+    d2 = -dum / 24.0
+    entries = (
+        (iv, iz - 2, d2 * (hh(iz - 1, imu, iv + 1) - hh(iz - 1, imu, iv - 1))),
+        (
+            iv - 1,
+            iz - 1,
+            d1 * (hh(iz - 1, imu, iv) - hh(iz, imu, iv - 1))
+            + d2
+            * (
+                hh(iz - 2, imu, iv)
+                + hh(iz - 1, imu, iv + 1)
+                - hh(iz, imu, iv - 2)
+                - hh(iz + 1, imu, iv - 1)
+            ),
+        ),
+        (
+            iv,
+            iz - 1,
+            d1
+            * (
+                hh(iz - 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv - 1)
+                - hh(iz, imu, iv - 1)
+                + hh(iz, imu, iv + 1)
+            ),
+        ),
+        (
+            iv + 1,
+            iz - 1,
+            d1 * (hh(iz, imu, iv + 1) - hh(iz - 1, imu, iv))
+            + d2
+            * (
+                hh(iz + 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv - 1)
+                - hh(iz - 2, imu, iv)
+                + hh(iz, imu, iv + 2)
+            ),
+        ),
+        (iv - 2, iz, d2 * (hh(iz - 1, imu, iv - 1) - hh(iz + 1, imu, iv - 1))),
+        (
+            iv - 1,
+            iz,
+            d1
+            * (
+                hh(iz - 1, imu, iv - 1)
+                + hh(iz - 1, imu, iv)
+                - hh(iz + 1, imu, iv - 1)
+                - hh(iz + 1, imu, iv)
+            ),
+        ),
+        (
+            iv + 1,
+            iz,
+            d1
+            * (
+                hh(iz + 1, imu, iv)
+                + hh(iz + 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv)
+                - hh(iz - 1, imu, iv + 1)
+            ),
+        ),
+        (iv + 2, iz, d2 * (hh(iz + 1, imu, iv + 1) - hh(iz - 1, imu, iv + 1))),
+        (
+            iv - 1,
+            iz + 1,
+            d1 * (hh(iz, imu, iv - 1) - hh(iz + 1, imu, iv))
+            + d2
+            * (
+                hh(iz - 1, imu, iv - 1)
+                - hh(iz + 1, imu, iv + 1)
+                - hh(iz + 2, imu, iv)
+                + hh(iz, imu, iv - 2)
+            ),
+        ),
+        (
+            iv,
+            iz + 1,
+            d1
+            * (
+                hh(iz, imu, iv - 1)
+                + hh(iz + 1, imu, iv - 1)
+                - hh(iz, imu, iv + 1)
+                - hh(iz + 1, imu, iv + 1)
+            ),
+        ),
+        (
+            iv + 1,
+            iz + 1,
+            d1 * (hh(iz + 1, imu, iv) - hh(iz, imu, iv + 1))
+            + d2
+            * (
+                hh(iz + 1, imu, iv - 1)
+                - hh(iz - 1, imu, iv + 1)
+                + hh(iz + 2, imu, iv)
+                - hh(iz, imu, iv + 2)
+            ),
+        ),
+        (iv, iz + 2, d2 * (hh(iz + 1, imu, iv - 1) - hh(iz + 1, imu, iv + 1))),
+    )
+    for col_iv, col_iz, value in entries:
+        add(ispecies, iv, imu, iz, ix, iy, col_iv, col_iz, value)
+
+
+def _add_gkw_igh_zero_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, position, hh):
+    fac = 0.25
+    if position == 2:
+        val = fac * dum * (3.0 * hh(iz, imu, iv) - 4.0 * hh(iz - 1, imu, iv) + hh(iz - 2, imu, iv))
+        entries = ((iv - 1, iz, -val), (iv + 1, iz, val))
+        val = fac * dum * (hh(iz, imu, iv + 1) - hh(iz, imu, iv - 1))
+        entries += ((iv, iz, -3.0 * val), (iv, iz - 1, 4.0 * val), (iv, iz - 2, -val))
+    elif position == -2:
+        val = fac * dum * (-3.0 * hh(iz, imu, iv) + 4.0 * hh(iz + 1, imu, iv) - hh(iz + 2, imu, iv))
+        entries = ((iv - 1, iz, -val), (iv + 1, iz, val))
+        val = fac * dum * (hh(iz, imu, iv + 1) - hh(iz, imu, iv - 1))
+        entries += ((iv, iz, 3.0 * val), (iv, iz + 1, -4.0 * val), (iv, iz + 2, val))
+    else:
+        raise ValueError("position must be -2 or 2")
+    for col_iv, col_iz, value in entries:
+        add(ispecies, iv, imu, iz, ix, iy, col_iv, col_iz, value)
+
+
+def _add_gkw_igh_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, position, hh):
+    fac = 1.0 / 72.0
+    if position == -1:
+        val = (
+            fac
+            * dum
+            * (
+                -2.0 * hh(iz - 1, imu, iv)
+                - 3.0 * hh(iz, imu, iv)
+                + 6.0 * hh(iz + 1, imu, iv)
+                - hh(iz + 2, imu, iv)
+            )
+        )
+        entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
+        entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
+        val = (
+            -fac
+            * dum
+            * (
+                hh(iz, imu, iv - 2)
+                - 8.0 * hh(iz, imu, iv - 1)
+                + 8.0 * hh(iz, imu, iv + 1)
+                - hh(iz, imu, iv + 2)
+            )
+        )
+        entries += (
+            (iv, iz - 1, -2.0 * val),
+            (iv, iz, -3.0 * val),
+            (iv, iz + 1, 6.0 * val),
+            (iv, iz + 2, -val),
+        )
+    elif position == 1:
+        val = (
+            fac
+            * dum
+            * (
+                hh(iz - 2, imu, iv)
+                - 6.0 * hh(iz - 1, imu, iv)
+                + 3.0 * hh(iz, imu, iv)
+                + 2.0 * hh(iz + 1, imu, iv)
+            )
+        )
+        entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
+        entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
+        val = (
+            -fac
+            * dum
+            * (
+                hh(iz, imu, iv - 2)
+                - 8.0 * hh(iz, imu, iv - 1)
+                + 8.0 * hh(iz, imu, iv + 1)
+                - hh(iz, imu, iv + 2)
+            )
+        )
+        entries += (
+            (iv, iz - 2, val),
+            (iv, iz - 1, -6.0 * val),
+            (iv, iz, 3.0 * val),
+            (iv, iz + 1, 2.0 * val),
+        )
+    else:
+        raise ValueError("position must be -1 or 1")
+    for col_iv, col_iz, value in entries:
+        add(ispecies, iv, imu, iz, ix, iy, col_iv, col_iz, value)
+
+
+def _add_gkw_igh_diffusion_coefficients(add, ispecies, iv, imu, iz, ix, iy, speed, spacing, axis):
+    if speed <= 0.0:
+        return
+    coefficient = -abs(float(speed)) / (12.0 * float(spacing))
+    stencil = (1.0, -4.0, 6.0, -4.0, 1.0)
+    for offset, weight in zip(range(-2, 3), stencil, strict=True):
+        col_iv = iv + offset if axis == "vpar" else iv
+        col_iz = iz + offset if axis == "z" else iz
+        add(ispecies, iv, imu, iz, ix, iy, col_iv, col_iz, coefficient * weight)
 
 
 def parallel_streaming(distribution, D_z, parallel_coefficient):
@@ -457,10 +934,18 @@ def gkw_parallel_streaming(distribution, precompute: LinearRHSPrecompute):
         single_ndim=2,
     )
     upar = -coefficient_s
-    d1_pos = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d1_pos, precompute.gkw_parallel_stencil)
-    d1_neg = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d1_neg, precompute.gkw_parallel_stencil)
-    d4_pos = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d4_pos, precompute.gkw_parallel_stencil)
-    d4_neg = _apply_gkw_parallel_stencil_table(distribution_s, precompute.gkw_parallel_stencil.d4_neg, precompute.gkw_parallel_stencil)
+    d1_pos = _apply_gkw_parallel_stencil_table(
+        distribution_s, precompute.gkw_parallel_stencil.d1_pos, precompute.gkw_parallel_stencil
+    )
+    d1_neg = _apply_gkw_parallel_stencil_table(
+        distribution_s, precompute.gkw_parallel_stencil.d1_neg, precompute.gkw_parallel_stencil
+    )
+    d4_pos = _apply_gkw_parallel_stencil_table(
+        distribution_s, precompute.gkw_parallel_stencil.d4_pos, precompute.gkw_parallel_stencil
+    )
+    d4_neg = _apply_gkw_parallel_stencil_table(
+        distribution_s, precompute.gkw_parallel_stencil.d4_neg, precompute.gkw_parallel_stencil
+    )
     sign = upar[:, :, None, :, None, None]
     d1 = jnp.where(sign > 0.0, d1_pos, d1_neg)
     d4 = jnp.where(sign > 0.0, d4_pos, d4_neg)
@@ -472,6 +957,30 @@ def gkw_parallel_streaming(distribution, precompute: LinearRHSPrecompute):
         single_ndim=2,
     )
     result = sign * d1 + recurrence_s[:, :, None, :, None, None] * d4
+    return _restore_distribution_shape(result, original_ndim)
+
+
+def gkw_igh_streaming_mirror(distribution, precompute: LinearRHSPrecompute):
+    """Return GKW's fused ``igh`` Term I/IV plus ``disp_par``/``disp_vp``."""
+
+    coefficients = jnp.asarray(precompute.gkw_igh_stencil.coefficients)
+    n_species = int(coefficients.shape[2])
+    original_ndim = jnp.asarray(distribution).ndim
+    distribution_s = _distribution_with_species_axis(distribution, n_species)
+    result = jnp.zeros_like(distribution_s)
+    for v_shift_index, delta_v in enumerate(range(-2, 3)):
+        shifted_v = _shift_vpar_zero(
+            distribution_s,
+            delta_v,
+            precompute.gkw_igh_stencil.valid_v_shift[v_shift_index],
+        )
+        for z_shift_index, delta_z in enumerate(range(-2, 3)):
+            shifted = _apply_gkw_parallel_single_shift(
+                shifted_v,
+                delta_z,
+                precompute.gkw_parallel_stencil,
+            )
+            result = result + coefficients[v_shift_index, z_shift_index] * shifted
     return _restore_distribution_shape(result, original_ndim)
 
 
@@ -542,8 +1051,7 @@ def parallel_recurrence_control(distribution, operator, coefficient):
         coefficient_s = coefficient
     else:
         raise ValueError(
-            "parallel_recurrence_coeff must have shape (n_vpar,n_z) "
-            "or (n_species,n_vpar,n_z)"
+            "parallel_recurrence_coeff must have shape (n_vpar,n_z) or (n_species,n_vpar,n_z)"
         )
     original_ndim = distribution.ndim
     distribution_s = _distribution_with_species_axis(distribution, n_species)
@@ -565,8 +1073,7 @@ def velocity_recurrence_control(distribution, operator, coefficient):
         coefficient_s = coefficient
     else:
         raise ValueError(
-            "velocity_recurrence_coeff must have shape (n_mu,n_z) "
-            "or (n_species,n_mu,n_z)"
+            "velocity_recurrence_coeff must have shape (n_mu,n_z) or (n_species,n_mu,n_z)"
         )
     original_ndim = distribution.ndim
     distribution_s = _distribution_with_species_axis(distribution, n_species)
@@ -578,10 +1085,22 @@ def velocity_recurrence_control(distribution, operator, coefficient):
 def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute):
     """Assemble the linear RHS for a supplied electrostatic potential."""
 
-    if precompute.parallel_derivative_model == "gkw_upwind":
+    if precompute.parallel_derivative_model == "gkw_igh":
+        parallel_term = gkw_igh_streaming_mirror(distribution, precompute)
+        parallel_field_term = gkw_parallel_field_drive(phi, precompute)
+        mirror_term = jnp.zeros_like(distribution)
+        parallel_recurrence_term = jnp.zeros_like(distribution)
+        velocity_recurrence_term = jnp.zeros_like(distribution)
+    elif precompute.parallel_derivative_model == "gkw_upwind":
         parallel_term = gkw_parallel_streaming(distribution, precompute)
         parallel_field_term = gkw_parallel_field_drive(phi, precompute)
+        mirror_term = mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
         parallel_recurrence_term = jnp.zeros_like(distribution)
+        velocity_recurrence_term = velocity_recurrence_control(
+            distribution,
+            precompute.velocity_recurrence_operator,
+            precompute.velocity_recurrence_coeff,
+        )
     else:
         parallel_term = parallel_streaming(
             distribution,
@@ -589,25 +1108,27 @@ def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute)
             precompute.parallel_streaming_coeff,
         )
         parallel_field_term = parallel_field_drive(phi, precompute.D_z, precompute)
+        mirror_term = mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
         parallel_recurrence_term = parallel_recurrence_control(
             distribution,
             precompute.parallel_recurrence_operator,
             precompute.parallel_recurrence_coeff,
         )
+        velocity_recurrence_term = velocity_recurrence_control(
+            distribution,
+            precompute.velocity_recurrence_operator,
+            precompute.velocity_recurrence_coeff,
+        )
     return (
         parallel_term
         + magnetic_drift_advection(distribution, precompute.magnetic_drift_frequency)
-        + mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
+        + mirror_term
         + equilibrium_drive(phi, precompute)
         + parallel_field_term
         + drift_field_drive(phi, precompute)
         + dissipation(distribution, precompute.perpendicular_damping)
         + parallel_recurrence_term
-        + velocity_recurrence_control(
-            distribution,
-            precompute.velocity_recurrence_operator,
-            precompute.velocity_recurrence_coeff,
-        )
+        + velocity_recurrence_term
     )
 
 
@@ -652,6 +1173,33 @@ def _apply_gkw_parallel_stencil_table(values, coefficients, stencil: GKWParallel
         shifted = jnp.where(stencil.valid_shift[shift_index][None, :, :, :], shifted, 0.0)
         output = output + coefficients[shift_index][None, :, :, :] * shifted
     return jnp.reshape(output, prefix_shape + (n_z, n_kx, n_ky))
+
+
+def _apply_gkw_parallel_single_shift(values, delta_z: int, stencil: GKWParallelStencil):
+    values = jnp.asarray(values)
+    prefix_shape = values.shape[:-3]
+    n_z, n_kx, n_ky = values.shape[-3:]
+    flat = jnp.reshape(values, (-1, n_z, n_kx, n_ky))
+    shift_index = int(delta_z) + 4
+    ky_idx = jnp.reshape(jnp.arange(n_ky, dtype=jnp.int32), (1, 1, n_ky))
+    shifted = flat[
+        :,
+        stencil.s_shift[shift_index],
+        stencil.kx_shift[shift_index],
+        ky_idx,
+    ]
+    shifted = jnp.where(stencil.valid_shift[shift_index][None, :, :, :], shifted, 0.0)
+    return jnp.reshape(shifted, prefix_shape + (n_z, n_kx, n_ky))
+
+
+def _shift_vpar_zero(values, delta_v: int, valid_v_shift):
+    values = jnp.asarray(values)
+    n_vpar = values.shape[1]
+    indices = jnp.arange(n_vpar, dtype=jnp.int32) + int(delta_v)
+    clipped = jnp.clip(indices, 0, n_vpar - 1)
+    shifted = jnp.take(values, clipped, axis=1)
+    valid = jnp.asarray(valid_v_shift, dtype=bool)[None, :, None, None, None, None]
+    return jnp.where(valid, shifted, 0.0)
 
 
 def _k_perp_squared(geometry, fourier_grid: FourierGrid):
@@ -911,7 +1459,9 @@ def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity
             scale = jnp.where(v_abs > eps, jnp.abs(parallel_coeff) / safe_v_abs, 0.0)
             speed = rms * jnp.max(scale, axis=1, keepdims=True)
         else:
-            raise ValueError("parallel_coeff must have shape (n_vpar,n_z) or (n_species,n_vpar,n_z)")
+            raise ValueError(
+                "parallel_coeff must have shape (n_vpar,n_z) or (n_species,n_vpar,n_z)"
+            )
         speed = jnp.broadcast_to(speed, parallel_coeff.shape)
     return jnp.asarray(rate, dtype=parallel_coeff.dtype) * speed
 
