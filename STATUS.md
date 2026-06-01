@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 
 ## Current State
 
@@ -243,9 +243,21 @@ eigenfunction/output phase. The best unit-phase variant remains
 relative \(L^2\) error `0.24656223896253462`; the direct unit-phase error is
 `0.033230903073356986`. Even allowing an unconstrained complex scale only
 reduces the best max error to `0.017952545317588844`. The remaining issue is
-therefore not a free final-slice phase or amplitude convention; the next
-useful discriminator is \(k_y\)/Fourier sign tracing and/or a multi-time or
-full normalized GKW state dump.
+therefore not a free final-slice phase or amplitude convention.
+A non-destructive multi-time GKW velocity-slice path is now available through
+`scripts/prepare_gkw_cosine2_run.py --multi-time-distr`. It patches only the
+copied `diagnostic.F90`, imports `ntotstep`, calls
+`velocity_space_output(ntotstep)` at every normal diagnostic output, and
+writes suffixed snapshots while preserving the unsuffixed final `distr*.dat`
+files. The patched serial/no-FFT selected-`ky` `cosin2` tree built and ran
+from `/private/tmp/stellarator_gk_gkw_cosin2_multitime_v2`, producing 320
+suffixed files: 80 diagnostic windows times four velocity-slice components,
+from `distr1_00000020.dat` through `distr4_00001600.dat`. The public
+`GkwVelocitySpaceSliceSeries`/`load_gkw_velocity_space_slice_series` API reads
+that run as 80 snapshots with shape `(80, 8, 32)`, time range `0.06` to `4.8`,
+and final snapshot index `1600`. The next useful discriminator is now a
+multi-window solver/GKW velocity-slice comparison plus \(k_y\)/Fourier sign
+tracing.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -284,7 +296,7 @@ The repository currently contains:
 - `examples/audit_cyclone_cosin2_vpar_odd_signs.py`: controlled odd-\(v_\parallel\) RHS sign audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`: controlled Term VII field-variable convention audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_velocity_phase.py`: global phase/complex-scale alignment audit for patched-GKW `cosin2` velocity slices.
-- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, and writes a matched selected-`ky` input.
+- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
 - `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
@@ -385,9 +397,9 @@ examples labeled as reduced until CBC parity passes:
 - audit \(v_\parallel\)-odd dynamics/sign conventions in parallel streaming,
   parallel field drive, and the fused `igh` backend with explicit Fortran
   1-based indexing checks,
-- add a non-destructive GKW final-state/restart or multi-time velocity-slice
-  dump if the final peak slice is insufficient to identify the cumulative
-  source of the distribution mismatch,
+- use the non-destructive GKW multi-time velocity-slice dump to compare early,
+  middle, and late peak-\(\phi\) distribution states and identify whether the
+  mismatch is immediate, cumulative, or final-slice biased,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -413,6 +425,66 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Multi-Time GKW Velocity-Slice Output
+
+- Committed the previous selected-`ky` velocity/phase audit tranche as:
+  - `5ee9501 Add Cyclone velocity and Term VII audits`,
+  - `9bd534d Add Cyclone velocity phase audit`.
+- Extended `scripts/prepare_gkw_cosine2_run.py` with an optional
+  `--multi-time-distr` mode. The patch is still non-destructive: it edits only
+  the copied GKW tree and leaves `relevant-codes/gkw/` unchanged.
+- The copied `diagnostic.F90` patch:
+  - imports `ntotstep` in `write_output`,
+  - calls `velocity_space_output(ntotstep)` at every normal diagnostic output,
+  - changes `velocity_space_output` to accept an optional snapshot index,
+  - writes suffixed `distr*_<ntotstep>.dat` files while preserving the original
+    unsuffixed final `distr*.dat` output path.
+- Added `GkwVelocitySpaceSliceSeries` and
+  `load_gkw_velocity_space_slice_series`, exported publicly from
+  `stellarator_gk`.
+- Added unit coverage in `tests/test_gkw_cosine2_patch.py` for:
+  - default non-multi-time behavior,
+  - multi-time patch insertion,
+  - patch idempotence,
+  - loading complete suffixed `distr1`--`distr4` snapshot groups.
+- Built and ran a real patched serial/no-FFT selected-`ky` `cosin2` GKW tree:
+  - scratch tree:
+    `/private/tmp/stellarator_gk_gkw_cosin2_multitime_v2`,
+  - emitted suffixed snapshot count: `320`,
+  - snapshot range: `00000020` through `00001600`,
+  - loader shape: `(80, 8, 32)`,
+  - loaded time range: `0.06` through `4.8`,
+  - final snapshot index: `1600`,
+  - final GKW-reported growth remained the known patched-`cosin2` value
+    `0.188741`.
+- Interpretation: the final peak-\(\phi\) `distr*.dat` slice is no longer the
+  only available distribution diagnostic. The next narrowed target is a
+  multi-window solver/GKW velocity-slice comparison to decide whether the
+  mismatch appears immediately, accumulates during time evolution, or is tied
+  to the final peak-\(\phi\) slice location.
+- Verification run this round:
+  - `python -m py_compile scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `python scripts/prepare_gkw_cosine2_run.py --output-root /tmp/stellarator_gk_gkw_cosin2_multitime_v2 --multi-time-distr`
+  - `make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`
+  - `./gkw.x`
+  - `uv run python -c "from stellarator_gk import load_gkw_velocity_space_slice_series; ..."`
+  - `uv run pytest tests/test_benchmark_references.py::test_gkw_velocity_space_slice_loader_reads_distr_files tests/test_benchmark_references.py::test_gkw_velocity_space_slice_loader_reads_matched_cosin2_fixture -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run pytest -q`
+  - `git diff --check`
+- Verification results:
+  - focused patch/loader tests: 7 passed,
+  - focused existing final-slice loader tests: 2 passed,
+  - full pytest suite: 173 passed,
+  - focused ruff: all checks passed,
+  - patched GKW build succeeded,
+  - patched GKW run completed successfully,
+  - loader read the full 80-window suffixed snapshot series,
+  - `main.tex` built successfully with existing underfull-box warnings only,
+  - whitespace check passed.
 
 ### 2026-06-01: Added Velocity-Slice Phase Audit
 

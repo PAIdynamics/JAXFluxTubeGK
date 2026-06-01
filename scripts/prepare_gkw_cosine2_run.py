@@ -30,6 +30,8 @@ class PreparedGkwCosine2Run:
     output_root: Path
     patched_init: Path
     patched_input: Path
+    patched_diagnostic: Path | None = None
+    multi_time_distr: bool = False
     selector: str = PATCHED_SELECTOR
 
 
@@ -66,6 +68,7 @@ def prepare_gkw_cosine2_run(
     input_path: Path = DEFAULT_INPUT,
     *,
     overwrite: bool = False,
+    multi_time_distr: bool = False,
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
 
@@ -92,14 +95,20 @@ def prepare_gkw_cosine2_run(
     shutil.copytree(source_root, output_root, ignore=_ignore_generated_gkw_files)
     patched_init = output_root / "src" / "init.f90"
     add_cosin2_branch(patched_init)
+    patched_diagnostic = None
+    if multi_time_distr:
+        patched_diagnostic = output_root / "src" / "diagnostic.F90"
+        add_multitime_velocity_slice_patch(patched_diagnostic)
     patched_input = output_root / "input.dat"
     write_cosin2_input(input_path, patched_input)
-    _write_run_readme(output_root)
+    _write_run_readme(output_root, multi_time_distr=multi_time_distr)
     return PreparedGkwCosine2Run(
         source_root=source_root,
         output_root=output_root,
         patched_init=patched_init,
+        patched_diagnostic=patched_diagnostic,
         patched_input=patched_input,
+        multi_time_distr=multi_time_distr,
     )
 
 
@@ -127,6 +136,70 @@ def write_cosin2_input(input_path: Path, output_path: Path) -> None:
     output_path.write_text(patched, encoding="utf-8")
 
 
+def add_multitime_velocity_slice_patch(diagnostic_path: Path) -> bool:
+    """Patch copied GKW diagnostics to write ``distr*_<ntotstep>.dat`` snapshots."""
+
+    text = diagnostic_path.read_text(encoding="utf-8")
+    if "stellarator_gk multi-time distr patch" in text:
+        return False
+
+    control_import = "  use control,      only : output3d, lphi_diagnostics\n"
+    control_import_patch = (
+        "  use control,      only : output3d, lphi_diagnostics, ntotstep\n"
+    )
+    if control_import not in text:
+        raise ValueError(f"could not find write_output control import in {diagnostic_path}")
+    text = text.replace(control_import, control_import_patch, 1)
+
+    call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
+    call_patch = (
+        "  ! stellarator_gk multi-time distr patch: write selected peak-phi\n"
+        "  ! velocity-space slices at every normal diagnostic output window.\n"
+        "  call velocity_space_output(ntotstep)\n\n"
+    )
+    if call_marker not in text:
+        raise ValueError(f"could not find write_output insertion marker in {diagnostic_path}")
+    text = text.replace(call_marker, call_patch + call_marker, 1)
+
+    signature = "subroutine velocity_space_output\n"
+    replacement = "subroutine velocity_space_output(snapshot_index)\n"
+    if signature not in text:
+        raise ValueError(f"could not find velocity_space_output signature in {diagnostic_path}")
+    text = text.replace(signature, replacement, 1)
+
+    declaration = "  character (len=18) :: file_fmt \n"
+    if declaration not in text:
+        raise ValueError(f"could not find file_fmt declaration in {diagnostic_path}")
+    text = text.replace(
+        declaration,
+        "  integer, optional, intent(in) :: snapshot_index\n"
+        + declaration
+        + "  character (len=32) :: distr_file\n",
+        1,
+    )
+
+    for index in range(1, 5):
+        old = (
+            f"  if (lwrite) call output_slice(global_vpar_mu,FILE='distr{index}.dat',"
+            "FMT=file_fmt)"
+        )
+        new = (
+            "  if (present(snapshot_index)) then\n"
+            f"    write(distr_file,'(\"distr{index}_\",I8.8,\".dat\")') snapshot_index\n"
+            "  else\n"
+            f"    distr_file = 'distr{index}.dat'\n"
+            "  endif\n"
+            "  if (lwrite) call output_slice(global_vpar_mu,FILE=trim(distr_file),"
+            "FMT=file_fmt)"
+        )
+        if old not in text:
+            raise ValueError(f"could not find distr{index}.dat output call in {diagnostic_path}")
+        text = text.replace(old, new, 1)
+
+    diagnostic_path.write_text(text, encoding="utf-8")
+    return True
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -146,7 +219,21 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     }
 
 
-def _write_run_readme(output_root: Path) -> None:
+def _write_run_readme(output_root: Path, *, multi_time_distr: bool = False) -> None:
+    extra = ""
+    if multi_time_distr:
+        extra = """
+The copied `src/diagnostic.F90` was also patched to write velocity-space
+snapshots at every normal diagnostic output window:
+
+```text
+distr1_00000020.dat, ..., distr4_00000020.dat
+distr1_00000040.dat, ..., distr4_00000040.dat
+...
+```
+
+The unsuffixed `distr*.dat` files are still produced by GKW final output.
+"""
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
@@ -163,6 +250,7 @@ The generated `input.dat` uses:
 ```fortran
 finit = '{PATCHED_SELECTOR}'
 ```
+{extra}
 
 Build and run from this directory with the same local serial/no-FFT settings
 used for the matched selected-ky reference, for example:
@@ -184,6 +272,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--multi-time-distr",
+        action="store_true",
+        help="Patch copied GKW diagnostics to write distr*_<ntotstep>.dat snapshots.",
+    )
     return parser.parse_args()
 
 
@@ -194,9 +287,12 @@ def main() -> None:
         output_root=args.output_root,
         input_path=args.input,
         overwrite=args.overwrite,
+        multi_time_distr=args.multi_time_distr,
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")
     print(f"patched initializer: {prepared.patched_init}")
+    if prepared.patched_diagnostic is not None:
+        print(f"patched diagnostics: {prepared.patched_diagnostic}")
     print(f"patched input: {prepared.patched_input}")
     print("run from the patched tree with:")
     print(

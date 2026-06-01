@@ -535,6 +535,50 @@ class GkwVelocitySpaceSlice(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GkwVelocitySpaceSliceSeries(_PyTreeDataclass):
+    """Time series of GKW peak-``phi`` ``distr*_<step>.dat`` velocity slices."""
+
+    times: object
+    snapshot_indices: object
+    vpar: object
+    vperp: object
+    real_part: object
+    imag_part: object
+    source: str = ""
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "times",
+        "snapshot_indices",
+        "vpar",
+        "vperp",
+        "real_part",
+        "imag_part",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if times.ndim != 1 or times.shape[0] < 1:
+            raise ValueError("times must be a nonempty one-dimensional array")
+        indices = jnp.asarray(self.snapshot_indices, dtype=jnp.int32)
+        if indices.shape != times.shape:
+            raise ValueError("snapshot_indices must match times")
+        object.__setattr__(self, "times", times)
+        object.__setattr__(self, "snapshot_indices", indices)
+        vpar = jnp.asarray(self.vpar, dtype=jnp.float64)
+        if vpar.ndim != 3 or vpar.shape[0] != times.shape[0] or 0 in vpar.shape:
+            raise ValueError("vpar must have nonempty shape (n_time,n_mu,n_vpar)")
+        object.__setattr__(self, "vpar", vpar)
+        for name in ("vperp", "real_part", "imag_part"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != vpar.shape:
+                raise ValueError(f"{name} must match vpar shape")
+            object.__setattr__(self, name, values)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneVelocitySpaceSliceAudit(_PyTreeDataclass):
     """Selected-``ky`` comparison against GKW peak-``phi`` velocity slices."""
 
@@ -2926,6 +2970,62 @@ def load_gkw_velocity_space_slice(
         time=time,
         source=source or str(Path(distr1_path).parent),
         notes=slice_notes,
+    )
+
+
+def load_gkw_velocity_space_slice_series(
+    directory,
+    *,
+    time_path=None,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwVelocitySpaceSliceSeries:
+    """Load suffixed GKW ``distr*_<ntotstep>.dat`` velocity-slice snapshots."""
+
+    directory = Path(directory)
+    snapshots = _gkw_distr_snapshot_paths(directory)
+    if not snapshots:
+        raise ValueError(f"no GKW distr1_*.dat snapshots found in {directory}")
+    indices = []
+    vpar_values = []
+    vperp_values = []
+    real_values = []
+    imag_values = []
+    for index, paths in snapshots:
+        indices.append(index)
+        vpar = _load_gkw_distr_array(paths[0], paths[0].name)
+        vperp = _load_gkw_distr_array(paths[1], paths[1].name)
+        imag_part = _load_gkw_distr_array(paths[2], paths[2].name)
+        real_part = _load_gkw_distr_array(paths[3], paths[3].name)
+        for name, values in (
+            (paths[1].name, vperp),
+            (paths[2].name, imag_part),
+            (paths[3].name, real_part),
+        ):
+            if values.shape != vpar.shape:
+                raise ValueError(f"{name} shape must match {paths[0].name}")
+        vpar_values.append(vpar)
+        vperp_values.append(vperp)
+        real_values.append(real_part)
+        imag_values.append(imag_part)
+
+    index_array = np.asarray(indices, dtype=np.int32)
+    if time_path is None:
+        times = np.full(index_array.shape, np.nan, dtype=float)
+    else:
+        times = _gkw_times_for_snapshot_indices(_gkw_time_dat_times(time_path), index_array)
+    series_notes = "GKW distr*_<ntotstep>.dat velocity-space slice series"
+    if notes:
+        series_notes = f"{series_notes}; {notes}"
+    return GkwVelocitySpaceSliceSeries(
+        times=times,
+        snapshot_indices=index_array,
+        vpar=np.stack(vpar_values),
+        vperp=np.stack(vperp_values),
+        real_part=np.stack(real_values),
+        imag_part=np.stack(imag_values),
+        source=source or str(directory),
+        notes=series_notes,
     )
 
 
@@ -6629,6 +6729,42 @@ def _load_gkw_distr_array(path, name: str) -> np.ndarray:
     if not np.all(np.isfinite(values)):
         raise ValueError(f"GKW {name} contains non-finite values")
     return values
+
+
+def _gkw_distr_snapshot_paths(directory: Path) -> list[tuple[int, tuple[Path, Path, Path, Path]]]:
+    snapshots = []
+    for path in sorted(directory.glob("distr1_*.dat")):
+        suffix = path.stem.removeprefix("distr1_")
+        try:
+            index = int(suffix)
+        except ValueError:
+            continue
+        paths = tuple(directory / f"distr{component}_{suffix}.dat" for component in range(1, 5))
+        if not all(candidate.is_file() for candidate in paths):
+            missing = [candidate.name for candidate in paths if not candidate.is_file()]
+            raise FileNotFoundError(f"incomplete GKW distr snapshot {suffix}: missing {missing}")
+        snapshots.append((index, paths))
+    return snapshots
+
+
+def _gkw_times_for_snapshot_indices(times: np.ndarray, snapshot_indices: np.ndarray) -> np.ndarray:
+    times = np.asarray(times, dtype=float)
+    snapshot_indices = np.asarray(snapshot_indices, dtype=np.int32)
+    if snapshot_indices.ndim != 1 or snapshot_indices.shape[0] < 1:
+        raise ValueError("snapshot_indices must be nonempty and one-dimensional")
+    if times.shape[0] == snapshot_indices.shape[0]:
+        return times
+    first_index = int(snapshot_indices[0])
+    if first_index <= 0:
+        raise ValueError("cannot align snapshot indices with time.dat rows")
+    output_rows = snapshot_indices / first_index
+    rounded_rows = np.rint(output_rows).astype(np.int32)
+    expected = first_index * np.arange(1, snapshot_indices.shape[0] + 1, dtype=np.int32)
+    if not np.array_equal(snapshot_indices, expected):
+        raise ValueError("snapshot indices are not a regular diagnostic-window sequence")
+    if np.any(rounded_rows < 1) or int(rounded_rows[-1]) > times.shape[0]:
+        raise ValueError("time.dat does not contain enough rows for distr snapshots")
+    return times[rounded_rows - 1]
 
 
 def _velocity_slice_spatial_variants(values):

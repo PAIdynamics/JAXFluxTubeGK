@@ -1539,6 +1539,23 @@ relative \(L^2\) error \(2.47\times10^{-1}\).  Even allowing an unconstrained
 complex scale only reduces the maximum error to \(1.80\times10^{-2}\).  The
 remaining ambiguity is thus a genuine evolved-state or mode-sign issue, not a
 free final-output phase.
+To remove the final-slice ambiguity from the reference side, the copied-GKW
+preparation script now has a second non-destructive patch,
+\(\texttt{--multi-time-distr}\).  This patch is applied only to a scratch copy
+of \path{diagnostic.F90}.  It imports \(\texttt{ntotstep}\) into
+\(\texttt{write\_output}\), calls
+\(\texttt{velocity\_space\_output(ntotstep)}\) at every normal diagnostic
+window, and writes
+\(\texttt{distr1\_00000020.dat},\ldots,\texttt{distr4\_00001600.dat}\)
+without removing the original final \(\texttt{distr*.dat}\) files.  A matched
+serial/no-FFT \(\texttt{cosin2}\) run produced \(320\) suffixed files, i.e.
+\(80\) time windows times four velocity-slice components.  The new
+\(\texttt{GkwVelocitySpaceSliceSeries}\) loader reads these as an
+\(80\times 8\times 32\) series over \(t=0.06,\ldots,4.8\).  The next
+validation comparison should therefore use early, middle, and late snapshots
+to decide whether the distribution mismatch is present immediately,
+accumulates during the time evolution, or is biased by the final
+peak-\(\phi\) sampling point.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
