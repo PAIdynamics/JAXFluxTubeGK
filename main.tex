@@ -1157,7 +1157,7 @@ drift, drive, field-drive, boundary-map, and grid-normalization conventions.
 This is intentional bookkeeping: it prevents DESC-driven optimization studies
 from being mistaken for validated physical predictions before the CBC growth
 rate itself is on the reference ladder.
-The current implementation now also includes ten validation-hardening tools.
+The current implementation now also includes eleven validation-hardening tools.
 First, late-time growth rates may be computed by a least-squares fit of
 \(\log A_{k_y}(t)\) over a selected diagnostic window,
 \begin{equation}
@@ -1386,9 +1386,20 @@ term/action error is \(3.10\times10^{-17}\), the maximum coefficient error is
 zero to stored precision, and the maximum insertion error is
 \(3.10\times10^{-17}\); the CSV is
 \path{figures/cyclone_coefficient_source_audit.csv}.  The next CBC parity step
-is therefore not the separated Term II/IV/V/VII/VIII coefficient formulas, but
-the production GKW \texttt{ltrapping\_arakawa} path that fuses the Term I/IV
-Hamiltonian stencil and applies the \(\texttt{disp\_vp}=0.2\) convention.
+is therefore not the separated Term II/IV/V/VII/VIII coefficient formulas.  An
+eleventh audit targets the actual production GKW \texttt{ltrapping\_arakawa}
+path, which fuses Term I and Term IV into the Hamiltonian stencil
+\texttt{igh} and applies both \(\texttt{disp\_par}=1\) and
+\(\texttt{disp\_vp}=0.2\) diffusion.  This audit is intentionally open: the
+fused GKW operator differs from the separated solver streaming/mirror fallback
+by local profile delta \(3.58\times10^{-4}\), maximum profile delta
+\(1.51\times10^{-3}\), and relative envelope \(1.26\times10^{-1}\).  The
+parallel and velocity diffusion components of \texttt{igh} peak at
+\(7.04\times10^{-3}\) and \(7.60\times10^{-4}\), respectively; the CSV is
+\path{figures/cyclone_igh_arakawa_audit.csv}.  The next implementation step is
+to promote this source reconstruction into an optional matrix-free GKW
+\texttt{igh} RHS backend and rerun the production selected-\(k_y\)
+growth/profile gates.
 The direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or

@@ -853,6 +853,77 @@ class CycloneCoefficientSourceAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneIghArakawaAudit(_PyTreeDataclass):
+    """GKW ``ltrapping_arakawa`` fused Term I/IV audit."""
+
+    fused_profile: object
+    separated_profile: object
+    delta_profile: object
+    parallel_diffusion_profile: object
+    velocity_diffusion_profile: object
+    time: object
+    z: object
+    z_index: object
+    local_delta: object
+    max_delta: object
+    relative_delta: object
+    max_parallel_diffusion: object
+    max_velocity_diffusion: object
+    passed: object
+    output_window: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "fused_profile",
+        "separated_profile",
+        "delta_profile",
+        "parallel_diffusion_profile",
+        "velocity_diffusion_profile",
+        "time",
+        "z",
+        "z_index",
+        "local_delta",
+        "max_delta",
+        "relative_delta",
+        "max_parallel_diffusion",
+        "max_velocity_diffusion",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("output_window", "notes")
+
+    def __post_init__(self):
+        profile = jnp.asarray(self.delta_profile, dtype=jnp.float64)
+        if profile.ndim != 1:
+            raise ValueError("delta_profile must be one-dimensional")
+        object.__setattr__(self, "delta_profile", profile)
+        for name in (
+            "fused_profile",
+            "separated_profile",
+            "parallel_diffusion_profile",
+            "velocity_diffusion_profile",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != profile.shape:
+                raise ValueError(f"{name} must match delta_profile")
+            object.__setattr__(self, name, values)
+        for name in (
+            "time",
+            "z",
+            "local_delta",
+            "max_delta",
+            "relative_delta",
+            "max_parallel_diffusion",
+            "max_velocity_diffusion",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        if self.output_window < 0:
+            raise ValueError("output_window must be nonnegative")
+        object.__setattr__(self, "z_index", jnp.asarray(self.z_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -3884,6 +3955,211 @@ def run_cyclone_base_case_coefficient_source_audit(
     )
 
 
+def run_cyclone_base_case_igh_arakawa_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    target_z: float = 0.09375,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-11,
+    target: BenchmarkTarget | None = None,
+) -> CycloneIghArakawaAudit:
+    """Compare GKW's fused ``igh`` Term I/IV path with the separated fallback."""
+
+    from .physics import (
+        gkw_parallel_streaming,
+        mirror_force,
+        solve_adiabatic_electron_phi,
+        velocity_recurrence_control,
+    )
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 0:
+        raise ValueError("output_window must be nonnegative")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    velocity_recurrence_rate = float(
+        metadata.get("disp_vp", 0.2)
+        if velocity_recurrence_rate is None
+        else velocity_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(
+            state_value,
+            setup["precompute"].field,
+        )
+    )
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            if normalization_model == "weighted":
+                amplitude = mode_chain_amplitude(
+                    phi,
+                    w_z=setup["geometry"].w_z,
+                    connectivity=setup["connectivity"],
+                )
+            else:
+                amplitude = jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(
+                amplitude[selected],
+                jnp.asarray(1.0e-300, dtype=amplitude.dtype),
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    fused_total, fused_hamiltonian, parallel_diffusion, velocity_diffusion = (
+        _gkw_fortran_igh_reference(
+            state,
+            setup,
+            disp_par=parallel_recurrence_rate,
+            disp_vp=velocity_recurrence_rate,
+        )
+    )
+    separated = (
+        gkw_parallel_streaming(state, rhs)
+        + mirror_force(state, rhs.D_vpar, rhs.mirror_force_coeff)
+        + velocity_recurrence_control(
+            state,
+            rhs.velocity_recurrence_operator,
+            rhs.velocity_recurrence_coeff,
+        )
+    )
+    delta = fused_total - separated
+    fused_profile = _selected_mode_rms_profile(fused_total, ixzero, selected)
+    separated_profile = _selected_mode_rms_profile(separated, ixzero, selected)
+    delta_profile = _selected_mode_rms_profile(delta, ixzero, selected)
+    parallel_diffusion_profile = _selected_mode_rms_profile(
+        parallel_diffusion,
+        ixzero,
+        selected,
+    )
+    velocity_diffusion_profile = _selected_mode_rms_profile(
+        velocity_diffusion,
+        ixzero,
+        selected,
+    )
+    max_delta = jnp.max(delta_profile)
+    fused_scale = jnp.max(jnp.maximum(fused_profile, jnp.asarray(1.0e-300, dtype=fused_profile.dtype)))
+    relative_delta = max_delta / fused_scale
+    z_index = int(jnp.argmin(jnp.abs(setup["parallel"].z - target_z)))
+
+    return CycloneIghArakawaAudit(
+        fused_profile=fused_profile,
+        separated_profile=separated_profile,
+        delta_profile=delta_profile,
+        parallel_diffusion_profile=parallel_diffusion_profile,
+        velocity_diffusion_profile=velocity_diffusion_profile,
+        time=output_window * steps_per_window * dt,
+        z=setup["parallel"].z[z_index],
+        z_index=z_index,
+        local_delta=delta_profile[z_index],
+        max_delta=max_delta,
+        relative_delta=relative_delta,
+        max_parallel_diffusion=jnp.max(parallel_diffusion_profile),
+        max_velocity_diffusion=jnp.max(velocity_diffusion_profile),
+        passed=max_delta <= tolerance,
+        output_window=output_window,
+        notes=(
+            "GKW ltrapping_arakawa fused Term I/IV audit; "
+            "linear_terms.F90:igh, jhg_interior, igh_zero_two, igh_two, diffus; "
+            f"disp_par={parallel_recurrence_rate:g}, "
+            f"disp_vp={velocity_recurrence_rate:g}, "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}, "
+            f"target_z={target_z}; "
+            "passed means the separated solver fallback matches the fused GKW path"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -5262,6 +5538,332 @@ def _gkw_fortran_term_vii_reference(phi, field_coefficient, bessel_j0, stencil):
                         * phi_np[source_z, 0, 0]
                     )
     return jnp.asarray(expected, dtype=jnp.asarray(phi).dtype)
+
+
+def _gkw_fortran_igh_reference(state, setup, *, disp_par: float, disp_vp: float):
+    state_np = np.asarray(state)
+    if state_np.ndim != 5 or state_np.shape[-2:] != (1, 1):
+        raise ValueError("GKW igh audit currently expects a single selected mode")
+    n_vpar, n_mu, n_z, _, _ = state_np.shape
+    if n_vpar < 5 or n_z < 5:
+        raise ValueError("GKW igh audit requires at least five vpar and z points")
+
+    velocity = setup["velocity"]
+    geometry = setup["geometry"]
+    vpar = np.asarray(velocity.vpar, dtype=float)
+    mu = np.asarray(velocity.mu, dtype=float)
+    B = np.asarray(geometry.B, dtype=float)
+    F = np.asarray(geometry.F, dtype=float)
+    G = np.asarray(geometry.G, dtype=float)
+    dvp = float(vpar[1] - vpar[0])
+    ds = float(setup["precompute"].rhs.gkw_parallel_stencil.spacing)
+    vpgr_rms = float(np.sqrt(np.mean(vpar**2)))
+    mugr_rms = float(np.sqrt(np.mean(mu**2)))
+
+    total = np.zeros_like(state_np)
+    hamiltonian = np.zeros_like(state_np)
+    parallel_diffusion = np.zeros_like(state_np)
+    velocity_diffusion = np.zeros_like(state_np)
+
+    def vpar_at(iv):
+        return vpar[0] + iv * dvp
+
+    def hh(iz, imu, iv):
+        iz_ref = min(max(iz, 0), n_z - 1)
+        return 0.5 * vpar_at(iv) ** 2 + mu[imu] * B[iz_ref]
+
+    def add(out, row_iv, row_imu, row_iz, col_iv, col_iz, value):
+        if 0 <= col_iv < n_vpar and 0 <= col_iz < n_z:
+            out[row_iv, row_imu, row_iz, 0, 0] += (
+                value * state_np[col_iv, row_imu, col_iz, 0, 0]
+            )
+
+    for iv in range(n_vpar):
+        for imu in range(n_mu):
+            for iz in range(n_z):
+                dum = F[iz] / (ds * dvp)
+                dum2 = -F[iz] * vpar[iv]
+                position = _gkw_open_boundary_position_class(iz, n_z)
+                if position in (-2, 2):
+                    if dum2 * position < 0.0:
+                        _gkw_igh_zero_two(
+                            hamiltonian,
+                            row_iv=iv,
+                            row_imu=imu,
+                            row_iz=iz,
+                            dum=dum,
+                            position=position,
+                            hh=hh,
+                            add=add,
+                        )
+                    elif dum2 * position > 0.0:
+                        _gkw_igh_jhg_interior(
+                            hamiltonian,
+                            row_iv=iv,
+                            row_imu=imu,
+                            row_iz=iz,
+                            dum=dum,
+                            hh=hh,
+                            add=add,
+                        )
+                elif position in (-1, 1):
+                    if dum2 * position < 0.0:
+                        _gkw_igh_two(
+                            hamiltonian,
+                            row_iv=iv,
+                            row_imu=imu,
+                            row_iz=iz,
+                            dum=dum,
+                            position=position,
+                            hh=hh,
+                            add=add,
+                        )
+                    elif dum2 * position > 0.0:
+                        _gkw_igh_jhg_interior(
+                            hamiltonian,
+                            row_iv=iv,
+                            row_imu=imu,
+                            row_iz=iz,
+                            dum=dum,
+                            hh=hh,
+                            add=add,
+                        )
+                else:
+                    _gkw_igh_jhg_interior(
+                        hamiltonian,
+                        row_iv=iv,
+                        row_imu=imu,
+                        row_iz=iz,
+                        dum=dum,
+                        hh=hh,
+                        add=add,
+                    )
+                    disp_s_dum = F[iz] * vpgr_rms
+                    disp_v_dum = mugr_rms * B[iz] * G[iz]
+                    _gkw_igh_diffus(
+                        parallel_diffusion,
+                        row_iv=iv,
+                        row_imu=imu,
+                        row_iz=iz,
+                        kdiff=disp_par,
+                        dum=disp_s_dum,
+                        dx=ds,
+                        direction="s",
+                        add=add,
+                    )
+                    _gkw_igh_diffus(
+                        velocity_diffusion,
+                        row_iv=iv,
+                        row_imu=imu,
+                        row_iz=iz,
+                        kdiff=disp_vp,
+                        dum=disp_v_dum,
+                        dx=dvp,
+                        direction="vpar",
+                        add=add,
+                    )
+
+    total = hamiltonian + parallel_diffusion + velocity_diffusion
+    dtype = jnp.asarray(state).dtype
+    return (
+        jnp.asarray(total, dtype=dtype),
+        jnp.asarray(hamiltonian, dtype=dtype),
+        jnp.asarray(parallel_diffusion, dtype=dtype),
+        jnp.asarray(velocity_diffusion, dtype=dtype),
+    )
+
+
+def _gkw_igh_jhg_interior(out, *, row_iv, row_imu, row_iz, dum, hh, add):
+    d1 = dum / 6.0
+    d2 = -dum / 24.0
+    iv = row_iv
+    iz = row_iz
+    imu = row_imu
+    entries = (
+        (iv, iz - 2, d2 * (hh(iz - 1, imu, iv + 1) - hh(iz - 1, imu, iv - 1))),
+        (
+            iv - 1,
+            iz - 1,
+            d1 * (hh(iz - 1, imu, iv) - hh(iz, imu, iv - 1))
+            + d2
+            * (
+                hh(iz - 2, imu, iv)
+                + hh(iz - 1, imu, iv + 1)
+                - hh(iz, imu, iv - 2)
+                - hh(iz + 1, imu, iv - 1)
+            ),
+        ),
+        (
+            iv,
+            iz - 1,
+            d1
+            * (
+                hh(iz - 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv - 1)
+                - hh(iz, imu, iv - 1)
+                + hh(iz, imu, iv + 1)
+            ),
+        ),
+        (
+            iv + 1,
+            iz - 1,
+            d1 * (hh(iz, imu, iv + 1) - hh(iz - 1, imu, iv))
+            + d2
+            * (
+                hh(iz + 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv - 1)
+                - hh(iz - 2, imu, iv)
+                + hh(iz, imu, iv + 2)
+            ),
+        ),
+        (iv - 2, iz, d2 * (hh(iz - 1, imu, iv - 1) - hh(iz + 1, imu, iv - 1))),
+        (
+            iv - 1,
+            iz,
+            d1
+            * (
+                hh(iz - 1, imu, iv - 1)
+                + hh(iz - 1, imu, iv)
+                - hh(iz + 1, imu, iv - 1)
+                - hh(iz + 1, imu, iv)
+            ),
+        ),
+        (
+            iv + 1,
+            iz,
+            d1
+            * (
+                hh(iz + 1, imu, iv)
+                + hh(iz + 1, imu, iv + 1)
+                - hh(iz - 1, imu, iv)
+                - hh(iz - 1, imu, iv + 1)
+            ),
+        ),
+        (iv + 2, iz, d2 * (hh(iz + 1, imu, iv + 1) - hh(iz - 1, imu, iv + 1))),
+        (
+            iv - 1,
+            iz + 1,
+            d1 * (hh(iz, imu, iv - 1) - hh(iz + 1, imu, iv))
+            + d2
+            * (
+                hh(iz - 1, imu, iv - 1)
+                - hh(iz + 1, imu, iv + 1)
+                - hh(iz + 2, imu, iv)
+                + hh(iz, imu, iv - 2)
+            ),
+        ),
+        (
+            iv,
+            iz + 1,
+            d1
+            * (
+                hh(iz, imu, iv - 1)
+                + hh(iz + 1, imu, iv - 1)
+                - hh(iz, imu, iv + 1)
+                - hh(iz + 1, imu, iv + 1)
+            ),
+        ),
+        (
+            iv + 1,
+            iz + 1,
+            d1 * (hh(iz + 1, imu, iv) - hh(iz, imu, iv + 1))
+            + d2
+            * (
+                hh(iz + 1, imu, iv - 1)
+                - hh(iz - 1, imu, iv + 1)
+                + hh(iz + 2, imu, iv)
+                - hh(iz, imu, iv + 2)
+            ),
+        ),
+        (iv, iz + 2, d2 * (hh(iz + 1, imu, iv - 1) - hh(iz + 1, imu, iv + 1))),
+    )
+    for col_iv, col_iz, value in entries:
+        add(out, row_iv, row_imu, row_iz, col_iv, col_iz, value)
+
+
+def _gkw_igh_zero_two(out, *, row_iv, row_imu, row_iz, dum, position, hh, add):
+    fac = 0.25
+    iv = row_iv
+    iz = row_iz
+    imu = row_imu
+    if position == 2:
+        val = fac * dum * (3.0 * hh(iz, imu, iv) - 4.0 * hh(iz - 1, imu, iv) + hh(iz - 2, imu, iv))
+        entries = ((iv - 1, iz, -val), (iv + 1, iz, val))
+        val = fac * dum * (hh(iz, imu, iv + 1) - hh(iz, imu, iv - 1))
+        entries += ((iv, iz, -3.0 * val), (iv, iz - 1, 4.0 * val), (iv, iz - 2, -val))
+    elif position == -2:
+        val = fac * dum * (-3.0 * hh(iz, imu, iv) + 4.0 * hh(iz + 1, imu, iv) - hh(iz + 2, imu, iv))
+        entries = ((iv - 1, iz, -val), (iv + 1, iz, val))
+        val = fac * dum * (hh(iz, imu, iv + 1) - hh(iz, imu, iv - 1))
+        entries += ((iv, iz, 3.0 * val), (iv, iz + 1, -4.0 * val), (iv, iz + 2, val))
+    else:
+        raise ValueError("position must be -2 or 2")
+    for col_iv, col_iz, value in entries:
+        add(out, row_iv, row_imu, row_iz, col_iv, col_iz, value)
+
+
+def _gkw_igh_two(out, *, row_iv, row_imu, row_iz, dum, position, hh, add):
+    fac = 1.0 / 72.0
+    iv = row_iv
+    iz = row_iz
+    imu = row_imu
+    if position == -1:
+        val = fac * dum * (
+            -2.0 * hh(iz - 1, imu, iv)
+            - 3.0 * hh(iz, imu, iv)
+            + 6.0 * hh(iz + 1, imu, iv)
+            - hh(iz + 2, imu, iv)
+        )
+        entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
+        entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
+        val = -fac * dum * (
+            hh(iz, imu, iv - 2)
+            - 8.0 * hh(iz, imu, iv - 1)
+            + 8.0 * hh(iz, imu, iv + 1)
+            - hh(iz, imu, iv + 2)
+        )
+        entries += (
+            (iv, iz - 1, -2.0 * val),
+            (iv, iz, -3.0 * val),
+            (iv, iz + 1, 6.0 * val),
+            (iv, iz + 2, -val),
+        )
+    elif position == 1:
+        val = fac * dum * (
+            hh(iz - 2, imu, iv)
+            - 6.0 * hh(iz - 1, imu, iv)
+            + 3.0 * hh(iz, imu, iv)
+            + 2.0 * hh(iz + 1, imu, iv)
+        )
+        entries = ((iv - 2, iz, val), (iv - 1, iz, -8.0 * val))
+        entries += ((iv + 1, iz, 8.0 * val), (iv + 2, iz, -val))
+        val = -fac * dum * (
+            hh(iz, imu, iv - 2)
+            - 8.0 * hh(iz, imu, iv - 1)
+            + 8.0 * hh(iz, imu, iv + 1)
+            - hh(iz, imu, iv + 2)
+        )
+        entries += (
+            (iv, iz - 2, val),
+            (iv, iz - 1, -6.0 * val),
+            (iv, iz, 3.0 * val),
+            (iv, iz + 1, 2.0 * val),
+        )
+    else:
+        raise ValueError("position must be -1 or 1")
+    for col_iv, col_iz, value in entries:
+        add(out, row_iv, row_imu, row_iz, col_iv, col_iz, value)
+
+
+def _gkw_igh_diffus(out, *, row_iv, row_imu, row_iz, kdiff, dum, dx, direction, add):
+    if kdiff <= 0.0:
+        return
+    stencil = (1.0, -4.0, 6.0, -4.0, 1.0)
+    coefficient = -float(kdiff) * abs(float(dum)) / (12.0 * float(dx))
+    for offset, weight in zip(range(-2, 3), stencil, strict=True):
+        col_iv = row_iv + offset if direction == "vpar" else row_iv
+        col_iz = row_iz + offset if direction == "s" else row_iz
+        add(out, row_iv, row_imu, row_iz, col_iv, col_iz, coefficient * weight)
 
 
 def _gkw_fortran_term_i_reference(state, parallel_coeff, recurrence_coeff, stencil, vpar, recurrence_rate: float):

@@ -143,6 +143,15 @@ term error `3.1031676915590914e-17`, zero coefficient error, and maximum
 insertion error `3.1031676915590914e-17` at `t=3.72`, `z=0.09375`. This
 rules out the separated source-level coefficient construction/insertion for
 those terms as the remaining production selected-`ky` cause.
+A production-control `ltrapping_arakawa` fused `igh` audit now reconstructs
+GKW's combined Term I/IV Hamiltonian stencil plus `disp_par=1` and
+`disp_vp=0.2` diffusion. It is intentionally OPEN against the separated solver
+fallback: at `t=3.72`, `z=0.09375`, the local fused-vs-separated profile delta
+is `3.5775663113790776e-04`, the maximum profile delta is
+`1.5086176659840009e-03`, and the relative envelope is
+`0.1257254487392138`. The GKW `igh` parallel and velocity diffusion components
+peak at `7.044002628973732e-03` and `7.597330135842486e-04`. This makes the
+fused production `igh` operator the next actionable CBC parity gap.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -175,8 +184,9 @@ The repository currently contains:
 - `examples/audit_cyclone_diagnostic_packing.py`: selected-mode Cyclone GKW `get_phi` field-packing and diagnostic-output audit.
 - `examples/audit_cyclone_matdat_matrix.py`: reduced Cyclone `matdat.F90` sparse matrix/source convention audit.
 - `examples/audit_cyclone_coefficient_source.py`: production-control selected-`ky` GKW Term II/IV/V/VII/VIII coefficient/source audit.
+- `examples/audit_cyclone_igh_arakawa.py`: production-control selected-`ky` GKW `ltrapping_arakawa` fused Term I/IV audit.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
@@ -266,9 +276,10 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- audit the production selected-`ky` GKW `ltrapping_arakawa` fused `igh` path,
-  especially the combined Term I/IV Hamiltonian stencil and `disp_vp=0.2`
-  convention, against the solver's separated streaming/mirror fallback,
+- implement an optional matrix-free GKW `ltrapping_arakawa` fused `igh` backend
+  for the solver residual, including the combined Term I/IV Hamiltonian
+  stencil and `disp_vp=0.2`, then rerun the production selected-`ky`
+  growth/profile gates,
 - add a non-destructive GKW `cosine2` patch or restart/state-injection path
   only if the remaining native `finit='cosine'` profile comparison still
   cannot isolate the discrepancy,
@@ -297,6 +308,49 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added GKW `ltrapping_arakawa` `igh` Audit
+
+- Committed the previous coefficient/source tranche as:
+  - `ddec9e7 Add Cyclone coefficient source audit`.
+- Added `CycloneIghArakawaAudit` and
+  `run_cyclone_base_case_igh_arakawa_audit`.
+- Added `examples/audit_cyclone_igh_arakawa.py`, which reconstructs GKW
+  `linear_terms.F90::igh` plus `jhg_interior`, `igh_zero_two`, `igh_two`, and
+  `diffus`, then writes:
+  - `figures/cyclone_igh_arakawa_audit.csv`.
+- Main production-control findings at output window 62 (`t=3.72`,
+  `z=0.09375`):
+  - local fused-vs-separated profile delta:
+    `3.5775663113790776e-04`,
+  - maximum profile delta: `1.5086176659840009e-03`,
+  - relative delta envelope: `0.1257254487392138`,
+  - maximum GKW `igh` parallel diffusion profile:
+    `7.044002628973732e-03`,
+  - maximum GKW `igh` velocity diffusion profile:
+    `7.597330135842486e-04`,
+  - worst profile row: `z_index=25`.
+- Interpretation: unlike the separated Term II/IV/V/VII/VIII coefficient
+  audit, the production `ltrapping_arakawa` fused `igh` audit exposes an
+  actionable operator mismatch between GKW's actual selected-`ky` path and the
+  current separated streaming/mirror fallback. The next implementation target
+  is an optional matrix-free GKW `igh` RHS backend.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_igh_arakawa.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_igh_arakawa_audit_quantifies_fused_path_gap -q`
+  - `uv run --extra dev python examples/audit_cyclone_igh_arakawa.py`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification results:
+  - focused `igh` audit test: 1 passed,
+  - focused benchmark suite: 32 passed,
+  - full pytest suite: 151 passed,
+  - focused ruff: all checks passed,
+  - full ruff: all checks passed,
+  - production-control `igh` example: OPEN as expected,
+  - `main.tex` built successfully with existing underfull-box warnings only.
 
 ### 2026-06-01: Added GKW Coefficient Source Audit
 
