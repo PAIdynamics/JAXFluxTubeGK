@@ -16,6 +16,8 @@ from stellarator_gk import (
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
     CycloneProfileOperatorAudit,
+    CycloneTermIFortranAudit,
+    CycloneTimeNormalizationAudit,
     ParallelPhiTrace,
     audit_parallel_phi_profile_alignment,
     benchmark_target_cost,
@@ -43,6 +45,8 @@ from stellarator_gk import (
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
+    run_cyclone_base_case_term_i_fortran_audit,
+    run_cyclone_base_case_time_normalization_audit,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
@@ -670,6 +674,79 @@ def test_cyclone_profile_operator_audit_checks_selected_mode_assembly():
 
     with pytest.raises(ValueError, match="output_window"):
         run_cyclone_base_case_profile_operator_audit(output_window=0)
+
+
+def test_cyclone_term_i_fortran_audit_matches_source_reconstruction():
+    audit = run_cyclone_base_case_term_i_fortran_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_window=2,
+        target_z=0.0,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-11,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneTermIFortranAudit)
+    assert audit.term_error_profile.shape == (8,)
+    assert audit.coefficient_error_profile.shape == (8,)
+    assert audit.current_term_profile.shape == (8,)
+    assert audit.reference_term_profile.shape == (8,)
+    assert audit.recurrence_speed_error_profile.shape == (8,)
+    assert len(leaves) == len(CycloneTermIFortranAudit._dynamic_fields)
+    assert aux is not None
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.time, 0.012)
+    assert 0 <= int(audit.z_index) < 8
+    assert audit.max_term_error < 1.0e-11
+    assert audit.local_term_error <= audit.max_term_error
+    assert audit.max_coefficient_error < 1.0e-11
+    assert audit.local_coefficient_error <= audit.max_coefficient_error
+    assert audit.recurrence_speed_max_error < 1.0e-11
+    assert audit.sign_selection_error < 1.0e-14
+    assert "vpar_grad_df_4d_testnewbc" in audit.notes
+
+    with pytest.raises(ValueError, match="normalization_model"):
+        run_cyclone_base_case_term_i_fortran_audit(normalization_model="bad")
+
+
+def test_cyclone_time_normalization_audit_matches_gkw_sequence():
+    audit = run_cyclone_base_case_time_normalization_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-11,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneTimeNormalizationAudit)
+    assert audit.times.shape == (3,)
+    assert audit.normalization_factor.shape == (3,)
+    assert audit.gkw_window_growth.shape == (3,)
+    assert audit.trace_window_growth.shape == (3,)
+    assert audit.post_normalization_field_norm.shape == (3,)
+    assert audit.field_linearity_error.shape == (3,)
+    assert len(leaves) == len(CycloneTimeNormalizationAudit._dynamic_fields)
+    assert aux is not None
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.times, jnp.asarray([0.0, 0.006, 0.012]))
+    np.testing.assert_allclose(audit.gkw_window_growth, audit.trace_window_growth, atol=1.0e-11)
+    np.testing.assert_allclose(audit.post_normalization_field_norm, 1.0, atol=1.0e-11)
+    assert audit.rk4_step_error < 1.0e-11
+    assert audit.time_grid_error < 1.0e-14
+    assert audit.growth_sequence_error < 1.0e-11
+    assert audit.max_field_linearity_error < 1.0e-11
+    assert "normalise.F90" in audit.notes
+
+    with pytest.raises(ValueError, match="normalization_model"):
+        run_cyclone_base_case_time_normalization_audit(normalization_model="bad")
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

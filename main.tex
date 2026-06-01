@@ -1157,7 +1157,7 @@ drift, drive, field-drive, boundary-map, and grid-normalization conventions.
 This is intentional bookkeeping: it prevents DESC-driven optimization studies
 from being mistaken for validated physical predictions before the CBC growth
 rate itself is on the reference ladder.
-The current implementation now also includes six validation-hardening tools.
+The current implementation now also includes seven validation-hardening tools.
 First, late-time growth rates may be computed by a least-squares fit of
 \(\log A_{k_y}(t)\) over a selected diagnostic window,
 \begin{equation}
@@ -1336,10 +1336,30 @@ RHS agrees with the public residual wrapper to stored precision.  At the
 localized central point, however, the matrix-versus-GKW-upwind parallel
 streaming delta is \(5.23\times10^{-3}\), while the corresponding parallel
 field-drive delta is \(2.76\times10^{-19}\).  The audit CSV is
-\path{figures/cyclone_profile_operator_audit.csv}.  The next CBC parity step
-is therefore to compare the selected-mode Term I streaming/upwind stencil,
-sign choice, and normalization directly against the GKW Fortran path.  The
-direct compact GKW comparison path uses
+\path{figures/cyclone_profile_operator_audit.csv}.  A second audit
+reconstructs the selected-mode Term I coefficients directly from the GKW
+\path{linear_terms.F90} routine \texttt{vpar\_grad\_df\_4d\_testnewbc},
+including the sign-dependent fourth-order boundary cases and the
+\(\texttt{idisp}=2\) \(\texttt{vpgr\_rms}\) recurrence convention.  That
+source reconstruction matches the implemented operator with maximum term
+error \(5.14\times10^{-18}\), maximum coefficient error
+\(4.44\times10^{-16}\), and recurrence-speed error \(5.55\times10^{-17}\);
+the CSV is \path{figures/cyclone_term_i_fortran_audit.csv}.  A seventh audit
+then reconstructs the explicit source sequence in
+\path{exp_integration.F90} and \path{normalise.F90}: the GKW
+\texttt{rk4} routine stores stage increments as \(\Delta t\,R(g)\), and
+\texttt{normalize(2)} computes the unweighted field norm, divides the full
+state by that factor, and reports
+\(\log(\mathrm{factor})/(t-t_{\mathrm{last}})\) as the window growth.
+For the same production-control trace, the reconstructed source sequence
+matches the solver's GKW-unweighted window trace with RK4-step error
+\(3.48\times10^{-18}\), growth-sequence error \(1.29\times10^{-14}\),
+post-normalization field-norm error \(1.33\times10^{-15}\), and field
+linearity error \(1.67\times10^{-15}\); the CSV is
+\path{figures/cyclone_time_normalization_audit.csv}.  The next CBC parity
+step is therefore to inspect GKW matrix construction, diagnostic output, and
+remaining field/index packing conventions beyond Term I and normalization.
+The direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or
 a restart/state-injection path because the original GKW \texttt{finit}

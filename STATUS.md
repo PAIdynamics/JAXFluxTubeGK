@@ -107,9 +107,22 @@ field/RHS consistency checks: field residual `4.742874840267547e-16`, phi
 reconstruction error `3.7238012298709097e-16`, and RHS assembly error `0.0`.
 The local matrix-versus-GKW-upwind streaming delta is
 `5.228399497117055e-03`, while the local field-drive delta is
-`2.7611004325485534e-19`; this narrows the remaining profile gap toward Term I
-parallel streaming/upwind details rather than the quasineutrality solve or
-parallel field-drive assembly.
+`2.7611004325485534e-19`. A source-reconstructed audit of
+`linear_terms.F90::vpar_grad_df_4d_testnewbc` now matches the current Term I
+implementation with maximum term error `5.137226812672801e-18`, maximum
+coefficient error `4.440892098500626e-16`, and `idisp=2` recurrence-speed
+error `5.551115123125783e-17`. This rules out the selected-mode Term I
+stencil/sign/normalization implementation itself. A source-sequence audit of
+`exp_integration.F90::rk4` plus `normalise.F90::normalize(2)` now matches the
+solver's GKW-unweighted selected-mode window trace with RK4 step error
+`3.476216610979977e-18`, growth-sequence error `1.2878587085651816e-14`,
+post-normalization field-norm error `1.3322676295501878e-15`, and field
+linearity error `1.668583973270389e-15`. This rules out the explicit
+time-update/field-normalization cadence itself; the remaining profile gap now
+points toward GKW matrix/time-history construction, diagnostic output, or
+remaining field/index packing conventions rather than the quasineutrality
+solve, parallel field-drive assembly, GKW-upwind streaming formula, RK4
+staging, or `normalise.F90` field norm.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -137,8 +150,10 @@ The repository currently contains:
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
 - `examples/compare_gkw_parallel_phi_profile.py`: matched production-control GKW `parallel_phi.dat` versus solver selected-`ky` parallel-profile comparison generator.
 - `examples/audit_cyclone_profile_operator.py`: selected-mode Cyclone operator audit at the localized GKW profile mismatch.
+- `examples/audit_cyclone_term_i_fortran.py`: selected-mode Cyclone Term I audit reconstructed directly from the GKW Fortran source formulas.
+- `examples/audit_cyclone_time_normalization.py`: selected-mode Cyclone RK4/window-normalization audit against the GKW source sequence.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
@@ -228,11 +243,12 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- compare the selected-mode parallel streaming/upwind implementation against
-  the GKW Fortran Term I stencil and sign/normalization details at the
-  localized central mismatch,
-- only patch GKW or add a restart/state-injection path for `cosine2` if the
-  native `cosine` profile comparison cannot isolate the discrepancy,
+- compare GKW matrix/time-history construction and diagnostic output paths
+  beyond Term I and normalization, especially `matdat.F90`, `diagnostic.F90`,
+  and any remaining field/index packing conventions,
+- add a non-destructive GKW `cosine2` patch or restart/state-injection path
+  only if the remaining native `finit='cosine'` profile comparison still
+  cannot isolate the discrepancy,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -258,6 +274,71 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added GKW RK4 and Normalization Sequence Audit
+
+- Added `CycloneTimeNormalizationAudit` and
+  `run_cyclone_base_case_time_normalization_audit`.
+- Added `normalization_model='gkw_unweighted'` support to
+  `run_cyclone_base_case_trace` and `run_production_cyclone_base_case_gate`
+  so the windowed trace can use the same unweighted field norm computed by
+  `normalise.F90::calc_factor`.
+- Added `examples/audit_cyclone_time_normalization.py`, which reconstructs
+  the `exp_integration.F90::rk4` stage sequence and
+  `normalise.F90::normalize(2)` window-normalization cadence and writes:
+  - `figures/cyclone_time_normalization_audit.csv`.
+- Main production-control findings for `finit='cosine'`, 20 steps per window,
+  and 80 windows:
+  - RK4 source-sequence error: `3.476216610979977e-18`,
+  - solver/source window-growth sequence error: `1.2878587085651816e-14`,
+  - post-normalization field-norm error: `1.3322676295501878e-15`,
+  - quasineutrality field-linearity error after normalization:
+    `1.668583973270389e-15`.
+- Interpretation: the selected-mode RK4 staging, diagnostic-window cadence,
+  and GKW unweighted field normalization now match the source sequence to
+  roundoff. The remaining CBC profile/growth gap should be chased through
+  GKW matrix construction, diagnostic output, and field/index packing
+  conventions before adding a `cosine2` GKW patch.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_time_normalization.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_time_normalization_audit_matches_gkw_sequence -q`
+  - `uv run --extra dev python examples/audit_cyclone_time_normalization.py`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification results:
+  - focused time-normalization audit test: 1 passed,
+  - focused benchmark suite: 28 passed,
+  - full pytest suite: 147 passed,
+  - full ruff: all checks passed,
+  - `main.tex` built successfully with existing underfull-box warnings only.
+
+### 2026-06-01: Added GKW Fortran Term I Source Audit
+
+- Committed the previous profile-operator audit tranche as:
+  - `4080d5b Add Cyclone profile operator audit`.
+- Added `CycloneTermIFortranAudit` and
+  `run_cyclone_base_case_term_i_fortran_audit`.
+- Added `examples/audit_cyclone_term_i_fortran.py`, which reconstructs the
+  GKW Term I coefficients directly from
+  `linear_terms.F90::vpar_grad_df_4d_testnewbc` and writes:
+  - `figures/cyclone_term_i_fortran_audit.csv`.
+- Main findings at output window 62 (`t=3.72`, `z=0.09375`):
+  - maximum Term I operator error: `5.137226812672801e-18`,
+  - maximum coefficient-table error: `4.440892098500626e-16`,
+  - `idisp=2` recurrence-speed error: `5.551115123125783e-17`,
+  - local target-row Term I error is at roundoff.
+- Interpretation: the selected-mode GKW-upwind Term I implementation,
+  sign choice, boundary stencils, and `vpgr_rms` recurrence normalization
+  match the GKW Fortran source formulas. The remaining CBC selected-`ky`
+  discrepancy should now be chased through the time-update and normalization
+  sequence (`exp_integration.F90`/`normalise.F90`) before patching GKW for a
+  `cosine2` initialization.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_term_i_fortran.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_term_i_fortran_audit_matches_source_reconstruction -q`
+  - `uv run --extra dev python examples/audit_cyclone_term_i_fortran.py`
 
 ### 2026-06-01: Added Cyclone Profile Operator Audit
 

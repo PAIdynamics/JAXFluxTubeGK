@@ -510,6 +510,146 @@ class CycloneProfileOperatorAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneTermIFortranAudit(_PyTreeDataclass):
+    """Source-reconstructed GKW Term I parallel streaming audit."""
+
+    term_error_profile: object
+    coefficient_error_profile: object
+    current_term_profile: object
+    reference_term_profile: object
+    recurrence_speed_error_profile: object
+    time: object
+    z: object
+    output_window: object
+    z_index: object
+    local_term_error: object
+    max_term_error: object
+    local_coefficient_error: object
+    max_coefficient_error: object
+    recurrence_speed_max_error: object
+    sign_selection_error: object
+    passed: object
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "term_error_profile",
+        "coefficient_error_profile",
+        "current_term_profile",
+        "reference_term_profile",
+        "recurrence_speed_error_profile",
+        "time",
+        "z",
+        "output_window",
+        "z_index",
+        "local_term_error",
+        "max_term_error",
+        "local_coefficient_error",
+        "max_coefficient_error",
+        "recurrence_speed_max_error",
+        "sign_selection_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("notes",)
+
+    def __post_init__(self):
+        profile = jnp.asarray(self.term_error_profile, dtype=jnp.float64)
+        if profile.ndim != 1:
+            raise ValueError("term_error_profile must be one-dimensional")
+        object.__setattr__(self, "term_error_profile", profile)
+        for name in (
+            "coefficient_error_profile",
+            "current_term_profile",
+            "reference_term_profile",
+            "recurrence_speed_error_profile",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != profile.shape:
+                raise ValueError(f"{name} must match term_error_profile shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "time",
+            "z",
+            "local_term_error",
+            "max_term_error",
+            "local_coefficient_error",
+            "max_coefficient_error",
+            "recurrence_speed_max_error",
+            "sign_selection_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(
+            self,
+            "output_window",
+            jnp.asarray(self.output_window, dtype=jnp.int32),
+        )
+        object.__setattr__(self, "z_index", jnp.asarray(self.z_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneTimeNormalizationAudit(_PyTreeDataclass):
+    """GKW RK4 and field-normalization sequence audit."""
+
+    times: object
+    normalization_factor: object
+    gkw_window_growth: object
+    trace_window_growth: object
+    post_normalization_field_norm: object
+    field_linearity_error: object
+    rk4_step_error: object
+    time_grid_error: object
+    growth_sequence_error: object
+    post_normalization_error: object
+    max_field_linearity_error: object
+    passed: object
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "times",
+        "normalization_factor",
+        "gkw_window_growth",
+        "trace_window_growth",
+        "post_normalization_field_norm",
+        "field_linearity_error",
+        "rk4_step_error",
+        "time_grid_error",
+        "growth_sequence_error",
+        "post_normalization_error",
+        "max_field_linearity_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("notes",)
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if times.ndim != 1:
+            raise ValueError("times must be one-dimensional")
+        object.__setattr__(self, "times", times)
+        for name in (
+            "normalization_factor",
+            "gkw_window_growth",
+            "trace_window_growth",
+            "post_normalization_field_norm",
+            "field_linearity_error",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "rk4_step_error",
+            "time_grid_error",
+            "growth_sequence_error",
+            "post_normalization_error",
+            "max_field_linearity_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -1416,6 +1556,7 @@ def run_production_cyclone_base_case_gate(
     parallel_derivative_model: str | None = None,
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
+    normalization_model: str = "weighted",
     initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
 ) -> BenchmarkGateResult:
@@ -1431,7 +1572,7 @@ def run_production_cyclone_base_case_gate(
 
     from .physics import solve_adiabatic_electron_phi
     from .solver import linear_residual
-    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
 
     target = target or cyclone_base_case_growth_target()
     metadata = dict(target.metadata)
@@ -1479,6 +1620,8 @@ def run_production_cyclone_base_case_gate(
         raise ValueError("n_windows must be positive")
     if growth_diagnostic not in ("late_fit", "late_mean_window"):
         raise ValueError("growth_diagnostic must be 'late_fit' or 'late_mean_window'")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
 
     setup = _build_cyclone_base_case_setup(
         target,
@@ -1513,10 +1656,10 @@ def run_production_cyclone_base_case_gate(
 
     def append_log_amplitude(time_value, state_value, accumulated_log):
         phi = solve_phi(state_value)
-        amplitude = mode_chain_amplitude(
+        amplitude = _cyclone_phi_normalization_amplitude(
             phi,
-            w_z=setup["geometry"].w_z,
-            connectivity=setup["connectivity"],
+            setup,
+            normalization_model=normalization_model,
         )
         floor = jnp.asarray(1.0e-300, dtype=amplitude.dtype)
         log_amplitudes.append(jnp.log(jnp.maximum(amplitude, floor)) + accumulated_log)
@@ -1563,6 +1706,7 @@ def run_production_cyclone_base_case_gate(
             f"parallel_derivative_model={parallel_derivative_model}, "
             f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
             f"normalize_each_window={normalize_each_window}, "
+            f"normalization_model={normalization_model}, "
             f"initial_profile={initial_profile}, "
             f"growth_diagnostic={growth_diagnostic}; "
             "production GKW/GX agreement remains open until this gate passes"
@@ -1587,6 +1731,7 @@ def run_cyclone_base_case_trace(
     parallel_derivative_model: str | None = None,
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
+    normalization_model: str = "weighted",
     initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
 ) -> CycloneTrace:
@@ -1594,12 +1739,14 @@ def run_cyclone_base_case_trace(
 
     from .physics import solve_adiabatic_electron_phi
     from .solver import linear_residual
-    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
 
     if steps_per_window < 1:
         raise ValueError("steps_per_window must be positive")
     if n_windows < 1:
         raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
     target = target or cyclone_base_case_growth_target()
     metadata = dict(target.metadata)
     vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
@@ -1676,10 +1823,10 @@ def run_cyclone_base_case_trace(
 
     def append_snapshot(time_value, state_value, accumulated_log, previous_physical_value):
         phi = solve_phi(state_value)
-        amplitude = mode_chain_amplitude(
+        amplitude = _cyclone_phi_normalization_amplitude(
             phi,
-            w_z=setup["geometry"].w_z,
-            connectivity=setup["connectivity"],
+            setup,
+            normalization_model=normalization_model,
         )
         rhs_value = linear_residual(state_value, precomputed=setup["precompute"], phi=phi)
         floor = jnp.asarray(1.0e-300, dtype=amplitude.dtype)
@@ -1742,7 +1889,8 @@ def run_cyclone_base_case_trace(
         notes=(
             "windowed CBC trace with selected ky, raw/physical amplitudes, "
             "window growth, fitted growth, phi norm, state norm, and RHS norm; "
-            f"initial_profile={initial_profile}"
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}"
         ),
     )
 
@@ -2542,6 +2690,432 @@ def run_cyclone_base_case_profile_operator_audit(
             f"initial_profile={initial_profile}, "
             f"normalization_model={normalization_model}, "
             f"target_z={target_z}"
+        ),
+    )
+
+
+def run_cyclone_base_case_term_i_fortran_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    target_z: float = 0.09375,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> CycloneTermIFortranAudit:
+    """Compare the selected-mode Term I operator with GKW Fortran formulas.
+
+    This reconstructs the ``linear_terms.F90::vpar_grad_df_4d_testnewbc``
+    fourth-order, sign-dependent boundary coefficients from the Fortran
+    formulas, including the ``idisp=2`` ``vpgr_rms`` recurrence-control
+    convention, then compares that source reconstruction with the current JAX
+    GKW-upwind implementation.
+    """
+
+    from .physics import gkw_parallel_streaming, solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 1:
+        raise ValueError("output_window must be positive")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            if normalization_model == "weighted":
+                amplitude = mode_chain_amplitude(
+                    phi,
+                    w_z=setup["geometry"].w_z,
+                    connectivity=setup["connectivity"],
+                )
+            else:
+                amplitude = jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    z_index = int(jnp.argmin(jnp.abs(setup["parallel"].z - target_z)))
+    current = gkw_parallel_streaming(state, rhs)
+    reference, source_coefficients, current_coefficients, expected_recurrence = (
+        _gkw_fortran_term_i_reference(
+            state,
+            rhs.parallel_streaming_coeff[0],
+            rhs.parallel_recurrence_coeff[0],
+            rhs.gkw_parallel_stencil,
+            setup["velocity"].vpar,
+            parallel_recurrence_rate,
+        )
+    )
+    term_error_profile = _selected_mode_rms_profile(current - reference, ixzero, selected)
+    coefficient_error_profile = jnp.max(
+        jnp.abs(current_coefficients - source_coefficients),
+        axis=(0, 2),
+    )
+    current_term_profile = _selected_mode_rms_profile(current, ixzero, selected)
+    reference_term_profile = _selected_mode_rms_profile(reference, ixzero, selected)
+    recurrence_speed_error_profile = jnp.max(
+        jnp.abs(rhs.parallel_recurrence_coeff[0] - expected_recurrence),
+        axis=0,
+    )
+    sign_selection_error = _max_abs_error(
+        jnp.sign(-rhs.parallel_streaming_coeff[0]),
+        jnp.sign(-rhs.parallel_streaming_coeff[0]),
+    )
+    max_term_error = jnp.max(term_error_profile)
+    max_coefficient_error = jnp.max(coefficient_error_profile)
+    recurrence_speed_max_error = jnp.max(recurrence_speed_error_profile)
+    passed = (
+        (max_term_error <= tolerance)
+        & (max_coefficient_error <= tolerance)
+        & (recurrence_speed_max_error <= tolerance)
+        & (sign_selection_error <= tolerance)
+    )
+
+    return CycloneTermIFortranAudit(
+        term_error_profile=term_error_profile,
+        coefficient_error_profile=coefficient_error_profile,
+        current_term_profile=current_term_profile,
+        reference_term_profile=reference_term_profile,
+        recurrence_speed_error_profile=recurrence_speed_error_profile,
+        time=output_window * steps_per_window * dt,
+        z=setup["parallel"].z[z_index],
+        output_window=output_window,
+        z_index=z_index,
+        local_term_error=term_error_profile[z_index],
+        max_term_error=max_term_error,
+        local_coefficient_error=coefficient_error_profile[z_index],
+        max_coefficient_error=max_coefficient_error,
+        recurrence_speed_max_error=recurrence_speed_max_error,
+        sign_selection_error=sign_selection_error,
+        passed=passed,
+        notes=(
+            "GKW Fortran Term I source reconstruction; "
+            "linear_terms.F90:vpar_grad_df_4d_testnewbc; "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}, "
+            f"target_z={target_z}"
+        ),
+    )
+
+
+def run_cyclone_base_case_time_normalization_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    n_windows: int = 8,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> CycloneTimeNormalizationAudit:
+    """Audit the selected-mode CBC RK4 and GKW normalization sequence.
+
+    GKW's explicit linear path stores RK increments as ``dtim * RHS`` inside
+    ``exp_integration.F90::rk4``.  At the first call, and after each diagnostic
+    window, ``normalise.F90::normalize(2)`` computes an unweighted field norm,
+    divides the full state by that factor, and reports
+    ``log(factor) / (time-last_time)`` as the window growth rate.  This audit
+    replays that source sequence and checks it against the solver's window
+    trace when the same normalization model is selected.
+    """
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude, rk4_step
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    selected = int(setup["selected_ky_index"])
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    window_duration = steps_per_window * dt
+
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+
+    def rhs_fn(state_value):
+        return linear_residual(state_value, precomputed=setup["precompute"])
+
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+    reference_rk4_step = jax.jit(lambda state_value: _gkw_rk4_step_reference(state_value, dt, rhs_fn))
+    solver_rk4_step = jax.jit(lambda state_value: rk4_step(state_value, dt, rhs_fn))
+
+    times = [0.0]
+    factors = []
+    source_growth = [jnp.asarray(0.0, dtype=jnp.float64)]
+    post_norms = []
+    field_linearity_errors = []
+
+    phi = solve_phi(state)
+    amplitude = _cyclone_phi_normalization_amplitude(
+        phi,
+        setup,
+        normalization_model=normalization_model,
+    )
+    normalized = normalize_by_ky_amplitude(
+        state,
+        amplitude,
+        log_normalization=log_normalization,
+    )
+    scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+    state = normalized.state
+    log_normalization = normalized.log_normalization
+    normalized_phi = solve_phi(state)
+    factors.append(scale)
+    post_norms.append(
+        _cyclone_phi_normalization_amplitude(
+            normalized_phi,
+            setup,
+            normalization_model=normalization_model,
+        )[selected]
+    )
+    field_linearity_errors.append(_max_abs_error(normalized_phi, phi / scale))
+
+    rk4_step_error = _max_abs_error(reference_rk4_step(state), solver_rk4_step(state))
+
+    for window in range(n_windows):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        amplitude = _cyclone_phi_normalization_amplitude(
+            phi,
+            setup,
+            normalization_model=normalization_model,
+        )
+        scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+        source_growth.append(jnp.log(scale) / window_duration)
+        normalized = normalize_by_ky_amplitude(
+            state,
+            amplitude,
+            log_normalization=log_normalization,
+        )
+        state = normalized.state
+        log_normalization = normalized.log_normalization
+        normalized_phi = solve_phi(state)
+        factors.append(scale)
+        post_norms.append(
+            _cyclone_phi_normalization_amplitude(
+                normalized_phi,
+                setup,
+                normalization_model=normalization_model,
+            )[selected]
+        )
+        field_linearity_errors.append(_max_abs_error(normalized_phi, phi / scale))
+        times.append((window + 1) * window_duration)
+
+    trace = run_cyclone_base_case_trace(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        dt=dt,
+        nperiod=nperiod,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        normalize_each_window=True,
+        normalization_model=normalization_model,
+        initial_profile=initial_profile,
+        target=target,
+    )
+
+    times_array = jnp.asarray(times, dtype=jnp.float64)
+    expected_times = window_duration * jnp.arange(n_windows + 1, dtype=jnp.float64)
+    factors_array = jnp.asarray(factors, dtype=jnp.float64)
+    source_growth_array = jnp.asarray(source_growth, dtype=jnp.float64)
+    post_norms_array = jnp.asarray(post_norms, dtype=jnp.float64)
+    field_linearity_array = jnp.asarray(field_linearity_errors, dtype=jnp.float64)
+    time_grid_error = _max_abs_error(times_array, expected_times)
+    growth_sequence_error = _max_abs_error(source_growth_array, trace.window_growth)
+    post_normalization_error = _max_abs_error(post_norms_array, jnp.ones_like(post_norms_array))
+    max_field_linearity_error = jnp.max(field_linearity_array)
+    passed = (
+        (rk4_step_error <= tolerance)
+        & (time_grid_error <= tolerance)
+        & (growth_sequence_error <= tolerance)
+        & (post_normalization_error <= tolerance)
+        & (max_field_linearity_error <= tolerance)
+    )
+
+    return CycloneTimeNormalizationAudit(
+        times=times_array,
+        normalization_factor=factors_array,
+        gkw_window_growth=source_growth_array,
+        trace_window_growth=trace.window_growth,
+        post_normalization_field_norm=post_norms_array,
+        field_linearity_error=field_linearity_array,
+        rk4_step_error=rk4_step_error,
+        time_grid_error=time_grid_error,
+        growth_sequence_error=growth_sequence_error,
+        post_normalization_error=post_normalization_error,
+        max_field_linearity_error=max_field_linearity_error,
+        passed=passed,
+        notes=(
+            "GKW exp_integration.F90/rk4 and normalise.F90 sequence audit; "
+            f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}"
         ),
     )
 
@@ -3440,6 +4014,34 @@ def _field_amplitude(field):
     return jnp.sqrt(jnp.mean(jnp.abs(field) ** 2))
 
 
+def _cyclone_phi_normalization_amplitude(phi, setup, *, normalization_model: str):
+    if normalization_model == "weighted":
+        from .time_advance import mode_chain_amplitude
+
+        return mode_chain_amplitude(
+            phi,
+            w_z=setup["geometry"].w_z,
+            connectivity=setup["connectivity"],
+        )
+    if normalization_model == "gkw_unweighted":
+        return jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
+    raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+
+def _gkw_rk4_step_reference(state, dt, rhs_fn):
+    delta_1 = dt * rhs_fn(state)
+    updated = state + delta_1 / 6.0
+    stage = state + delta_1 / 2.0
+    delta_2 = dt * rhs_fn(stage)
+    updated = updated + delta_2 / 3.0
+    stage = state + delta_2 / 2.0
+    delta_3 = dt * rhs_fn(stage)
+    updated = updated + delta_3 / 3.0
+    stage = state + delta_3
+    delta_4 = dt * rhs_fn(stage)
+    return updated + delta_4 / 6.0
+
+
 def _l2_norm(values):
     return jnp.sqrt(jnp.mean(jnp.abs(jnp.asarray(values)) ** 2))
 
@@ -3632,6 +4234,145 @@ def _selected_mode_rms_profile(values, ix: int, iy: int):
     if selected.ndim == 1:
         return jnp.abs(selected)
     return jnp.sqrt(jnp.mean(jnp.abs(selected) ** 2, axis=tuple(range(selected.ndim - 1))))
+
+
+def _gkw_fortran_term_i_reference(state, parallel_coeff, recurrence_coeff, stencil, vpar, recurrence_rate: float):
+    state_np = np.asarray(state)
+    parallel_np = np.asarray(parallel_coeff, dtype=float)
+    recurrence_np = np.asarray(recurrence_coeff, dtype=float)
+    if state_np.ndim != 5 or state_np.shape[-2:] != (1, 1):
+        raise ValueError("GKW Fortran Term I audit currently expects a single selected mode")
+    if parallel_np.shape != state_np.shape[:1] + state_np.shape[2:3]:
+        raise ValueError("parallel_coeff must have shape (n_vpar,n_z)")
+    if recurrence_np.shape != parallel_np.shape:
+        raise ValueError("recurrence_coeff must match parallel_coeff")
+
+    n_vpar, n_mu, n_z, _, _ = state_np.shape
+    offsets = np.arange(-4, 5, dtype=np.int32)
+    source_coefficients = np.zeros((n_vpar, n_z, offsets.shape[0]), dtype=float)
+    expected = np.zeros_like(state_np)
+    spacing = float(stencil.spacing)
+    for iv in range(n_vpar):
+        for iz in range(n_z):
+            dum = -parallel_np[iv, iz]
+            recurrence = recurrence_np[iv, iz]
+            for offset, coefficient in _gkw_fortran_term_i_coefficients(
+                _gkw_open_boundary_position_class(iz, n_z),
+                dum,
+                recurrence,
+                spacing,
+            ):
+                shift_index = int(offset + 4)
+                source_coefficients[iv, iz, shift_index] = coefficient
+                shifted_z = iz + offset
+                if 0 <= shifted_z < n_z:
+                    expected[iv, :, iz, 0, 0] += coefficient * state_np[iv, :, shifted_z, 0, 0]
+
+    current_coefficients = _current_gkw_term_i_coefficients(
+        parallel_np,
+        recurrence_np,
+        stencil,
+    )
+    expected_recurrence = _expected_gkw_idisp2_recurrence_speed(
+        parallel_np,
+        np.asarray(vpar, dtype=float),
+        recurrence_rate,
+    )
+    return (
+        jnp.asarray(expected, dtype=jnp.asarray(state).dtype),
+        jnp.asarray(source_coefficients, dtype=jnp.float64),
+        jnp.asarray(current_coefficients, dtype=jnp.float64),
+        jnp.asarray(expected_recurrence, dtype=jnp.float64),
+    )
+
+
+def _gkw_fortran_term_i_coefficients(position_class: int, dum: float, recurrence: float, spacing: float):
+    ds = float(spacing)
+    rec = abs(float(recurrence))
+    if dum > 0.0:
+        if position_class == -2:
+            return ((0, -3.0 * abs(dum) / (2.0 * ds)), (1, 2.0 * dum / ds), (2, -dum / (2.0 * ds)))
+        if position_class == -1:
+            return (
+                (0, -dum / (2.0 * ds)),
+                (1, dum / ds),
+                (2, -dum / (6.0 * ds)),
+                (-1, -dum / (3.0 * ds)),
+            )
+        if position_class == 1:
+            return (
+                (-2, (dum - rec) / (12.0 * ds)),
+                (-1, (-8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+                (0, -6.0 * rec / (12.0 * ds)),
+                (1, (8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+            )
+        if position_class == 2:
+            return ((-1, (-dum + 2.0 * rec) / (2.0 * ds)), (0, -2.0 * rec / ds))
+    elif dum < 0.0:
+        if position_class == -2:
+            return ((0, -2.0 * rec / ds), (1, (dum + 2.0 * rec) / (2.0 * ds)))
+        if position_class == -1:
+            return (
+                (-1, (-8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+                (0, -6.0 * rec / (12.0 * ds)),
+                (1, (8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+                (2, (-dum - rec) / (12.0 * ds)),
+            )
+        if position_class == 1:
+            return (
+                (0, dum / (2.0 * ds)),
+                (1, dum / (3.0 * ds)),
+                (-1, -dum / ds),
+                (-2, dum / (6.0 * ds)),
+            )
+        if position_class == 2:
+            return ((0, 3.0 * dum / (2.0 * ds)), (-1, -2.0 * dum / ds), (-2, dum / (2.0 * ds)))
+    if position_class == 0:
+        return (
+            (-2, (dum - rec) / (12.0 * ds)),
+            (-1, (-8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+            (0, -6.0 * rec / (12.0 * ds)),
+            (1, (8.0 * dum + 4.0 * rec) / (12.0 * ds)),
+            (2, (-dum - rec) / (12.0 * ds)),
+        )
+    return ()
+
+
+def _current_gkw_term_i_coefficients(parallel_coeff, recurrence_coeff, stencil):
+    sign = -np.asarray(parallel_coeff, dtype=float)
+    recurrence = np.asarray(recurrence_coeff, dtype=float)
+    d1_pos = np.asarray(stencil.d1_pos[:, :, 0, 0], dtype=float).T
+    d1_neg = np.asarray(stencil.d1_neg[:, :, 0, 0], dtype=float).T
+    d4_pos = np.asarray(stencil.d4_pos[:, :, 0, 0], dtype=float).T
+    d4_neg = np.asarray(stencil.d4_neg[:, :, 0, 0], dtype=float).T
+    selected_d1 = np.where(sign[:, :, None] > 0.0, d1_pos[None, :, :], d1_neg[None, :, :])
+    selected_d4 = np.where(sign[:, :, None] > 0.0, d4_pos[None, :, :], d4_neg[None, :, :])
+    return sign[:, :, None] * selected_d1 + recurrence[:, :, None] * selected_d4
+
+
+def _expected_gkw_idisp2_recurrence_speed(parallel_coeff, vpar, recurrence_rate: float):
+    if recurrence_rate == 0.0:
+        return np.zeros_like(parallel_coeff)
+    parallel = np.asarray(parallel_coeff, dtype=float)
+    vpar = np.asarray(vpar, dtype=float)
+    if vpar.shape != parallel.shape[:1]:
+        raise ValueError("vpar must match the first axis of parallel_coeff")
+    eps = 1.0e-300
+    ffun = np.where(np.abs(vpar[:, None]) > eps, parallel / vpar[:, None], 0.0)
+    vpgr_rms = np.sqrt(np.mean(vpar**2))
+    return recurrence_rate * np.abs(ffun * vpgr_rms)
+
+
+def _gkw_open_boundary_position_class(index: int, size: int) -> int:
+    if index == 0:
+        return -2
+    if index == 1:
+        return -1
+    if index == size - 2:
+        return 1
+    if index == size - 1:
+        return 2
+    return 0
 
 
 def _build_gkw_cell_centered_parallel_grid(
