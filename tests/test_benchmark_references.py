@@ -15,6 +15,7 @@ from stellarator_gk import (
     ParallelGridSpec,
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
+    CycloneDiagnosticPackingAudit,
     CycloneProfileOperatorAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
@@ -42,6 +43,7 @@ from stellarator_gk import (
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_cyclone_base_case_diagnostic_packing_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
@@ -747,6 +749,49 @@ def test_cyclone_time_normalization_audit_matches_gkw_sequence():
 
     with pytest.raises(ValueError, match="normalization_model"):
         run_cyclone_base_case_time_normalization_audit(normalization_model="bad")
+
+
+def test_cyclone_diagnostic_packing_audit_matches_gkw_source_layout():
+    audit = run_cyclone_base_case_diagnostic_packing_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_window=2,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-11,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneDiagnosticPackingAudit)
+    assert audit.parallel_phi_profile.shape == (8,)
+    assert audit.packed_parallel_phi_profile.shape == (8,)
+    assert audit.ky_spectrum.shape == (1,)
+    assert audit.packed_ky_spectrum.shape == (1,)
+    assert audit.kx_spectrum.shape == (1,)
+    assert audit.packed_kx_spectrum.shape == (1,)
+    assert len(leaves) == len(CycloneDiagnosticPackingAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.output_window == 2
+    assert audit.field_offset == 8 * 6 * 4
+    assert audit.n_field_values == 8
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.time, 0.012)
+    np.testing.assert_allclose(
+        audit.parallel_phi_profile,
+        audit.packed_parallel_phi_profile,
+        atol=1.0e-11,
+    )
+    np.testing.assert_allclose(audit.ky_spectrum, audit.packed_ky_spectrum, atol=1.0e-11)
+    np.testing.assert_allclose(audit.kx_spectrum, audit.packed_kx_spectrum, atol=1.0e-11)
+    assert audit.packing_roundtrip_error < 1.0e-11
+    assert audit.parallel_phi_error < 1.0e-11
+    assert audit.selected_profile_error < 1.0e-11
+    assert "diagnostic.F90" in audit.notes
+
+    with pytest.raises(ValueError, match="output_window"):
+        run_cyclone_base_case_diagnostic_packing_audit(output_window=0)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

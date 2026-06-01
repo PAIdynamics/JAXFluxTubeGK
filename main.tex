@@ -1157,7 +1157,7 @@ drift, drive, field-drive, boundary-map, and grid-normalization conventions.
 This is intentional bookkeeping: it prevents DESC-driven optimization studies
 from being mistaken for validated physical predictions before the CBC growth
 rate itself is on the reference ladder.
-The current implementation now also includes seven validation-hardening tools.
+The current implementation now also includes eight validation-hardening tools.
 First, late-time growth rates may be computed by a least-squares fit of
 \(\log A_{k_y}(t)\) over a selected diagnostic window,
 \begin{equation}
@@ -1356,9 +1356,19 @@ matches the solver's GKW-unweighted window trace with RK4-step error
 \(3.48\times10^{-18}\), growth-sequence error \(1.29\times10^{-14}\),
 post-normalization field-norm error \(1.33\times10^{-15}\), and field
 linearity error \(1.67\times10^{-15}\); the CSV is
-\path{figures/cyclone_time_normalization_audit.csv}.  The next CBC parity
-step is therefore to inspect GKW matrix construction, diagnostic output, and
-remaining field/index packing conventions beyond Term I and normalization.
+\path{figures/cyclone_time_normalization_audit.csv}.  An eighth audit checks
+the field diagnostic path itself.  In GKW, \path{dist.F90} and
+\path{index_function.F90} store electrostatic field values after the kinetic
+distribution with \(i_x\) fastest, then mode index, then parallel index, and
+\path{diagnostic.F90} writes \texttt{parallel\_phi.dat}, \texttt{kyspec}, and
+\texttt{kxspec} by summing \(|\phi_{\mathrm{mode},i_x,j}|^2\) with fixed
+normalizing counts.  Packing the solver field into this source layout and
+unpacking it through the same contract gives zero roundtrip error, zero
+\texttt{parallel\_phi} error, zero selected-profile error, and zero
+\(k_y/k_x\) spectrum error at the same production-control audit point; the CSV
+is \path{figures/cyclone_diagnostic_packing_audit.csv}.  The next CBC parity
+step is therefore to inspect GKW matrix/source-term construction in
+\path{matdat.F90} beyond Term I, normalization, and field diagnostics.
 The direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or

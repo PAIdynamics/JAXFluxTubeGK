@@ -650,6 +650,90 @@ class CycloneTimeNormalizationAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneDiagnosticPackingAudit(_PyTreeDataclass):
+    """GKW field-packing and diagnostic-output source audit."""
+
+    parallel_phi_profile: object
+    packed_parallel_phi_profile: object
+    ky_spectrum: object
+    packed_ky_spectrum: object
+    kx_spectrum: object
+    packed_kx_spectrum: object
+    time: object
+    packing_roundtrip_error: object
+    parallel_phi_error: object
+    selected_profile_error: object
+    ky_spectrum_error: object
+    kx_spectrum_error: object
+    passed: object
+    output_window: int
+    field_offset: int
+    n_field_values: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "parallel_phi_profile",
+        "packed_parallel_phi_profile",
+        "ky_spectrum",
+        "packed_ky_spectrum",
+        "kx_spectrum",
+        "packed_kx_spectrum",
+        "time",
+        "packing_roundtrip_error",
+        "parallel_phi_error",
+        "selected_profile_error",
+        "ky_spectrum_error",
+        "kx_spectrum_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "output_window",
+        "field_offset",
+        "n_field_values",
+        "notes",
+    )
+
+    def __post_init__(self):
+        profile = jnp.asarray(self.parallel_phi_profile, dtype=jnp.float64)
+        if profile.ndim != 1:
+            raise ValueError("parallel_phi_profile must be one-dimensional")
+        object.__setattr__(self, "parallel_phi_profile", profile)
+        packed_profile = jnp.asarray(self.packed_parallel_phi_profile, dtype=jnp.float64)
+        if packed_profile.shape != profile.shape:
+            raise ValueError("packed_parallel_phi_profile must match parallel_phi_profile")
+        object.__setattr__(self, "packed_parallel_phi_profile", packed_profile)
+        ky = jnp.asarray(self.ky_spectrum, dtype=jnp.float64)
+        packed_ky = jnp.asarray(self.packed_ky_spectrum, dtype=jnp.float64)
+        kx = jnp.asarray(self.kx_spectrum, dtype=jnp.float64)
+        packed_kx = jnp.asarray(self.packed_kx_spectrum, dtype=jnp.float64)
+        if ky.ndim != 1 or packed_ky.shape != ky.shape:
+            raise ValueError("ky spectra must be one-dimensional and shape-matched")
+        if kx.ndim != 1 or packed_kx.shape != kx.shape:
+            raise ValueError("kx spectra must be one-dimensional and shape-matched")
+        object.__setattr__(self, "ky_spectrum", ky)
+        object.__setattr__(self, "packed_ky_spectrum", packed_ky)
+        object.__setattr__(self, "kx_spectrum", kx)
+        object.__setattr__(self, "packed_kx_spectrum", packed_kx)
+        for name in (
+            "time",
+            "packing_roundtrip_error",
+            "parallel_phi_error",
+            "selected_profile_error",
+            "ky_spectrum_error",
+            "kx_spectrum_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        if self.output_window < 1:
+            raise ValueError("output_window must be positive")
+        if self.field_offset < 0:
+            raise ValueError("field_offset must be nonnegative")
+        if self.n_field_values < 1:
+            raise ValueError("n_field_values must be positive")
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -3120,6 +3204,189 @@ def run_cyclone_base_case_time_normalization_audit(
     )
 
 
+def run_cyclone_base_case_diagnostic_packing_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> CycloneDiagnosticPackingAudit:
+    """Audit GKW ``get_phi`` packing and field diagnostics for CBC.
+
+    GKW stores electrostatic field values after the kinetic distribution in
+    ``fdisi`` using the default ``index_function.F90`` order
+    ``ix`` fastest, then ``imod``, then ``s``.  ``diagnostic.F90`` then calls
+    ``get_phi`` and forms ``parallel_phi.dat``, ``kyspec``, and ``kxspec`` by
+    summing ``abs(phi(imod,ix,is))**2`` with fixed normalizing counts.  This
+    audit packs the solver field into that source layout, unpacks it through
+    the same index contract, and compares the resulting diagnostics.
+    """
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 1:
+        raise ValueError("output_window must be positive")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    n_z_actual, n_kx, n_ky = phi.shape
+    field_offset = int(state.size)
+    n_field_values = int(n_z_actual * n_kx * n_ky)
+    packed = _pack_gkw_phi_field(phi, field_offset=field_offset)
+    unpacked = _unpack_gkw_phi_field(
+        packed,
+        field_offset=field_offset,
+        n_z=n_z_actual,
+        n_kx=n_kx,
+        n_ky=n_ky,
+    )
+    parallel_phi = _gkw_parallel_phi_diagnostic(phi)
+    packed_parallel_phi = _gkw_parallel_phi_diagnostic(unpacked)
+    ky_spectrum = _gkw_ky_spectrum_diagnostic(phi)
+    packed_ky_spectrum = _gkw_ky_spectrum_diagnostic(unpacked)
+    kx_spectrum = _gkw_kx_spectrum_diagnostic(phi)
+    packed_kx_spectrum = _gkw_kx_spectrum_diagnostic(unpacked)
+    selected_profile = jnp.abs(phi[:, ixzero, selected]) ** 2
+
+    packing_roundtrip_error = _max_abs_error(unpacked, phi)
+    parallel_phi_error = _max_abs_error(packed_parallel_phi, parallel_phi)
+    selected_profile_error = _max_abs_error(parallel_phi, selected_profile)
+    ky_spectrum_error = _max_abs_error(packed_ky_spectrum, ky_spectrum)
+    kx_spectrum_error = _max_abs_error(packed_kx_spectrum, kx_spectrum)
+    passed = (
+        (packing_roundtrip_error <= tolerance)
+        & (parallel_phi_error <= tolerance)
+        & (selected_profile_error <= tolerance)
+        & (ky_spectrum_error <= tolerance)
+        & (kx_spectrum_error <= tolerance)
+    )
+
+    return CycloneDiagnosticPackingAudit(
+        parallel_phi_profile=parallel_phi,
+        packed_parallel_phi_profile=packed_parallel_phi,
+        ky_spectrum=ky_spectrum,
+        packed_ky_spectrum=packed_ky_spectrum,
+        kx_spectrum=kx_spectrum,
+        packed_kx_spectrum=packed_kx_spectrum,
+        time=output_window * steps_per_window * dt,
+        packing_roundtrip_error=packing_roundtrip_error,
+        parallel_phi_error=parallel_phi_error,
+        selected_profile_error=selected_profile_error,
+        ky_spectrum_error=ky_spectrum_error,
+        kx_spectrum_error=kx_spectrum_error,
+        passed=passed,
+        output_window=output_window,
+        field_offset=field_offset,
+        n_field_values=n_field_values,
+        notes=(
+            "GKW dist.F90/get_phi and diagnostic.F90 field-output audit; "
+            f"steps_per_window={steps_per_window}, output_window={output_window}, "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -4040,6 +4307,54 @@ def _gkw_rk4_step_reference(state, dt, rhs_fn):
     stage = state + delta_3
     delta_4 = dt * rhs_fn(stage)
     return updated + delta_4 / 6.0
+
+
+def _pack_gkw_phi_field(phi, *, field_offset: int):
+    phi = jnp.asarray(phi)
+    if phi.ndim != 3:
+        raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
+    if field_offset < 0:
+        raise ValueError("field_offset must be nonnegative")
+    field_values = jnp.ravel(jnp.transpose(phi, (0, 2, 1)))
+    prefix = jnp.zeros((field_offset,), dtype=phi.dtype)
+    return jnp.concatenate([prefix, field_values])
+
+
+def _unpack_gkw_phi_field(fdis, *, field_offset: int, n_z: int, n_kx: int, n_ky: int):
+    fdis = jnp.asarray(fdis)
+    if field_offset < 0:
+        raise ValueError("field_offset must be nonnegative")
+    if n_z < 1 or n_kx < 1 or n_ky < 1:
+        raise ValueError("field dimensions must be positive")
+    n_field = n_z * n_kx * n_ky
+    field_values = fdis[field_offset : field_offset + n_field]
+    if field_values.shape[0] != n_field:
+        raise ValueError("packed field does not contain enough values")
+    return jnp.transpose(jnp.reshape(field_values, (n_z, n_ky, n_kx)), (0, 2, 1))
+
+
+def _gkw_parallel_phi_diagnostic(phi):
+    phi = jnp.asarray(phi)
+    if phi.ndim != 3:
+        raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
+    _n_z, n_kx, n_ky = phi.shape
+    return jnp.sum(jnp.abs(phi) ** 2, axis=(1, 2)) / (n_kx * n_ky)
+
+
+def _gkw_ky_spectrum_diagnostic(phi):
+    phi = jnp.asarray(phi)
+    if phi.ndim != 3:
+        raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
+    n_z, n_kx, _n_ky = phi.shape
+    return jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)) / (n_kx * n_z)
+
+
+def _gkw_kx_spectrum_diagnostic(phi):
+    phi = jnp.asarray(phi)
+    if phi.ndim != 3:
+        raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
+    n_z, _n_kx, n_ky = phi.shape
+    return jnp.sum(jnp.abs(phi) ** 2, axis=(0, 2)) / (n_ky * n_z)
 
 
 def _l2_norm(values):

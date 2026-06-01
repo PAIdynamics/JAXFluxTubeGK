@@ -118,11 +118,15 @@ solver's GKW-unweighted selected-mode window trace with RK4 step error
 `3.476216610979977e-18`, growth-sequence error `1.2878587085651816e-14`,
 post-normalization field-norm error `1.3322676295501878e-15`, and field
 linearity error `1.668583973270389e-15`. This rules out the explicit
-time-update/field-normalization cadence itself; the remaining profile gap now
-points toward GKW matrix/time-history construction, diagnostic output, or
-remaining field/index packing conventions rather than the quasineutrality
-solve, parallel field-drive assembly, GKW-upwind streaming formula, RK4
-staging, or `normalise.F90` field norm.
+time-update/field-normalization cadence itself. A GKW diagnostic/packing audit
+now reconstructs the `dist.F90::get_phi` field layout and
+`diagnostic.F90::{parallel_phi,phi_ky_spec}` formulas with zero packing,
+`parallel_phi`, `ky`-spectrum, and `kx`-spectrum error at the localized
+production-control audit point. The remaining profile gap now points toward
+GKW matrix/time-history construction or source-term/matrix-format conventions
+rather than the quasineutrality solve, parallel field-drive assembly,
+GKW-upwind streaming formula, RK4 staging, `normalise.F90` field norm, or GKW
+field diagnostic packing.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -152,8 +156,9 @@ The repository currently contains:
 - `examples/audit_cyclone_profile_operator.py`: selected-mode Cyclone operator audit at the localized GKW profile mismatch.
 - `examples/audit_cyclone_term_i_fortran.py`: selected-mode Cyclone Term I audit reconstructed directly from the GKW Fortran source formulas.
 - `examples/audit_cyclone_time_normalization.py`: selected-mode Cyclone RK4/window-normalization audit against the GKW source sequence.
+- `examples/audit_cyclone_diagnostic_packing.py`: selected-mode Cyclone GKW `get_phi` field-packing and diagnostic-output audit.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
@@ -243,9 +248,10 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- compare GKW matrix/time-history construction and diagnostic output paths
-  beyond Term I and normalization, especially `matdat.F90`, `diagnostic.F90`,
-  and any remaining field/index packing conventions,
+- compare remaining GKW matrix/time-history construction paths beyond Term I,
+  normalization, and field diagnostics, especially `matdat.F90` coefficient
+  assembly/compression and any source-term or matrix-format conventions not
+  yet mirrored by the matrix-free residual,
 - add a non-destructive GKW `cosine2` patch or restart/state-injection path
   only if the remaining native `finit='cosine'` profile comparison still
   cannot isolate the discrepancy,
@@ -274,6 +280,39 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added GKW Diagnostic Packing Audit
+
+- Added `CycloneDiagnosticPackingAudit` and
+  `run_cyclone_base_case_diagnostic_packing_audit`.
+- Added `examples/audit_cyclone_diagnostic_packing.py`, which packs the
+  solver field into the GKW `dist.F90`/`index_function.F90` field layout and
+  reconstructs the `diagnostic.F90::parallel_phi` and `phi_ky_spec` formulas:
+  - `figures/cyclone_diagnostic_packing_audit.csv`.
+- Main production-control findings at output window 62 (`t=3.72`):
+  - field-packing roundtrip error: `0.0`,
+  - `parallel_phi.dat` source-formula error: `0.0`,
+  - selected single-mode profile error: `0.0`,
+  - `ky` field-spectrum error: `0.0`,
+  - `kx` field-spectrum error: `0.0`.
+- Interpretation: GKW field packing, `get_phi`, `parallel_phi.dat`, and
+  field-spectrum diagnostic formulas are not the source of the matched
+  Cyclone profile gap. The remaining immediate target is the GKW matrix and
+  source-term construction path in `matdat.F90`.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_diagnostic_packing.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_diagnostic_packing_audit_matches_gkw_source_layout -q`
+  - `uv run --extra dev python examples/audit_cyclone_diagnostic_packing.py`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification results:
+  - focused diagnostic-packing audit test: 1 passed,
+  - focused benchmark suite: 29 passed,
+  - full pytest suite: 148 passed,
+  - full ruff: all checks passed,
+  - `main.tex` built successfully with existing underfull-box warnings only.
 
 ### 2026-06-01: Added GKW RK4 and Normalization Sequence Audit
 
