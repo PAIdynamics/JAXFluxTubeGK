@@ -15,6 +15,7 @@ from stellarator_gk import (
     ParallelGridSpec,
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
+    CycloneProfileOperatorAudit,
     ParallelPhiTrace,
     audit_parallel_phi_profile_alignment,
     benchmark_target_cost,
@@ -41,6 +42,7 @@ from stellarator_gk import (
     run_geometry_to_gx_eik_export_gate,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
+    run_cyclone_base_case_profile_operator_audit,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
@@ -626,6 +628,48 @@ def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
             n_windows=1,
             normalization_model="unsupported",
         )
+
+
+def test_cyclone_profile_operator_audit_checks_selected_mode_assembly():
+    audit = run_cyclone_base_case_profile_operator_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_window=2,
+        target_z=0.0,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-10,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneProfileOperatorAudit)
+    assert audit.normalized_phi_power.shape == (8,)
+    assert audit.z_grid.shape == (8,)
+    assert audit.streaming_delta_profile.shape == (8,)
+    assert audit.field_drive_delta_profile.shape == (8,)
+    assert audit.field_residual_profile.shape == (8,)
+    assert len(leaves) == len(CycloneProfileOperatorAudit._dynamic_fields)
+    assert aux is not None
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.time, 0.012)
+    np.testing.assert_allclose(jnp.sum(audit.normalized_phi_power), 1.0, rtol=2e-12)
+    assert 0 <= int(audit.z_index) < 8
+    assert jnp.all(jnp.isfinite(audit.normalized_phi_power))
+    assert jnp.all(audit.streaming_delta_profile >= 0.0)
+    assert jnp.all(audit.field_drive_delta_profile >= 0.0)
+    assert audit.local_streaming_delta <= audit.max_streaming_delta
+    assert audit.local_field_drive_delta <= audit.max_field_drive_delta
+    assert audit.boundary_streaming_delta <= audit.max_streaming_delta
+    assert audit.boundary_field_drive_delta <= audit.max_field_drive_delta
+    assert audit.field_residual_max < 1.0e-10
+    assert audit.field_reconstruction_error < 1.0e-10
+    assert audit.rhs_assembly_error < 1.0e-10
+    assert "central profile operator audit" in audit.notes
+
+    with pytest.raises(ValueError, match="output_window"):
+        run_cyclone_base_case_profile_operator_audit(output_window=0)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

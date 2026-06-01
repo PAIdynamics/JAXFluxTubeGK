@@ -414,6 +414,102 @@ class ParallelPhiProfileAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneProfileOperatorAudit(_PyTreeDataclass):
+    """Selected-mode operator audit at a localized Cyclone profile mismatch."""
+
+    normalized_phi_power: object
+    z_grid: object
+    streaming_delta_profile: object
+    field_drive_delta_profile: object
+    field_residual_profile: object
+    time: object
+    z: object
+    output_window: object
+    z_index: object
+    peak_z: object
+    second_moment: object
+    local_streaming_delta: object
+    max_streaming_delta: object
+    boundary_streaming_delta: object
+    local_field_drive_delta: object
+    max_field_drive_delta: object
+    boundary_field_drive_delta: object
+    field_residual_max: object
+    field_reconstruction_error: object
+    rhs_assembly_error: object
+    passed: object
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "normalized_phi_power",
+        "z_grid",
+        "streaming_delta_profile",
+        "field_drive_delta_profile",
+        "field_residual_profile",
+        "time",
+        "z",
+        "output_window",
+        "z_index",
+        "peak_z",
+        "second_moment",
+        "local_streaming_delta",
+        "max_streaming_delta",
+        "boundary_streaming_delta",
+        "local_field_drive_delta",
+        "max_field_drive_delta",
+        "boundary_field_drive_delta",
+        "field_residual_max",
+        "field_reconstruction_error",
+        "rhs_assembly_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("notes",)
+
+    def __post_init__(self):
+        profile = jnp.asarray(self.normalized_phi_power, dtype=jnp.float64)
+        if profile.ndim != 1:
+            raise ValueError("normalized_phi_power must be one-dimensional")
+        object.__setattr__(self, "normalized_phi_power", profile)
+        z_grid = jnp.asarray(self.z_grid, dtype=jnp.float64)
+        if z_grid.shape != profile.shape:
+            raise ValueError("z_grid must match normalized_phi_power shape")
+        object.__setattr__(self, "z_grid", z_grid)
+        for name in (
+            "streaming_delta_profile",
+            "field_drive_delta_profile",
+            "field_residual_profile",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != profile.shape:
+                raise ValueError(f"{name} must match normalized_phi_power shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "time",
+            "z",
+            "peak_z",
+            "second_moment",
+            "local_streaming_delta",
+            "max_streaming_delta",
+            "boundary_streaming_delta",
+            "local_field_drive_delta",
+            "max_field_drive_delta",
+            "boundary_field_drive_delta",
+            "field_residual_max",
+            "field_reconstruction_error",
+            "rhs_assembly_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(
+            self,
+            "output_window",
+            jnp.asarray(self.output_window, dtype=jnp.int32),
+        )
+        object.__setattr__(self, "z_index", jnp.asarray(self.z_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -2215,6 +2311,241 @@ def audit_parallel_phi_profile_alignment(
     )
 
 
+def run_cyclone_base_case_profile_operator_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    target_z: float = 0.09375,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-11,
+    target: BenchmarkTarget | None = None,
+) -> CycloneProfileOperatorAudit:
+    """Audit selected-mode parallel operators at the localized CBC profile gap.
+
+    The default targets the row and grid point identified by the matched GKW
+    ``parallel_phi.dat`` comparison: output window 62, ``t=3.72``, and
+    ``z=0.09375`` on the 48-point GKW cell-centered grid.  The diagnostic is
+    intentionally a solver-internal consistency check: it confirms whether the
+    field solve and RHS assembly are exact at that state, while measuring the
+    local matrix-versus-GKW-upwind parallel operator deltas.
+    """
+
+    from .physics import (
+        adiabatic_density_numerator,
+        adiabatic_quasineutrality_residual_from_density,
+        dissipation,
+        drift_field_drive,
+        equilibrium_drive,
+        gkw_parallel_field_drive,
+        gkw_parallel_streaming,
+        magnetic_drift_advection,
+        mirror_force,
+        parallel_field_drive,
+        parallel_streaming,
+        solve_adiabatic_electron_phi,
+        solve_adiabatic_electron_phi_from_density,
+        velocity_recurrence_control,
+    )
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 1:
+        raise ValueError("output_window must be positive")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field))
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            if normalization_model == "weighted":
+                amplitude = mode_chain_amplitude(
+                    phi,
+                    w_z=setup["geometry"].w_z,
+                    connectivity=setup["connectivity"],
+                )
+            else:
+                amplitude = jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(amplitude[selected], jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    z_index = int(jnp.argmin(jnp.abs(setup["parallel"].z - target_z)))
+    power = jnp.abs(phi[:, ixzero, selected]) ** 2
+    normalized_power = power / jnp.maximum(jnp.sum(power), jnp.asarray(1.0e-300, dtype=power.dtype))
+    center = jnp.sum(normalized_power * setup["parallel"].z)
+    second_moment = jnp.sum(normalized_power * (setup["parallel"].z - center) ** 2)
+
+    matrix_parallel = parallel_streaming(state, rhs.D_z, rhs.parallel_streaming_coeff)
+    gkw_parallel = gkw_parallel_streaming(state, rhs)
+    matrix_field = parallel_field_drive(phi, rhs.D_z, rhs)
+    gkw_field = gkw_parallel_field_drive(phi, rhs)
+    streaming_delta_profile = _selected_mode_rms_profile(
+        gkw_parallel - matrix_parallel,
+        ixzero,
+        selected,
+    )
+    field_drive_delta_profile = _selected_mode_rms_profile(
+        gkw_field - matrix_field,
+        ixzero,
+        selected,
+    )
+
+    numerator = adiabatic_density_numerator(state, setup["precompute"].field)
+    reconstructed_phi = solve_adiabatic_electron_phi_from_density(numerator, setup["precompute"].field)
+    field_residual = adiabatic_quasineutrality_residual_from_density(
+        phi,
+        numerator,
+        setup["precompute"].field,
+    )
+    field_residual_profile = jnp.abs(field_residual[:, ixzero, selected])
+
+    manual = (
+        gkw_parallel
+        + magnetic_drift_advection(state, rhs.magnetic_drift_frequency)
+        + mirror_force(state, rhs.D_vpar, rhs.mirror_force_coeff)
+        + equilibrium_drive(phi, rhs)
+        + gkw_field
+        + drift_field_drive(phi, rhs)
+        + dissipation(state, rhs.perpendicular_damping)
+        + velocity_recurrence_control(
+            state,
+            rhs.velocity_recurrence_operator,
+            rhs.velocity_recurrence_coeff,
+        )
+    )
+    assembled = linear_residual(state, precomputed=setup["precompute"], phi=phi)
+    rhs_assembly_error = _max_abs_error(assembled, manual)
+    field_reconstruction_error = _max_abs_error(reconstructed_phi, phi)
+    field_residual_max = jnp.max(jnp.abs(field_residual))
+    boundary_streaming_delta = jnp.max(
+        jnp.asarray([streaming_delta_profile[0], streaming_delta_profile[-1]])
+    )
+    boundary_field_drive_delta = jnp.max(
+        jnp.asarray([field_drive_delta_profile[0], field_drive_delta_profile[-1]])
+    )
+    passed = (
+        (field_residual_max <= tolerance)
+        & (field_reconstruction_error <= tolerance)
+        & (rhs_assembly_error <= tolerance)
+    )
+
+    return CycloneProfileOperatorAudit(
+        normalized_phi_power=normalized_power,
+        z_grid=setup["parallel"].z,
+        streaming_delta_profile=streaming_delta_profile,
+        field_drive_delta_profile=field_drive_delta_profile,
+        field_residual_profile=field_residual_profile,
+        time=output_window * steps_per_window * dt,
+        z=setup["parallel"].z[z_index],
+        output_window=output_window,
+        z_index=z_index,
+        peak_z=setup["parallel"].z[jnp.argmax(normalized_power)],
+        second_moment=second_moment,
+        local_streaming_delta=streaming_delta_profile[z_index],
+        max_streaming_delta=jnp.max(streaming_delta_profile),
+        boundary_streaming_delta=boundary_streaming_delta,
+        local_field_drive_delta=field_drive_delta_profile[z_index],
+        max_field_drive_delta=jnp.max(field_drive_delta_profile),
+        boundary_field_drive_delta=boundary_field_drive_delta,
+        field_residual_max=field_residual_max,
+        field_reconstruction_error=field_reconstruction_error,
+        rhs_assembly_error=rhs_assembly_error,
+        passed=passed,
+        notes=(
+            "central profile operator audit; "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}, "
+            f"target_z={target_z}"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -3294,6 +3625,13 @@ def _cyclone_normalization_error(setup, metadata):
 
 def _field_power(field, weights):
     return jnp.sum(jnp.asarray(weights) * jnp.abs(jnp.asarray(field)) ** 2)
+
+
+def _selected_mode_rms_profile(values, ix: int, iy: int):
+    selected = jnp.asarray(values)[..., :, ix, iy]
+    if selected.ndim == 1:
+        return jnp.abs(selected)
+    return jnp.sqrt(jnp.mean(jnp.abs(selected) ** 2, axis=tuple(range(selected.ndim - 1))))
 
 
 def _build_gkw_cell_centered_parallel_grid(

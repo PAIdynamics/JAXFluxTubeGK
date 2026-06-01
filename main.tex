@@ -1328,7 +1328,18 @@ The profile-width diagnostic is negative in this worst row
 (\(-2.08\times10^{-2}\)), so the remaining discrepancy is concentrated in the
 central curvature/width of the parallel eigenfunction rather than in a scalar
 normalization, output ordering, center-of-mass displacement, or edge
-convention.  The direct compact GKW comparison path uses
+convention.  A solver-internal operator audit at the same row now separates
+the candidate causes.  The quasineutrality residual is
+\(4.74\times10^{-16}\), solving \(\phi\) again from the density numerator
+changes the field by only \(3.72\times10^{-16}\), and the manually assembled
+RHS agrees with the public residual wrapper to stored precision.  At the
+localized central point, however, the matrix-versus-GKW-upwind parallel
+streaming delta is \(5.23\times10^{-3}\), while the corresponding parallel
+field-drive delta is \(2.76\times10^{-19}\).  The audit CSV is
+\path{figures/cyclone_profile_operator_audit.csv}.  The next CBC parity step
+is therefore to compare the selected-mode Term I streaming/upwind stencil,
+sign choice, and normalization directly against the GKW Fortran path.  The
+direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or
 a restart/state-injection path because the original GKW \texttt{finit}

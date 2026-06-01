@@ -102,7 +102,14 @@ profile-width error in that row. This confirms that the remaining CBC gap
 includes a real central-curvature/width mismatch in the parallel mode
 structure, not only a compact `time.dat` growth-window, scalar normalization,
 output-ordering convention, center-of-power shift, or boundary-edge
-concentration.
+concentration. A selected-mode operator audit at the same point now passes the
+field/RHS consistency checks: field residual `4.742874840267547e-16`, phi
+reconstruction error `3.7238012298709097e-16`, and RHS assembly error `0.0`.
+The local matrix-versus-GKW-upwind streaming delta is
+`5.228399497117055e-03`, while the local field-drive delta is
+`2.7611004325485534e-19`; this narrows the remaining profile gap toward Term I
+parallel streaming/upwind details rather than the quasineutrality solve or
+parallel field-drive assembly.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -129,8 +136,9 @@ The repository currently contains:
 - `examples/run_validation_gates.py`: runnable report for RH, CBC, and GX/eik validation gate status.
 - `examples/generate_validation_gate_figures.py`: runnable reduced validation-gate figure and CSV generator for the `main.tex` result section.
 - `examples/compare_gkw_parallel_phi_profile.py`: matched production-control GKW `parallel_phi.dat` versus solver selected-`ky` parallel-profile comparison generator.
+- `examples/audit_cyclone_profile_operator.py`: selected-mode Cyclone operator audit at the localized GKW profile mismatch.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
@@ -220,9 +228,9 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- compare the localized GKW `parallel_phi.dat` central-curvature/width
-  mismatch against the selected-mode parallel derivative, GKW-upwind boundary,
-  and field-solve assembly,
+- compare the selected-mode parallel streaming/upwind implementation against
+  the GKW Fortran Term I stencil and sign/normalization details at the
+  localized central mismatch,
 - only patch GKW or add a restart/state-injection path for `cosine2` if the
   native `cosine` profile comparison cannot isolate the discrepancy,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
@@ -250,6 +258,42 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added Cyclone Profile Operator Audit
+
+- Committed the previous alignment/localization tranche as:
+  - `e11e3ed Add GKW parallel phi alignment audit`.
+- Added `CycloneProfileOperatorAudit` and
+  `run_cyclone_base_case_profile_operator_audit`.
+- Added `examples/audit_cyclone_profile_operator.py`, which advances the
+  production-control selected-`ky` Cyclone setup to the localized GKW
+  `parallel_phi.dat` mismatch row and writes:
+  - `figures/cyclone_profile_operator_audit.csv`.
+- Main findings at output window 62 (`t=3.72`, `z=0.09375`):
+  - field residual: `4.742874840267547e-16`,
+  - phi reconstruction error: `3.7238012298709097e-16`,
+  - RHS assembly error: `0.0`,
+  - local matrix-versus-GKW-upwind streaming delta:
+    `5.228399497117055e-03`,
+  - maximum streaming delta: `7.044002628973733e-03`,
+  - boundary streaming delta: `1.9373242808842016e-03`,
+  - local matrix-versus-GKW-upwind field-drive delta:
+    `2.7611004325485534e-19`,
+  - maximum field-drive delta: `2.1023285024078316e-06`.
+- Interpretation: the field solve, field reconstruction, field-drive assembly,
+  and RHS assembly are not the visible source of the matched GKW
+  `parallel_phi.dat` gap. The remaining mismatch now points most strongly to
+  the selected-mode parallel streaming/upwind path and should be checked
+  against the GKW Fortran Term I stencil/sign/normalization logic.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_profile_operator.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_profile_operator_audit_checks_selected_mode_assembly -q`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_profile_operator_audit_checks_selected_mode_assembly tests/test_benchmark_references.py::test_cyclone_parallel_phi_trace_records_gkw_style_profiles -q`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `uv run --extra dev python examples/audit_cyclone_profile_operator.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
 
 ### 2026-06-01: Added GKW Parallel-Phi Alignment Audit
 
