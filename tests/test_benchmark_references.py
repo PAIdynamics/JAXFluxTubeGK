@@ -15,6 +15,7 @@ from stellarator_gk import (
     ParallelGridSpec,
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
+    CycloneCoefficientSourceAudit,
     CycloneDiagnosticPackingAudit,
     CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
@@ -44,6 +45,7 @@ from stellarator_gk import (
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
+    run_cyclone_base_case_coefficient_source_audit,
     run_cyclone_base_case_diagnostic_packing_audit,
     run_cyclone_base_case_matdat_matrix_audit,
     run_desc_gx_eik_external_geometry_gate,
@@ -826,6 +828,42 @@ def test_cyclone_matdat_matrix_audit_matches_sparse_conventions():
 
     with pytest.raises(ValueError, match="nonzero_threshold"):
         run_cyclone_base_case_matdat_matrix_audit(nonzero_threshold=-1.0)
+
+
+def test_cyclone_coefficient_source_audit_matches_gkw_formulas():
+    audit = run_cyclone_base_case_coefficient_source_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_window=2,
+        target_z=0.0,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-10,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneCoefficientSourceAudit)
+    assert audit.term_errors.shape == (5,)
+    assert audit.coefficient_errors.shape == (5,)
+    assert audit.insertion_errors.shape == (5,)
+    assert len(audit.term_names) == 5
+    assert len(leaves) == len(CycloneCoefficientSourceAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.output_window == 2
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.time, 0.012)
+    assert 0 <= int(audit.z_index) < 8
+    assert audit.max_term_error < 1.0e-10
+    assert audit.max_coefficient_error < 1.0e-10
+    assert audit.max_insertion_error < 1.0e-10
+    assert audit.max_abs_error < 1.0e-10
+    assert "vdgradf" in audit.notes
+    assert "vpgrphi_3_newbc" in audit.notes
+
+    with pytest.raises(ValueError, match="normalization_model"):
+        run_cyclone_base_case_coefficient_source_audit(normalization_model="bad")
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

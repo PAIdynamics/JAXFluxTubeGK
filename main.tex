@@ -1157,7 +1157,7 @@ drift, drive, field-drive, boundary-map, and grid-normalization conventions.
 This is intentional bookkeeping: it prevents DESC-driven optimization studies
 from being mistaken for validated physical predictions before the CBC growth
 rate itself is on the reference ladder.
-The current implementation now also includes nine validation-hardening tools.
+The current implementation now also includes ten validation-hardening tools.
 First, late-time growth rates may be computed by a least-squares fit of
 \(\log A_{k_y}(t)\) over a selected diagnostic window,
 \begin{equation}
@@ -1376,9 +1376,19 @@ matrix-action error \(2.60\times10^{-18}\), zero source term,
 explicit-delta error \(8.47\times10^{-21}\), compressed-triplet error
 \(3.04\times10^{-18}\), and \texttt{complex-real} split error
 \(1.73\times10^{-18}\); the CSV is
-\path{figures/cyclone_matdat_matrix_audit.csv}.  The next CBC parity step is
-therefore to inspect source-level coefficient construction and insertion for
-Terms II, IV, V, VII, and VIII in the production selected-\(k_y\) setup.
+\path{figures/cyclone_matdat_matrix_audit.csv}.  A tenth audit then
+reconstructs source-level GKW coefficients for Terms II, IV, V, VII, and VIII
+at the same production-control selected-\(k_y\) point.  The audited source
+routines are \texttt{vdgradf}, \texttt{trapdf\_4d},
+\texttt{ve\_grad\_fm}, \texttt{vpgrphi\_3\_newbc}, and
+\texttt{vd\_grad\_phi\_fm}.  At \(t=3.72\) and \(z=0.09375\), the maximum
+term/action error is \(3.10\times10^{-17}\), the maximum coefficient error is
+zero to stored precision, and the maximum insertion error is
+\(3.10\times10^{-17}\); the CSV is
+\path{figures/cyclone_coefficient_source_audit.csv}.  The next CBC parity step
+is therefore not the separated Term II/IV/V/VII/VIII coefficient formulas, but
+the production GKW \texttt{ltrapping\_arakawa} path that fuses the Term I/IV
+Hamiltonian stencil and applies the \(\texttt{disp\_vp}=0.2\) convention.
 The direct compact GKW comparison path uses
 \(\texttt{finit='cosine'}\); matching the solver/Gyaradax
 \(\texttt{cosine2}\) initialization would require a local GKW source patch or

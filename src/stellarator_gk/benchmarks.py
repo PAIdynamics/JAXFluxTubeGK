@@ -790,6 +790,69 @@ class CycloneMatdatMatrixAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneCoefficientSourceAudit(_PyTreeDataclass):
+    """GKW source-level coefficient construction audit for selected CBC terms."""
+
+    term_errors: object
+    coefficient_errors: object
+    insertion_errors: object
+    time: object
+    z: object
+    z_index: object
+    max_term_error: object
+    max_coefficient_error: object
+    max_insertion_error: object
+    max_abs_error: object
+    passed: object
+    term_names: tuple[str, ...]
+    output_window: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "term_errors",
+        "coefficient_errors",
+        "insertion_errors",
+        "time",
+        "z",
+        "z_index",
+        "max_term_error",
+        "max_coefficient_error",
+        "max_insertion_error",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("term_names", "output_window", "notes")
+
+    def __post_init__(self):
+        term_errors = jnp.asarray(self.term_errors, dtype=jnp.float64)
+        if term_errors.ndim != 1:
+            raise ValueError("term_errors must be one-dimensional")
+        if len(self.term_names) != term_errors.shape[0]:
+            raise ValueError("term_names length must match term_errors")
+        object.__setattr__(self, "term_errors", term_errors)
+        for name in ("coefficient_errors", "insertion_errors"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != term_errors.shape:
+                raise ValueError(f"{name} must match term_errors")
+            object.__setattr__(self, name, values)
+        for name in (
+            "time",
+            "z",
+            "max_term_error",
+            "max_coefficient_error",
+            "max_insertion_error",
+            "max_abs_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        if self.output_window < 0:
+            raise ValueError("output_window must be nonnegative")
+        object.__setattr__(self, "z_index", jnp.asarray(self.z_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -3593,6 +3656,234 @@ def run_cyclone_base_case_matdat_matrix_audit(
     )
 
 
+def run_cyclone_base_case_coefficient_source_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    target_z: float = 0.09375,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-11,
+    target: BenchmarkTarget | None = None,
+) -> CycloneCoefficientSourceAudit:
+    """Audit GKW source coefficient formulas for Terms II, IV, V, VII, and VIII."""
+
+    from .physics import (
+        drift_field_drive,
+        equilibrium_drive,
+        gkw_parallel_field_drive,
+        magnetic_drift_advection,
+        mirror_force,
+        solve_adiabatic_electron_phi,
+    )
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, mode_chain_amplitude, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 0:
+        raise ValueError("output_window must be nonnegative")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(
+            state_value,
+            setup["precompute"].field,
+        )
+    )
+    advance_window = jax.jit(
+        lambda state_value: integrate_fixed_step(
+            state_value,
+            dt,
+            steps_per_window,
+            linear_residual,
+            setup["precompute"],
+            store_history=False,
+        ).state
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            if normalization_model == "weighted":
+                amplitude = mode_chain_amplitude(
+                    phi,
+                    w_z=setup["geometry"].w_z,
+                    connectivity=setup["connectivity"],
+                )
+            else:
+                amplitude = jnp.sqrt(jnp.sum(jnp.abs(phi) ** 2, axis=(0, 1)))
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(
+                amplitude[selected],
+                jnp.asarray(1.0e-300, dtype=amplitude.dtype),
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    source = _cyclone_source_term_arrays(setup, metadata)
+    term_ii = -1j * source["drift_frequency"] * state
+    term_iv = (
+        source["mirror_coeff"][None, :, :, None, None]
+        * _apply_first_axis_matrix(rhs.D_vpar, state)
+    )
+    term_v = source["equilibrium_drive_coeff"] * phi[None, None, :, :, :]
+    term_vii = _gkw_fortran_term_vii_reference(
+        phi,
+        source["parallel_field_coeff"],
+        rhs.flr_factors.bessel_j0[0],
+        rhs.gkw_parallel_stencil,
+    )
+    term_viii = source["drift_field_coeff"] * phi[None, None, :, :, :]
+
+    current_term_ii = magnetic_drift_advection(state, rhs.magnetic_drift_frequency)
+    current_term_iv = mirror_force(state, rhs.D_vpar, rhs.mirror_force_coeff)
+    current_term_v = equilibrium_drive(phi, rhs)
+    current_term_vii = gkw_parallel_field_drive(phi, rhs)
+    current_term_viii = drift_field_drive(phi, rhs)
+
+    term_errors = jnp.asarray(
+        [
+            _max_abs_error(current_term_ii, term_ii),
+            _max_abs_error(current_term_iv, term_iv),
+            _max_abs_error(current_term_v, term_v),
+            _max_abs_error(current_term_vii, term_vii),
+            _max_abs_error(current_term_viii, term_viii),
+        ],
+        dtype=jnp.float64,
+    )
+    coefficient_errors = jnp.asarray(
+        [
+            _max_abs_error(rhs.magnetic_drift_frequency[0], source["drift_frequency"]),
+            _max_abs_error(rhs.mirror_force_coeff[0], source["mirror_coeff"]),
+            _max_abs_error(source["equilibrium_drive_coeff"], source["current_drive_coeff"]),
+            _max_abs_error(source["parallel_field_coeff"], source["current_field_coeff"]),
+            _max_abs_error(source["drift_field_coeff"], source["current_drift_field_coeff"]),
+        ],
+        dtype=jnp.float64,
+    )
+    insertion_errors = jnp.asarray(
+        [
+            _max_abs_error(term_ii, current_term_ii),
+            _max_abs_error(term_iv, current_term_iv),
+            _max_abs_error(term_v, current_term_v),
+            _max_abs_error(term_vii, current_term_vii),
+            _max_abs_error(term_viii, current_term_viii),
+        ],
+        dtype=jnp.float64,
+    )
+    max_term_error = jnp.max(term_errors)
+    max_coefficient_error = jnp.max(coefficient_errors)
+    max_insertion_error = jnp.max(insertion_errors)
+    max_abs_error = jnp.max(
+        jnp.asarray(
+            [max_term_error, max_coefficient_error, max_insertion_error],
+            dtype=jnp.float64,
+        )
+    )
+    z_index = int(jnp.argmin(jnp.abs(setup["parallel"].z - target_z)))
+    term_names = (
+        "Term II vdgradf",
+        "Term IV trapdf",
+        "Term V ve_grad_fm",
+        "Term VII vpgrphi",
+        "Term VIII vd_grad_phi_fm",
+    )
+    return CycloneCoefficientSourceAudit(
+        term_errors=term_errors,
+        coefficient_errors=coefficient_errors,
+        insertion_errors=insertion_errors,
+        time=output_window * steps_per_window * dt,
+        z=setup["parallel"].z[z_index],
+        z_index=z_index,
+        max_term_error=max_term_error,
+        max_coefficient_error=max_coefficient_error,
+        max_insertion_error=max_insertion_error,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        term_names=term_names,
+        output_window=output_window,
+        notes=(
+            "GKW source-level coefficient audit; "
+            "linear_terms.F90:vdgradf, trapdf_4d, ve_grad_fm, "
+            "vpgrphi_3_newbc, vd_grad_phi_fm; "
+            f"initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}, "
+            f"target_z={target_z}"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -4854,6 +5145,123 @@ def _selected_mode_rms_profile(values, ix: int, iy: int):
     if selected.ndim == 1:
         return jnp.abs(selected)
     return jnp.sqrt(jnp.mean(jnp.abs(selected) ** 2, axis=tuple(range(selected.ndim - 1))))
+
+
+def _cyclone_source_term_arrays(setup, metadata):
+    """Rebuild the CBC source formulas used by selected GKW ``linear_terms``."""
+
+    rhs = setup["precompute"].rhs
+    velocity = setup["velocity"]
+    geometry = setup["geometry"]
+    fourier = setup["fourier"]
+    vpar = jnp.asarray(velocity.vpar)
+    mu = jnp.asarray(velocity.mu)
+    B = jnp.asarray(geometry.B)
+
+    vpar_5 = vpar[:, None, None, None, None]
+    mu_5 = mu[None, :, None, None, None]
+    B_5 = B[None, None, :, None, None]
+    kx = fourier.kx[None, None, None, :, None]
+    ky = fourier.ky[None, None, None, None, :]
+    D_x = geometry.D_x[None, None, :, None, None]
+    D_y = geometry.D_y[None, None, :, None, None]
+
+    drift_frequency = (vpar_5**2 + mu_5 * B_5) * (kx * D_x + ky * D_y)
+    energy = vpar[:, None, None] ** 2 + 2.0 * mu[None, :, None] * B[None, None, :]
+    maxwellian_value = jnp.exp(-energy) / jnp.pi**1.5
+    drive_factor = float(metadata.get("R_over_Ln", 2.2)) + float(
+        metadata.get("R_over_LT", 6.9)
+    ) * (energy - 1.5)
+    bessel_j0 = rhs.flr_factors.bessel_j0[0]
+    equilibrium_drive_coeff = (
+        1j
+        * geometry.E_y[None, None, :, None, None]
+        * fourier.ky[None, None, None, None, :]
+        * bessel_j0[None, :, :, :, :]
+        * maxwellian_value[..., None, None]
+        * drive_factor[..., None, None]
+    )
+    current_drive_coeff = (
+        1j
+        * rhs.E_y[None, None, :, None, None]
+        * rhs.ky[None, None, None, None, :]
+        * rhs.flr_factors.bessel_j0[0][None, :, :, :, :]
+        * rhs.maxwellian[0][..., None, None]
+        * rhs.drive_factor[0][..., None, None]
+    )
+
+    mirror_coeff = mu[:, None] * B[None, :] * geometry.G[None, :]
+    parallel_coeff = vpar[:, None] * geometry.F[None, :]
+    parallel_field_coeff = -parallel_coeff[:, None, :] * maxwellian_value
+    current_field_coeff = (
+        -rhs.charge_over_temperature[0]
+        * rhs.parallel_streaming_coeff[0][:, None, :]
+        * rhs.maxwellian[0]
+    )
+    drift_field_coeff = (
+        -1j
+        * drift_frequency
+        * maxwellian_value[..., None, None]
+        * bessel_j0[None, :, :, :, :]
+    )
+    current_drift_field_coeff = (
+        -rhs.charge_over_temperature[0]
+        * 1j
+        * rhs.magnetic_drift_frequency[0]
+        * rhs.maxwellian[0][..., None, None]
+        * rhs.flr_factors.bessel_j0[0][None, :, :, :, :]
+    )
+    return {
+        "drift_frequency": drift_frequency,
+        "mirror_coeff": mirror_coeff,
+        "equilibrium_drive_coeff": equilibrium_drive_coeff,
+        "current_drive_coeff": current_drive_coeff,
+        "parallel_field_coeff": parallel_field_coeff,
+        "current_field_coeff": current_field_coeff,
+        "drift_field_coeff": drift_field_coeff,
+        "current_drift_field_coeff": current_drift_field_coeff,
+    }
+
+
+def _apply_first_axis_matrix(matrix, values):
+    matrix = jnp.asarray(matrix)
+    values = jnp.asarray(values)
+    return jnp.tensordot(matrix, values, axes=((1,), (0,)))
+
+
+def _gkw_fortran_term_vii_reference(phi, field_coefficient, bessel_j0, stencil):
+    phi_np = np.asarray(phi)
+    coefficient_np = np.asarray(field_coefficient)
+    bessel_np = np.asarray(bessel_j0)
+    if phi_np.ndim != 3 or phi_np.shape[1:] != (1, 1):
+        raise ValueError("Term VII source audit expects a single selected mode")
+    if coefficient_np.ndim != 3:
+        raise ValueError("field_coefficient must have shape (n_vpar,n_mu,n_z)")
+    if bessel_np.shape[1:] != phi_np.shape:
+        raise ValueError("bessel_j0 must have shape (n_mu,n_z,1,1)")
+
+    n_vpar, n_mu, n_z = coefficient_np.shape
+    d1_pos = np.asarray(stencil.d1_pos[:, :, 0, 0], dtype=float).T
+    d1_neg = np.asarray(stencil.d1_neg[:, :, 0, 0], dtype=float).T
+    s_shift = np.asarray(stencil.s_shift[:, :, 0, 0], dtype=np.int32)
+    valid_shift = np.asarray(stencil.valid_shift[:, :, 0, 0], dtype=bool)
+    expected = np.zeros((n_vpar, n_mu, n_z, 1, 1), dtype=np.result_type(phi_np, 1j))
+    for iv in range(n_vpar):
+        for imu in range(n_mu):
+            for iz in range(n_z):
+                row_coeff = coefficient_np[iv, imu, iz]
+                table = d1_pos if row_coeff < 0.0 else d1_neg
+                for shift_index in range(table.shape[1]):
+                    if not valid_shift[shift_index, iz]:
+                        continue
+                    source_z = int(s_shift[shift_index, iz])
+                    expected[iv, imu, iz, 0, 0] += (
+                        row_coeff
+                        * table[iz, shift_index]
+                        * bessel_np[imu, source_z, 0, 0]
+                        * phi_np[source_z, 0, 0]
+                    )
+    return jnp.asarray(expected, dtype=jnp.asarray(phi).dtype)
 
 
 def _gkw_fortran_term_i_reference(state, parallel_coeff, recurrence_coeff, stencil, vpar, recurrence_rate: float):
