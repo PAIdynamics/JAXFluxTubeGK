@@ -23,16 +23,19 @@ from stellarator_gk import (
     CycloneSelectedKyGapAudit,
     CycloneTermVIIFieldConventionAudit,
     CycloneVelocitySpaceSliceAudit,
+    CycloneVelocitySpaceSliceSeriesAudit,
     CycloneVparOddSignAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
     CycloneTrace,
     GkwVelocitySpaceSlice,
+    GkwVelocitySpaceSliceSeries,
     ParallelPhiTrace,
     VelocitySliceConventionAudit,
     VelocitySlicePhaseAudit,
     audit_cyclone_selected_ky_gap,
     audit_cyclone_velocity_space_slice,
+    audit_cyclone_velocity_space_slice_series,
     audit_parallel_phi_profile_alignment,
     audit_velocity_space_slice_conventions,
     audit_velocity_space_slice_phase_alignment,
@@ -55,6 +58,7 @@ from stellarator_gk import (
     load_gkw_parallel_phi_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice,
+    load_gkw_velocity_space_slice_series,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -66,6 +70,7 @@ from stellarator_gk import (
     run_cyclone_base_case_cosin2_gap_audit,
     run_cyclone_base_case_cosin2_velocity_convention_audit,
     run_cyclone_base_case_cosin2_velocity_phase_audit,
+    run_cyclone_base_case_cosin2_velocity_series_audit,
     run_cyclone_base_case_cosin2_velocity_slice_audit,
     run_cyclone_base_case_cosin2_term_vii_field_convention_audit,
     run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
@@ -78,6 +83,7 @@ from stellarator_gk import (
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
     run_cyclone_base_case_velocity_space_slice,
+    run_cyclone_base_case_velocity_space_slice_series,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
@@ -824,6 +830,22 @@ def test_gkw_velocity_space_slice_loader_reads_matched_cosin2_fixture():
     assert float(jnp.max(jnp.abs(loaded.imag_part))) > 0.0
 
 
+def test_gkw_velocity_space_slice_series_loader_reads_matched_cosin2_fixture():
+    loaded = load_gkw_velocity_space_slice_series(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_multitime_distr",
+        time_path=ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_multitime_distr/time.dat",
+    )
+
+    assert isinstance(loaded, GkwVelocitySpaceSliceSeries)
+    np.testing.assert_array_equal(loaded.snapshot_indices, np.array([20, 800, 1600]))
+    np.testing.assert_allclose(loaded.times, np.array([0.06, 2.4, 4.8]))
+    assert loaded.vpar.shape == (3, 8, 32)
+    np.testing.assert_allclose(loaded.vpar[0, 0, 0], -2.90625, atol=5.0e-5)
+    np.testing.assert_allclose(loaded.vpar[-1, -1, -1], 2.90625, atol=5.0e-5)
+    assert float(jnp.max(jnp.abs(loaded.real_part[-1]))) > 0.0
+    assert float(jnp.max(jnp.abs(loaded.imag_part[-1]))) > 0.0
+
+
 def test_cyclone_velocity_space_slice_audit_accepts_matched_slice():
     observed = GkwVelocitySpaceSlice(
         vpar=((0.0, 1.0), (0.0, 1.0)),
@@ -851,6 +873,38 @@ def test_cyclone_velocity_space_slice_audit_accepts_matched_slice():
     assert audit.shape == (2, 2)
     np.testing.assert_allclose(audit.complex_max_abs_error, 0.0, atol=1.0e-14)
     assert "velocity-space slice comparison" in audit.notes
+
+
+def test_cyclone_velocity_space_slice_series_audit_accepts_matched_series():
+    values = np.array(
+        [
+            [[0.1 + 0.2j, 0.3 - 0.4j], [-0.5 + 0.6j, 0.7 + 0.8j]],
+            [[0.2 + 0.1j, 0.4 - 0.3j], [-0.6 + 0.5j, 0.8 + 0.7j]],
+        ],
+        dtype=np.complex128,
+    )
+    reference = GkwVelocitySpaceSliceSeries(
+        times=(0.1, 0.2),
+        snapshot_indices=(2, 4),
+        vpar=np.broadcast_to(np.array([[0.0, 1.0], [0.0, 1.0]]), values.shape),
+        vperp=np.broadcast_to(np.array([[0.5, 0.5], [1.5, 1.5]]), values.shape),
+        real_part=np.real(values),
+        imag_part=np.imag(values),
+        source="reference",
+    )
+
+    audit = audit_cyclone_velocity_space_slice_series(
+        reference,
+        reference,
+        tolerance=1.0e-12,
+    )
+
+    assert isinstance(audit, CycloneVelocitySpaceSliceSeriesAudit)
+    assert bool(audit.passed)
+    assert audit.shape == (2, 2)
+    np.testing.assert_allclose(audit.max_direct_max_abs_error, 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.max_best_max_abs_error, 0.0, atol=1.0e-14)
+    assert audit.variant_names[int(audit.best_variant_indices[0])] == audit.variant_names[0]
 
 
 def test_velocity_space_slice_convention_audit_keeps_direct_baseline():
@@ -1050,6 +1104,40 @@ def test_cosin2_velocity_phase_audit_runner_accepts_matched_reduced_reference():
     np.testing.assert_allclose(audit.best_phase_max_abs_error, 0.0, atol=1.0e-12)
     np.testing.assert_allclose(audit.best_scaled_max_abs_error, 0.0, atol=1.0e-12)
     assert "ky-sign" in audit.notes
+
+
+def test_cosin2_velocity_series_audit_runner_accepts_matched_reduced_reference():
+    reference = run_cyclone_base_case_velocity_space_slice_series(
+        snapshot_indices=(2, 6),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+
+    audit = run_cyclone_base_case_cosin2_velocity_series_audit(
+        reference_series=reference,
+        snapshot_indices=(2, 6),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        tolerance=1.0e-10,
+        grid_tolerance=1.0e-10,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneVelocitySpaceSliceSeriesAudit)
+    assert bool(audit.passed)
+    assert len(leaves) == len(CycloneVelocitySpaceSliceSeriesAudit._dynamic_fields)
+    assert aux is not None
+    np.testing.assert_allclose(audit.max_direct_max_abs_error, 0.0, atol=1.0e-12)
+    assert audit.variant_names[0] == "direct_mu_rows_vpar_columns:identity"
 
 
 def test_cosin2_vpar_odd_sign_audit_runs_reduced_against_matched_reference():

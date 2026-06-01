@@ -624,6 +624,89 @@ class CycloneVelocitySpaceSliceAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneVelocitySpaceSliceSeriesAudit(_PyTreeDataclass):
+    """Multi-window selected-``ky`` velocity-slice comparison."""
+
+    snapshot_indices: object
+    times: object
+    vpar_errors: object
+    vperp_errors: object
+    time_errors: object
+    direct_max_abs_errors: object
+    direct_l2_errors: object
+    direct_relative_l2_errors: object
+    best_variant_indices: object
+    best_max_abs_errors: object
+    best_l2_errors: object
+    first_direct_max_abs_error: object
+    last_direct_max_abs_error: object
+    max_direct_max_abs_error: object
+    max_best_max_abs_error: object
+    passed: object
+    shape: tuple[int, int]
+    variant_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "snapshot_indices",
+        "times",
+        "vpar_errors",
+        "vperp_errors",
+        "time_errors",
+        "direct_max_abs_errors",
+        "direct_l2_errors",
+        "direct_relative_l2_errors",
+        "best_variant_indices",
+        "best_max_abs_errors",
+        "best_l2_errors",
+        "first_direct_max_abs_error",
+        "last_direct_max_abs_error",
+        "max_direct_max_abs_error",
+        "max_best_max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("shape", "variant_names", "notes")
+
+    def __post_init__(self):
+        indices = jnp.asarray(self.snapshot_indices, dtype=jnp.int32)
+        if indices.ndim != 1 or indices.shape[0] < 1:
+            raise ValueError("snapshot_indices must be a nonempty one-dimensional array")
+        object.__setattr__(self, "snapshot_indices", indices)
+        for name in (
+            "times",
+            "vpar_errors",
+            "vperp_errors",
+            "time_errors",
+            "direct_max_abs_errors",
+            "direct_l2_errors",
+            "direct_relative_l2_errors",
+            "best_max_abs_errors",
+            "best_l2_errors",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != indices.shape:
+                raise ValueError(f"{name} must match snapshot_indices")
+            object.__setattr__(self, name, values)
+        best_indices = jnp.asarray(self.best_variant_indices, dtype=jnp.int32)
+        if best_indices.shape != indices.shape:
+            raise ValueError("best_variant_indices must match snapshot_indices")
+        object.__setattr__(self, "best_variant_indices", best_indices)
+        for name in (
+            "first_direct_max_abs_error",
+            "last_direct_max_abs_error",
+            "max_direct_max_abs_error",
+            "max_best_max_abs_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        if len(self.shape) != 2 or any(int(value) < 1 for value in self.shape):
+            raise ValueError("shape must be a positive (n_mu,n_vpar) tuple")
+        object.__setattr__(self, "shape", tuple(int(value) for value in self.shape))
+        object.__setattr__(self, "variant_names", tuple(self.variant_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class VelocitySliceConventionAudit(_PyTreeDataclass):
     """Debug simple indexing/layout/phase conventions for velocity slices."""
 
@@ -3201,6 +3284,69 @@ def run_cyclone_base_case_parallel_phi_trace(
     )
 
 
+def _cyclone_velocity_space_slice_from_state(
+    setup,
+    state,
+    phi,
+    *,
+    selected_ky_index: int,
+    ixzero: int,
+    time: float,
+    source: str,
+    notes: str,
+) -> GkwVelocitySpaceSlice:
+    mode_phi = phi[:, ixzero, selected_ky_index]
+    peak_z_index = int(np.asarray(jnp.argmax(jnp.abs(mode_phi))))
+    peak_phi = mode_phi[peak_z_index]
+    floor = jnp.asarray(1.0e-300, dtype=jnp.float64)
+    peak_phi = jnp.where(jnp.abs(peak_phi) > floor, peak_phi, floor + 0.0j)
+    weighted = (
+        state[:, :, peak_z_index, ixzero, selected_ky_index]
+        * setup["velocity"].w_vpar[:, None]
+        * setup["velocity"].w_mu[None, :]
+        / peak_phi
+    )
+    weighted_mu_vpar = jnp.transpose(weighted)
+    vpar = jnp.broadcast_to(setup["velocity"].vpar[None, :], weighted_mu_vpar.shape)
+    vperp = jnp.sqrt(
+        2.0
+        * setup["geometry"].B[peak_z_index]
+        * jnp.maximum(setup["velocity"].mu[:, None], 0.0)
+    )
+    vperp = jnp.broadcast_to(vperp, weighted_mu_vpar.shape)
+    return GkwVelocitySpaceSlice(
+        vpar=vpar,
+        vperp=vperp,
+        real_part=jnp.real(weighted_mu_vpar),
+        imag_part=jnp.imag(weighted_mu_vpar),
+        time=time,
+        peak_z=setup["parallel"].z[peak_z_index],
+        peak_z_index=peak_z_index,
+        source=source,
+        notes=notes,
+    )
+
+
+def _velocity_series_snapshot_indices(
+    snapshot_indices: tuple[int, ...] | None,
+    *,
+    steps_per_window: int,
+    n_windows: int,
+) -> tuple[int, ...]:
+    if snapshot_indices is None:
+        return tuple((window + 1) * steps_per_window for window in range(n_windows))
+    requested = tuple(sorted({int(index) for index in snapshot_indices}))
+    if not requested:
+        raise ValueError("snapshot_indices must not be empty")
+    max_step = n_windows * steps_per_window
+    for index in requested:
+        if index < 1 or index > max_step:
+            raise ValueError("snapshot_indices must lie within the simulated step range")
+        if index % steps_per_window != 0:
+            raise ValueError("snapshot_indices must land on diagnostic-window boundaries")
+    return requested
+
+
 def run_cyclone_base_case_velocity_space_slice(
     *,
     n_z: int = 48,
@@ -3328,34 +3474,14 @@ def run_cyclone_base_case_velocity_space_slice(
             log_normalization = normalized.log_normalization
             phi = solve_phi(state)
 
-    mode_phi = phi[:, ixzero, selected]
-    peak_z_index = int(np.asarray(jnp.argmax(jnp.abs(mode_phi))))
-    peak_phi = mode_phi[peak_z_index]
-    floor = jnp.asarray(1.0e-300, dtype=jnp.float64)
-    peak_phi = jnp.where(jnp.abs(peak_phi) > floor, peak_phi, floor + 0.0j)
-    weighted = (
-        state[:, :, peak_z_index, ixzero, selected]
-        * setup["velocity"].w_vpar[:, None]
-        * setup["velocity"].w_mu[None, :]
-        / peak_phi
-    )
-    weighted_mu_vpar = jnp.transpose(weighted)
-    vpar = jnp.broadcast_to(setup["velocity"].vpar[None, :], weighted_mu_vpar.shape)
-    vperp = jnp.sqrt(
-        2.0
-        * setup["geometry"].B[peak_z_index]
-        * jnp.maximum(setup["velocity"].mu[:, None], 0.0)
-    )
-    vperp = jnp.broadcast_to(vperp, weighted_mu_vpar.shape)
     final_time = n_windows * steps_per_window * dt
-    return GkwVelocitySpaceSlice(
-        vpar=vpar,
-        vperp=vperp,
-        real_part=jnp.real(weighted_mu_vpar),
-        imag_part=jnp.imag(weighted_mu_vpar),
+    return _cyclone_velocity_space_slice_from_state(
+        setup,
+        state,
+        phi,
+        selected_ky_index=selected,
+        ixzero=ixzero,
         time=final_time,
-        peak_z=setup["parallel"].z[peak_z_index],
-        peak_z_index=peak_z_index,
         source="stellarator_gk",
         notes=(
             "selected-ky CBC velocity-space slice with GKW distr*.dat normalization; "
@@ -3364,6 +3490,181 @@ def run_cyclone_base_case_velocity_space_slice(
             f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
             f"normalize_each_window={normalize_each_window}, "
             f"normalization_model={normalization_model}"
+        ),
+    )
+
+
+def run_cyclone_base_case_velocity_space_slice_series(
+    *,
+    snapshot_indices: tuple[int, ...] | None = None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> GkwVelocitySpaceSliceSeries:
+    """Run selected-``ky`` CBC and sample GKW-normalized velocity slices."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+    requested = _velocity_series_snapshot_indices(
+        snapshot_indices,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+    )
+    requested_set = set(requested)
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    snapshots: list[GkwVelocitySpaceSlice] = []
+    phi = solve_phi(state)
+    for window in range(n_windows):
+        state = advance_window(state)
+        current_step = (window + 1) * steps_per_window
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = solve_phi(state)
+        if current_step in requested_set:
+            snapshots.append(
+                _cyclone_velocity_space_slice_from_state(
+                    setup,
+                    state,
+                    phi,
+                    selected_ky_index=selected,
+                    ixzero=ixzero,
+                    time=current_step * dt,
+                    source="stellarator_gk",
+                    notes=(
+                        "selected-ky CBC velocity-space slice series with "
+                        "GKW distr*_<ntotstep>.dat normalization; "
+                        f"snapshot_index={current_step}, "
+                        f"initial_profile={initial_profile}, "
+                        f"parallel_derivative_model={parallel_derivative_model}, "
+                        f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
+                        f"normalize_each_window={normalize_each_window}, "
+                        f"normalization_model={normalization_model}"
+                    ),
+                )
+            )
+
+    if len(snapshots) != len(requested):
+        raise RuntimeError("internal error: did not collect every requested snapshot")
+    return GkwVelocitySpaceSliceSeries(
+        times=jnp.asarray([snapshot.time for snapshot in snapshots], dtype=jnp.float64),
+        snapshot_indices=jnp.asarray(requested, dtype=jnp.int32),
+        vpar=jnp.stack([snapshot.vpar for snapshot in snapshots]),
+        vperp=jnp.stack([snapshot.vperp for snapshot in snapshots]),
+        real_part=jnp.stack([snapshot.real_part for snapshot in snapshots]),
+        imag_part=jnp.stack([snapshot.imag_part for snapshot in snapshots]),
+        source="stellarator_gk",
+        notes=(
+            "selected-ky CBC velocity-space slice series with "
+            "GKW distr*_<ntotstep>.dat normalization"
         ),
     )
 
@@ -4272,6 +4573,140 @@ def audit_cyclone_velocity_space_slice(
     )
 
 
+def _slice_from_velocity_space_series(
+    series: GkwVelocitySpaceSliceSeries,
+    position: int,
+    *,
+    source_suffix: str = "",
+) -> GkwVelocitySpaceSlice:
+    source = series.source
+    if source_suffix:
+        source = f"{source}:{source_suffix}"
+    snapshot_index = int(np.asarray(series.snapshot_indices[position]))
+    return GkwVelocitySpaceSlice(
+        vpar=series.vpar[position],
+        vperp=series.vperp[position],
+        real_part=series.real_part[position],
+        imag_part=series.imag_part[position],
+        time=series.times[position],
+        source=source,
+        notes=f"{series.notes}; snapshot_index={snapshot_index}",
+    )
+
+
+def _snapshot_position_map(series: GkwVelocitySpaceSliceSeries) -> dict[int, int]:
+    return {
+        int(snapshot_index): position
+        for position, snapshot_index in enumerate(np.asarray(series.snapshot_indices))
+    }
+
+
+def _shared_snapshot_indices(
+    observed: GkwVelocitySpaceSliceSeries,
+    reference: GkwVelocitySpaceSliceSeries,
+    snapshot_indices: tuple[int, ...] | None,
+) -> tuple[int, ...]:
+    observed_indices = set(_snapshot_position_map(observed))
+    reference_indices = set(_snapshot_position_map(reference))
+    if snapshot_indices is None:
+        shared = tuple(sorted(observed_indices & reference_indices))
+    else:
+        shared = tuple(int(index) for index in snapshot_indices)
+    if not shared:
+        raise ValueError("no shared velocity-slice snapshot indices to compare")
+    missing_observed = [index for index in shared if index not in observed_indices]
+    missing_reference = [index for index in shared if index not in reference_indices]
+    if missing_observed or missing_reference:
+        raise ValueError(
+            "requested snapshot indices are missing: "
+            f"observed={missing_observed}, reference={missing_reference}"
+        )
+    return shared
+
+
+def audit_cyclone_velocity_space_slice_series(
+    observed: GkwVelocitySpaceSliceSeries,
+    reference: GkwVelocitySpaceSliceSeries,
+    *,
+    snapshot_indices: tuple[int, ...] | None = None,
+    tolerance: float = 2.0e-2,
+    grid_tolerance: float = 1.0e-4,
+    time_tolerance: float = 1.0e-8,
+) -> CycloneVelocitySpaceSliceSeriesAudit:
+    """Compare solver and GKW velocity-slice histories at matching snapshots."""
+
+    shared = _shared_snapshot_indices(observed, reference, snapshot_indices)
+    observed_positions = _snapshot_position_map(observed)
+    reference_positions = _snapshot_position_map(reference)
+    direct_reports = []
+    convention_reports = []
+    for snapshot_index in shared:
+        observed_slice = _slice_from_velocity_space_series(
+            observed,
+            observed_positions[snapshot_index],
+            source_suffix=str(snapshot_index),
+        )
+        reference_slice = _slice_from_velocity_space_series(
+            reference,
+            reference_positions[snapshot_index],
+            source_suffix=str(snapshot_index),
+        )
+        direct_reports.append(
+            audit_cyclone_velocity_space_slice(
+                observed_slice,
+                reference_slice,
+                tolerance=tolerance,
+                grid_tolerance=grid_tolerance,
+                time_tolerance=time_tolerance,
+            )
+        )
+        convention_reports.append(
+            audit_velocity_space_slice_conventions(observed_slice, reference_slice)
+        )
+
+    direct_max = jnp.asarray(
+        [report.complex_max_abs_error for report in direct_reports],
+        dtype=jnp.float64,
+    )
+    best_max = jnp.asarray(
+        [report.best_max_abs_error for report in convention_reports],
+        dtype=jnp.float64,
+    )
+    first_convention = convention_reports[0]
+    return CycloneVelocitySpaceSliceSeriesAudit(
+        snapshot_indices=jnp.asarray(shared, dtype=jnp.int32),
+        times=jnp.asarray(
+            [observed.times[observed_positions[index]] for index in shared],
+            dtype=jnp.float64,
+        ),
+        vpar_errors=jnp.asarray([report.vpar_error for report in direct_reports]),
+        vperp_errors=jnp.asarray([report.vperp_error for report in direct_reports]),
+        time_errors=jnp.asarray([report.time_error for report in direct_reports]),
+        direct_max_abs_errors=direct_max,
+        direct_l2_errors=jnp.asarray([report.complex_l2_error for report in direct_reports]),
+        direct_relative_l2_errors=jnp.asarray(
+            [report.complex_relative_l2_error for report in direct_reports]
+        ),
+        best_variant_indices=jnp.asarray(
+            [report.best_variant_index for report in convention_reports],
+            dtype=jnp.int32,
+        ),
+        best_max_abs_errors=best_max,
+        best_l2_errors=jnp.asarray([report.best_l2_error for report in convention_reports]),
+        first_direct_max_abs_error=direct_max[0],
+        last_direct_max_abs_error=direct_max[-1],
+        max_direct_max_abs_error=jnp.max(direct_max),
+        max_best_max_abs_error=jnp.max(best_max),
+        passed=jnp.all(jnp.asarray([report.passed for report in direct_reports], dtype=bool)),
+        shape=tuple(int(value) for value in observed.vpar.shape[1:]),
+        variant_names=first_convention.variant_names,
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "multi-window GKW-normalized velocity-space slice comparison"
+        ),
+    )
+
+
 def audit_velocity_space_slice_conventions(
     observed: GkwVelocitySpaceSlice,
     reference: GkwVelocitySpaceSlice,
@@ -4570,6 +5005,59 @@ def run_cyclone_base_case_cosin2_velocity_slice_audit(
     return audit_cyclone_velocity_space_slice(
         observed,
         reference,
+        tolerance=tolerance,
+        grid_tolerance=grid_tolerance,
+    )
+
+
+def run_cyclone_base_case_cosin2_velocity_series_audit(
+    *,
+    reference_series: GkwVelocitySpaceSliceSeries | None = None,
+    gkw_directory=None,
+    gkw_time_path=None,
+    snapshot_indices: tuple[int, ...] | None = None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    tolerance: float = 2.0e-2,
+    grid_tolerance: float = 1.0e-4,
+) -> CycloneVelocitySpaceSliceSeriesAudit:
+    """Compare solver snapshots with patched GKW ``cosin2`` multi-time slices."""
+
+    if reference_series is None:
+        gkw_directory = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_multitime_distr"
+            if gkw_directory is None
+            else gkw_directory
+        )
+        gkw_time_path = Path(gkw_directory / "time.dat" if gkw_time_path is None else gkw_time_path)
+        reference_series = load_gkw_velocity_space_slice_series(
+            gkw_directory,
+            time_path=gkw_time_path,
+            source="gkw:cosin2:distr*_<ntotstep>.dat",
+            notes="patched selected-ky production-control cosin2 multi-time output",
+        )
+    if snapshot_indices is None:
+        snapshot_indices = tuple(int(value) for value in np.asarray(reference_series.snapshot_indices))
+    observed = run_cyclone_base_case_velocity_space_slice_series(
+        snapshot_indices=snapshot_indices,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    return audit_cyclone_velocity_space_slice_series(
+        observed,
+        reference_series,
+        snapshot_indices=snapshot_indices,
         tolerance=tolerance,
         grid_tolerance=grid_tolerance,
     )

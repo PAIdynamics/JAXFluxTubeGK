@@ -1556,6 +1556,23 @@ validation comparison should therefore use early, middle, and late snapshots
 to decide whether the distribution mismatch is present immediately,
 accumulates during the time evolution, or is biased by the final
 peak-\(\phi\) sampling point.
+The first such comparison is recorded in
+\path{figures/gkw_cosin2_cyclone_velocity_series_audit.csv}.  At GKW steps
+20, 800, and 1600, the direct complex maximum errors are
+\[
+  3.99\times10^{-3},\qquad
+  3.67\times10^{-2},\qquad
+  3.53\times10^{-2},
+\]
+with matching \(v_\parallel\), \(v_\perp\), and time grids to output
+precision.  The best simple layout is the direct GKW row/column convention at
+step 20, but \(v_\parallel\)-column reversal becomes the best simple layout
+by steps 800 and 1600.  Therefore the large final velocity-space discrepancy
+is mainly a cumulative evolution error that develops between the first and
+middle diagnostic windows, not a pure final-output phase, grid-ordering, or
+peak-\(\phi\) sampling artifact.  The next parity target is the step-20 to
+step-800 evolution through the fused \(\texttt{gkw\_igh}\) path, Term VII,
+field packing, and \(k_y\)/Fourier sign conventions.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
