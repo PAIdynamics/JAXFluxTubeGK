@@ -231,6 +231,21 @@ path through `vpgrphi_3_newbc`, `add_element`, `matdat.F90`, complex-real
 matrix conventions, \(k_y\)/Fourier signs, and `dist.F90::get_phi`. A full
 normalized state/restart or multi-time velocity-slice dump remains useful if
 this final peak slice is not enough to localize the cumulative discrepancy.
+The first pass through that complex phase path found no hidden source-side
+conjugation: `vpgrphi_3_newbc` inserts real scalar coefficients into `iphi`,
+`add_element` maps them directly to the connected `iphi` column, `put_element`
+stores the coefficient unchanged in both `complex` and `complex-real` formats,
+`dist.F90::get_phi` copies `fdis(iphi)` directly, and
+`diagnostic.F90::velocity_space_output` normalizes by `phi`, not
+`conjg(phi)`. A new velocity-slice phase-alignment audit also rules out a pure
+eigenfunction/output phase. The best unit-phase variant remains
+`reverse_vpar_columns:identity` with max error `0.018885582880959564` and
+relative \(L^2\) error `0.24656223896253462`; the direct unit-phase error is
+`0.033230903073356986`. Even allowing an unconstrained complex scale only
+reduces the best max error to `0.017952545317588844`. The remaining issue is
+therefore not a free final-slice phase or amplitude convention; the next
+useful discriminator is \(k_y\)/Fourier sign tracing and/or a multi-time or
+full normalized GKW state dump.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -268,9 +283,10 @@ The repository currently contains:
 - `examples/audit_cyclone_cosin2_velocity_slice.py`: patched-GKW `cosin2` selected-`ky` `distr*.dat` velocity-space slice audit.
 - `examples/audit_cyclone_cosin2_vpar_odd_signs.py`: controlled odd-\(v_\parallel\) RHS sign audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`: controlled Term VII field-variable convention audit against patched-GKW `cosin2` velocity slices.
+- `examples/audit_cyclone_cosin2_velocity_phase.py`: global phase/complex-scale alignment audit for patched-GKW `cosin2` velocity slices.
 - `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, and writes a matched selected-`ky` input.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat` through `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`: patched GKW final-output velocity-space slices for the selected-`ky` `cosin2` run.
@@ -397,6 +413,54 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added Velocity-Slice Phase Audit
+
+- Committed the previous selected-`ky` velocity and Term VII audit tranche as:
+  - `5ee9501 Add Cyclone velocity and Term VII audits`.
+- Added `VelocitySlicePhaseAudit`,
+  `audit_velocity_space_slice_phase_alignment`, and
+  `run_cyclone_base_case_cosin2_velocity_phase_audit`.
+- Added `examples/audit_cyclone_cosin2_velocity_phase.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`.
+- Source inspection result:
+  - `linear_terms.F90::vpgrphi_3_newbc` inserts real scalar coefficients into
+    the `iphi` column,
+  - `linear_terms.F90::add_element` maps those coefficients directly to the
+    connected `iphi` index,
+  - `matdat.F90::put_element` stores `mat_elem` unchanged in both `complex`
+    and `complex-real` modes,
+  - `dist.F90::get_phi` copies `fdis(indx(...,iphi))` directly,
+  - `diagnostic.F90::velocity_space_output` writes
+    `fdisi(...)*intmu*intvp/phi`, not division by `conjg(phi)`.
+- Production-control x64 audit result:
+  - best unit-phase variant: `reverse_vpar_columns:identity`,
+  - best unit-phase max / \(L^2\) / relative \(L^2\):
+    `0.018885582880959564` / `0.005508247236254402` /
+    `0.24656223896253462`,
+  - direct unit-phase max / \(L^2\) / relative \(L^2\):
+    `0.033230903073356986` / `0.008423993122181344` /
+    `0.37707795531385896`,
+  - best unconstrained complex-scale variant: `reverse_vpar_columns:identity`,
+  - best scaled max / \(L^2\) / relative \(L^2\):
+    `0.017952545317588844` / `0.005189532875988546` /
+    `0.23229582663822185`.
+- Interpretation: a pure eigenfunction/output phase or amplitude-phase scale
+  does not explain the final `distr*.dat` velocity-slice mismatch. The
+  remaining discriminator is \(k_y\)/Fourier sign tracing and/or a multi-time
+  or full normalized GKW state dump.
+- Verification run this round:
+  - `python -m py_compile src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_velocity_phase.py`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_cosin2_velocity_phase.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_velocity_space_slice_phase_audit_detects_global_phase tests/test_benchmark_references.py::test_cosin2_velocity_phase_audit_runner_accepts_matched_reduced_reference -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/audit_cyclone_cosin2_velocity_phase.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run pytest -q` (`170 passed in 171.18s`)
+  - `git diff --check`
+- Next action:
+  add either a GKW multi-time `distr*.dat`/state diagnostic or a Fourier-sign
+  audit that compares \(k_y\), complex conjugation, and mode-label conventions
+  before promoting any Term VII conjugation experiment to a code change.
 
 ### 2026-06-01: Added Term VII Field-Convention Audit
 

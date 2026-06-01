@@ -1522,6 +1522,23 @@ RHS change; it points next to the Term VII complex phase path through
 \path{linear_terms.F90::add_element}, \path{matdat.F90}, complex-real matrix
 storage, \(k_y\)/Fourier signs, and the \(\texttt{iphi}\) field variable read
 by \path{dist.F90::get_phi}.
+Direct source inspection then removes the simplest hidden phase conventions:
+\(\texttt{vpgrphi\_3\_newbc}\) inserts real scalar coefficients into the
+\(\texttt{iphi}\) column, \(\texttt{add\_element}\) maps them directly to the
+connected \(\texttt{iphi}\) index, \(\texttt{put\_element}\) stores the
+coefficient unchanged in both \(\texttt{complex}\) and
+\(\texttt{complex-real}\) matrix formats, and \(\texttt{get\_phi}\) copies
+\(\texttt{fdis(iphi)}\) directly.  Also,
+\(\texttt{velocity\_space\_output}\) writes \(f\,\Delta\mu\,\Delta
+v_\parallel/\phi\), not \(f/\phi^\ast\).  The phase-alignment audit
+\path{figures/gkw_cosin2_cyclone_velocity_phase_audit.csv} therefore tests
+whether the remaining final-slice difference is only an arbitrary eigenvector
+phase.  It is not: the best unit-phase alignment is still the
+\(v_\parallel\)-reversed layout, with maximum error \(1.89\times10^{-2}\) and
+relative \(L^2\) error \(2.47\times10^{-1}\).  Even allowing an unconstrained
+complex scale only reduces the maximum error to \(1.80\times10^{-2}\).  The
+remaining ambiguity is thus a genuine evolved-state or mode-sign issue, not a
+free final-output phase.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

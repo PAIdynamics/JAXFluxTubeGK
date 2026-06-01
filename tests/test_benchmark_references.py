@@ -30,10 +30,12 @@ from stellarator_gk import (
     GkwVelocitySpaceSlice,
     ParallelPhiTrace,
     VelocitySliceConventionAudit,
+    VelocitySlicePhaseAudit,
     audit_cyclone_selected_ky_gap,
     audit_cyclone_velocity_space_slice,
     audit_parallel_phi_profile_alignment,
     audit_velocity_space_slice_conventions,
+    audit_velocity_space_slice_phase_alignment,
     benchmark_target_cost,
     benchmark_target_residual,
     build_desc_gx_eik_reference_from_path,
@@ -63,6 +65,7 @@ from stellarator_gk import (
     run_cyclone_base_case_matdat_matrix_audit,
     run_cyclone_base_case_cosin2_gap_audit,
     run_cyclone_base_case_cosin2_velocity_convention_audit,
+    run_cyclone_base_case_cosin2_velocity_phase_audit,
     run_cyclone_base_case_cosin2_velocity_slice_audit,
     run_cyclone_base_case_cosin2_term_vii_field_convention_audit,
     run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
@@ -893,6 +896,39 @@ def test_velocity_space_slice_convention_audit_detects_one_based_axis_shift():
     assert float(audit.direct_max_abs_error) > 0.0
 
 
+def test_velocity_space_slice_phase_audit_detects_global_phase():
+    phase = np.exp(0.37j)
+    reference_values = np.array(
+        [[0.1 + 0.2j, 0.3 - 0.4j], [-0.5 + 0.6j, 0.7 + 0.8j]],
+        dtype=np.complex128,
+    )
+    observed_values = np.conj(phase) * reference_values
+    reference = GkwVelocitySpaceSlice(
+        vpar=((0.0, 1.0), (0.0, 1.0)),
+        vperp=((0.5, 0.5), (1.5, 1.5)),
+        real_part=np.real(reference_values),
+        imag_part=np.imag(reference_values),
+        source="reference",
+    )
+    observed = GkwVelocitySpaceSlice(
+        vpar=reference.vpar,
+        vperp=reference.vperp,
+        real_part=np.real(observed_values),
+        imag_part=np.imag(observed_values),
+        source="observed",
+    )
+
+    audit = audit_velocity_space_slice_phase_alignment(observed, reference)
+
+    assert isinstance(audit, VelocitySlicePhaseAudit)
+    assert audit.variant_names[0] == "direct_mu_rows_vpar_columns:identity"
+    assert int(audit.best_phase_variant_index) == 0
+    assert int(audit.best_scaled_variant_index) == 0
+    np.testing.assert_allclose(audit.unit_phase_factors[0], phase, atol=1.0e-14)
+    np.testing.assert_allclose(audit.phase_aligned_max_abs_errors[0], 0.0, atol=1.0e-14)
+    np.testing.assert_allclose(audit.scaled_max_abs_errors[0], 0.0, atol=1.0e-14)
+
+
 def test_cosin2_velocity_slice_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
     solver_slice = run_cyclone_base_case_velocity_space_slice(
         n_z=8,
@@ -980,6 +1016,40 @@ def test_cosin2_velocity_convention_audit_runner_accepts_matched_reduced_fixture
 
     assert audit.variant_names[int(audit.best_variant_index)] == audit.variant_names[0]
     np.testing.assert_allclose(audit.best_max_abs_error, 0.0, atol=1.0e-12)
+
+
+def test_cosin2_velocity_phase_audit_runner_accepts_matched_reduced_reference():
+    reference = run_cyclone_base_case_velocity_space_slice(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+
+    audit = run_cyclone_base_case_cosin2_velocity_phase_audit(
+        reference_slice=reference,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, VelocitySlicePhaseAudit)
+    assert len(leaves) == len(VelocitySlicePhaseAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.phase_aligned_max_abs_errors.shape == (20,)
+    assert audit.variant_names[0] == "direct_mu_rows_vpar_columns:identity"
+    assert int(audit.best_phase_variant_index) == 0
+    assert int(audit.best_scaled_variant_index) == 0
+    np.testing.assert_allclose(audit.best_phase_max_abs_error, 0.0, atol=1.0e-12)
+    np.testing.assert_allclose(audit.best_scaled_max_abs_error, 0.0, atol=1.0e-12)
+    assert "ky-sign" in audit.notes
 
 
 def test_cosin2_vpar_odd_sign_audit_runs_reduced_against_matched_reference():

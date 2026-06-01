@@ -648,6 +648,84 @@ class VelocitySliceConventionAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class VelocitySlicePhaseAudit(_PyTreeDataclass):
+    """Separate velocity-slice layout errors from global complex phase errors."""
+
+    unit_phase_factors: object
+    unit_phase_angles: object
+    phase_aligned_max_abs_errors: object
+    phase_aligned_l2_errors: object
+    phase_aligned_relative_l2_errors: object
+    complex_scale_factors: object
+    scaled_max_abs_errors: object
+    scaled_l2_errors: object
+    scaled_relative_l2_errors: object
+    best_phase_variant_index: object
+    best_scaled_variant_index: object
+    best_phase_max_abs_error: object
+    best_scaled_max_abs_error: object
+    direct_phase_max_abs_error: object
+    reverse_vpar_phase_max_abs_error: object
+    variant_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "unit_phase_factors",
+        "unit_phase_angles",
+        "phase_aligned_max_abs_errors",
+        "phase_aligned_l2_errors",
+        "phase_aligned_relative_l2_errors",
+        "complex_scale_factors",
+        "scaled_max_abs_errors",
+        "scaled_l2_errors",
+        "scaled_relative_l2_errors",
+        "best_phase_variant_index",
+        "best_scaled_variant_index",
+        "best_phase_max_abs_error",
+        "best_scaled_max_abs_error",
+        "direct_phase_max_abs_error",
+        "reverse_vpar_phase_max_abs_error",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("variant_names", "notes")
+
+    def __post_init__(self):
+        phase_errors = jnp.asarray(self.phase_aligned_max_abs_errors, dtype=jnp.float64)
+        if phase_errors.ndim != 1:
+            raise ValueError("phase_aligned_max_abs_errors must be one-dimensional")
+        if len(self.variant_names) != phase_errors.shape[0]:
+            raise ValueError("variant_names length must match phase errors")
+        object.__setattr__(self, "phase_aligned_max_abs_errors", phase_errors)
+        for name in (
+            "unit_phase_angles",
+            "phase_aligned_l2_errors",
+            "phase_aligned_relative_l2_errors",
+            "scaled_max_abs_errors",
+            "scaled_l2_errors",
+            "scaled_relative_l2_errors",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != phase_errors.shape:
+                raise ValueError(f"{name} must match phase_aligned_max_abs_errors")
+            object.__setattr__(self, name, values)
+        for name in ("unit_phase_factors", "complex_scale_factors"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.complex128)
+            if values.shape != phase_errors.shape:
+                raise ValueError(f"{name} must match phase_aligned_max_abs_errors")
+            object.__setattr__(self, name, values)
+        for name in ("best_phase_variant_index", "best_scaled_variant_index"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.int32))
+        for name in (
+            "best_phase_max_abs_error",
+            "best_scaled_max_abs_error",
+            "direct_phase_max_abs_error",
+            "reverse_vpar_phase_max_abs_error",
+        ):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        object.__setattr__(self, "variant_names", tuple(self.variant_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneVparOddSignAudit(_PyTreeDataclass):
     """Controlled RHS sign audit for odd-in-``v_parallel`` Cyclone terms."""
 
@@ -4165,6 +4243,97 @@ def audit_velocity_space_slice_conventions(
     )
 
 
+def audit_velocity_space_slice_phase_alignment(
+    observed: GkwVelocitySpaceSlice,
+    reference: GkwVelocitySpaceSlice,
+) -> VelocitySlicePhaseAudit:
+    """Apply optimal global complex phase/scale factors to velocity-slice variants.
+
+    A linear eigenfunction can carry an arbitrary complex phase, and some
+    Fourier-sign conventions appear as complex conjugation.  This audit keeps
+    the GKW ``output_slice_2d`` row/column contract explicit, then measures how
+    much error remains after applying the best unit phase, and separately the
+    best unconstrained complex scalar, to each candidate layout.
+    """
+
+    if tuple(observed.vpar.shape) != tuple(reference.vpar.shape):
+        raise ValueError("velocity-space slices must have matching shapes")
+    observed_complex = jnp.asarray(observed.real_part) + 1j * jnp.asarray(observed.imag_part)
+    reference_complex = jnp.asarray(reference.real_part) + 1j * jnp.asarray(reference.imag_part)
+    reference_l2 = jnp.maximum(_l2_norm(reference_complex), jnp.asarray(1.0e-300))
+    names = []
+    phase_factors = []
+    phase_angles = []
+    phase_max_errors = []
+    phase_l2_errors = []
+    phase_relative_errors = []
+    scale_factors = []
+    scaled_max_errors = []
+    scaled_l2_errors = []
+    scaled_relative_errors = []
+    for spatial_name, spatial_values in _velocity_slice_spatial_variants(observed_complex):
+        for transform_name, transformed in (
+            ("identity", spatial_values),
+            ("conjugate", jnp.conj(spatial_values)),
+        ):
+            names.append(f"{spatial_name}:{transform_name}")
+            phase = _optimal_unit_complex_factor(transformed, reference_complex)
+            phase_delta = phase * transformed - reference_complex
+            phase_l2 = _l2_norm(phase_delta)
+            scale = _optimal_complex_scale(transformed, reference_complex)
+            scaled_delta = scale * transformed - reference_complex
+            scaled_l2 = _l2_norm(scaled_delta)
+            phase_factors.append(phase)
+            phase_angles.append(jnp.angle(phase))
+            phase_max_errors.append(jnp.max(jnp.abs(phase_delta)))
+            phase_l2_errors.append(phase_l2)
+            phase_relative_errors.append(phase_l2 / reference_l2)
+            scale_factors.append(scale)
+            scaled_max_errors.append(jnp.max(jnp.abs(scaled_delta)))
+            scaled_l2_errors.append(scaled_l2)
+            scaled_relative_errors.append(scaled_l2 / reference_l2)
+
+    phase_max_array = jnp.asarray(phase_max_errors, dtype=jnp.float64)
+    scaled_max_array = jnp.asarray(scaled_max_errors, dtype=jnp.float64)
+    best_phase_index = jnp.argmin(phase_max_array)
+    best_scaled_index = jnp.argmin(scaled_max_array)
+    reverse_vpar_index = names.index("reverse_vpar_columns:identity")
+    return VelocitySlicePhaseAudit(
+        unit_phase_factors=jnp.asarray(phase_factors, dtype=jnp.complex128),
+        unit_phase_angles=jnp.asarray(phase_angles, dtype=jnp.float64),
+        phase_aligned_max_abs_errors=phase_max_array,
+        phase_aligned_l2_errors=jnp.asarray(phase_l2_errors, dtype=jnp.float64),
+        phase_aligned_relative_l2_errors=jnp.asarray(phase_relative_errors, dtype=jnp.float64),
+        complex_scale_factors=jnp.asarray(scale_factors, dtype=jnp.complex128),
+        scaled_max_abs_errors=scaled_max_array,
+        scaled_l2_errors=jnp.asarray(scaled_l2_errors, dtype=jnp.float64),
+        scaled_relative_l2_errors=jnp.asarray(scaled_relative_errors, dtype=jnp.float64),
+        best_phase_variant_index=best_phase_index,
+        best_scaled_variant_index=best_scaled_index,
+        best_phase_max_abs_error=phase_max_array[best_phase_index],
+        best_scaled_max_abs_error=scaled_max_array[best_scaled_index],
+        direct_phase_max_abs_error=phase_max_array[0],
+        reverse_vpar_phase_max_abs_error=phase_max_array[reverse_vpar_index],
+        variant_names=tuple(names),
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "velocity-space phase audit for eigenfunction/output phase and ky-sign conjugation"
+        ),
+    )
+
+
+def _optimal_unit_complex_factor(observed, reference):
+    cross = jnp.sum(jnp.conj(observed) * reference)
+    magnitude = jnp.abs(cross)
+    return jnp.where(magnitude > 0.0, cross / magnitude, jnp.asarray(1.0 + 0.0j))
+
+
+def _optimal_complex_scale(observed, reference):
+    norm = jnp.sum(jnp.abs(observed) ** 2)
+    cross = jnp.sum(jnp.conj(observed) * reference)
+    return jnp.where(norm > 0.0, cross / norm, jnp.asarray(1.0 + 0.0j))
+
+
 def run_cyclone_base_case_cosin2_gap_audit(
     *,
     gkw_time_path=None,
@@ -4368,6 +4537,73 @@ def run_cyclone_base_case_cosin2_velocity_convention_audit(
         notes="patched selected-ky production-control cosin2 final output",
     )
     return audit_velocity_space_slice_conventions(observed, reference)
+
+
+def run_cyclone_base_case_cosin2_velocity_phase_audit(
+    *,
+    reference_slice: GkwVelocitySpaceSlice | None = None,
+    gkw_distr1_path=None,
+    gkw_distr2_path=None,
+    gkw_distr3_path=None,
+    gkw_distr4_path=None,
+    gkw_time_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+) -> VelocitySlicePhaseAudit:
+    """Run the patched GKW ``cosin2`` velocity-slice phase-alignment audit."""
+
+    if reference_slice is None:
+        gkw_distr1_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat"
+            if gkw_distr1_path is None
+            else gkw_distr1_path
+        )
+        gkw_distr2_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr2.dat"
+            if gkw_distr2_path is None
+            else gkw_distr2_path
+        )
+        gkw_distr3_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr3.dat"
+            if gkw_distr3_path is None
+            else gkw_distr3_path
+        )
+        gkw_distr4_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat"
+            if gkw_distr4_path is None
+            else gkw_distr4_path
+        )
+        gkw_time_path = Path(
+            "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+            if gkw_time_path is None
+            else gkw_time_path
+        )
+        reference_slice = load_gkw_velocity_space_slice(
+            gkw_distr1_path,
+            gkw_distr2_path,
+            gkw_distr3_path,
+            gkw_distr4_path,
+            time_path=gkw_time_path,
+            source="gkw:cosin2:distr*.dat",
+            notes="patched selected-ky production-control cosin2 final output",
+        )
+
+    observed = run_cyclone_base_case_velocity_space_slice(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile="cosine2",
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    return audit_velocity_space_slice_phase_alignment(observed, reference_slice)
 
 
 def run_cyclone_base_case_profile_operator_audit(
