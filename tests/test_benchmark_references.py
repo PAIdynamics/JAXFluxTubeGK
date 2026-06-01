@@ -16,6 +16,7 @@ from stellarator_gk import (
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
     CycloneDiagnosticPackingAudit,
+    CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
@@ -44,6 +45,7 @@ from stellarator_gk import (
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
     run_cyclone_base_case_diagnostic_packing_audit,
+    run_cyclone_base_case_matdat_matrix_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
@@ -792,6 +794,38 @@ def test_cyclone_diagnostic_packing_audit_matches_gkw_source_layout():
 
     with pytest.raises(ValueError, match="output_window"):
         run_cyclone_base_case_diagnostic_packing_audit(output_window=0)
+
+
+def test_cyclone_matdat_matrix_audit_matches_sparse_conventions():
+    audit = run_cyclone_base_case_matdat_matrix_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        initial_profile="cosine",
+        tolerance=1.0e-10,
+        max_size=512,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneMatdatMatrixAudit)
+    assert len(leaves) == len(CycloneMatdatMatrixAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.n_state == 8 * 6 * 4
+    assert audit.n_nonzero > 0
+    assert audit.n_duplicate_triplets == 2 * audit.n_nonzero
+    assert audit.n_real_entries + audit.n_complex_entries == audit.n_nonzero
+    assert bool(audit.passed)
+    assert audit.matrix_action_error < 1.0e-10
+    assert audit.source_max_abs < 1.0e-10
+    assert audit.explicit_delta_error < 1.0e-10
+    assert audit.compressed_action_error < 1.0e-10
+    assert audit.complex_real_split_error < 1.0e-10
+    assert audit.linearity_error < 1.0e-10
+    assert audit.max_abs_matrix_entry > 0.0
+    assert "matdat.F90" in audit.notes
+
+    with pytest.raises(ValueError, match="nonzero_threshold"):
+        run_cyclone_base_case_matdat_matrix_audit(nonzero_threshold=-1.0)
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():

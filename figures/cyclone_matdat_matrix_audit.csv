@@ -1,0 +1,2 @@
+n_state,n_nonzero,n_duplicate_triplets,n_real_entries,n_complex_entries,matrix_action_error,source_max_abs,explicit_delta_error,compressed_action_error,complex_real_split_error,linearity_error,max_abs_matrix_entry,status,notes
+192,19032,38064,14424,4608,2.6021205067653364e-18,0.0,8.47042252985074e-21,3.035783099198609e-18,1.7347484980098753e-18,7.105427357601002e-15,68.5282549321186,PASS,"GKW matdat.F90 sparse matrix/source convention audit; n_z=8, n_vpar=6, n_mu=4, initial_profile=cosine, parallel_backend=finite_difference, velocity_backend=finite_difference"

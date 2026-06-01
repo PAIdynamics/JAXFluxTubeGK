@@ -127,6 +127,14 @@ GKW matrix/time-history construction or source-term/matrix-format conventions
 rather than the quasineutrality solve, parallel field-drive assembly,
 GKW-upwind streaming formula, RK4 staging, `normalise.F90` field norm, or GKW
 field diagnostic packing.
+A reduced `matdat.F90` sparse matrix/source convention audit now passes with
+matrix-action error `2.6021205067653364e-18`, zero source term,
+explicit-`dtim` delta error `8.47042252985074e-21`, duplicate-triplet
+compression error `3.035783099198609e-18`, and `complex-real` split error
+`1.7347484980098753e-18` on a 192-state reduced CBC matrix. This rules out the
+homogeneous source convention, explicit `dtim*(source+mat*fdis_tmp)` action,
+duplicate `(ii,jj)` compression, and `complex-real` matrix-format split as
+remaining reduced matrix-format causes.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -157,8 +165,9 @@ The repository currently contains:
 - `examples/audit_cyclone_term_i_fortran.py`: selected-mode Cyclone Term I audit reconstructed directly from the GKW Fortran source formulas.
 - `examples/audit_cyclone_time_normalization.py`: selected-mode Cyclone RK4/window-normalization audit against the GKW source sequence.
 - `examples/audit_cyclone_diagnostic_packing.py`: selected-mode Cyclone GKW `get_phi` field-packing and diagnostic-output audit.
+- `examples/audit_cyclone_matdat_matrix.py`: reduced Cyclone `matdat.F90` sparse matrix/source convention audit.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
@@ -248,10 +257,10 @@ growth-diagnostic selector to isolate the remaining production Cyclone
 growth-history and parallel mode-structure gap while keeping DESC optimization
 examples labeled as reduced until CBC parity passes:
 
-- compare remaining GKW matrix/time-history construction paths beyond Term I,
-  normalization, and field diagnostics, especially `matdat.F90` coefficient
-  assembly/compression and any source-term or matrix-format conventions not
-  yet mirrored by the matrix-free residual,
+- compare remaining GKW coefficient construction paths beyond the reduced
+  `matdat.F90` sparse convention audit, especially term insertion order and
+  source-level coefficient formulas for Terms II, IV, V, VII, and VIII in
+  production selected-`ky` geometry,
 - add a non-destructive GKW `cosine2` patch or restart/state-injection path
   only if the remaining native `finit='cosine'` profile comparison still
   cannot isolate the discrepancy,
@@ -280,6 +289,47 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-01: Added GKW Matdat Matrix Convention Audit
+
+- Committed the previous diagnostic-packing tranche as:
+  - `0cb5007 Add Cyclone diagnostic packing audit`.
+- Added `CycloneMatdatMatrixAudit` and
+  `run_cyclone_base_case_matdat_matrix_audit`.
+- Added `examples/audit_cyclone_matdat_matrix.py`, which builds a reduced CBC
+  dense residual matrix, reconstructs GKW `matdat.F90` sparse/source
+  conventions, and writes:
+  - `figures/cyclone_matdat_matrix_audit.csv`.
+- Main reduced-grid findings for \(N_z=8\), \(N_{v_\parallel}=6\),
+  \(N_\mu=4\), and 192 state entries:
+  - nonzero matrix entries: `19032`,
+  - duplicate triplets after synthetic split: `38064`,
+  - real/complex-real split counts: `14424` real and `4608` complex,
+  - matrix-action error: `2.6021205067653364e-18`,
+  - source maximum absolute value: `0.0`,
+  - explicit `dtim*(source+mat*fdis_tmp)` delta error:
+    `8.47042252985074e-21`,
+  - duplicate-triplet compression error: `3.035783099198609e-18`,
+  - `complex-real` split action error: `1.7347484980098753e-18`,
+  - linearity error: `7.105427357601002e-15`.
+- Interpretation: the reduced matrix-free residual obeys the GKW sparse
+  matrix/source conventions, so the remaining CBC gap should be chased through
+  source-level coefficient construction for Terms II, IV, V, VII, and VIII in
+  the production selected-`ky` setup.
+- Verification run this round:
+  - `uv run --extra dev ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_matdat_matrix.py`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py::test_cyclone_matdat_matrix_audit_matches_sparse_conventions -q`
+  - `uv run --extra dev python examples/audit_cyclone_matdat_matrix.py`
+  - `uv run --extra dev ruff check src tests examples scripts`
+  - `uv run --extra dev pytest tests/test_benchmark_references.py -q`
+  - `uv run --extra dev pytest -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification results:
+  - focused matdat audit test: 1 passed,
+  - focused benchmark suite: 30 passed,
+  - full pytest suite: 149 passed,
+  - full ruff: all checks passed,
+  - `main.tex` built successfully with existing underfull-box warnings only.
 
 ### 2026-06-01: Added GKW Diagnostic Packing Audit
 

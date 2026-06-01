@@ -734,6 +734,62 @@ class CycloneDiagnosticPackingAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneMatdatMatrixAudit(_PyTreeDataclass):
+    """GKW ``matdat.F90`` sparse-matrix convention audit."""
+
+    matrix_action_error: object
+    source_max_abs: object
+    explicit_delta_error: object
+    compressed_action_error: object
+    complex_real_split_error: object
+    linearity_error: object
+    max_abs_matrix_entry: object
+    passed: object
+    n_state: int
+    n_nonzero: int
+    n_duplicate_triplets: int
+    n_real_entries: int
+    n_complex_entries: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "matrix_action_error",
+        "source_max_abs",
+        "explicit_delta_error",
+        "compressed_action_error",
+        "complex_real_split_error",
+        "linearity_error",
+        "max_abs_matrix_entry",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "n_state",
+        "n_nonzero",
+        "n_duplicate_triplets",
+        "n_real_entries",
+        "n_complex_entries",
+        "notes",
+    )
+
+    def __post_init__(self):
+        for name in self._dynamic_fields[:-1]:
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        for name in (
+            "n_state",
+            "n_nonzero",
+            "n_duplicate_triplets",
+            "n_real_entries",
+            "n_complex_entries",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be nonnegative")
+        if self.n_state < 1:
+            raise ValueError("n_state must be positive")
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -3387,6 +3443,156 @@ def run_cyclone_base_case_diagnostic_packing_audit(
     )
 
 
+def run_cyclone_base_case_matdat_matrix_audit(
+    *,
+    n_z: int = 8,
+    n_vpar: int = 6,
+    n_mu: int = 4,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-11,
+    nonzero_threshold: float = 1.0e-14,
+    max_size: int = 4096,
+    target: BenchmarkTarget | None = None,
+) -> CycloneMatdatMatrixAudit:
+    """Audit reduced CBC residuals against GKW ``matdat.F90`` conventions.
+
+    GKW stores linear terms as sparse triplets through ``put_element``, keeps
+    any inhomogeneous term in ``source``, compresses duplicate ``(ii,jj)``
+    entries, and the explicit integrator applies
+    ``dtim * (source + mat * fdis_tmp)``.  This reduced audit builds the dense
+    matrix-free residual matrix, reconstructs those sparse conventions, and
+    verifies that the compressed and ``complex-real`` split actions reproduce
+    the residual.
+    """
+
+    from .operators import dense_matrix_from_action, flatten_state, unflatten_state
+    from .solver import linear_residual
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if nonzero_threshold < 0.0:
+        raise ValueError("nonzero_threshold must be nonnegative")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2")
+        if initial_profile is None
+        else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    state = setup["state"]
+    zero_state = jnp.zeros_like(state)
+
+    def action(state_value):
+        return linear_residual(state_value, precomputed=setup["precompute"])
+
+    matrix = dense_matrix_from_action(action, state, max_size=max_size)
+    vector = flatten_state(state)
+    residual = action(state)
+    residual_from_matrix = unflatten_state(matrix @ vector, state.shape)
+    source = action(zero_state)
+    source_vector = flatten_state(source)
+    dt_value = jnp.asarray(dt, dtype=jnp.float64)
+    explicit_delta = dt_value * (source_vector + matrix @ vector)
+    expected_delta = dt_value * flatten_state(residual)
+
+    probe = _deterministic_complex_probe(state.shape, dtype=state.dtype)
+    combo = 0.37 * state - 0.21j * probe
+    linearity_reference = 0.37 * action(state) - 0.21j * action(probe)
+    linearity_error = _max_abs_error(action(combo), linearity_reference)
+
+    triplets = _gkw_triplets_from_dense_matrix(np.asarray(matrix), threshold=nonzero_threshold)
+    compressed = _gkw_compress_triplets(*triplets, n_rows=int(vector.shape[0]))
+    compressed_action = _gkw_apply_compressed_triplets(compressed, np.asarray(vector))
+    split_action, n_real_entries, n_complex_entries = _gkw_complex_real_split_action(
+        np.asarray(matrix),
+        np.asarray(vector),
+        threshold=nonzero_threshold,
+    )
+
+    matrix_action_error = _max_abs_error(residual_from_matrix, residual)
+    source_max_abs = jnp.max(jnp.abs(source_vector))
+    explicit_delta_error = _max_abs_error(explicit_delta, expected_delta)
+    compressed_action_error = _max_abs_error(compressed_action, np.asarray(matrix @ vector))
+    complex_real_split_error = _max_abs_error(split_action, np.asarray(matrix @ vector))
+    max_abs_matrix_entry = jnp.max(jnp.abs(matrix))
+    passed = (
+        (matrix_action_error <= tolerance)
+        & (source_max_abs <= tolerance)
+        & (explicit_delta_error <= tolerance)
+        & (compressed_action_error <= tolerance)
+        & (complex_real_split_error <= tolerance)
+        & (linearity_error <= tolerance)
+    )
+
+    return CycloneMatdatMatrixAudit(
+        matrix_action_error=matrix_action_error,
+        source_max_abs=source_max_abs,
+        explicit_delta_error=explicit_delta_error,
+        compressed_action_error=compressed_action_error,
+        complex_real_split_error=complex_real_split_error,
+        linearity_error=linearity_error,
+        max_abs_matrix_entry=max_abs_matrix_entry,
+        passed=passed,
+        n_state=int(vector.shape[0]),
+        n_nonzero=int(triplets[0].shape[0]),
+        n_duplicate_triplets=int(2 * triplets[0].shape[0]),
+        n_real_entries=int(n_real_entries),
+        n_complex_entries=int(n_complex_entries),
+        notes=(
+            "GKW matdat.F90 sparse matrix/source convention audit; "
+            f"n_z={n_z}, n_vpar={n_vpar}, n_mu={n_mu}, "
+            f"initial_profile={initial_profile}, "
+            f"parallel_backend={parallel_backend}, velocity_backend={velocity_backend}"
+        ),
+    )
+
+
 def _cyclone_trace_csv_columns() -> tuple[str, ...]:
     return ("time", *CycloneTrace._dynamic_fields[1:])
 
@@ -4355,6 +4561,105 @@ def _gkw_kx_spectrum_diagnostic(phi):
         raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
     n_z, _n_kx, n_ky = phi.shape
     return jnp.sum(jnp.abs(phi) ** 2, axis=(0, 2)) / (n_ky * n_z)
+
+
+def _deterministic_complex_probe(shape, dtype):
+    size = int(np.prod(shape))
+    index = jnp.arange(size, dtype=jnp.float64).reshape(shape)
+    probe = jnp.cos(index / 5.0) + 1j * jnp.sin(index / 7.0)
+    return probe.astype(dtype)
+
+
+def _gkw_triplets_from_dense_matrix(matrix: np.ndarray, *, threshold: float):
+    matrix = np.asarray(matrix)
+    rows, cols = np.nonzero(np.abs(matrix) > threshold)
+    values = matrix[rows, cols]
+    return rows.astype(np.int64), cols.astype(np.int64), values.astype(matrix.dtype)
+
+
+def _gkw_compress_triplets(rows, cols, values, *, n_rows: int):
+    rows = np.asarray(rows, dtype=np.int64)
+    cols = np.asarray(cols, dtype=np.int64)
+    values = np.asarray(values)
+    if rows.shape != cols.shape or rows.shape != values.shape:
+        raise ValueError("rows, cols, and values must have matching shapes")
+    if n_rows < 1:
+        raise ValueError("n_rows must be positive")
+    if rows.size == 0:
+        return {
+            "rows": rows,
+            "cols": cols,
+            "values": values,
+            "iac": np.ones(n_rows + 1, dtype=np.int64),
+        }
+    duplicate_rows = np.concatenate([rows, rows])
+    duplicate_cols = np.concatenate([cols, cols])
+    duplicate_values = np.concatenate([0.4 * values, 0.6 * values])
+    order = np.lexsort((duplicate_cols, duplicate_rows))
+    sorted_rows = duplicate_rows[order]
+    sorted_cols = duplicate_cols[order]
+    sorted_values = duplicate_values[order]
+
+    out_rows = []
+    out_cols = []
+    out_values = []
+    row = int(sorted_rows[0])
+    col = int(sorted_cols[0])
+    value = sorted_values[0]
+    for next_row, next_col, next_value in zip(
+        sorted_rows[1:],
+        sorted_cols[1:],
+        sorted_values[1:],
+        strict=False,
+    ):
+        if int(next_row) == row and int(next_col) == col:
+            value = value + next_value
+        else:
+            out_rows.append(row)
+            out_cols.append(col)
+            out_values.append(value)
+            row = int(next_row)
+            col = int(next_col)
+            value = next_value
+    out_rows.append(row)
+    out_cols.append(col)
+    out_values.append(value)
+    out_rows = np.asarray(out_rows, dtype=np.int64)
+    out_cols = np.asarray(out_cols, dtype=np.int64)
+    out_values = np.asarray(out_values, dtype=values.dtype)
+    iac = np.empty(n_rows + 1, dtype=np.int64)
+    cursor = 0
+    for row_index in range(n_rows):
+        iac[row_index] = cursor
+        while cursor < out_rows.size and out_rows[cursor] == row_index:
+            cursor += 1
+    iac[n_rows] = out_rows.size
+    return {"rows": out_rows, "cols": out_cols, "values": out_values, "iac": iac}
+
+
+def _gkw_apply_compressed_triplets(compressed, vector):
+    vector = np.asarray(vector)
+    out = np.zeros((compressed["iac"].shape[0] - 1,), dtype=np.result_type(compressed["values"], vector))
+    for row in range(out.shape[0]):
+        start = compressed["iac"][row]
+        stop = compressed["iac"][row + 1]
+        cols = compressed["cols"][start:stop]
+        values = compressed["values"][start:stop]
+        if cols.size:
+            out[row] = np.sum(values * vector[cols])
+    return out
+
+
+def _gkw_complex_real_split_action(matrix, vector, *, threshold: float):
+    matrix = np.asarray(matrix)
+    vector = np.asarray(vector)
+    real_mask = np.abs(np.imag(matrix)) <= threshold
+    real_matrix = np.where(real_mask, np.real(matrix), 0.0)
+    complex_matrix = np.where(real_mask, 0.0, matrix)
+    action = real_matrix @ vector + complex_matrix @ vector
+    n_real = int(np.count_nonzero((np.abs(matrix) > threshold) & real_mask))
+    n_complex = int(np.count_nonzero((np.abs(matrix) > threshold) & ~real_mask))
+    return action, n_real, n_complex
 
 
 def _l2_norm(values):
