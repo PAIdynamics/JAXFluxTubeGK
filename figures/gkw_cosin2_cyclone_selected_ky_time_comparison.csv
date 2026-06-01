@@ -1,0 +1,4 @@
+reference_trace,metric,gkw,solver,delta_gkw_minus_solver,parallel_derivative_model,initial_profile,normalization_model
+gkw_igh_backend,final_window_growth,0.188741,0.13945213935812423,0.049288860641875765,gkw_igh,cosine2,gkw_unweighted
+gkw_igh_backend,late_mean_window_growth,0.177999075,0.15623725215738368,0.021761822842616324,gkw_igh,cosine2,gkw_unweighted
+gkw_igh_backend,late_fit_growth,0.18741518752345235,0.16389932979797434,0.023515857725478012,gkw_igh,cosine2,gkw_unweighted

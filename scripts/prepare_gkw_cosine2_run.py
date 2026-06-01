@@ -1,0 +1,210 @@
+"""Prepare a non-destructive GKW tree with a solver-style cosine2 initializer.
+
+The original GKW ``finit`` selector is ``character(len = 6)``.  The patched
+branch therefore uses the six-character name ``cosin2`` while implementing the
+same ``1 + cos(2*pi*s)`` profile used by the solver/Gyaradax ``cosine2``
+initialization.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from pathlib import Path
+import re
+import shutil
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE_ROOT = REPO_ROOT / "relevant-codes" / "gkw"
+DEFAULT_INPUT = REPO_ROOT / "fixtures" / "gkw_cyclone_selected_ky_linear_input.dat"
+DEFAULT_OUTPUT_ROOT = Path("/tmp/stellarator_gk_gkw_cosin2")
+PATCHED_SELECTOR = "cosin2"
+
+
+@dataclass(frozen=True)
+class PreparedGkwCosine2Run:
+    """Paths produced by :func:`prepare_gkw_cosine2_run`."""
+
+    source_root: Path
+    output_root: Path
+    patched_init: Path
+    patched_input: Path
+    selector: str = PATCHED_SELECTOR
+
+
+COSIN2_CASE = """    case('cosin2')
+
+       do imod = 1, nmod
+          do i = 1, ns
+             do j = 1, nmu
+                do k = 1, nvpar
+                   do is = 1, nsp
+                      do ix = 1, nx
+
+                         ! No initialisation of the zonal flow
+                         if ((imod.eq.1).and.mode_box.and.(nmod.ne.1)) then
+                            fdisi(indx(imod,ix,i,j,k,is)) = 0.
+                         else
+                            fdisi(indx(imod,ix,i,j,k,is)) = amp_init *      &
+                                 &    de(is) * (1.E0 + cos(2*pi*sgr(ix,i)))
+                         endif
+
+                      end do
+                   end do
+                end do
+             end do
+          end do
+       end do
+
+"""
+
+
+def prepare_gkw_cosine2_run(
+    source_root: Path = DEFAULT_SOURCE_ROOT,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    input_path: Path = DEFAULT_INPUT,
+    *,
+    overwrite: bool = False,
+) -> PreparedGkwCosine2Run:
+    """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
+
+    The source tree is never edited.  If ``output_root`` already exists,
+    ``overwrite=True`` is required.
+    """
+
+    source_root = Path(source_root).resolve()
+    output_root = Path(output_root).resolve()
+    input_path = Path(input_path).resolve()
+    if not source_root.is_dir():
+        raise FileNotFoundError(f"GKW source root not found: {source_root}")
+    if not (source_root / "src" / "init.f90").is_file():
+        raise FileNotFoundError(f"GKW init.f90 not found under: {source_root}")
+    if not input_path.is_file():
+        raise FileNotFoundError(f"GKW input file not found: {input_path}")
+    if source_root == output_root:
+        raise ValueError("output_root must be different from source_root")
+    if output_root.exists():
+        if not overwrite:
+            raise FileExistsError(f"{output_root} already exists; pass --overwrite")
+        shutil.rmtree(output_root)
+
+    shutil.copytree(source_root, output_root, ignore=_ignore_generated_gkw_files)
+    patched_init = output_root / "src" / "init.f90"
+    add_cosin2_branch(patched_init)
+    patched_input = output_root / "input.dat"
+    write_cosin2_input(input_path, patched_input)
+    _write_run_readme(output_root)
+    return PreparedGkwCosine2Run(
+        source_root=source_root,
+        output_root=output_root,
+        patched_init=patched_init,
+        patched_input=patched_input,
+    )
+
+
+def add_cosin2_branch(init_path: Path) -> bool:
+    """Insert the six-character ``cosin2`` branch into a copied GKW init file."""
+
+    text = init_path.read_text(encoding="utf-8")
+    if "case('cosin2')" in text:
+        return False
+    marker = "    case('sine')"
+    if marker not in text:
+        raise ValueError(f"could not find insertion marker {marker!r} in {init_path}")
+    init_path.write_text(text.replace(marker, COSIN2_CASE + marker, 1), encoding="utf-8")
+    return True
+
+
+def write_cosin2_input(input_path: Path, output_path: Path) -> None:
+    """Write an input.dat copy whose ``finit`` selector is ``'cosin2'``."""
+
+    text = input_path.read_text(encoding="utf-8")
+    pattern = re.compile(r"(?im)^(\s*finit\s*=\s*)(?:'cosine'|\"cosine\"|cosine)(\s*,?)")
+    patched, count = pattern.subn(rf"\1'{PATCHED_SELECTOR}'\2", text, count=1)
+    if count != 1:
+        raise ValueError(f"could not replace finit='cosine' in {input_path}")
+    output_path.write_text(patched, encoding="utf-8")
+
+
+def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
+    generated_names = {
+        ".DS_Store",
+        "gkw.x",
+        "input.out",
+        "time.dat",
+        "parallel_phi.dat",
+        "phi.dat",
+        "fluxes.dat",
+        "screen.out",
+    }
+    suffixes = (".o", ".mod", ".smod", ".log")
+    return {
+        name
+        for name in names
+        if name in generated_names or name.endswith(suffixes) or name == "__pycache__"
+    }
+
+
+def _write_run_readme(output_root: Path) -> None:
+    readme = output_root / "README_stellarator_gk_cosin2.md"
+    readme.write_text(
+        f"""# Patched GKW `cosin2` Run
+
+This directory was copied from `{DEFAULT_SOURCE_ROOT}` by
+`scripts/prepare_gkw_cosine2_run.py`.
+
+Only the copied `src/init.f90` was patched.  The original GKW tree is unchanged.
+The selector is named `{PATCHED_SELECTOR}` because GKW declares `finit` as
+`character(len = 6)`.
+
+The generated `input.dat` uses:
+
+```fortran
+finit = '{PATCHED_SELECTOR}'
+```
+
+Build and run from this directory with the same local serial/no-FFT settings
+used for the matched selected-ky reference, for example:
+
+```bash
+make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""
+./gkw.x
+```
+""",
+        encoding="utf-8",
+    )
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Copy GKW to an output directory and add a cosin2 initializer."
+    )
+    parser.add_argument("--source-root", type=Path, default=DEFAULT_SOURCE_ROOT)
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--overwrite", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    prepared = prepare_gkw_cosine2_run(
+        source_root=args.source_root,
+        output_root=args.output_root,
+        input_path=args.input,
+        overwrite=args.overwrite,
+    )
+    print(f"prepared patched GKW tree: {prepared.output_root}")
+    print(f"patched initializer: {prepared.patched_init}")
+    print(f"patched input: {prepared.patched_input}")
+    print("run from the patched tree with:")
+    print(
+        '  make FC=gfortran FFLAGS="-fdefault-real-8 -O2" '
+        'FFTLIB=nofft PARALLEL=nompi LDFLAGS=""'
+    )
+    print("  ./gkw.x")
+
+
+if __name__ == "__main__":
+    main()

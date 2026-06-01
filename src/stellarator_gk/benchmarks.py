@@ -1827,6 +1827,7 @@ def run_production_cyclone_base_case_gate(
     growth_window_fraction: float = 0.5,
     growth_diagnostic: str = "late_fit",
     parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
     parallel_backend: str | None = None,
     parallel_boundary: str | None = None,
     parallel_derivative_model: str | None = None,
@@ -1880,6 +1881,11 @@ def run_production_cyclone_base_case_gate(
         if parallel_derivative_model is None
         else parallel_derivative_model
     )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
     velocity_backend = str(
         metadata.get("velocity_backend", "finite_difference")
         if velocity_backend is None
@@ -1906,6 +1912,7 @@ def run_production_cyclone_base_case_gate(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
         parallel_backend=parallel_backend,
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
@@ -1982,6 +1989,7 @@ def run_production_cyclone_base_case_gate(
             f"parallel_backend={parallel_backend}, velocity_backend={velocity_backend}, "
             f"parallel_boundary={parallel_boundary}, "
             f"parallel_derivative_model={parallel_derivative_model}, "
+            f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
             f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
             f"normalize_each_window={normalize_each_window}, "
             f"normalization_model={normalization_model}, "
@@ -2004,6 +2012,7 @@ def run_cyclone_base_case_trace(
     steps_per_window: int = 4,
     n_windows: int = 4,
     parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
     parallel_backend: str | None = None,
     parallel_boundary: str | None = None,
     parallel_derivative_model: str | None = None,
@@ -2048,6 +2057,11 @@ def run_cyclone_base_case_trace(
         if parallel_derivative_model is None
         else parallel_derivative_model
     )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
     velocity_backend = str(
         metadata.get("velocity_backend", "finite_difference")
         if velocity_backend is None
@@ -2065,6 +2079,7 @@ def run_cyclone_base_case_trace(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
         parallel_backend=parallel_backend,
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
@@ -2170,6 +2185,8 @@ def run_cyclone_base_case_trace(
             "windowed CBC trace with selected ky, raw/physical amplitudes, "
             "window growth, fitted growth, phi norm, state norm, and RHS norm; "
             f"initial_profile={initial_profile}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
             f"normalization_model={normalization_model}"
         ),
     )
@@ -2408,6 +2425,7 @@ def run_cyclone_base_case_parallel_phi_trace(
     steps_per_window: int = 4,
     n_windows: int = 4,
     parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
     parallel_backend: str | None = None,
     parallel_boundary: str | None = None,
     parallel_derivative_model: str | None = None,
@@ -2463,6 +2481,11 @@ def run_cyclone_base_case_parallel_phi_trace(
         if parallel_derivative_model is None
         else parallel_derivative_model
     )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
     velocity_backend = str(
         metadata.get("velocity_backend", "finite_difference")
         if velocity_backend is None
@@ -2481,6 +2504,7 @@ def run_cyclone_base_case_parallel_phi_trace(
         mu_max=mu_max,
         nperiod=nperiod,
         parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
         parallel_backend=parallel_backend,
         parallel_boundary=parallel_boundary,
         parallel_derivative_model=parallel_derivative_model,
@@ -2552,6 +2576,8 @@ def run_cyclone_base_case_parallel_phi_trace(
         notes=(
             "selected-ky CBC parallel |phi|^2 profile trace; "
             f"initial_profile={initial_profile}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
             f"normalize_each_window={normalize_each_window}, "
             f"physical_power={physical_power}, "
             f"normalization_model={normalization_model}"
@@ -4208,6 +4234,18 @@ def _cyclone_trace_csv_column_map(header: dict[str, object]) -> dict[str, str]:
     if "times" not in column_map and "time" in names:
         column_map["times"] = "time"
     return column_map
+
+
+def _cyclone_velocity_recurrence_rate(
+    metadata: dict[str, object],
+    requested: float | None,
+    parallel_derivative_model: str,
+) -> float:
+    if requested is not None:
+        return float(requested)
+    if parallel_derivative_model == "gkw_igh":
+        return float(metadata.get("disp_vp", 0.2))
+    return 0.0
 
 
 def run_cyclone_base_case_term_parity_audit(

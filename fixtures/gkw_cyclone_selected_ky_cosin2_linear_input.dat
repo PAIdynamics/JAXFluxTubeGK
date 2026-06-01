@@ -1,0 +1,86 @@
+! Linear selected-ky Cyclone trace input for the local serial/no-FFT GKW build.
+! This is matched to the stellarator_gk/Gyaradax production-control trace:
+!   ky*rho_s = 0.5, nperiod = 5, Nz = 48, Nvpar = 32, Nmu = 8,
+!   dt = 0.003, 20 steps per diagnostic window, 80 windows.
+
+&CONTROL
+ testing = .false.,
+ silent = .true.,
+ order_of_the_scheme = 'fourth_order',
+ parallel_boundary_conditions = 'zero',
+ matrix_format = 'complex',
+ READ_FILE = .false.,
+ NON_LINEAR = .false.,
+ zonal_adiabatic = .true.,
+ METHOD = 'EXP',
+ METH = 2,
+ DTIM = 0.003,
+ NTIME = 80,
+ NAVERAGE = 20,
+ nlapar = .false.,
+ collisions = .false.,
+ disp_par = 1.0,
+ disp_vp = 0.2,
+ disp_x = 0.0,
+ disp_y = 0.0,
+ ltrapping_arakawa = .true.,
+ normalized = .true.,
+ LCALC_FREQ = .false.,
+ screen_output = .true.
+ /
+
+&GRIDSIZE
+ NX = 1,
+ N_s_grid = 48,
+ N_mu_grid = 8,
+ n_vpar_grid = 32,
+ NMOD = 1,
+ nperiod = 5,
+ number_of_species = 1,
+ vpmax = 3.0,
+ mumax = 4.5
+ /
+
+&MODE
+ CHIN = 0.0,
+ KTHRHO = 0.5, 0.5,
+ mode_box = .false.,
+ krhomax = 0.5,
+ ikxspace = 5
+ /
+
+&GEOM
+ SHAT = 0.78,
+ Q = 1.4,
+ EPS = 0.19
+ /
+
+&SPCGENERAL
+ beta = 0.000,
+ adiabatic_electrons = .true.,
+ amp_init = 1.0e-4,
+ finit = 'cosin2'
+ /
+
+&SPECIES
+ MASS = 1.0,
+ Z = 1.0,
+ TEMP = 1.0,
+ DENS = 1.0,
+ rlt = 6.9,
+ rln = 2.2,
+ uprim = 0.0
+ /
+
+&SPECIES
+ MASS = 2.72e-4,
+ Z = -1.0,
+ TEMP = 1.0,
+ rlt = 6.9,
+ rln = 2.2,
+ uprim = 0.0
+ /
+
+&ROTATION
+ VCOR = 0.0
+ /

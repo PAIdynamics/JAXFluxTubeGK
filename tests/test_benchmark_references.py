@@ -112,8 +112,7 @@ def test_named_benchmark_targets_and_costs_are_differentiable():
 def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
     pytest.importorskip("netCDF4")
     path = (
-        ROOT
-        / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
         "itg_salpha_adiabatic_electrons_correct.out.nc"
     )
 
@@ -136,8 +135,7 @@ def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
 
 def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
     path = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
 
@@ -154,8 +152,7 @@ def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
 
 def test_gx_eik_loader_uses_gist_drift_column_order():
     path = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
     )
 
@@ -183,17 +180,14 @@ def test_gx_eik_loader_reads_desc_block_eik_fixture():
 
 def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
     path = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
     reference = load_gx_eik_geometry_reference(path)
     theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
     sampled = resample_gx_eik_geometry_reference(reference, theta)
     parallel = _parallel_grid_from_theta(theta)
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35)))
 
     result = run_gx_eik_geometry_gate(sampled, parallel, fourier)
 
@@ -204,17 +198,14 @@ def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
 
 def test_solver_geometry_to_eik_parity_report_matches_imported_geometry():
     path = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
     reference = load_gx_eik_geometry_reference(path)
     theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
     sampled = resample_gx_eik_geometry_reference(reference, theta)
     parallel = _parallel_grid_from_theta(theta)
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35)))
     geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
 
     report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
@@ -231,9 +222,7 @@ def test_desc_fixture_geometry_exports_to_gx_eik_contract():
     fixture = ROOT / "fixtures/desc_geometry_dshape_rho05_alpha0.npz"
     data = np.load(fixture)
     parallel = _parallel_grid_from_fixture_z(data["z"])
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35)))
     geometry = build_desc_geometry_from_arrays(
         parallel,
         theta=data["theta"],
@@ -276,14 +265,11 @@ def test_desc_fixture_geometry_exports_to_gx_eik_contract():
 
 def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
     paths = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000",
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
         "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000",
     )
 
@@ -382,6 +368,21 @@ def test_production_cyclone_gate_supports_gkw_time_dat_mean_diagnostic():
             n_windows=1,
             growth_diagnostic="unsupported",
         )
+
+
+def test_production_cyclone_gate_supports_gkw_igh_backend():
+    cyclone = run_production_cyclone_base_case_gate(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        parallel_derivative_model="gkw_igh",
+    )
+
+    assert jnp.isfinite(cyclone.observed_value)
+    assert "parallel_derivative_model=gkw_igh" in cyclone.notes
+    assert "velocity_recurrence_rate=0.2" in cyclone.notes
 
 
 def test_cyclone_term_parity_audit_covers_gkw_conventions():
@@ -630,6 +631,21 @@ def test_cyclone_parallel_phi_trace_records_gkw_style_profiles():
     assert "normalization_model=gkw_unweighted" in trace.notes
     np.testing.assert_allclose(jnp.sum(trace.phi_power, axis=1), 1.0, rtol=2e-12, atol=2e-12)
     assert bool(comparison.passed)
+
+    gkw_igh_trace = run_cyclone_base_case_parallel_phi_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    assert gkw_igh_trace.phi_power.shape == (2, 8)
+    assert jnp.all(jnp.isfinite(gkw_igh_trace.phi_power))
+    assert "parallel_derivative_model=gkw_igh" in gkw_igh_trace.notes
+    assert "velocity_recurrence_rate=0.2" in gkw_igh_trace.notes
 
     with pytest.raises(ValueError, match="normalization_model"):
         run_cyclone_base_case_parallel_phi_trace(

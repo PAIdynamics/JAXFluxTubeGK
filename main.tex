@@ -1425,13 +1425,36 @@ mirror-force, \(\texttt{disp\_par}\), and \(\texttt{disp\_vp}\) terms while the
 parallel field drive still uses the GKW upwind derivative.  A direct reduced
 test compares the backend against the reconstructed Fortran-style
 \texttt{igh} action, including a JIT call, to roundoff.  The next validation
-step is to rerun the production selected-\(k_y\) growth/profile gates with
-this backend enabled.
-The direct compact GKW comparison path uses
-\(\texttt{finit='cosine'}\); matching the solver/Gyaradax
-\(\texttt{cosine2}\) initialization would require a local GKW source patch or
-a restart/state-injection path because the original GKW \texttt{finit}
-selector has no native \(\texttt{cosine2}\) branch.
+step was to rerun the production selected-\(k_y\) growth/profile gates with
+this backend enabled.  The GKW-native \(\texttt{finit='cosine'}\),
+GKW-unweighted, production-control rerun remains open:
+\(\gamma_{\mathrm{late\,fit}}=0.164465\) versus the matched GKW
+\(0.188531\), and the late-window mean is \(0.154739\) versus \(0.180408\).
+The row-normalized \(\texttt{parallel\_phi.dat}\) profile comparison improves
+only slightly, with maximum error \(3.28\times10^{-2}\) and best circular
+shift zero; the CSV artifacts are
+\path{figures/gkw_igh_cyclone_selected_ky_time_comparison.csv} and
+\path{figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv}.
+
+We then removed the initialization mismatch by adding a non-destructive GKW
+patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies
+GKW to a scratch tree and patches only the copy.  Since the original GKW
+\texttt{finit} variable has length six, the new branch is named
+\(\texttt{cosin2}\), but it implements the solver/Gyaradax
+\(\texttt{cosine2}\) profile \(1+\cos(2\pi s)\).  The patched serial/no-FFT
+GKW tree builds and runs, producing matched \(\texttt{cosin2}\) time and
+\(\texttt{parallel\_phi}\) fixtures under \path{fixtures/}.  Against these
+fixtures, the solver \(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\)
+late-fit growth is \(0.163899\) versus GKW \(0.187415\); the late-window mean
+is \(0.156237\) versus \(0.177999\); and the final-window growth is
+\(0.139452\) versus \(0.188741\).  The row-normalized
+\(\texttt{parallel\_phi.dat}\) profile error improves to
+\(2.96\times10^{-2}\), with worst signed error at \(t=3.78\),
+\(z=-0.09375\).  The corresponding CSV artifacts are the \(\texttt{gkw\_cosin2}\)
+time and parallel-profile comparisons under \path{figures/}.  Thus the
+initialization convention is no longer the dominant remaining explanation; the
+next audit should target production GKW conventions that affect the evolved
+mode history.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

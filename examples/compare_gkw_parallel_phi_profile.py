@@ -41,6 +41,8 @@ def main() -> None:
         n_windows=args.n_windows,
         initial_profile=args.initial_profile,
         normalization_model=args.normalization_model,
+        parallel_derivative_model=args.parallel_derivative_model,
+        velocity_recurrence_rate=args.velocity_recurrence_rate,
     )
     reference = load_gkw_parallel_phi_trace(
         args.gkw_parallel_phi,
@@ -186,6 +188,12 @@ def _parse_args():
     parser.add_argument("--steps-per-window", type=int, default=20)
     parser.add_argument("--n-windows", type=int, default=80)
     parser.add_argument("--initial-profile", choices=("cosine2", "cosine"), default="cosine")
+    parser.add_argument(
+        "--parallel-derivative-model",
+        choices=("gkw_upwind", "gkw_igh"),
+        default="gkw_upwind",
+    )
+    parser.add_argument("--velocity-recurrence-rate", type=float, default=None)
     parser.add_argument(
         "--normalization-model",
         choices=("weighted", "gkw_unweighted"),
