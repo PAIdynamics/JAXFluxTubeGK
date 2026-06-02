@@ -2047,6 +2047,54 @@ class GxEikGeometryParityReport(_PyTreeDataclass):
         )
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ExternalEikProducerReport(_PyTreeDataclass):
+    """Per-source report for independently produced eik geometry fixtures."""
+
+    producer_errors: object
+    max_abs_error: object
+    passed: object
+    producer_names: tuple[str, ...]
+    sources: tuple[str, ...]
+    n_theta: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "producer_errors",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "producer_names",
+        "sources",
+        "n_theta",
+        "notes",
+    )
+
+    def __post_init__(self):
+        errors = jnp.asarray(self.producer_errors, dtype=jnp.float64)
+        if errors.ndim != 1 or errors.shape[0] < 1:
+            raise ValueError("producer_errors must be a nonempty one-dimensional array")
+        producer_names = tuple(str(name) for name in self.producer_names)
+        sources = tuple(str(source) for source in self.sources)
+        if len(producer_names) != errors.shape[0]:
+            raise ValueError("producer_names length must match producer_errors")
+        if len(sources) != errors.shape[0]:
+            raise ValueError("sources length must match producer_errors")
+        if self.n_theta < 2:
+            raise ValueError("n_theta must be at least 2")
+        object.__setattr__(self, "producer_errors", errors)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "producer_names", producer_names)
+        object.__setattr__(self, "sources", sources)
+
+
 def rosenbluth_hinton_residual(q, epsilon, coefficient: float = 1.6):
     """Return the large-aspect-ratio Rosenbluth-Hinton residual estimate."""
 
@@ -9073,14 +9121,21 @@ def run_desc_gx_eik_external_geometry_gate(
     )
 
 
-def run_gx_gist_external_eik_suite_gate(
+def run_independent_external_eik_producer_report(
     paths,
     *,
+    producer_names=None,
     n_theta: int = 33,
     fourier_grid=None,
-    target: BenchmarkTarget | None = None,
-) -> BenchmarkGateResult:
-    """Run external GIST/GS2 eik fixtures through the solver geometry contract."""
+    tolerance: float = 1.0e-10,
+    notes: str | None = None,
+) -> ExternalEikProducerReport:
+    """Run independent external eik producers through the solver geometry contract.
+
+    This report is intentionally separate from the matched DESC/GX block-eik
+    fixture.  The matched fixture checks DESC convention parity; this report
+    checks externally generated eik tables as independent producer artifacts.
+    """
 
     from .grids import build_fourier_grid, build_parallel_grid
     from .types import FourierGridSpec, ParallelGridSpec
@@ -9090,6 +9145,15 @@ def run_gx_gist_external_eik_suite_gate(
         raise ValueError("at least one eik reference path is required")
     if n_theta < 2:
         raise ValueError("n_theta must be at least 2")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if producer_names is None:
+        names = tuple(path.name for path in paths)
+    else:
+        names = tuple(str(name) for name in producer_names)
+        if len(names) != len(paths):
+            raise ValueError("producer_names length must match paths")
+
     fourier = fourier_grid or build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
@@ -9099,14 +9163,82 @@ def run_gx_gist_external_eik_suite_gate(
     parallel = build_parallel_grid(
         ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
     )
+
     errors = []
+    sources = []
     for path in paths:
         reference = load_gx_eik_geometry_reference(path)
         sampled = resample_gx_eik_geometry_reference(reference, theta)
         geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
         report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
         errors.append(report.max_abs_error)
-    observed = jnp.max(jnp.asarray(errors, dtype=jnp.float64))
+        sources.append(sampled.source)
+
+    producer_errors = jnp.asarray(errors, dtype=jnp.float64)
+    max_abs_error = jnp.max(producer_errors)
+    return ExternalEikProducerReport(
+        producer_errors=producer_errors,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        producer_names=names,
+        sources=tuple(sources),
+        n_theta=int(n_theta),
+        notes=notes
+        or (
+            "independent external eik producer contract; matched DESC/GX "
+            "block-eik fixture excluded and retained as a separate convention check"
+        ),
+    )
+
+
+def run_independent_external_eik_producer_gate(
+    paths,
+    *,
+    producer_names=None,
+    n_theta: int = 33,
+    fourier_grid=None,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Gate independent external eik producer fixtures against zero contract error."""
+
+    paths = tuple(Path(path) for path in paths)
+    if not paths:
+        raise ValueError("at least one eik reference path is required")
+    target = target or BenchmarkTarget(
+        name="independent_external_eik_producer_suite",
+        quantity="max_abs_geometry_error",
+        reference_value=0.0,
+        tolerance=1.0e-10,
+        source=";".join(str(path) for path in paths),
+        metadata=(("n_references", len(paths)), ("n_theta", int(n_theta))),
+    )
+    report = run_independent_external_eik_producer_report(
+        paths,
+        producer_names=producer_names,
+        n_theta=n_theta,
+        fourier_grid=fourier_grid,
+        tolerance=target.tolerance,
+    )
+    return evaluate_benchmark_gate(
+        report.max_abs_error,
+        target,
+        normalize_by_tolerance=False,
+        notes=report.notes,
+    )
+
+
+def run_gx_gist_external_eik_suite_gate(
+    paths,
+    *,
+    n_theta: int = 33,
+    fourier_grid=None,
+    target: BenchmarkTarget | None = None,
+) -> BenchmarkGateResult:
+    """Run external GIST/GS2 eik fixtures through the solver geometry contract."""
+
+    paths = tuple(Path(path) for path in paths)
+    if not paths:
+        raise ValueError("at least one eik reference path is required")
     target = target or BenchmarkTarget(
         name="gx_gist_external_eik_suite",
         quantity="max_abs_geometry_error",
@@ -9115,14 +9247,23 @@ def run_gx_gist_external_eik_suite_gate(
         source=";".join(str(path) for path in paths),
         metadata=(("n_references", len(paths)), ("n_theta", int(n_theta))),
     )
-    return evaluate_benchmark_gate(
-        observed,
-        target,
-        normalize_by_tolerance=False,
+    report = run_independent_external_eik_producer_report(
+        paths,
+        producer_names=tuple(f"gx-vmec-gist:{path.name}" for path in paths),
+        n_theta=n_theta,
+        fourier_grid=fourier_grid,
+        tolerance=target.tolerance,
         notes=(
             "independent GX/VMEC GIST eik fixtures mapped into solver geometry "
-            "and compared field-by-field"
+            "and compared field-by-field; matched DESC/GX block-eik fixture is "
+            "excluded and remains a separate DESC convention check"
         ),
+    )
+    return evaluate_benchmark_gate(
+        report.max_abs_error,
+        target,
+        normalize_by_tolerance=False,
+        notes=report.notes,
     )
 
 

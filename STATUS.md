@@ -47,9 +47,10 @@ cell-centered `s` grid, `nperiod=5`, single-mode `ky=0.5` convention, GKW
 finite-difference velocity fallback, a zero-boundary finite-difference
 parallel fallback, an optional GKW/Gyaradax sign-dependent upwind parallel
 stencil for Term I/Term VII, and a jitted production-control amplitude-window
-runner. The medium production-control gate observes `0.16471456525100867`
-against the GKW/Gyaradax target `0.179`, so it is narrowed but still OPEN
-against the `0.01` tolerance. A CBC term-level audit now passes with zero
+runner. The matched 48/32/8 production-control gate now observes
+`late_mean_window=0.17800063460817828` against the GKW/Gyaradax target
+`0.179`, after applying the internal s-alpha `KTHRHO/kthnorm` convention. A
+CBC term-level audit now passes with zero
 stored error for magnetic drift, equilibrium drive, drift-field drive, GKW
 boundary maps, grid/velocity normalization, and assembled RHS conventions; the
 new reduced CBC trace diagnostic records selected-`ky` raw and physical
@@ -383,9 +384,10 @@ solver-produced DESC fixture export gate for GX/GS2 eik-compatible fields, so
 DESC arrays can be audited through the same metric/drift and `k_perp^2`
 contract before they are used in optimization. The external stellarator eik
 path now also checks three independent GX/VMEC GIST fixtures, uses the correct
-GIST drift-column order, and includes a matched DESC/GX block-`eik.out` DSHAPE
-fixture with zero residual against the solver-produced DESC/GX-convention
-geometry.
+GIST drift-column order, exposes an independent external eik-producer
+report/gate with per-producer errors and source names, and includes a matched
+DESC/GX block-`eik.out` DSHAPE fixture with zero residual against the
+solver-produced DESC/GX-convention geometry.
 
 The repository currently contains:
 
@@ -531,17 +533,17 @@ examples labeled as reduced until CBC parity passes:
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - keep the now-passing production-control Cyclone selected-`ky` regression in
   place while the remaining selected-state trace gap is narrowed,
-- supplement the matched DESC/GX block-eik fixture with a truly independent
-  external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST
-  path is available.
+- keep the independent GX/VMEC GIST external eik-producer report/gate separate
+  from the matched DESC/GX block-eik convention fixture.
 
 Expected file changes:
 
 - GKW/Gyaradax/solver parallel profile, source-term, or amplitude-history
   comparison report updates,
-- any selected-mode initialization or diagnostic-window adjustment needed for
-  the scalar Cyclone gate,
-- any independent eik producer/fixture discovered for DESC/GX geometry,
+- selected-mode initialization or state-history diagnostics needed to explain
+  the remaining full selected-mode state gap,
+- any future independently generated DESC/GX-specific eik fixture if an
+  external runner becomes available,
 - `TODO.md`,
 - `STATUS.md`
 
@@ -553,6 +555,30 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Independent External Eik Producer Gate
+
+- Added `ExternalEikProducerReport` plus
+  `run_independent_external_eik_producer_report()` and
+  `run_independent_external_eik_producer_gate()`.
+- The new report records one geometry-contract error per external producer,
+  the maximum suite error, pass/fail status, producer names, source paths, and
+  the comparison grid size.
+- Refactored `run_gx_gist_external_eik_suite_gate()` to use this generic
+  report while preserving the existing GX/GIST validation-gate name and target
+  metadata.
+- The independent producer suite uses the local GX/VMEC GIST fixtures and
+  explicitly excludes the matched DESC/GX block-`eik.out` fixture, which remains
+  a separate DESC convention-parity check.
+- Updated `TODO.md` and `main.tex` to record that external eik-producer
+  coverage is in place for the available GX/VMEC GIST path, while future
+  DESC-specific external runners can still strengthen production parity.
+- Verification run this round:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures -q`
+  - `uv run pytest tests/test_benchmark_references.py -q`
+  - `uv run python examples/generate_validation_gate_figures.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
 
 ### 2026-06-02: Fixed GKW Internal `krho` Convention for Cyclone CBC
 

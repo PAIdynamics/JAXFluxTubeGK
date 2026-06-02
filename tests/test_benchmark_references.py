@@ -32,6 +32,7 @@ from stellarator_gk import (
     CycloneTimeNormalizationAudit,
     CycloneSourceTermTrace,
     CycloneTrace,
+    ExternalEikProducerReport,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
     ParallelPhiTrace,
@@ -83,6 +84,8 @@ from stellarator_gk import (
     run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
+    run_independent_external_eik_producer_gate,
+    run_independent_external_eik_producer_report,
     run_cyclone_base_case_profile_operator_audit,
     run_cyclone_base_case_term_i_fortran_audit,
     run_cyclone_base_case_term_vii_mode_packing_audit,
@@ -310,11 +313,36 @@ def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
         "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000",
     )
 
+    names = ("gx-vmec-gist:w7x", "gx-vmec-gist:li383", "gx-vmec-gist:stellarator")
+    report = run_independent_external_eik_producer_report(
+        paths,
+        producer_names=names,
+        n_theta=17,
+    )
+    generic_gate = run_independent_external_eik_producer_gate(
+        paths,
+        producer_names=names,
+        n_theta=17,
+    )
     gate = run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
 
+    assert isinstance(report, ExternalEikProducerReport)
+    assert bool(report.passed)
+    assert report.producer_names == names
+    assert report.producer_errors.shape == (3,)
+    assert len(report.sources) == 3
+    assert report.n_theta == 17
+    assert "independent" in report.notes
+    assert "matched DESC/GX" in report.notes
+    assert bool(generic_gate.passed)
+    assert generic_gate.target.name == "independent_external_eik_producer_suite"
     assert bool(gate.passed)
     assert gate.target.name == "gx_gist_external_eik_suite"
     assert dict(gate.target.metadata)["n_references"] == 3
+    assert "matched DESC/GX" in gate.notes
+    np.testing.assert_allclose(report.producer_errors, 0.0, atol=1.0e-13)
+    np.testing.assert_allclose(report.max_abs_error, 0.0, atol=1.0e-13)
+    np.testing.assert_allclose(generic_gate.observed_value, 0.0, atol=1.0e-13)
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
