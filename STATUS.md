@@ -163,14 +163,15 @@ raw fixtures are stored as
 `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`,
 `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and
 `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`. Against these
-patched GKW fixtures, the solver `cosine2`/`gkw_igh` late-fit growth is
-`0.16389932979797434` versus GKW `0.18741518752345235`, the late-window mean
-is `0.15623725215738368` versus GKW `0.177999075`, and the final-window growth
-is `0.13945213935812423` versus GKW `0.188741`. The row-normalized
-`parallel_phi.dat` maximum profile error improves to
-`2.9625447419939166e-02` but remains above the current `2.0e-02` exploratory
-tolerance. Initialization mismatch is therefore no longer the dominant
-remaining explanation.
+patched GKW fixtures, the pre-`krho`-fix solver `cosine2`/`gkw_igh` late-fit
+growth was `0.16389932979797434` versus GKW `0.18741518752345235`, the
+late-window mean was `0.15623725215738368` versus GKW `0.177999075`, and the
+final-window growth was `0.13945213935812423` versus GKW `0.188741`. After
+applying the GKW internal `KTHRHO/kthnorm` convention, the matched selected-`ky`
+production-control growth gate passes: `late_fit=0.18560606277298422` and
+`late_mean_window=0.17800063460817828` against target `0.179`. Initialization,
+field normalization, and magnetic-drift wave-number conventions are therefore
+no longer the dominant remaining explanations.
 The selected-`ky` gap audit now combines the patched GKW `cosin2` time/profile
 fixtures with the solver `cosine2`/`gkw_igh` traces in one aligned diagnostic.
 It reports solver late-fit growth `0.1648622859363632` versus GKW
@@ -353,13 +354,16 @@ dtim-scaled total action norm is `1.9404731497669497e-02`, dominated by
 (`1.2506893514028245e-03`). The solver now records matching full selected-mode
 term-action arrays through `run_cyclone_base_case_selected_rhs_trace()` and
 compares them with `compare_selected_mode_rhs_traces()`. The production
-GKW/solver elementwise RHS/action comparison remains OPEN: best diagnostic
-layout is reverse-`vpar` plus snapshot phase alignment, with max error
-`4.466017187736114e-03`; per-term errors are dominated by `vdgradf`
-(`4.466017187736114e-03`), then `ve_grad_fm`
-(`6.045520645652958e-04`), `igh_or_term_i`
-(`2.0712355663949134e-04`), and `vpgrphi`
-(`8.175992645595e-05`).
+GKW/solver elementwise RHS/action comparison improved after applying the GKW
+s-alpha `mode.F90::kgrid` convention `krho = KTHRHO/kthnorm`, with
+`kthnorm=q/(2*pi*eps)`. The best diagnostic layout is now direct, and the max
+error is `2.2379489422925073e-05`; per-term errors are dominated by `vdgradf`
+(`2.2379489422925073e-05`), then `igh_or_term_i`
+(`1.1169352619622038e-06`), `ve_grad_fm`
+(`4.5614093015065964e-08`), and `vd_grad_phi_fm`
+(`3.9597207251785146e-08`). The matched selected-`ky` production-control
+growth gate now passes at 48/32/8 resolution: `late_fit=0.18560606277298422`
+and `late_mean_window=0.17800063460817828` against the `0.179` target.
 The earlier multi-time velocity-slice discriminator has also been run on
 early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
@@ -521,12 +525,12 @@ examples labeled as reduced until CBC parity passes:
   source-term trace, and GKW compact state-trace patch as guardrails against
   promoting diagnostic sign variants; the full selected-mode state dump is now
   available and leaves an OPEN phase-aligned state gap; the GKW and solver
-  full selected-mode RHS/action traces are now comparable elementwise, with the
-  remaining best-layout error dominated by `vdgradf`,
+  full selected-mode RHS/action traces are now comparable elementwise, and the
+  GKW `KTHRHO/kthnorm` fix reduces the selected RHS gap to `2.24e-05`,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
-- promote the production-control Cyclone growth-rate gate to PASS only after it
-  is within the documented GKW/GX tolerance ladder,
+- keep the now-passing production-control Cyclone selected-`ky` regression in
+  place while the remaining selected-state trace gap is narrowed,
 - supplement the matched DESC/GX block-eik fixture with a truly independent
   external eik producer when a compatible GX/DESC, GS2, stella, or VMEC/GIST
   path is available.
@@ -549,6 +553,43 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Fixed GKW Internal `krho` Convention for Cyclone CBC
+
+- Implemented the GKW s-alpha wave-number convention in the Cyclone benchmark
+  setup: `mode.F90::kgrid` divides input `KTHRHO` by
+  `kthnorm=q/(2*pi*eps)` before the linear terms use `krho`.
+- For the current Cyclone input, `KTHRHO=0.5`, `q=1.4`, and `eps=0.19`, so
+  the solver now uses internal `krho=0.4263590029871862` in the GKW-matched
+  Fourier grid.
+- Before the fix, the GKW-implied `vdgradf` frequency was an exact scalar
+  multiple of the solver frequency with scale `0.852718005974373`, i.e.
+  `1/kthnorm`; after the fix, the selected RHS/action comparison no longer
+  prefers reversed-`vpar` or phase-aligned layouts.
+- Post-fix selected RHS/action comparison against
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace/`:
+  - `passed=False` at strict tolerance `1e-8`,
+  - best total layout: `direct`,
+  - best term layout: `direct`,
+  - max error `2.2379489422925073e-05`,
+  - dominant per-term errors: `vdgradf=2.2379489422925073e-05`,
+    `igh_or_term_i=1.1169352619622038e-06`,
+    `ve_grad_fm=4.5614093015065964e-08`,
+    `vd_grad_phi_fm=3.9597207251785146e-08`,
+    `vpgrphi=4.9491617703205574e-09`.
+- Added a production-control selected-`ky` regression at the matched
+  48/32/8 GKW trace resolution. The `late_mean_window` gate now passes with
+  observed growth `0.17800063460817828` against target `0.179`; the companion
+  diagnostic `late_fit` is `0.18560606277298422`.
+- Interpretation: the large `vdgradf` parity gap was a GKW internal-wave-number
+  convention mismatch, not a Term VII field-drive convention. The remaining CBC
+  production work is now the selected-state history gap and independent eik
+  coverage, not the selected-`ky` growth gate.
+- Verification run this round:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py tests/test_benchmark_references.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot tests/test_benchmark_references.py::test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution tests/test_benchmark_references.py::test_cyclone_term_vii_mode_packing_audit_matches_source_path -q`
+  - `JAX_ENABLE_X64=1 uv run python -c "... compare_selected_mode_rhs_traces(...) ..."`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_production_cyclone_base_case_gate(...) ..."`
 
 ### 2026-06-02: Added Solver Selected-Mode RHS/Action Trace Comparison
 

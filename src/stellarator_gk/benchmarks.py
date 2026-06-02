@@ -3064,6 +3064,11 @@ def run_production_cyclone_base_case_gate(
         n_window = window_growth.shape[0]
         start = max(0, min(int(n_window * growth_window_fraction), n_window - 1))
         observed = jnp.mean(window_growth[start:])
+    gate_status = (
+        "production GKW/GX tolerance ladder passed"
+        if abs(float(observed) - float(target.reference_value)) <= float(target.tolerance)
+        else "production GKW/GX agreement remains open until this gate passes"
+    )
     return evaluate_benchmark_gate(
         observed,
         target,
@@ -3079,7 +3084,7 @@ def run_production_cyclone_base_case_gate(
             f"normalization_model={normalization_model}, "
             f"initial_profile={initial_profile}, "
             f"growth_diagnostic={growth_diagnostic}; "
-            "production GKW/GX agreement remains open until this gate passes"
+            f"{gate_status}"
         ),
     )
 
@@ -8329,7 +8334,7 @@ def run_cyclone_base_case_term_vii_mode_packing_audit(
     conjugate_term_vii_delta = _max_abs_error(conjugate_reference, direct_reference)
     negative_field_term_vii_delta = _max_abs_error(negative_reference, direct_reference)
     selected_ky = setup["fourier"].ky[selected]
-    gkw_krho = jnp.asarray(float(metadata.get("k_theta_rhos", 0.5)), dtype=jnp.float64)
+    gkw_krho = jnp.asarray(_gkw_internal_krho_from_metadata(metadata), dtype=jnp.float64)
     positive_ky_error = jnp.abs(jnp.asarray(selected_ky, dtype=jnp.float64) - gkw_krho)
     ixplus = setup["connectivity"].ixplus[:, selected]
     ixminus = setup["connectivity"].ixminus[:, selected]
@@ -10042,7 +10047,7 @@ def _build_cyclone_base_case_setup(
         mu_max = 0.5 * vpar_max**2
     if parallel_boundary not in ("periodic", "zero"):
         raise ValueError("parallel_boundary must be 'periodic' or 'zero'")
-    ky = float(metadata.get("k_theta_rhos", 0.5))
+    ky = _gkw_internal_krho_from_metadata(metadata)
     velocity = build_velocity_grid(
         VelocityGridSpec(
             n_vpar=n_vpar,
@@ -10114,6 +10119,21 @@ def _build_cyclone_base_case_setup(
     }
 
 
+def _gkw_internal_krho_from_metadata(metadata) -> float:
+    """Return GKW's internal ``krho`` for the Cyclone benchmark setup."""
+
+    k_theta_rhos = float(metadata.get("k_theta_rhos", 0.5))
+    geometry = str(metadata.get("geometry", "s-alpha")).lower()
+    if geometry != "s-alpha":
+        return k_theta_rhos
+    q = float(metadata.get("q", 1.4))
+    eps = float(metadata.get("epsilon", 0.19))
+    if eps == 0.0:
+        raise ValueError("epsilon must be nonzero for GKW s-alpha kthnorm")
+    kthnorm = q / (2.0 * np.pi * eps)
+    return k_theta_rhos / kthnorm
+
+
 def _fit_growth_from_log_amplitudes(times, log_amplitudes, *, start_fraction: float):
     times = jnp.asarray(times, dtype=jnp.float64)
     log_amplitudes = jnp.asarray(log_amplitudes, dtype=jnp.float64)
@@ -10180,7 +10200,10 @@ def _cyclone_normalization_error(setup, metadata):
             _max_abs_error(setup["velocity"].w_vpar, jnp.full((n_vpar,), dv)),
             _max_abs_error(setup["velocity"].mu, expected_mu),
             _max_abs_error(setup["velocity"].w_mu, expected_w_mu),
-            _max_abs_error(setup["fourier"].ky, jnp.asarray([metadata.get("k_theta_rhos", 0.5)])),
+            _max_abs_error(
+                setup["fourier"].ky,
+                jnp.asarray([_gkw_internal_krho_from_metadata(metadata)]),
+            ),
         ],
         dtype=jnp.float64,
     )

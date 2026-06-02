@@ -703,8 +703,12 @@ def test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot() -> None:
     assert report.term_names == gkw_trace.term_names
     assert report.term_errors.shape == (9,)
     assert np.all(np.isfinite(np.asarray(report.field_errors)))
-    assert float(report.max_abs_error) > 0.0
+    assert 0.0 < float(report.max_abs_error) < 3.0e-5
     assert not bool(report.passed)
+    assert "best_term_layout=direct" in report.notes
+    term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
+    assert term_error_map["vdgradf"] == pytest.approx(float(report.max_abs_error))
+    assert term_error_map["vpgrphi"] < 1.0e-8
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:

@@ -422,6 +422,25 @@ def test_production_cyclone_gate_supports_gkw_igh_backend():
     assert "velocity_recurrence_rate=0.2" in cyclone.notes
 
 
+def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution():
+    cyclone = run_production_cyclone_base_case_gate(
+        n_z=48,
+        n_vpar=32,
+        n_mu=8,
+        steps_per_window=20,
+        n_windows=80,
+        parallel_derivative_model="gkw_igh",
+        growth_diagnostic="late_mean_window",
+        initial_profile="cosine2",
+    )
+
+    assert bool(cyclone.passed)
+    np.testing.assert_allclose(cyclone.observed_value, 0.17800063460817828, atol=1.0e-8)
+    assert "growth_diagnostic=late_mean_window" in cyclone.notes
+    assert "parallel_derivative_model=gkw_igh" in cyclone.notes
+    assert "production GKW/GX tolerance ladder passed" in cyclone.notes
+
+
 def test_cyclone_term_parity_audit_covers_gkw_conventions():
     report = run_cyclone_base_case_term_parity_audit(n_z=8, n_vpar=6, n_mu=4)
 
@@ -1646,6 +1665,8 @@ def test_cyclone_term_vii_mode_packing_audit_matches_source_path():
     assert audit.n_field_values == 8
     assert bool(audit.passed)
     np.testing.assert_allclose(audit.time, 0.012)
+    expected_internal_krho = 0.5 / (1.4 / (2.0 * np.pi * 0.19))
+    np.testing.assert_allclose(audit.selected_ky, expected_internal_krho, atol=1.0e-12)
     np.testing.assert_allclose(audit.selected_ky, audit.gkw_krho, atol=1.0e-12)
     np.testing.assert_array_equal(np.asarray(audit.ixplus), np.array([-1], dtype=np.int32))
     np.testing.assert_array_equal(np.asarray(audit.ixminus), np.array([-1], dtype=np.int32))

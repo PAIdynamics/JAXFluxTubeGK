@@ -1538,15 +1538,18 @@ The solver now records the same selected-mode action tensor with the
 \(\Delta t\,\mathcal{R}_a[h,\phi]\) in the same nine GKW term buckets, so
 \(\sum_a \Delta t\,\mathcal{R}_a\) reconstructs the selected total action.
 Comparing the production solver trace with the GKW RHS fixture at steps
-\(20,800,1600\) remains an open parity gate: the best diagnostic
-layout is reversed \(v_\parallel\) with snapshot phase alignment, and the
-maximum elementwise error is \(4.466\times10^{-3}\).  The error is dominated
-by \(\texttt{vdgradf}\) \((4.466\times10^{-3})\), followed by
-\(\texttt{ve\_grad\_fm}\) \((6.046\times10^{-4})\),
-\(\texttt{igh}\) \((2.071\times10^{-4})\), and
-\(\texttt{vpgrphi}\) \((8.176\times10^{-5})\).  Thus the next production
-debugging target is the magnetic-drift coefficient/sign/layout path, not a
-Term-VII-only field-drive convention.
+\(20,800,1600\) exposed a GKW wave-number convention.  In s-alpha geometry,
+\(\texttt{mode.F90::kgrid}\) divides the input \(\texttt{KTHRHO}\) by
+\(\texttt{kthnorm}=q/(2\pi\epsilon)\) before the linear terms use
+\(\texttt{krho}\).  For \(q=1.4\), \(\epsilon=0.19\), and
+\(\texttt{KTHRHO}=0.5\), the internal value is
+\(\texttt{krho}=0.426359\).  After applying this convention, the best RHS
+layout is direct and the maximum elementwise error drops to
+\(2.238\times10^{-5}\), still dominated by \(\texttt{vdgradf}\) but now at
+state-history scale rather than coefficient-convention scale.  The matched
+48/32/8 selected-\(k_y\) growth gate now passes: the late-window mean is
+\(0.178001\) and the late fit is \(0.185606\), compared with the
+GKW/GX target \(0.179\).
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies
@@ -1556,20 +1559,16 @@ GKW to a scratch tree and patches only the copy.  Since the original GKW
 \(\texttt{cosine2}\) profile \(1+\cos(2\pi s)\).  The patched serial/no-FFT
 GKW tree builds and runs, producing matched \(\texttt{cosin2}\) time and
 \(\texttt{parallel\_phi}\) fixtures under \path{fixtures/}.  Against these
-fixtures, the solver \(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\)
-late-fit growth is \(0.163899\) versus GKW \(0.187415\); the late-window mean
-is \(0.156237\) versus \(0.177999\); and the final-window growth is
-\(0.139452\) versus \(0.188741\).  The row-normalized
-\(\texttt{parallel\_phi.dat}\) profile error improves to
-\(2.96\times10^{-2}\), with worst signed error at \(t=3.78\),
-\(z=-0.09375\).  The corresponding CSV artifacts are the \(\texttt{gkw\_cosin2}\)
-time and parallel-profile comparisons under \path{figures/}.  A combined
-post-window gap audit, \path{figures/gkw_cosin2_cyclone_gap_audit.csv},
-reports the aligned late-fit pair \(0.164862\) versus \(0.187415\), late-window
-mean delta \(2.18\times10^{-2}\), final-window delta \(4.93\times10^{-2}\),
-and total-power ratio \(0.99999998\pm1.95\times10^{-6}\).  Thus the
-initialization and field-normalization conventions are no longer the dominant
-remaining explanations; the next audit should compare the evolved
+fixtures, the pre-\(\texttt{krho}\)-fix solver
+\(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\) late-fit growth was \(0.163899\)
+versus GKW \(0.187415\), and the late-window mean was \(0.156237\) versus
+\(0.177999\).  The corresponding CSV artifacts are the
+\(\texttt{gkw\_cosin2}\) time and parallel-profile comparisons under
+\path{figures/}.  After applying the GKW internal-\(\texttt{krho}\) convention,
+the selected-\(k_y\) production-control gate passes the GKW/GX tolerance
+ladder at the matched fixture resolution.  Thus the initialization,
+field-normalization, and magnetic-drift wave-number conventions are no longer
+the dominant remaining explanations; the next audit should compare the evolved
 velocity-space distribution state, either through GKW \(\texttt{distr*.dat}\)
 slices or through a non-destructive final-state dump.
 
