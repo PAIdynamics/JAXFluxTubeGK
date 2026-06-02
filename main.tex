@@ -1480,9 +1480,17 @@ The matched GKW state-history path is now defined non-destructively.  Running
 \path{stellarator_gk_state_trace.dat} with columns
 \((\texttt{step},t,\|f\|,\|\phi\|)\) at each normal output window.  The file is
 loaded as a \(\texttt{GkwStateTrace}\) and compared against the solver
-\(\texttt{CycloneSourceTermTrace}\).  The production-control trace itself is
-still to be generated, so this is a comparison contract rather than a new
-passing parity result.
+\(\texttt{CycloneSourceTermTrace}\).  The matched production-control
+\(\texttt{cosin2}\) trace is stored in
+\path{fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat}.  Since GKW
+writes diagnostics after \(\texttt{normalize(2)}\), the solver comparison uses
+post-normalization snapshots.  The resulting compact norm comparison,
+\path{figures/gkw_cosin2_cyclone_state_trace_comparison.csv}, passes at
+tolerance \(5\times10^{-3}\): the maximum state-norm error is
+\(3.31\times10^{-3}\), the time error is \(7.02\times10^{-14}\), and the
+field-norm error is \(6.11\times10^{-16}\).  Thus compact state and field
+norms are aligned; the remaining production discrepancy must be resolved with a
+full selected-mode state dump or a term-resolved GKW RHS/source trace.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

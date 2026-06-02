@@ -3115,6 +3115,7 @@ def run_cyclone_base_case_source_term_trace(
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
     normalization_model: str = "gkw_unweighted",
+    snapshot_timing: str = "pre_normalization",
     initial_profile: str | None = "cosine2",
     target: BenchmarkTarget | None = None,
 ) -> CycloneSourceTermTrace:
@@ -3135,6 +3136,8 @@ def run_cyclone_base_case_source_term_trace(
         raise ValueError("output_windows must be strictly increasing")
     if normalization_model not in ("weighted", "gkw_unweighted"):
         raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+    if snapshot_timing not in ("pre_normalization", "post_normalization"):
+        raise ValueError("snapshot_timing must be 'pre_normalization' or 'post_normalization'")
     target = target or cyclone_base_case_growth_target()
     metadata = dict(target.metadata)
     vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
@@ -3250,7 +3253,7 @@ def run_cyclone_base_case_source_term_trace(
         append_snapshot(0, state, log_normalization)
     for window in range(1, max(output_windows) + 1):
         state = advance_window(state)
-        if window in requested:
+        if window in requested and snapshot_timing == "pre_normalization":
             append_snapshot(window, state, log_normalization)
         if normalize_each_window:
             phi = solve_phi(state)
@@ -3266,6 +3269,8 @@ def run_cyclone_base_case_source_term_trace(
             )
             state = normalized.state
             log_normalization = normalized.log_normalization
+        if window in requested and snapshot_timing == "post_normalization":
+            append_snapshot(window, state, log_normalization)
 
     return CycloneSourceTermTrace(
         times=jnp.asarray(times, dtype=jnp.float64),
@@ -3284,7 +3289,8 @@ def run_cyclone_base_case_source_term_trace(
             f"initial_profile={initial_profile}, "
             f"parallel_derivative_model={parallel_derivative_model}, "
             f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
-            f"normalization_model={normalization_model}"
+            f"normalization_model={normalization_model}, "
+            f"snapshot_timing={snapshot_timing}"
         ),
     )
 

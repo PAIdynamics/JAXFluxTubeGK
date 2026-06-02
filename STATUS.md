@@ -310,8 +310,19 @@ copy-tree patch. `scripts/prepare_gkw_cosine2_run.py --state-trace` adds a
 normal diagnostic output with columns `step`, `time`, `state_norm`, and
 `phi_norm`; it can be combined with `--multi-time-distr`. The Python side now
 loads this file as `GkwStateTrace` and compares it to `CycloneSourceTermTrace`
-with `compare_gkw_state_trace_to_source_term_trace`. The production-control
-GKW state-trace fixture still needs to be generated or copied into `fixtures/`.
+with `compare_gkw_state_trace_to_source_term_trace`. The matched
+production-control serial/no-FFT GKW `cosin2` state trace is now stored in
+`fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat`, and the comparison
+artifact is `figures/gkw_cosin2_cyclone_state_trace_comparison.csv`. Because
+GKW writes diagnostics after `normalize(2,...)`, the solver source trace now
+supports `snapshot_timing="post_normalization"` for this comparison. The
+compact norm-level comparison passes at tolerance `5.0e-03`: maximum error
+`3.3077755368903644e-03`, time error `7.016609515630989e-14`, state-norm error
+`3.3077755368903644e-03`, and field-norm error
+`6.106226635438361e-16`. Final GKW/solver state norms are
+`0.016112898161769` and `0.016826748946865613`; final field norms agree at
+`0.144337567297406`. Compact state/field norms therefore no longer explain the
+remaining CBC growth/profile discrepancy by themselves.
 That discriminator has now been run on compact early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
 `3.990529105190601e-03`, `3.6712468463562305e-02`, and
@@ -467,8 +478,9 @@ examples labeled as reduced until CBC parity passes:
   1-based indexing checks,
 - use the completed Term VII, multi-window fused-`igh`, solver-side
   source-term trace, and GKW compact state-trace patch as guardrails against
-  promoting diagnostic sign variants, and generate/load the matched production
-  GKW state/source/restart fixture for the remaining cumulative gap,
+  promoting diagnostic sign variants, and move from compact norms toward a
+  full selected-mode state dump or GKW term-resolved RHS/source trace for the
+  remaining cumulative gap,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -495,6 +507,32 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Captured Matched GKW Compact State Trace
+
+- Prepared a copied GKW tree with:
+  - `uv run python scripts/prepare_gkw_cosine2_run.py --overwrite --state-trace --output-root /tmp/stellarator_gk_gkw_cosin2_state_trace`
+- Built and ran the copied serial/no-FFT GKW tree with:
+  - `make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`
+  - `./gkw.x`
+- Added the matched production-control fixture:
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat`.
+- Added `examples/compare_gkw_state_trace.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_state_trace_comparison.csv`.
+- Added `snapshot_timing="post_normalization"` to
+  `run_cyclone_base_case_source_term_trace` to match GKW's diagnostic order
+  after `normalize(2,...)`.
+- Compact state-trace comparison result:
+  - PASS at tolerance `5.0e-03`,
+  - maximum error: `3.3077755368903644e-03`,
+  - time error: `7.016609515630989e-14`,
+  - state-norm error: `3.3077755368903644e-03`,
+  - field-norm error: `6.106226635438361e-16`.
+- Interpretation: compact state and field norms are now aligned well enough
+  that the remaining CBC gap needs a full selected-mode state dump or
+  term-resolved GKW RHS/source trace.
+- Verification run this round:
+  - `uv run --extra dev python examples/compare_gkw_state_trace.py`
 
 ### 2026-06-02: Added GKW Compact State-Trace Patch Path
 

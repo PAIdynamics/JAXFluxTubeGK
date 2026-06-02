@@ -522,6 +522,21 @@ def test_cyclone_source_term_trace_reconstructs_gkw_igh_rhs(tmp_path):
     assert jnp.max(trace.reconstruction_error) < 5.0e-13
     assert path.read_text().splitlines()[0].startswith("time,phi_norm,state_norm")
 
+    post_trace = run_cyclone_base_case_source_term_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_windows=(1, 2),
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+        snapshot_timing="post_normalization",
+    )
+    assert post_trace.times.shape == (2,)
+    assert jnp.max(post_trace.reconstruction_error) < 5.0e-13
+    assert "snapshot_timing=post_normalization" in post_trace.notes
+
     with pytest.raises(ValueError, match="strictly increasing"):
         run_cyclone_base_case_source_term_trace(
             n_z=8,

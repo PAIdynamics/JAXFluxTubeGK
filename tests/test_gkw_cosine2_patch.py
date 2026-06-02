@@ -213,11 +213,17 @@ def test_patched_cosin2_gkw_fixtures_load() -> None:
         ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat",
         time_path=ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat",
     )
+    state_trace = load_gkw_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat"
+    )
 
     assert "finit = 'cosin2'" in input_text
     assert time_trace.times.shape == (80,)
     assert phi_trace.phi_power.shape == (80, 48)
+    assert state_trace.times.shape == (80,)
     assert np.isclose(float(time_trace.window_growth[-1]), 0.188741)
+    assert np.isclose(float(state_trace.state_norm[-1]), 1.61128981617690e-02)
+    assert np.isclose(float(state_trace.phi_norm[-1]), 1.44337567297406e-01)
 
 
 def test_gkw_state_trace_loader_and_solver_comparison(tmp_path: Path) -> None:
