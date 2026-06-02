@@ -1531,9 +1531,22 @@ The internal term-sum error is \(9.55\times10^{-18}\).  At the final snapshot,
 the dtim-scaled total-action norm is \(1.94\times10^{-2}\), dominated by
 \(\texttt{vdgradf}\) \((1.91\times10^{-2})\), then
 \(\texttt{ve\_grad\_fm}\) \((2.62\times10^{-3})\) and
-\(\texttt{igh}\) \((1.25\times10^{-3})\).  The remaining comparison task is to
-record solver-side full selected-mode term-action arrays and compare them
-elementwise against this GKW trace.
+\(\texttt{igh}\) \((1.25\times10^{-3})\).
+
+The solver now records the same selected-mode action tensor with the
+\texttt{selected-rhs} trace helper.  Each solver snapshot stores
+\(\Delta t\,\mathcal{R}_a[h,\phi]\) in the same nine GKW term buckets, so
+\(\sum_a \Delta t\,\mathcal{R}_a\) reconstructs the selected total action.
+Comparing the production solver trace with the GKW RHS fixture at steps
+\(20,800,1600\) remains an open parity gate: the best diagnostic
+layout is reversed \(v_\parallel\) with snapshot phase alignment, and the
+maximum elementwise error is \(4.466\times10^{-3}\).  The error is dominated
+by \(\texttt{vdgradf}\) \((4.466\times10^{-3})\), followed by
+\(\texttt{ve\_grad\_fm}\) \((6.046\times10^{-4})\),
+\(\texttt{igh}\) \((2.071\times10^{-4})\), and
+\(\texttt{vpgrphi}\) \((8.176\times10^{-5})\).  Thus the next production
+debugging target is the magnetic-drift coefficient/sign/layout path, not a
+Term-VII-only field-drive convention.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

@@ -350,9 +350,16 @@ term-sum error is `9.550830415404176e-18`. At the final snapshot, the
 dtim-scaled total action norm is `1.9404731497669497e-02`, dominated by
 `vdgradf` (`1.912308487778263e-02`), followed by `ve_grad_fm`
 (`2.6230193433310666e-03`) and `igh_or_term_i`
-(`1.2506893514028245e-03`). The next target is the solver-side full
-selected-mode term-action array comparison; current solver term norms are not
-yet sufficient for elementwise source-action parity.
+(`1.2506893514028245e-03`). The solver now records matching full selected-mode
+term-action arrays through `run_cyclone_base_case_selected_rhs_trace()` and
+compares them with `compare_selected_mode_rhs_traces()`. The production
+GKW/solver elementwise RHS/action comparison remains OPEN: best diagnostic
+layout is reverse-`vpar` plus snapshot phase alignment, with max error
+`4.466017187736114e-03`; per-term errors are dominated by `vdgradf`
+(`4.466017187736114e-03`), then `ve_grad_fm`
+(`6.045520645652958e-04`), `igh_or_term_i`
+(`2.0712355663949134e-04`), and `vpgrphi`
+(`8.175992645595e-05`).
 The earlier multi-time velocity-slice discriminator has also been run on
 early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
@@ -513,9 +520,9 @@ examples labeled as reduced until CBC parity passes:
 - use the completed Term VII, multi-window fused-`igh`, solver-side
   source-term trace, and GKW compact state-trace patch as guardrails against
   promoting diagnostic sign variants; the full selected-mode state dump is now
-  available and leaves an OPEN phase-aligned state gap; the GKW RHS/source
-  trace is now available too, so the next narrowed target is a solver full
-  selected-mode term-action comparison against those GKW snapshots,
+  available and leaves an OPEN phase-aligned state gap; the GKW and solver
+  full selected-mode RHS/action traces are now comparable elementwise, with the
+  remaining best-layout error dominated by `vdgradf`,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -542,6 +549,36 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Solver Selected-Mode RHS/Action Trace Comparison
+
+- Added public `SolverSelectedModeRhsTrace`,
+  `SelectedModeRhsTraceComparisonReport`,
+  `run_cyclone_base_case_selected_rhs_trace()`, and
+  `compare_selected_mode_rhs_traces()`.
+- The solver trace records `dt`-scaled selected-mode actions with shape
+  `(n_time, 9, n_vpar, n_mu, n_z)` in the same GKW term buckets as the patched
+  `stellarator_gk_rhs_trace_*.dat` files.
+- The term buckets intentionally keep GKW-empty groups explicit:
+  `untagged`, `trapdf`, `hyper_collision`, and `field_eq` remain available as
+  zero-action checks in the collisionless production selected-`ky` setup.
+- Production x64 comparison against
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace/`:
+  - `passed=False` at tolerance `1e-8`,
+  - best total layout: `reverse_vpar_phase_aligned`,
+  - best term layout: `reverse_vpar_phase_aligned`,
+  - max error `4.466017187736114e-03`,
+  - dominant per-term errors: `vdgradf=4.466017187736114e-03`,
+    `ve_grad_fm=6.045520645652958e-04`,
+    `igh_or_term_i=2.0712355663949134e-04`,
+    `vpgrphi=8.175992645595e-05`.
+- Interpretation: selected-state and selected-RHS traces both prefer the
+  reversed-`vpar` diagnostic lens, but the largest remaining elementwise RHS
+  gap now sits in the magnetic-drift `vdgradf` bucket rather than Term VII.
+- Verification run this round:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `JAX_ENABLE_X64=1 uv run python -c "... compare_selected_mode_rhs_traces(...) ..."`
 
 ### 2026-06-02: Added GKW Selected-Mode RHS/Source Trace
 

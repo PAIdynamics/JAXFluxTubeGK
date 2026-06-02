@@ -22,7 +22,9 @@ from stellarator_gk import (
     GkwStateTrace,
     GkwVelocitySpaceSliceSeries,
     SelectedModeStateTrace,
+    SolverSelectedModeRhsTrace,
     compare_gkw_state_trace_to_source_term_trace,
+    compare_selected_mode_rhs_traces,
     compare_selected_mode_state_traces,
     load_gkw_parallel_phi_trace,
     load_gkw_selected_mode_rhs_trace,
@@ -30,6 +32,7 @@ from stellarator_gk import (
     load_gkw_state_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice_series,
+    run_cyclone_base_case_selected_rhs_trace,
 )
 
 
@@ -627,6 +630,81 @@ def test_patched_cosin2_rhs_trace_fixtures_load() -> None:
     assert trace.term_actions.shape == (3, 9, 32, 8, 48)
     assert trace.term_names[7] == "vpgrphi"
     assert float(np.max(np.abs(np.asarray(trace.total_action)))) > 0.0
+
+
+def test_solver_selected_mode_rhs_trace_records_gkw_bucketed_actions() -> None:
+    trace = run_cyclone_base_case_selected_rhs_trace(
+        n_z=12,
+        n_vpar=8,
+        n_mu=4,
+        steps_per_window=2,
+        output_windows=(1, 2),
+    )
+
+    assert isinstance(trace, SolverSelectedModeRhsTrace)
+    np.testing.assert_array_equal(trace.steps, np.asarray([2, 4], dtype=np.int32))
+    assert trace.total_action.shape == (2, 8, 4, 12)
+    assert trace.term_actions.shape == (2, 9, 8, 4, 12)
+    assert trace.term_names == (
+        "untagged",
+        "igh_or_term_i",
+        "trapdf",
+        "vdgradf",
+        "hyper_collision",
+        "ve_grad_fm",
+        "vd_grad_phi_fm",
+        "vpgrphi",
+        "field_eq",
+    )
+    np.testing.assert_allclose(
+        trace.total_action,
+        np.sum(np.asarray(trace.term_actions), axis=1),
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+    assert float(np.max(np.abs(np.asarray(trace.term_actions[:, 1])))) > 0.0
+    assert float(np.max(np.abs(np.asarray(trace.term_actions[:, 3])))) > 0.0
+
+
+def test_selected_mode_rhs_trace_comparator_detects_reversed_vpar_layout() -> None:
+    base = run_cyclone_base_case_selected_rhs_trace(
+        n_z=10,
+        n_vpar=6,
+        n_mu=3,
+        steps_per_window=1,
+        output_windows=(1,),
+    )
+    reversed_trace = SolverSelectedModeRhsTrace(
+        steps=base.steps,
+        times=base.times,
+        total_action=base.total_action[:, ::-1, :, :],
+        term_actions=base.term_actions[:, :, ::-1, :, :],
+        term_names=base.term_names,
+        source="reversed",
+    )
+
+    report = compare_selected_mode_rhs_traces(base, reversed_trace, tolerance=1.0e-12)
+
+    assert bool(report.passed)
+    assert "best_term_layout=reverse_vpar" in report.notes
+    term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
+    assert term_error_map["igh_or_term_i"] <= 1.0e-12
+
+
+def test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot() -> None:
+    gkw_trace = load_gkw_selected_mode_rhs_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
+    )
+    solver_trace = run_cyclone_base_case_selected_rhs_trace()
+
+    report = compare_selected_mode_rhs_traces(gkw_trace, solver_trace)
+
+    assert report.field_names[0] == "steps"
+    assert report.term_names == gkw_trace.term_names
+    assert report.term_errors.shape == (9,)
+    assert np.all(np.isfinite(np.asarray(report.field_errors)))
+    assert float(report.max_abs_error) > 0.0
+    assert not bool(report.passed)
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:

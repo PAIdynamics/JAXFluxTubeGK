@@ -433,6 +433,97 @@ class GkwSelectedModeRhsTrace(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class SolverSelectedModeRhsTrace(_PyTreeDataclass):
+    """Solver selected-mode RHS/action snapshots in GKW term buckets."""
+
+    steps: object
+    times: object
+    total_action: object
+    term_actions: object
+    term_names: tuple[str, ...]
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "steps",
+        "times",
+        "total_action",
+        "term_actions",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("term_names", "source", "notes")
+
+    def __post_init__(self):
+        steps = jnp.asarray(self.steps, dtype=jnp.int32)
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        total_action = jnp.asarray(self.total_action, dtype=jnp.complex128)
+        term_actions = jnp.asarray(self.term_actions, dtype=jnp.complex128)
+        if steps.ndim != 1:
+            raise ValueError("steps must be one-dimensional")
+        if times.shape != steps.shape:
+            raise ValueError("times must match steps shape")
+        if total_action.ndim != 4:
+            raise ValueError("total_action must have shape (n_time,n_vpar,n_mu,n_z)")
+        if term_actions.ndim != 5:
+            raise ValueError(
+                "term_actions must have shape (n_time,n_terms,n_vpar,n_mu,n_z)"
+            )
+        if total_action.shape[0] != times.shape[0]:
+            raise ValueError("total_action time dimension must match times")
+        if term_actions.shape[0] != times.shape[0]:
+            raise ValueError("term_actions time dimension must match times")
+        if term_actions.shape[2:] != total_action.shape[1:]:
+            raise ValueError("term_actions grid shape must match total_action")
+        if len(self.term_names) != term_actions.shape[1]:
+            raise ValueError("term_names length must match term_actions")
+        object.__setattr__(self, "steps", steps)
+        object.__setattr__(self, "times", times)
+        object.__setattr__(self, "total_action", total_action)
+        object.__setattr__(self, "term_actions", term_actions)
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class SelectedModeRhsTraceComparisonReport(_PyTreeDataclass):
+    """Elementwise comparison between selected-mode RHS/action traces."""
+
+    field_errors: object
+    term_errors: object
+    max_abs_error: object
+    passed: object
+    field_names: tuple[str, ...]
+    term_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "field_errors",
+        "term_errors",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("field_names", "term_names", "notes")
+
+    def __post_init__(self):
+        field_errors = jnp.asarray(self.field_errors, dtype=jnp.float64)
+        term_errors = jnp.asarray(self.term_errors, dtype=jnp.float64)
+        if field_errors.ndim != 1:
+            raise ValueError("field_errors must be one-dimensional")
+        if term_errors.ndim != 1:
+            raise ValueError("term_errors must be one-dimensional")
+        if len(self.field_names) != field_errors.shape[0]:
+            raise ValueError("field_names length must match field_errors")
+        if len(self.term_names) != term_errors.shape[0]:
+            raise ValueError("term_names length must match term_errors")
+        object.__setattr__(self, "field_errors", field_errors)
+        object.__setattr__(self, "term_errors", term_errors)
+        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "field_names", tuple(self.field_names))
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -3734,6 +3825,150 @@ def run_cyclone_base_case_selected_state_trace(
     )
 
 
+def run_cyclone_base_case_selected_rhs_trace(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    output_windows: tuple[int, ...] = (1, 40, 80),
+    parallel_derivative_model: str | None = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    snapshot_timing: str = "post_normalization",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> SolverSelectedModeRhsTrace:
+    """Record solver selected-mode ``dt``-scaled RHS actions in GKW buckets."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    output_windows = tuple(int(window) for window in output_windows)
+    if not output_windows:
+        raise ValueError("output_windows must not be empty")
+    if any(window < 0 for window in output_windows):
+        raise ValueError("output_windows must be nonnegative")
+    if any(left >= right for left, right in zip(output_windows, output_windows[1:])):
+        raise ValueError("output_windows must be strictly increasing")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+    if snapshot_timing not in ("pre_normalization", "post_normalization"):
+        raise ValueError("snapshot_timing must be 'pre_normalization' or 'post_normalization'")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    dt = float(metadata["dt"])
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            parallel_derivative_model,
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(
+            metadata.get("initial_profile", "cosine2")
+            if initial_profile is None
+            else initial_profile
+        ),
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+
+    steps = []
+    times = []
+    total_actions = []
+    term_actions = []
+
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    def append_snapshot(window, state_value):
+        phi = solve_phi(state_value)
+        names, terms = _cyclone_source_term_parts(state_value, phi, setup["precompute"].rhs)
+        selected_terms = _gkw_bucketed_selected_rhs_actions(
+            names,
+            terms,
+            ixzero=ixzero,
+            iy=selected,
+            dt=dt,
+        )
+        steps.append(window * steps_per_window)
+        times.append(float(window * steps_per_window * dt))
+        total_actions.append(jnp.sum(selected_terms, axis=0))
+        term_actions.append(selected_terms)
+
+    requested = set(output_windows)
+    if 0 in requested:
+        append_snapshot(0, state)
+    for window in range(1, max(output_windows) + 1):
+        state = advance_window(state)
+        if window in requested and snapshot_timing == "pre_normalization":
+            append_snapshot(window, state)
+        phi = solve_phi(state)
+        amplitude = _cyclone_phi_normalization_amplitude(
+            phi,
+            setup,
+            normalization_model=normalization_model,
+        )
+        normalized = normalize_by_ky_amplitude(
+            state,
+            amplitude,
+            log_normalization=log_normalization,
+        )
+        state = normalized.state
+        log_normalization = normalized.log_normalization
+        if window in requested and snapshot_timing == "post_normalization":
+            append_snapshot(window, state)
+
+    return SolverSelectedModeRhsTrace(
+        steps=jnp.asarray(steps, dtype=jnp.int32),
+        times=jnp.asarray(times, dtype=jnp.float64),
+        total_action=jnp.asarray(total_actions, dtype=jnp.complex128),
+        term_actions=jnp.asarray(term_actions, dtype=jnp.complex128),
+        term_names=GKW_SELECTED_MODE_RHS_TERM_NAMES,
+        source="stellarator_gk",
+        notes=(
+            "solver selected-mode dt-scaled RHS/action trace in GKW term buckets; "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"normalization_model={normalization_model}, "
+            f"snapshot_timing={snapshot_timing}"
+        ),
+    )
+
+
 def compare_selected_mode_state_traces(
     observed: SelectedModeStateTrace,
     reference: SelectedModeStateTrace,
@@ -3821,6 +4056,114 @@ def compare_selected_mode_state_traces(
             f"observed={observed.source}; reference={reference.source}; "
             f"best_state_layout={best_layout}; best_phi_layout={best_phi_layout}; "
             "selected-mode state trace comparison"
+        ),
+    )
+
+
+def compare_selected_mode_rhs_traces(
+    observed: GkwSelectedModeRhsTrace,
+    reference: SolverSelectedModeRhsTrace,
+    *,
+    tolerance: float = 1.0e-8,
+) -> SelectedModeRhsTraceComparisonReport:
+    """Compare GKW and solver selected-mode RHS/action traces elementwise."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if observed.total_action.shape != reference.total_action.shape:
+        raise ValueError("selected-mode total-action shapes must match")
+    if observed.term_actions.shape != reference.term_actions.shape:
+        raise ValueError("selected-mode term-action shapes must match")
+    if tuple(observed.term_names) != tuple(reference.term_names):
+        raise ValueError("selected-mode RHS term names must match")
+
+    total_direct = _max_abs_error(observed.total_action, reference.total_action)
+    total_reverse_vpar = _max_abs_error(
+        observed.total_action,
+        reference.total_action[:, ::-1, :, :],
+    )
+    total_phase = _phase_aligned_max_abs_error(observed.total_action, reference.total_action)
+    total_reverse_vpar_phase = _phase_aligned_max_abs_error(
+        observed.total_action,
+        reference.total_action[:, ::-1, :, :],
+    )
+
+    term_candidates = {
+        "direct": reference.term_actions,
+        "reverse_vpar": reference.term_actions[:, :, ::-1, :, :],
+        "direct_phase_aligned": _snapshot_phase_aligned_reference(
+            observed.term_actions,
+            reference.term_actions,
+        ),
+        "reverse_vpar_phase_aligned": _snapshot_phase_aligned_reference(
+            observed.term_actions,
+            reference.term_actions[:, :, ::-1, :, :],
+        ),
+    }
+    term_layout_errors = {
+        name: _max_abs_error(observed.term_actions, candidate)
+        for name, candidate in term_candidates.items()
+    }
+    best_term_layout = min(term_layout_errors, key=lambda name: float(term_layout_errors[name]))
+    best_term_actions = term_candidates[best_term_layout]
+    term_errors = jnp.max(
+        jnp.abs(jnp.asarray(observed.term_actions) - best_term_actions),
+        axis=(0, 2, 3, 4),
+    )
+
+    total_errors = {
+        "direct": total_direct,
+        "reverse_vpar": total_reverse_vpar,
+        "direct_phase_aligned": total_phase,
+        "reverse_vpar_phase_aligned": total_reverse_vpar_phase,
+    }
+    best_total_layout = min(total_errors, key=lambda name: float(total_errors[name]))
+    best_total_error = total_errors[best_total_layout]
+    best_term_error = term_layout_errors[best_term_layout]
+    errors = jnp.asarray(
+        [
+            _max_abs_error(observed.steps, reference.steps),
+            _max_abs_error(observed.times, reference.times),
+            total_direct,
+            total_reverse_vpar,
+            total_phase,
+            total_reverse_vpar_phase,
+            term_layout_errors["direct"],
+            term_layout_errors["reverse_vpar"],
+            term_layout_errors["direct_phase_aligned"],
+            term_layout_errors["reverse_vpar_phase_aligned"],
+        ],
+        dtype=jnp.float64,
+    )
+    max_error = jnp.max(
+        jnp.asarray(
+            [errors[0], errors[1], best_total_error, best_term_error],
+            dtype=jnp.float64,
+        )
+    )
+    return SelectedModeRhsTraceComparisonReport(
+        field_errors=errors,
+        term_errors=term_errors,
+        max_abs_error=max_error,
+        passed=max_error <= tolerance,
+        field_names=(
+            "steps",
+            "times",
+            "total_direct",
+            "total_reverse_vpar",
+            "total_phase_aligned",
+            "total_reverse_vpar_phase_aligned",
+            "terms_direct",
+            "terms_reverse_vpar",
+            "terms_phase_aligned",
+            "terms_reverse_vpar_phase_aligned",
+        ),
+        term_names=tuple(observed.term_names),
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            f"best_total_layout={best_total_layout}; "
+            f"best_term_layout={best_term_layout}; "
+            "selected-mode RHS/action trace comparison"
         ),
     )
 
@@ -9972,6 +10315,49 @@ def _cyclone_source_term_parts(distribution, phi, precompute):
     )
 
 
+def _gkw_bucketed_selected_rhs_actions(
+    term_names: tuple[str, ...],
+    terms: tuple[object, ...],
+    *,
+    ixzero: int,
+    iy: int,
+    dt: float,
+):
+    """Project solver RHS pieces into patched-GKW selected-mode term buckets."""
+
+    if len(term_names) != len(terms):
+        raise ValueError("term_names and terms must have the same length")
+    selected_terms = {
+        name: jnp.asarray(term)[..., ixzero, iy] for name, term in zip(term_names, terms)
+    }
+    if not selected_terms:
+        raise ValueError("at least one RHS term is required")
+    template = next(iter(selected_terms.values()))
+    buckets = [jnp.zeros_like(template) for _ in GKW_SELECTED_MODE_RHS_TERM_NAMES]
+
+    def add(bucket_name: str, solver_name: str):
+        nonlocal buckets
+        if solver_name not in selected_terms:
+            return
+        bucket_index = GKW_SELECTED_MODE_RHS_TERM_NAMES.index(bucket_name)
+        buckets[bucket_index] = buckets[bucket_index] + selected_terms[solver_name]
+
+    add("igh_or_term_i", "gkw_igh_streaming_mirror_recurrence")
+    add("igh_or_term_i", "gkw_parallel_streaming_recurrence")
+    add("igh_or_term_i", "parallel_streaming")
+    add("igh_or_term_i", "parallel_recurrence")
+    add("igh_or_term_i", "velocity_recurrence")
+    add("trapdf", "mirror_force")
+    add("vdgradf", "magnetic_drift")
+    add("hyper_collision", "dissipation")
+    add("ve_grad_fm", "equilibrium_drive")
+    add("vd_grad_phi_fm", "drift_field_drive")
+    add("vpgrphi", "gkw_parallel_field_drive")
+    add("vpgrphi", "parallel_field_drive")
+
+    return jnp.stack([jnp.asarray(dt, dtype=template.dtype) * bucket for bucket in buckets])
+
+
 def _cyclone_source_term_arrays(setup, metadata):
     """Rebuild the CBC source formulas used by selected GKW ``linear_terms``."""
 
@@ -10631,3 +11017,18 @@ def _phase_aligned_max_abs_error(left, right):
     denominator = jnp.vdot(right, right)
     scale = jnp.where(jnp.abs(denominator) > 0.0, numerator / denominator, 0.0)
     return jnp.max(jnp.abs(left - scale * right))
+
+
+def _snapshot_phase_aligned_reference(left, right):
+    left = jnp.asarray(left)
+    right = jnp.asarray(right)
+    if left.shape != right.shape:
+        raise ValueError("phase-aligned arrays must have matching shapes")
+    if left.ndim == 0:
+        return right
+    left_rows = left.reshape((left.shape[0], -1))
+    right_rows = right.reshape((right.shape[0], -1))
+    numerator = jnp.einsum("ij,ij->i", jnp.conjugate(right_rows), left_rows)
+    denominator = jnp.einsum("ij,ij->i", jnp.conjugate(right_rows), right_rows)
+    scale = jnp.where(jnp.abs(denominator) > 0.0, numerator / denominator, 0.0)
+    return (scale[:, None] * right_rows).reshape(right.shape)
