@@ -1573,6 +1573,21 @@ middle diagnostic windows, not a pure final-output phase, grid-ordering, or
 peak-\(\phi\) sampling artifact.  The next parity target is the step-20 to
 step-800 evolution through the fused \(\texttt{gkw\_igh}\) path, Term VII,
 field packing, and \(k_y\)/Fourier sign conventions.
+The multi-time variant audit
+\path{figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv} applies
+these tests to the same early/middle/late snapshots.  A global
+\(\texttt{gkw\_igh}\) sign flip remains ruled out: its step-1600 direct error is
+\(1.71\times10^{1}\).  Global field conjugation also worsens the middle and
+final snapshots.  The best diagnostic variant at step 800 is a Term VII-only
+sign flip, which reduces the direct maximum error from \(3.67\times10^{-2}\) to
+\(2.60\times10^{-2}\); at step 1600 the best diagnostic variant is Term VII-only
+conjugation, reducing \(3.53\times10^{-2}\) to \(1.60\times10^{-2}\).  Because
+the best diagnostic convention changes with time and the gap is not closed, no
+Term VII sign or conjugation change is promoted into the solver.  The remaining
+source-level task is to trace the selected-mode \(k_y\)/Fourier sign and
+field-packing path through \path{mode.F90}, \path{dist.F90::get_phi},
+\path{linear_terms.F90::vpgrphi_3_newbc}, and the real/complex storage
+convention.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
