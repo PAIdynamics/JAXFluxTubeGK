@@ -1473,6 +1473,16 @@ selected-mode norms are
 log-normalization \(-4.3987\).  This does not close the GKW gap, but it gives a
 compact solver-side target for a matched GKW source-term, state-history, or
 restart/final-state dump.
+The matched GKW state-history path is now defined non-destructively.  Running
+\path{scripts/prepare_gkw_cosine2_run.py} with
+\(\texttt{--state-trace}\) patches only the copied GKW
+\path{diagnostic.F90}; the patched diagnostic writes
+\path{stellarator_gk_state_trace.dat} with columns
+\((\texttt{step},t,\|f\|,\|\phi\|)\) at each normal output window.  The file is
+loaded as a \(\texttt{GkwStateTrace}\) and compared against the solver
+\(\texttt{CycloneSourceTermTrace}\).  The production-control trace itself is
+still to be generated, so this is a comparison contract rather than a new
+passing parity result.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

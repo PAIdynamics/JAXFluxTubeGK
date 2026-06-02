@@ -308,6 +308,42 @@ class CycloneSourceTermTrace(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GkwStateTrace(_PyTreeDataclass):
+    """Compact GKW state/field norm history from a patched diagnostic run."""
+
+    steps: object
+    times: object
+    state_norm: object
+    phi_norm: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "steps",
+        "times",
+        "state_norm",
+        "phi_norm",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        steps = jnp.asarray(self.steps, dtype=jnp.int32)
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if steps.ndim != 1:
+            raise ValueError("steps must be one-dimensional")
+        if times.shape != steps.shape:
+            raise ValueError("times must match steps shape")
+        object.__setattr__(self, "steps", steps)
+        object.__setattr__(self, "times", times)
+        for name in ("state_norm", "phi_norm"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times shape")
+            object.__setattr__(self, name, values)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -3342,6 +3378,97 @@ def write_cyclone_source_term_trace_csv(path, trace: CycloneSourceTermTrace) -> 
                     float(trace.log_normalization[index]),
                 ]
             )
+
+
+def load_gkw_state_trace(path, *, source: str | None = None, notes: str = "") -> GkwStateTrace:
+    """Load a patched GKW compact state trace.
+
+    The expected whitespace or CSV columns are ``step``, ``time``,
+    ``state_norm``, and ``phi_norm``.  Lines beginning with ``#`` are ignored.
+    """
+
+    rows = []
+    with Path(path).open(newline="") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            tokens = [token for token in line.replace(",", " ").split() if token]
+            if len(tokens) < 4:
+                raise ValueError("GKW state trace rows must contain step, time, state_norm, phi_norm")
+            try:
+                rows.append((int(float(tokens[0])), *(float(token) for token in tokens[1:4])))
+            except ValueError as exc:
+                raise ValueError(f"invalid GKW state trace row: {raw_line.strip()!r}") from exc
+    if not rows:
+        raise ValueError("GKW state trace contains no rows")
+    array = np.asarray(rows, dtype=np.float64)
+    steps = array[:, 0].astype(np.int32)
+    times = array[:, 1]
+    state_norm = array[:, 2]
+    phi_norm = array[:, 3]
+    if not np.all(np.isfinite(array)):
+        raise ValueError("GKW state trace contains non-finite values")
+    if np.any(np.diff(times) <= 0.0):
+        raise ValueError("GKW state trace times must be strictly increasing")
+    return GkwStateTrace(
+        steps=jnp.asarray(steps, dtype=jnp.int32),
+        times=jnp.asarray(times, dtype=jnp.float64),
+        state_norm=jnp.asarray(state_norm, dtype=jnp.float64),
+        phi_norm=jnp.asarray(phi_norm, dtype=jnp.float64),
+        source=source or str(path),
+        notes=notes or "patched GKW compact state trace",
+    )
+
+
+def compare_gkw_state_trace_to_source_term_trace(
+    gkw_trace: GkwStateTrace,
+    solver_trace: CycloneSourceTermTrace,
+    *,
+    tolerance: float = 1.0e-10,
+    physicalize_solver: bool = False,
+) -> CycloneTraceComparisonReport:
+    """Compare patched GKW state/field norms against the solver source trace."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    solver_times = jnp.asarray(solver_trace.times, dtype=jnp.float64)
+    solver_state = jnp.asarray(solver_trace.state_norm, dtype=jnp.float64)
+    solver_phi = jnp.asarray(solver_trace.phi_norm, dtype=jnp.float64)
+    if solver_times.shape[0] == gkw_trace.times.shape[0] + 1:
+        solver_times = solver_times[1:]
+        solver_state = solver_state[1:]
+        solver_phi = solver_phi[1:]
+        solver_log = jnp.asarray(solver_trace.log_normalization, dtype=jnp.float64)[1:]
+    elif solver_times.shape == gkw_trace.times.shape:
+        solver_log = jnp.asarray(solver_trace.log_normalization, dtype=jnp.float64)
+    else:
+        raise ValueError(
+            "solver source trace must match GKW trace times or include one initial sample"
+        )
+    if physicalize_solver:
+        scale = jnp.exp(solver_log)
+        solver_state = solver_state * scale
+        solver_phi = solver_phi * scale
+    errors = jnp.asarray(
+        [
+            _max_abs_error(solver_times, gkw_trace.times),
+            _max_abs_error(solver_state, gkw_trace.state_norm),
+            _max_abs_error(solver_phi, gkw_trace.phi_norm),
+        ],
+        dtype=jnp.float64,
+    )
+    max_error = jnp.max(errors)
+    return CycloneTraceComparisonReport(
+        field_errors=errors,
+        max_abs_error=max_error,
+        passed=max_error <= tolerance,
+        field_names=("times", "state_norm", "phi_norm"),
+        notes=(
+            f"gkw={gkw_trace.source}; solver={solver_trace.source}; "
+            f"physicalize_solver={physicalize_solver}; compact state/source trace comparison"
+        ),
+    )
 
 
 def load_cyclone_trace_csv(path, *, source: str | None = None, notes: str = "") -> CycloneTrace:

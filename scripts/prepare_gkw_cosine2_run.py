@@ -32,6 +32,7 @@ class PreparedGkwCosine2Run:
     patched_input: Path
     patched_diagnostic: Path | None = None
     multi_time_distr: bool = False
+    state_trace: bool = False
     selector: str = PATCHED_SELECTOR
 
 
@@ -69,6 +70,7 @@ def prepare_gkw_cosine2_run(
     *,
     overwrite: bool = False,
     multi_time_distr: bool = False,
+    state_trace: bool = False,
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
 
@@ -96,12 +98,19 @@ def prepare_gkw_cosine2_run(
     patched_init = output_root / "src" / "init.f90"
     add_cosin2_branch(patched_init)
     patched_diagnostic = None
-    if multi_time_distr:
+    if multi_time_distr or state_trace:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
+    if state_trace:
+        add_state_trace_patch(patched_diagnostic)
+    if multi_time_distr:
         add_multitime_velocity_slice_patch(patched_diagnostic)
     patched_input = output_root / "input.dat"
     write_cosin2_input(input_path, patched_input)
-    _write_run_readme(output_root, multi_time_distr=multi_time_distr)
+    _write_run_readme(
+        output_root,
+        multi_time_distr=multi_time_distr,
+        state_trace=state_trace,
+    )
     return PreparedGkwCosine2Run(
         source_root=source_root,
         output_root=output_root,
@@ -109,6 +118,7 @@ def prepare_gkw_cosine2_run(
         patched_diagnostic=patched_diagnostic,
         patched_input=patched_input,
         multi_time_distr=multi_time_distr,
+        state_trace=state_trace,
     )
 
 
@@ -200,6 +210,77 @@ def add_multitime_velocity_slice_patch(diagnostic_path: Path) -> bool:
     return True
 
 
+def add_state_trace_patch(diagnostic_path: Path) -> bool:
+    """Patch copied GKW diagnostics to write compact state/field norm traces."""
+
+    text = diagnostic_path.read_text(encoding="utf-8")
+    if "stellarator_gk compact state trace patch" in text:
+        return False
+
+    call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
+    call_patch = (
+        "  ! stellarator_gk compact state trace patch: write state and field\n"
+        "  ! norms at every normal diagnostic output window.\n"
+        "  call stellarator_gk_state_trace_output\n\n"
+    )
+    if call_marker not in text:
+        raise ValueError(f"could not find write_output insertion marker in {diagnostic_path}")
+    text = text.replace(call_marker, call_patch + call_marker, 1)
+
+    module_marker = "end module diagnostic"
+    if module_marker not in text:
+        raise ValueError(f"could not find diagnostic module end marker in {diagnostic_path}")
+    text = text.replace(module_marker, STATE_TRACE_SUBROUTINE + "\n" + module_marker, 1)
+    diagnostic_path.write_text(text, encoding="utf-8")
+    return True
+
+
+STATE_TRACE_SUBROUTINE = r"""
+subroutine stellarator_gk_state_trace_output
+
+  use control,      only : time, ntotstep
+  use dist,         only : fdisi, nf, nsolc, phi, get_phi
+  use grid,         only : nmod, nx, ns
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+
+  integer :: i, imod, ix, is, lun
+  logical, save :: header_written = .false.
+  real :: state_power, state_norm, phi_power, phi_norm
+
+  state_power = 0.E0
+  do i = 1, nf
+     state_power = state_power + real(fdisi(i)*conjg(fdisi(i)))
+  end do
+  state_norm = sqrt(state_power / max(1, nf))
+
+  call get_phi(fdisi(1:nsolc), phi)
+  phi_power = 0.E0
+  do imod = 1, nmod
+     do ix = 1, nx
+        do is = 1, ns
+           phi_power = phi_power + real(phi(imod,ix,is)*conjg(phi(imod,ix,is)))
+        end do
+     end do
+  end do
+  phi_norm = sqrt(phi_power / max(1, nmod*nx*ns))
+
+  if (root_processor) then
+     call get_free_lun(lun)
+     open(lun, FILE='stellarator_gk_state_trace.dat', STATUS='unknown', &
+          & POSITION='append')
+     if (.not. header_written) then
+        write(lun,'(A)') '# step time state_norm phi_norm'
+        header_written = .true.
+     end if
+     write(lun,'(I12,1X,3(1PE22.14,1X))') ntotstep, time, state_norm, phi_norm
+     close(lun)
+  end if
+
+end subroutine stellarator_gk_state_trace_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -210,6 +291,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         "phi.dat",
         "fluxes.dat",
         "screen.out",
+        "stellarator_gk_state_trace.dat",
     }
     suffixes = (".o", ".mod", ".smod", ".log")
     return {
@@ -219,7 +301,12 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     }
 
 
-def _write_run_readme(output_root: Path, *, multi_time_distr: bool = False) -> None:
+def _write_run_readme(
+    output_root: Path,
+    *,
+    multi_time_distr: bool = False,
+    state_trace: bool = False,
+) -> None:
     extra = ""
     if multi_time_distr:
         extra = """
@@ -233,6 +320,17 @@ distr1_00000040.dat, ..., distr4_00000040.dat
 ```
 
 The unsuffixed `distr*.dat` files are still produced by GKW final output.
+"""
+    if state_trace:
+        extra += """
+The copied `src/diagnostic.F90` was also patched to write a compact state trace
+at every normal diagnostic output window:
+
+```text
+stellarator_gk_state_trace.dat
+```
+
+The columns are `step`, `time`, `state_norm`, and `phi_norm`.
 """
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
@@ -277,6 +375,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Patch copied GKW diagnostics to write distr*_<ntotstep>.dat snapshots.",
     )
+    parser.add_argument(
+        "--state-trace",
+        action="store_true",
+        help="Patch copied GKW diagnostics to write stellarator_gk_state_trace.dat.",
+    )
     return parser.parse_args()
 
 
@@ -288,6 +391,7 @@ def main() -> None:
         input_path=args.input,
         overwrite=args.overwrite,
         multi_time_distr=args.multi_time_distr,
+        state_trace=args.state_trace,
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")
     print(f"patched initializer: {prepared.patched_init}")

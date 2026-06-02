@@ -9,12 +9,17 @@ from scripts.prepare_gkw_cosine2_run import (
     PATCHED_SELECTOR,
     add_cosin2_branch,
     add_multitime_velocity_slice_patch,
+    add_state_trace_patch,
     prepare_gkw_cosine2_run,
     write_cosin2_input,
 )
 from stellarator_gk import (
+    CycloneSourceTermTrace,
+    GkwStateTrace,
     GkwVelocitySpaceSliceSeries,
+    compare_gkw_state_trace_to_source_term_trace,
     load_gkw_parallel_phi_trace,
+    load_gkw_state_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice_series,
 )
@@ -131,6 +136,35 @@ def test_prepare_gkw_cosine2_run_can_patch_multitime_distr(tmp_path: Path) -> No
     ).read_text(encoding="utf-8")
 
 
+def test_prepare_gkw_cosine2_run_can_patch_state_trace(tmp_path: Path) -> None:
+    source_root = tmp_path / "gkw"
+    (source_root / "src").mkdir(parents=True)
+    source_init = source_root / "src" / "init.f90"
+    source_init.write_text(_MINIMAL_INIT, encoding="utf-8")
+    source_diagnostic = source_root / "src" / "diagnostic.F90"
+    source_diagnostic.write_text(_MINIMAL_DIAGNOSTIC, encoding="utf-8")
+    input_path = tmp_path / "selected_ky_input.dat"
+    input_path.write_text("&SPCGENERAL\n finit = 'cosine'\n /\n", encoding="utf-8")
+
+    prepared = prepare_gkw_cosine2_run(
+        source_root=source_root,
+        output_root=tmp_path / "patched-gkw",
+        input_path=input_path,
+        state_trace=True,
+    )
+
+    assert prepared.state_trace
+    assert prepared.patched_diagnostic is not None
+    diagnostic_text = prepared.patched_diagnostic.read_text(encoding="utf-8")
+    assert "stellarator_gk compact state trace patch" in diagnostic_text
+    assert "call stellarator_gk_state_trace_output" in diagnostic_text
+    assert "stellarator_gk_state_trace.dat" in diagnostic_text
+    assert "stellarator_gk_state_trace.dat" not in source_diagnostic.read_text(encoding="utf-8")
+    assert "compact state trace" in (
+        prepared.output_root / "README_stellarator_gk_cosin2.md"
+    ).read_text(encoding="utf-8")
+
+
 def test_cosin2_patch_is_idempotent(tmp_path: Path) -> None:
     init_path = tmp_path / "init.f90"
     init_path.write_text(_MINIMAL_INIT, encoding="utf-8")
@@ -148,6 +182,16 @@ def test_multitime_velocity_slice_patch_is_idempotent(tmp_path: Path) -> None:
     assert add_multitime_velocity_slice_patch(diagnostic_path)
     first_patch = diagnostic_path.read_text(encoding="utf-8")
     assert not add_multitime_velocity_slice_patch(diagnostic_path)
+    assert diagnostic_path.read_text(encoding="utf-8") == first_patch
+
+
+def test_state_trace_patch_is_idempotent(tmp_path: Path) -> None:
+    diagnostic_path = tmp_path / "diagnostic.F90"
+    diagnostic_path.write_text(_MINIMAL_DIAGNOSTIC, encoding="utf-8")
+
+    assert add_state_trace_patch(diagnostic_path)
+    first_patch = diagnostic_path.read_text(encoding="utf-8")
+    assert not add_state_trace_patch(diagnostic_path)
     assert diagnostic_path.read_text(encoding="utf-8") == first_patch
 
 
@@ -174,6 +218,35 @@ def test_patched_cosin2_gkw_fixtures_load() -> None:
     assert time_trace.times.shape == (80,)
     assert phi_trace.phi_power.shape == (80, 48)
     assert np.isclose(float(time_trace.window_growth[-1]), 0.188741)
+
+
+def test_gkw_state_trace_loader_and_solver_comparison(tmp_path: Path) -> None:
+    path = tmp_path / "stellarator_gk_state_trace.dat"
+    path.write_text(
+        "# step time state_norm phi_norm\n"
+        "20 6.00000000000000e-02 1.2e-01 2.3e-01\n"
+        "40 1.20000000000000e-01 1.4e-01 2.6e-01\n",
+        encoding="utf-8",
+    )
+    gkw_trace = load_gkw_state_trace(path)
+    solver_trace = CycloneSourceTermTrace(
+        times=np.asarray([0.0, 0.06, 0.12]),
+        phi_norm=np.asarray([0.0, 0.23, 0.26]),
+        state_norm=np.asarray([0.0, 0.12, 0.14]),
+        rhs_norm=np.asarray([0.0, 1.0, 1.0]),
+        term_norms=np.zeros((3, 1)),
+        reconstructed_rhs_norm=np.asarray([0.0, 1.0, 1.0]),
+        reconstruction_error=np.zeros(3),
+        log_normalization=np.zeros(3),
+        term_names=("total",),
+        source="synthetic-solver",
+    )
+    report = compare_gkw_state_trace_to_source_term_trace(gkw_trace, solver_trace)
+
+    assert isinstance(gkw_trace, GkwStateTrace)
+    np.testing.assert_array_equal(gkw_trace.steps, np.asarray([20, 40], dtype=np.int32))
+    assert bool(report.passed)
+    np.testing.assert_allclose(report.max_abs_error, 0.0, atol=1.0e-15)
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:

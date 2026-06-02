@@ -304,6 +304,14 @@ magnetic-drift norm is `9.042892647805491e-02`, the fused-`igh` norm is
 `4.486003543507541e-03`, and the accumulated log-normalization is
 `-4.398714455712693`. The remaining production task is now to generate or load
 a matched GKW state/source/restart trace against this solver-side artifact.
+The GKW-side compact state-history pathway is now prepared as a non-destructive
+copy-tree patch. `scripts/prepare_gkw_cosine2_run.py --state-trace` adds a
+`diagnostic.F90` hook that writes `stellarator_gk_state_trace.dat` at each
+normal diagnostic output with columns `step`, `time`, `state_norm`, and
+`phi_norm`; it can be combined with `--multi-time-distr`. The Python side now
+loads this file as `GkwStateTrace` and compares it to `CycloneSourceTermTrace`
+with `compare_gkw_state_trace_to_source_term_trace`. The production-control
+GKW state-trace fixture still needs to be generated or copied into `fixtures/`.
 That discriminator has now been run on compact early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
 `3.990529105190601e-03`, `3.6712468463562305e-02`, and
@@ -457,10 +465,10 @@ examples labeled as reduced until CBC parity passes:
 - audit \(v_\parallel\)-odd dynamics/sign conventions in parallel streaming,
   parallel field drive, and the fused `igh` backend with explicit Fortran
   1-based indexing checks,
-- use the completed Term VII, multi-window fused-`igh`, and solver-side
-  source-term trace audits as guardrails against promoting diagnostic sign
-  variants, and generate/load the matched GKW state/source/restart trace for
-  the remaining cumulative gap,
+- use the completed Term VII, multi-window fused-`igh`, solver-side
+  source-term trace, and GKW compact state-trace patch as guardrails against
+  promoting diagnostic sign variants, and generate/load the matched production
+  GKW state/source/restart fixture for the remaining cumulative gap,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -487,6 +495,25 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added GKW Compact State-Trace Patch Path
+
+- Extended `scripts/prepare_gkw_cosine2_run.py` with `--state-trace`.
+- The copied-source patch adds `stellarator_gk_state_trace_output` to
+  `diagnostic.F90` and writes `stellarator_gk_state_trace.dat` with:
+  - `step`,
+  - `time`,
+  - `state_norm`,
+  - `phi_norm`.
+- Added public `GkwStateTrace`, `load_gkw_state_trace`, and
+  `compare_gkw_state_trace_to_source_term_trace`.
+- The patch can be combined with the existing `--multi-time-distr` option and
+  still leaves `relevant-codes/gkw/` untouched.
+- The actual production-control GKW state-trace fixture is still open; this
+  round added the generation and comparison contract.
+- Verification run this round:
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py scripts/prepare_gkw_cosine2_run.py tests/test_gkw_cosine2_patch.py`
 
 ### 2026-06-02: Added Solver-Side Cyclone Source-Term Trace
 
