@@ -291,6 +291,19 @@ early operator-shape difference, not a monotone growth mechanism matching the
 step-20-to-step-800 GKW/solver velocity-slice divergence. The next useful target
 is a matched state-history, source-term time trace, or restart/final-state dump
 under the promoted `gkw_igh` backend.
+The solver-side half of that source-trace discriminator is now implemented.
+`CycloneSourceTermTrace` records selected-mode raw phi/state/RHS norms, term
+norms for fused `igh`, magnetic drift, equilibrium drive, GKW parallel
+field-drive, drift-field drive, and dissipation, a raw reconstructed-RHS norm,
+the direct reconstruction error, and the accumulated selected-`ky`
+log-normalization. The production-control `cosine2`/`gkw_igh` artifact
+`figures/cyclone_source_term_trace.csv` samples windows 0, 1, 40, and 80 with
+maximum stored reconstruction error `0.0`. At the final sampled window
+\(t=4.8\), the raw selected-mode RHS norm is `9.143666705809655e-02`, the
+magnetic-drift norm is `9.042892647805491e-02`, the fused-`igh` norm is
+`4.486003543507541e-03`, and the accumulated log-normalization is
+`-4.398714455712693`. The remaining production task is now to generate or load
+a matched GKW state/source/restart trace against this solver-side artifact.
 That discriminator has now been run on compact early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
 `3.990529105190601e-03`, `3.6712468463562305e-02`, and
@@ -444,9 +457,10 @@ examples labeled as reduced until CBC parity passes:
 - audit \(v_\parallel\)-odd dynamics/sign conventions in parallel streaming,
   parallel field drive, and the fused `igh` backend with explicit Fortran
   1-based indexing checks,
-- use the completed Term VII and multi-window fused-`igh` audits as guardrails
-  against promoting diagnostic sign variants, and move to matched state-history
-  or source-term time traces for the remaining cumulative gap,
+- use the completed Term VII, multi-window fused-`igh`, and solver-side
+  source-term trace audits as guardrails against promoting diagnostic sign
+  variants, and generate/load the matched GKW state/source/restart trace for
+  the remaining cumulative gap,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -457,7 +471,8 @@ examples labeled as reduced until CBC parity passes:
 
 Expected file changes:
 
-- GKW/Gyaradax/solver parallel profile or amplitude-history comparison report updates,
+- GKW/Gyaradax/solver parallel profile, source-term, or amplitude-history
+  comparison report updates,
 - any selected-mode initialization or diagnostic-window adjustment needed for
   the scalar Cyclone gate,
 - any independent eik producer/fixture discovered for DESC/GX geometry,
@@ -472,6 +487,29 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Solver-Side Cyclone Source-Term Trace
+
+- No tracked changes were waiting to commit at the start of this round after:
+  - `7f35779 Add multi-window Cyclone igh audit`.
+- Added `CycloneSourceTermTrace`,
+  `run_cyclone_base_case_source_term_trace`, and
+  `write_cyclone_source_term_trace_csv`.
+- Added `examples/audit_cyclone_source_term_trace.py`, which writes:
+  - `figures/cyclone_source_term_trace.csv`.
+- Production-control `cosine2`/`gkw_igh` source-term trace results for output
+  windows 0, 1, 40, and 80:
+  - maximum stored RHS reconstruction error: `0.0`,
+  - final raw RHS norm: `9.143666705809655e-02`,
+  - final raw magnetic-drift norm: `9.042892647805491e-02`,
+  - final raw fused-`igh` norm: `4.486003543507541e-03`,
+  - final selected-`ky` log-normalization: `-4.398714455712693`.
+- Interpretation: the solver-side source-term decomposition now has a
+  machine-checkable trace target. The remaining CBC action item is the matched
+  GKW source/state/restart trace, not another unanchored sign variant.
+- Verification run this round:
+  - `uv run pytest tests/test_benchmark_references.py -k "source_term_trace"`
+  - `uv run --extra dev python examples/audit_cyclone_source_term_trace.py`
 
 ### 2026-06-02: Added Multi-Window Igh Series Audit
 

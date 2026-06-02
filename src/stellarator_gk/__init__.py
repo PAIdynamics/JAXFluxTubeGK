@@ -74,6 +74,7 @@ from .benchmarks import (
     CycloneTermVIIModePackingAudit,
     CycloneTermVIIFieldConventionAudit,
     CycloneTimeNormalizationAudit,
+    CycloneSourceTermTrace,
     CycloneTermParityReport,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
@@ -133,6 +134,7 @@ from .benchmarks import (
     run_cyclone_base_case_term_i_fortran_audit,
     run_cyclone_base_case_term_vii_mode_packing_audit,
     run_cyclone_base_case_time_normalization_audit,
+    run_cyclone_base_case_source_term_trace,
     run_cyclone_base_case_trace,
     run_cyclone_base_case_velocity_space_slice,
     run_cyclone_base_case_velocity_space_slice_series,
@@ -147,6 +149,7 @@ from .benchmarks import (
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
     write_cyclone_trace_csv,
+    write_cyclone_source_term_trace_csv,
 )
 from .operators import (
     dense_eigensystem,
@@ -308,6 +311,7 @@ __all__ = [
     "CycloneTermVIIModePackingAudit",
     "CycloneTermVIIFieldConventionAudit",
     "CycloneTimeNormalizationAudit",
+    "CycloneSourceTermTrace",
     "CycloneTermParityReport",
     "FLRFactors",
     "GKWArakawaIghStencil",
@@ -510,6 +514,7 @@ __all__ = [
     "run_cyclone_base_case_term_i_fortran_audit",
     "run_cyclone_base_case_term_vii_mode_packing_audit",
     "run_cyclone_base_case_time_normalization_audit",
+    "run_cyclone_base_case_source_term_trace",
     "run_cyclone_base_case_trace",
     "run_cyclone_base_case_velocity_space_slice",
     "run_cyclone_base_case_velocity_space_slice_series",
@@ -552,6 +557,7 @@ __all__ = [
     "weighted_quasilinear_proxy",
     "windowed_linear_growth_diagnostics",
     "write_cyclone_trace_csv",
+    "write_cyclone_source_term_trace_csv",
 ]
 
 __version__ = "0.1.0"

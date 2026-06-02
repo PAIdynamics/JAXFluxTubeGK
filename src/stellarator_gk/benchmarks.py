@@ -253,6 +253,61 @@ class CycloneTraceComparisonReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneSourceTermTrace(_PyTreeDataclass):
+    """Selected-mode source-term norms for CBC solver/GKW history debugging."""
+
+    times: object
+    phi_norm: object
+    state_norm: object
+    rhs_norm: object
+    term_norms: object
+    reconstructed_rhs_norm: object
+    reconstruction_error: object
+    log_normalization: object
+    term_names: tuple[str, ...]
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "times",
+        "phi_norm",
+        "state_norm",
+        "rhs_norm",
+        "term_norms",
+        "reconstructed_rhs_norm",
+        "reconstruction_error",
+        "log_normalization",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("term_names", "source", "notes")
+
+    def __post_init__(self):
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if times.ndim != 1:
+            raise ValueError("times must be one-dimensional")
+        object.__setattr__(self, "times", times)
+        for name in self._dynamic_fields[1:4]:
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times shape")
+            object.__setattr__(self, name, values)
+        term_norms = jnp.asarray(self.term_norms, dtype=jnp.float64)
+        if term_norms.ndim != 2:
+            raise ValueError("term_norms must have shape (n_time,n_term)")
+        if term_norms.shape[0] != times.shape[0]:
+            raise ValueError("term_norms must match times shape")
+        if term_norms.shape[1] != len(self.term_names):
+            raise ValueError("term_norms second dimension must match term_names")
+        object.__setattr__(self, "term_norms", term_norms)
+        for name in ("reconstructed_rhs_norm", "reconstruction_error", "log_normalization"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != times.shape:
+                raise ValueError(f"{name} must match times shape")
+            object.__setattr__(self, name, values)
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -3005,6 +3060,199 @@ def run_cyclone_base_case_trace(
     )
 
 
+def run_cyclone_base_case_source_term_trace(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_windows: tuple[int, ...] = (0, 1, 40, 80),
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = "gkw_igh",
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> CycloneSourceTermTrace:
+    """Record selected-mode CBC source-term norms at fixed output windows."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    output_windows = tuple(int(window) for window in output_windows)
+    if not output_windows:
+        raise ValueError("output_windows must not be empty")
+    if any(window < 0 for window in output_windows):
+        raise ValueError("output_windows must be nonnegative")
+    if any(left >= right for left, right in zip(output_windows, output_windows[1:])):
+        raise ValueError("output_windows must be strictly increasing")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+
+    times = []
+    phi_norms = []
+    state_norms = []
+    rhs_norms = []
+    term_norms = []
+    reconstructed_rhs_norms = []
+    reconstruction_errors = []
+    log_normalizations = []
+
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    term_names = None
+
+    def append_snapshot(window, state_value, accumulated_log):
+        nonlocal term_names
+        phi = solve_phi(state_value)
+        rhs_value = linear_residual(state_value, precomputed=setup["precompute"], phi=phi)
+        names, terms = _cyclone_source_term_parts(state_value, phi, setup["precompute"].rhs)
+        reconstructed_rhs = sum(terms[1:], terms[0])
+        if term_names is None:
+            term_names = names
+        elif term_names != names:
+            raise ValueError("source-term names changed during trace construction")
+        times.append(float(window * steps_per_window * dt))
+        phi_norms.append(_field_amplitude(phi[:, ixzero, selected]))
+        state_norms.append(_selected_mode_rms_scalar(state_value, ixzero, selected))
+        rhs_norms.append(_selected_mode_rms_scalar(rhs_value, ixzero, selected))
+        term_norms.append(
+            jnp.asarray(
+                [_selected_mode_rms_scalar(term, ixzero, selected) for term in terms],
+                dtype=jnp.float64,
+            )
+        )
+        reconstructed_rhs_norms.append(
+            _selected_mode_rms_scalar(reconstructed_rhs, ixzero, selected)
+        )
+        reconstruction_errors.append(_max_abs_error(reconstructed_rhs, rhs_value))
+        log_normalizations.append(accumulated_log[selected])
+
+    requested = set(output_windows)
+    if 0 in requested:
+        append_snapshot(0, state, log_normalization)
+    for window in range(1, max(output_windows) + 1):
+        state = advance_window(state)
+        if window in requested:
+            append_snapshot(window, state, log_normalization)
+        if normalize_each_window:
+            phi = solve_phi(state)
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+
+    return CycloneSourceTermTrace(
+        times=jnp.asarray(times, dtype=jnp.float64),
+        phi_norm=jnp.asarray(phi_norms, dtype=jnp.float64),
+        state_norm=jnp.asarray(state_norms, dtype=jnp.float64),
+        rhs_norm=jnp.asarray(rhs_norms, dtype=jnp.float64),
+        term_norms=jnp.asarray(term_norms, dtype=jnp.float64),
+        reconstructed_rhs_norm=jnp.asarray(reconstructed_rhs_norms, dtype=jnp.float64),
+        reconstruction_error=jnp.asarray(reconstruction_errors, dtype=jnp.float64),
+        log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
+        term_names=term_names or (),
+        source="stellarator_gk",
+        notes=(
+            "selected-mode CBC source-term trace; norms are raw post-window values "
+            "and can be physicalized with exp(log_normalization); "
+            f"initial_profile={initial_profile}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"velocity_recurrence_rate={velocity_recurrence_rate:g}, "
+            f"normalization_model={normalization_model}"
+        ),
+    )
+
+
 def compare_cyclone_base_case_traces(
     observed: CycloneTrace,
     reference: CycloneTrace,
@@ -3061,6 +3309,39 @@ def write_cyclone_trace_csv(path, trace: CycloneTrace) -> None:
             strict=True,
         ):
             writer.writerow([float(value) for value in row])
+
+
+def write_cyclone_source_term_trace_csv(path, trace: CycloneSourceTermTrace) -> None:
+    """Write a ``CycloneSourceTermTrace`` to a flat CSV interchange format."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = (
+        "time",
+        "phi_norm",
+        "state_norm",
+        "rhs_norm",
+        *(f"term_norm:{name}" for name in trace.term_names),
+        "reconstructed_rhs_norm",
+        "reconstruction_error",
+        "log_normalization",
+    )
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(header)
+        for index in range(int(trace.times.shape[0])):
+            writer.writerow(
+                [
+                    float(trace.times[index]),
+                    float(trace.phi_norm[index]),
+                    float(trace.state_norm[index]),
+                    float(trace.rhs_norm[index]),
+                    *[float(value) for value in trace.term_norms[index]],
+                    float(trace.reconstructed_rhs_norm[index]),
+                    float(trace.reconstruction_error[index]),
+                    float(trace.log_normalization[index]),
+                ]
+            )
 
 
 def load_cyclone_trace_csv(path, *, source: str | None = None, notes: str = "") -> CycloneTrace:
@@ -8897,6 +9178,123 @@ def _selected_mode_rms_profile(values, ix: int, iy: int):
     if selected.ndim == 1:
         return jnp.abs(selected)
     return jnp.sqrt(jnp.mean(jnp.abs(selected) ** 2, axis=tuple(range(selected.ndim - 1))))
+
+
+def _selected_mode_rms_scalar(values, ix: int, iy: int):
+    selected = jnp.asarray(values)[..., :, ix, iy]
+    return jnp.sqrt(jnp.mean(jnp.abs(selected) ** 2))
+
+
+def _cyclone_source_term_parts(distribution, phi, precompute):
+    """Return named source-term arrays in the same sum order as the RHS."""
+
+    from .physics import (
+        dissipation,
+        drift_field_drive,
+        equilibrium_drive,
+        gkw_igh_streaming_mirror,
+        gkw_parallel_field_drive,
+        gkw_parallel_streaming,
+        magnetic_drift_advection,
+        mirror_force,
+        parallel_field_drive,
+        parallel_recurrence_control,
+        parallel_streaming,
+        velocity_recurrence_control,
+    )
+
+    magnetic_drift = magnetic_drift_advection(
+        distribution,
+        precompute.magnetic_drift_frequency,
+    )
+    equilibrium = equilibrium_drive(phi, precompute)
+    drift_field = drift_field_drive(phi, precompute)
+    damping = dissipation(distribution, precompute.perpendicular_damping)
+
+    if precompute.parallel_derivative_model == "gkw_igh":
+        return (
+            (
+                "gkw_igh_streaming_mirror_recurrence",
+                "magnetic_drift",
+                "equilibrium_drive",
+                "gkw_parallel_field_drive",
+                "drift_field_drive",
+                "dissipation",
+            ),
+            (
+                gkw_igh_streaming_mirror(distribution, precompute),
+                magnetic_drift,
+                equilibrium,
+                gkw_parallel_field_drive(phi, precompute),
+                drift_field,
+                damping,
+            ),
+        )
+
+    if precompute.parallel_derivative_model == "gkw_upwind":
+        return (
+            (
+                "gkw_parallel_streaming_recurrence",
+                "magnetic_drift",
+                "mirror_force",
+                "equilibrium_drive",
+                "gkw_parallel_field_drive",
+                "drift_field_drive",
+                "dissipation",
+                "velocity_recurrence",
+            ),
+            (
+                gkw_parallel_streaming(distribution, precompute),
+                magnetic_drift,
+                mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff),
+                equilibrium,
+                gkw_parallel_field_drive(phi, precompute),
+                drift_field,
+                damping,
+                velocity_recurrence_control(
+                    distribution,
+                    precompute.velocity_recurrence_operator,
+                    precompute.velocity_recurrence_coeff,
+                ),
+            ),
+        )
+
+    return (
+        (
+            "parallel_streaming",
+            "magnetic_drift",
+            "mirror_force",
+            "equilibrium_drive",
+            "parallel_field_drive",
+            "drift_field_drive",
+            "dissipation",
+            "parallel_recurrence",
+            "velocity_recurrence",
+        ),
+        (
+            parallel_streaming(
+                distribution,
+                precompute.D_z,
+                precompute.parallel_streaming_coeff,
+            ),
+            magnetic_drift,
+            mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff),
+            equilibrium,
+            parallel_field_drive(phi, precompute.D_z, precompute),
+            drift_field,
+            damping,
+            parallel_recurrence_control(
+                distribution,
+                precompute.parallel_recurrence_operator,
+                precompute.parallel_recurrence_coeff,
+            ),
+            velocity_recurrence_control(
+                distribution,
+                precompute.velocity_recurrence_operator,
+                precompute.velocity_recurrence_coeff,
+            ),
+        ),
+    )
 
 
 def _cyclone_source_term_arrays(setup, metadata):

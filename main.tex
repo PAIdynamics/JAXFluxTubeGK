@@ -1445,6 +1445,34 @@ difference is an early operator-shape mismatch, not by itself a monotone
 explanation of the later step-20 to step-800 distribution divergence.  The next
 comparison should use a matched state-history or source-term time trace under
 the promoted \(\texttt{gkw\_igh}\) backend.
+The solver-side source-term trace for that comparison is now in place.  The
+trace writes \path{figures/cyclone_source_term_trace.csv} and stores, at each
+selected output window, the raw selected-mode norms of \(\phi\), \(f\), the
+assembled RHS, and the decomposed RHS terms
+\begin{equation}
+  \mathcal R
+  =
+  \mathcal R_{\mathrm{igh}}
+  + \mathcal R_{\omega_d f}
+  + \mathcal R_{\nabla F}
+  + \mathcal R_{\nabla_\parallel \phi}
+  + \mathcal R_{\omega_d \phi}
+  + \mathcal R_{\mathrm{damp}} .
+  \label{eq:source-term-trace-decomposition}
+\end{equation}
+It also stores the accumulated selected-\(k_y\) log-normalization so that the
+same rows can be compared in either raw or physicalized units.  For the
+production-control \(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\) run sampled at
+windows \(0,1,40,80\), the reconstructed sum in
+Eq.~\eqref{eq:source-term-trace-decomposition} agrees with the public
+matrix-free RHS with maximum stored error zero.  At \(t=4.8\), the raw
+selected-mode norms are
+\(\|\mathcal R\|=9.14\times10^{-2}\),
+\(\|\mathcal R_{\omega_d f}\|=9.04\times10^{-2}\), and
+\(\|\mathcal R_{\mathrm{igh}}\|=4.49\times10^{-3}\), with accumulated
+log-normalization \(-4.3987\).  This does not close the GKW gap, but it gives a
+compact solver-side target for a matched GKW source-term, state-history, or
+restart/final-state dump.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

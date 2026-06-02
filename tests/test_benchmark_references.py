@@ -30,6 +30,7 @@ from stellarator_gk import (
     CycloneVparOddSignAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
+    CycloneSourceTermTrace,
     CycloneTrace,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
@@ -87,6 +88,7 @@ from stellarator_gk import (
     run_cyclone_base_case_term_vii_mode_packing_audit,
     run_cyclone_base_case_time_normalization_audit,
     run_cyclone_base_case_term_parity_audit,
+    run_cyclone_base_case_source_term_trace,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
     run_cyclone_base_case_velocity_space_slice,
@@ -100,6 +102,7 @@ from stellarator_gk import (
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
     single_surface_benchmark_objective,
+    write_cyclone_source_term_trace_csv,
     write_cyclone_trace_csv,
 )
 
@@ -481,6 +484,51 @@ def test_cyclone_trace_supports_gkw_cosine_initial_profile():
             steps_per_window=1,
             n_windows=1,
             initial_profile="unsupported",
+        )
+
+
+def test_cyclone_source_term_trace_reconstructs_gkw_igh_rhs(tmp_path):
+    trace = run_cyclone_base_case_source_term_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_windows=(0, 1, 2),
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    leaves, treedef = jax.tree_util.tree_flatten(trace)
+    path = tmp_path / "source_terms.csv"
+
+    write_cyclone_source_term_trace_csv(path, trace)
+
+    assert isinstance(jax.tree_util.tree_unflatten(treedef, leaves), CycloneSourceTermTrace)
+    assert trace.times.shape == (3,)
+    np.testing.assert_allclose(trace.times, jnp.asarray([0.0, 0.006, 0.012]))
+    assert trace.term_norms.shape == (3, len(trace.term_names))
+    assert trace.term_names == (
+        "gkw_igh_streaming_mirror_recurrence",
+        "magnetic_drift",
+        "equilibrium_drive",
+        "gkw_parallel_field_drive",
+        "drift_field_drive",
+        "dissipation",
+    )
+    assert jnp.all(jnp.isfinite(trace.term_norms))
+    assert jnp.all(trace.phi_norm > 0.0)
+    assert jnp.all(trace.state_norm > 0.0)
+    assert jnp.all(trace.rhs_norm > 0.0)
+    assert jnp.max(trace.reconstruction_error) < 5.0e-13
+    assert path.read_text().splitlines()[0].startswith("time,phi_norm,state_norm")
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        run_cyclone_base_case_source_term_trace(
+            n_z=8,
+            n_vpar=6,
+            n_mu=4,
+            steps_per_window=1,
+            output_windows=(1, 1),
         )
 
 
