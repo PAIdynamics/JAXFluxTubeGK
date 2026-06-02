@@ -382,6 +382,57 @@ class SelectedModeStateTrace(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GkwSelectedModeRhsTrace(_PyTreeDataclass):
+    """Selected-mode GKW RHS/source action trace from a patched diagnostic."""
+
+    steps: object
+    times: object
+    total_action: object
+    term_actions: object
+    term_names: tuple[str, ...]
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "steps",
+        "times",
+        "total_action",
+        "term_actions",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("term_names", "source", "notes")
+
+    def __post_init__(self):
+        steps = jnp.asarray(self.steps, dtype=jnp.int32)
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        total_action = jnp.asarray(self.total_action, dtype=jnp.complex128)
+        term_actions = jnp.asarray(self.term_actions, dtype=jnp.complex128)
+        if steps.ndim != 1:
+            raise ValueError("steps must be one-dimensional")
+        if times.shape != steps.shape:
+            raise ValueError("times must match steps shape")
+        if total_action.ndim != 4:
+            raise ValueError("total_action must have shape (n_time,n_vpar,n_mu,n_z)")
+        if term_actions.ndim != 5:
+            raise ValueError(
+                "term_actions must have shape (n_time,n_terms,n_vpar,n_mu,n_z)"
+            )
+        if total_action.shape[0] != times.shape[0]:
+            raise ValueError("total_action time dimension must match times")
+        if term_actions.shape[0] != times.shape[0]:
+            raise ValueError("term_actions time dimension must match times")
+        if term_actions.shape[2:] != total_action.shape[1:]:
+            raise ValueError("term_actions grid shape must match total_action")
+        if len(self.term_names) != term_actions.shape[1]:
+            raise ValueError("term_names length must match term_actions")
+        object.__setattr__(self, "steps", steps)
+        object.__setattr__(self, "times", times)
+        object.__setattr__(self, "total_action", total_action)
+        object.__setattr__(self, "term_actions", term_actions)
+        object.__setattr__(self, "term_names", tuple(self.term_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -3499,6 +3550,50 @@ def load_gkw_selected_mode_state_trace(
         phi=jnp.asarray(np.stack([snapshot["phi"] for snapshot in snapshots]), dtype=jnp.complex128),
         source=source or str(files[0].parent),
         notes=notes or "patched GKW selected-mode state dump",
+    )
+
+
+GKW_SELECTED_MODE_RHS_TERM_NAMES = (
+    "untagged",
+    "igh_or_term_i",
+    "trapdf",
+    "vdgradf",
+    "hyper_collision",
+    "ve_grad_fm",
+    "vd_grad_phi_fm",
+    "vpgrphi",
+    "field_eq",
+)
+
+
+def load_gkw_selected_mode_rhs_trace(
+    paths,
+    *,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwSelectedModeRhsTrace:
+    """Load patched GKW selected-mode RHS/source action dumps.
+
+    The trace values are ``dtim``-scaled actions, matching GKW
+    ``exp_integration.F90::calculate_rhs``.
+    """
+
+    files = _rhs_trace_dump_files(paths)
+    snapshots = [_load_gkw_rhs_trace_file(path) for path in files]
+    return GkwSelectedModeRhsTrace(
+        steps=jnp.asarray([snapshot["step"] for snapshot in snapshots], dtype=jnp.int32),
+        times=jnp.asarray([snapshot["time"] for snapshot in snapshots], dtype=jnp.float64),
+        total_action=jnp.asarray(
+            np.stack([snapshot["total_action"] for snapshot in snapshots]),
+            dtype=jnp.complex128,
+        ),
+        term_actions=jnp.asarray(
+            np.stack([snapshot["term_actions"] for snapshot in snapshots]),
+            dtype=jnp.complex128,
+        ),
+        term_names=GKW_SELECTED_MODE_RHS_TERM_NAMES,
+        source=source or str(files[0].parent),
+        notes=notes or "patched GKW selected-mode RHS/source action trace",
     )
 
 
@@ -8818,6 +8913,80 @@ def _selected_state_dump_files(paths) -> tuple[Path, ...]:
     if missing:
         raise FileNotFoundError(f"GKW selected-state dump files not found: {missing}")
     return files
+
+
+def _rhs_trace_dump_files(paths) -> tuple[Path, ...]:
+    if isinstance(paths, (str, Path)):
+        path = Path(paths)
+        if path.is_dir():
+            files = tuple(sorted(path.glob("stellarator_gk_rhs_trace_*.dat")))
+        else:
+            files = (path,)
+    else:
+        files = tuple(Path(path) for path in paths)
+    if not files:
+        raise ValueError("no GKW RHS trace files found")
+    missing = [str(path) for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"GKW RHS trace files not found: {missing}")
+    return files
+
+
+def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError(f"{path} contains no RHS trace rows")
+    array = np.asarray(rows, dtype=float)
+    n_terms = len(GKW_SELECTED_MODE_RHS_TERM_NAMES)
+    expected_columns = 5 + 2 + 2 * n_terms
+    if array.shape[1] < expected_columns:
+        raise ValueError(
+            f"GKW RHS trace rows must have at least {expected_columns} columns"
+        )
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{path} contains non-finite RHS trace values")
+    steps = array[:, 0].astype(np.int64)
+    times = array[:, 1]
+    if np.unique(steps).size != 1 or np.unique(times).size != 1:
+        raise ValueError(f"{path} must contain a single step and time")
+    iz = array[:, 2].astype(np.int64)
+    imu = array[:, 3].astype(np.int64)
+    ivpar = array[:, 4].astype(np.int64)
+    if np.any(iz < 1) or np.any(imu < 1) or np.any(ivpar < 1):
+        raise ValueError("GKW RHS trace indices must be one-based positive integers")
+    n_z = int(np.max(iz))
+    n_mu = int(np.max(imu))
+    n_vpar = int(np.max(ivpar))
+    expected_rows = n_z * n_mu * n_vpar
+    if array.shape[0] != expected_rows:
+        raise ValueError(
+            f"{path} has {array.shape[0]} rows; expected {expected_rows} from index extents"
+        )
+    total_action = np.zeros((n_vpar, n_mu, n_z), dtype=np.complex128)
+    term_actions = np.zeros((n_terms, n_vpar, n_mu, n_z), dtype=np.complex128)
+    seen = np.zeros((n_vpar, n_mu, n_z), dtype=bool)
+    for row in array:
+        z_index = int(row[2]) - 1
+        mu_index = int(row[3]) - 1
+        vpar_index = int(row[4]) - 1
+        if seen[vpar_index, mu_index, z_index]:
+            raise ValueError(f"{path} contains duplicate RHS trace indices")
+        total_action[vpar_index, mu_index, z_index] = row[5] + 1j * row[6]
+        offset = 7
+        for term_index in range(n_terms):
+            term_actions[term_index, vpar_index, mu_index, z_index] = (
+                row[offset + 2 * term_index]
+                + 1j * row[offset + 2 * term_index + 1]
+            )
+        seen[vpar_index, mu_index, z_index] = True
+    if not np.all(seen):
+        raise ValueError(f"{path} does not cover the full selected-mode RHS grid")
+    return {
+        "step": int(steps[0]),
+        "time": float(times[0]),
+        "total_action": total_action,
+        "term_actions": term_actions,
+    }
 
 
 def _load_gkw_selected_state_file(path: Path) -> dict[str, object]:

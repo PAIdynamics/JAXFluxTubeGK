@@ -34,6 +34,8 @@ class PreparedGkwCosine2Run:
     multi_time_distr: bool = False
     state_trace: bool = False
     selected_state_dump: bool = False
+    rhs_trace: bool = False
+    rhs_trace_steps: tuple[int, ...] = (20, 800, 1600)
     selector: str = PATCHED_SELECTOR
 
 
@@ -73,6 +75,8 @@ def prepare_gkw_cosine2_run(
     multi_time_distr: bool = False,
     state_trace: bool = False,
     selected_state_dump: bool = False,
+    rhs_trace: bool = False,
+    rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
 
@@ -100,6 +104,13 @@ def prepare_gkw_cosine2_run(
     patched_init = output_root / "src" / "init.f90"
     add_cosin2_branch(patched_init)
     patched_diagnostic = None
+    if rhs_trace:
+        add_rhs_trace_matdat_patch(output_root / "src" / "matdat.F90")
+        add_rhs_trace_linear_terms_patch(output_root / "src" / "linear_terms.F90")
+        add_rhs_trace_exp_integration_patch(
+            output_root / "src" / "exp_integration.F90",
+            rhs_trace_steps,
+        )
     if multi_time_distr or state_trace or selected_state_dump:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
     if state_trace:
@@ -115,6 +126,8 @@ def prepare_gkw_cosine2_run(
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
+        rhs_trace=rhs_trace,
+        rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
     return PreparedGkwCosine2Run(
         source_root=source_root,
@@ -125,6 +138,8 @@ def prepare_gkw_cosine2_run(
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
+        rhs_trace=rhs_trace,
+        rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
 
 
@@ -270,6 +285,232 @@ def add_selected_state_dump_patch(diagnostic_path: Path) -> bool:
     return True
 
 
+def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
+    """Patch copied GKW matrix storage to retain linear-term IDs."""
+
+    text = matdat_path.read_text(encoding="utf-8")
+    if "stellarator_gk rhs trace matdat patch" in text:
+        return False
+
+    public_marker = "public :: put_element_correct_apar\n"
+    public_patch = (
+        "public :: put_element_correct_apar\n"
+        "public :: stellarator_gk_set_trace_term, stellarator_gk_mat_term\n"
+        "public :: stellarator_gk_source_by_term, stellarator_gk_n_trace_terms\n"
+    )
+    if public_marker not in text:
+        raise ValueError(f"could not find matdat public marker in {matdat_path}")
+    text = text.replace(public_marker, public_patch, 1)
+
+    source_decl = "complex, allocatable :: source(:)\n"
+    source_patch = (
+        "complex, allocatable :: source(:)\n"
+        "! stellarator_gk rhs trace matdat patch\n"
+        "integer, parameter :: stellarator_gk_n_trace_terms = 8\n"
+        "integer :: stellarator_gk_current_trace_term = 0\n"
+        "integer, allocatable :: stellarator_gk_mat_term(:)\n"
+        "complex, allocatable :: stellarator_gk_source_by_term(:,:)\n"
+    )
+    if source_decl not in text:
+        raise ValueError(f"could not find source declaration in {matdat_path}")
+    text = text.replace(source_decl, source_patch, 1)
+
+    source_init_pattern = r"do i = 1, nsolc[ \t]*\n  source\(i\) = \(0\.,0\.\)[ \t]*\nend do[ \t]*\n"
+    source_init_match = re.search(source_init_pattern, text)
+    if source_init_match is None:
+        raise ValueError(f"could not find source initialization in {matdat_path}")
+    source_init_patch = (
+        source_init_match.group(0)
+        + "allocate(stellarator_gk_source_by_term(nsolc,0:stellarator_gk_n_trace_terms),"
+        "stat=ierr)\n"
+        "if (ierr.ne.0) then\n"
+        "  stop 'Could not allocate stellarator_gk_source_by_term in matdat'\n"
+        "endif\n"
+        "stellarator_gk_source_by_term = (0.,0.)\n"
+    )
+    text = text[: source_init_match.start()] + source_init_patch + text[source_init_match.end() :]
+
+    mat_alloc = "  allocate(mat(ntot),stat=ierr)\n"
+    mat_alloc_patch = (
+        mat_alloc
+        + "  allocate(stellarator_gk_mat_term(ntot),stat=ierr)\n"
+        + "  if (ierr.ne.0) then\n"
+        + "    stop 'Could not allocate stellarator_gk_mat_term in matdat'\n"
+        + "  endif\n"
+        + "  stellarator_gk_mat_term = 0\n"
+    )
+    if mat_alloc not in text:
+        raise ValueError(f"could not find complex matrix allocation in {matdat_path}")
+    text = text.replace(mat_alloc, mat_alloc_patch, 1)
+
+    mat_store_pattern = r"  mat\(nmat\) = mat_elem[ \t]*\n"
+    mat_store_match = re.search(mat_store_pattern, text)
+    if mat_store_match is None:
+        raise ValueError(f"could not find complex matrix store in {matdat_path}")
+    mat_store_patch = (
+        mat_store_match.group(0)
+        + "  stellarator_gk_mat_term(nmat) = stellarator_gk_current_trace_term\n"
+    )
+    text = text[: mat_store_match.start()] + mat_store_patch + text[mat_store_match.end() :]
+
+    source_store_pattern = r"source\(iih\) = source\(iih\) \+ mat_elem[ \t]*\n"
+    source_store_match = re.search(source_store_pattern, text)
+    if source_store_match is None:
+        raise ValueError(f"could not find source store in {matdat_path}")
+    source_store_patch = (
+        source_store_match.group(0)
+        + "stellarator_gk_source_by_term(iih,stellarator_gk_current_trace_term) = &\n"
+        + "     & stellarator_gk_source_by_term(iih,stellarator_gk_current_trace_term) + mat_elem\n"
+    )
+    text = text[: source_store_match.start()] + source_store_patch + text[source_store_match.end() :]
+
+    duplicate_check = "    if ((ii(i).eq.ii(ireduced)).and.(jj(i).eq.jj(ireduced))) then\n"
+    duplicate_patch = (
+        "    if ((ii(i).eq.ii(ireduced)).and.(jj(i).eq.jj(ireduced)) &\n"
+        "        & .and.(stellarator_gk_mat_term(i).eq.stellarator_gk_mat_term(ireduced))) then\n"
+    )
+    if duplicate_check not in text:
+        raise ValueError(f"could not find compression duplicate check in {matdat_path}")
+    text = text.replace(duplicate_check, duplicate_patch, 1)
+
+    reduced_copy = "      mat(ireduced) = mat(i)\n"
+    reduced_copy_patch = reduced_copy + "      stellarator_gk_mat_term(ireduced) = stellarator_gk_mat_term(i)\n"
+    if reduced_copy not in text:
+        raise ValueError(f"could not find compression matrix copy in {matdat_path}")
+    text = text.replace(reduced_copy, reduced_copy_patch, 1)
+
+    heap_swap = "    ctmp = mat(ind) ; mat(ind) = mat(i_start) ; mat(i_start) = ctmp\n"
+    heap_swap_patch = (
+        heap_swap
+        + "    itmp = stellarator_gk_mat_term(ind)\n"
+        + "    stellarator_gk_mat_term(ind) = stellarator_gk_mat_term(i_start)\n"
+        + "    stellarator_gk_mat_term(i_start) = itmp\n"
+    )
+    if heap_swap not in text:
+        raise ValueError(f"could not find heap-sort matrix swap in {matdat_path}")
+    text = text.replace(heap_swap, heap_swap_patch, 1)
+
+    sift_swap = "      ctmp = mat(ind2) ; mat(ind2) = mat(ind) ; mat(ind) = ctmp\n"
+    sift_swap_patch = (
+        sift_swap
+        + "      itmp = stellarator_gk_mat_term(ind2)\n"
+        + "      stellarator_gk_mat_term(ind2) = stellarator_gk_mat_term(ind)\n"
+        + "      stellarator_gk_mat_term(ind) = itmp\n"
+    )
+    if sift_swap not in text:
+        raise ValueError(f"could not find sift matrix swap in {matdat_path}")
+    text = text.replace(sift_swap, sift_swap_patch, 1)
+
+    subroutine_marker = "subroutine put_element(iih,jjh,mat_elem,itime_est)\n"
+    setter = (
+        "subroutine stellarator_gk_set_trace_term(term_id)\n"
+        "  integer, intent(in) :: term_id\n"
+        "  if (term_id < 0 .or. term_id > stellarator_gk_n_trace_terms) then\n"
+        "    stop 'stellarator_gk_set_trace_term: term out of range'\n"
+        "  endif\n"
+        "  stellarator_gk_current_trace_term = term_id\n"
+        "end subroutine stellarator_gk_set_trace_term\n\n"
+    )
+    if subroutine_marker not in text:
+        raise ValueError(f"could not find put_element marker in {matdat_path}")
+    text = text.replace(subroutine_marker, setter + subroutine_marker, 1)
+
+    matdat_path.write_text(text, encoding="utf-8")
+    return True
+
+
+def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
+    """Patch copied GKW linear-term assembly to tag matrix/source entries."""
+
+    text = linear_terms_path.read_text(encoding="utf-8")
+    if "stellarator_gk rhs trace linear_terms patch" in text:
+        return False
+
+    use_marker = "  use matdat,      only : finish_matrix_section\n"
+    use_patch = (
+        "  use matdat,      only : finish_matrix_section, &\n"
+        "      & stellarator_gk_set_trace_term\n"
+        "  ! stellarator_gk rhs trace linear_terms patch\n"
+    )
+    if use_marker not in text:
+        raise ValueError(f"could not find calc_linear_terms matdat use in {linear_terms_path}")
+    text = text.replace(use_marker, use_patch, 1)
+
+    replacements = (
+        ("  if (ltrapping_arakawa) call igh(disp_par,disp_vp)\n", 1, 1),
+        ("          call vpar_grad_df_4d_testnewbc(disp_par)\n", 1, 2),
+        ("        call trapdf_2d(trapping,disp_vp)\n", 2, 1),
+        ("        call trapdf_4d(trapping,disp_vp)\n", 2, 1),
+        ("  if (lvdgradf) call vdgradf\n", 3, 1),
+        ("  if (lve_grad_fm) call ve_grad_fm\n", 5, 1),
+        ("  if (lvd_grad_phi_fm) call vd_grad_phi_fm\n", 6, 1),
+        ("          call vpgrphi_3_newbc(landau,disp_fe)\n", 7, 2),
+        ("  if (lpoisson_int) call poisson_int\n", 8, 1),
+    )
+    for marker, term_id, count in replacements:
+        if marker not in text:
+            raise ValueError(f"could not find linear term marker {marker!r}")
+        text = text.replace(
+            marker,
+            f"  call stellarator_gk_set_trace_term({term_id})\n" + marker,
+            count,
+        )
+    reset_marker = "  if (neoclassics .and. lneoclassical) call neoclassical\n"
+    if reset_marker not in text:
+        raise ValueError(f"could not find neoclassical marker in {linear_terms_path}")
+    text = text.replace(
+        reset_marker,
+        "  call stellarator_gk_set_trace_term(0)\n" + reset_marker,
+        1,
+    )
+
+    linear_terms_path.write_text(text, encoding="utf-8")
+    return True
+
+
+def add_rhs_trace_exp_integration_patch(
+    exp_integration_path: Path,
+    steps: tuple[int, ...] = (20, 800, 1600),
+) -> bool:
+    """Patch copied GKW time advancement to dump selected-mode RHS term actions."""
+
+    text = exp_integration_path.read_text(encoding="utf-8")
+    if "stellarator_gk rhs trace exp_integration patch" in text:
+        return False
+
+    if not steps:
+        raise ValueError("rhs trace steps must not be empty")
+    step_values = tuple(int(step) for step in steps)
+    if any(step <= 0 for step in step_values):
+        raise ValueError("rhs trace steps must be positive")
+
+    call_marker = (
+        "  ! done after calculate_fields to have the new potential\n"
+        "  call normalize(2,fdisi(1),nsolc)\n\n"
+    )
+    call_patch = (
+        call_marker
+        + "  ! stellarator_gk rhs trace exp_integration patch: write selected-mode\n"
+        + "  ! dtim-scaled term actions after end-of-window normalization.\n"
+        "  call stellarator_gk_rhs_trace_output\n\n"
+    )
+    if call_marker not in text:
+        raise ValueError(
+            f"could not find explicit normalization marker in {exp_integration_path}"
+        )
+    text = text.replace(call_marker, call_patch, 1)
+
+    module_marker = "end module exp_integration"
+    if module_marker not in text:
+        raise ValueError(
+            f"could not find exp_integration module end marker in {exp_integration_path}"
+        )
+    subroutine = _rhs_trace_subroutine(step_values)
+    text = text.replace(module_marker, subroutine + "\n" + module_marker, 1)
+    exp_integration_path.write_text(text, encoding="utf-8")
+    return True
+
+
 STATE_TRACE_SUBROUTINE = r"""
 subroutine stellarator_gk_state_trace_output
 
@@ -354,6 +595,78 @@ end subroutine stellarator_gk_selected_state_dump_output
 """
 
 
+def _rhs_trace_subroutine(steps: tuple[int, ...]) -> str:
+    keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
+    return rf"""
+subroutine stellarator_gk_rhs_trace_output
+
+  use control,      only : time, ntotstep, dtim
+  use dist,         only : fdisi, indx, nsolc
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use matdat,       only : mat, ii, jj, n4, source, stellarator_gk_mat_term, &
+       & stellarator_gk_source_by_term, stellarator_gk_n_trace_terms
+  use mpiinterface, only : root_processor
+
+  integer :: iz, imu, ivpar, irow, elem, term_id, term, lun
+  character (len=64) :: trace_file
+  complex :: action(0:stellarator_gk_n_trace_terms)
+  complex :: total_action
+  logical :: keep_snapshot
+
+  keep_snapshot = .false.
+{keep_checks}
+  if (.not. keep_snapshot) return
+
+  if (root_processor) then
+     write(trace_file,'("stellarator_gk_rhs_trace_",I8.8,".dat")') ntotstep
+     call get_free_lun(lun)
+     open(lun, FILE=trim(trace_file), STATUS='unknown')
+     write(lun,'(A)') '# step time iz imu ivpar real_total imag_total ' // &
+          & 'real_untagged imag_untagged real_igh imag_igh ' // &
+          & 'real_trapdf imag_trapdf real_vdgradf imag_vdgradf ' // &
+          & 'real_hyper_collision imag_hyper_collision ' // &
+          & 'real_ve_grad_fm imag_ve_grad_fm ' // &
+          & 'real_vd_grad_phi_fm imag_vd_grad_phi_fm ' // &
+          & 'real_vpgrphi imag_vpgrphi real_field_eq imag_field_eq'
+     do iz = 1, ns
+        do imu = 1, nmu
+           do ivpar = 1, nvpar
+              irow = indx(1,1,iz,imu,ivpar,1)
+              action = (0.,0.)
+              do term = 0, stellarator_gk_n_trace_terms
+                 action(term) = action(term) + dtim*stellarator_gk_source_by_term(irow,term)
+              end do
+              do elem = 1, n4
+                 if (ii(elem) .eq. irow) then
+                    term_id = stellarator_gk_mat_term(elem)
+                    if (term_id .lt. 0 .or. term_id .gt. stellarator_gk_n_trace_terms) then
+                       term_id = 0
+                    endif
+                    if (jj(elem) .ge. 1 .and. jj(elem) .le. nsolc) then
+                       action(term_id) = action(term_id) + dtim*mat(elem)*fdisi(jj(elem))
+                    endif
+                 endif
+              end do
+              total_action = (0.,0.)
+              do term = 0, stellarator_gk_n_trace_terms
+                 total_action = total_action + action(term)
+              end do
+              write(lun,'(I12,1X,1PE22.14,3(1X,I8),20(1X,1PE22.14))') &
+                   & ntotstep, time, iz, imu, ivpar, real(total_action), &
+                   & aimag(total_action), &
+                   & (real(action(term)), aimag(action(term)), &
+                   &  term = 0, stellarator_gk_n_trace_terms)
+           end do
+        end do
+     end do
+     close(lun)
+  end if
+
+end subroutine stellarator_gk_rhs_trace_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -372,6 +685,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         for name in names
         if name in generated_names
         or name.startswith("stellarator_gk_selected_state_")
+        or name.startswith("stellarator_gk_rhs_trace_")
         or name.endswith(suffixes)
         or name == "__pycache__"
     }
@@ -383,6 +697,8 @@ def _write_run_readme(
     multi_time_distr: bool = False,
     state_trace: bool = False,
     selected_state_dump: bool = False,
+    rhs_trace: bool = False,
+    rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> None:
     extra = ""
     if multi_time_distr:
@@ -422,6 +738,25 @@ stellarator_gk_selected_state_00000040.dat
 
 Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the complex
 distribution value, and the selected-mode complex field at that `z`.
+"""
+    if rhs_trace:
+        step_list = ", ".join(str(step) for step in rhs_trace_steps)
+        extra += f"""
+The copied `src/matdat.F90`, `src/linear_terms.F90`, and
+`src/exp_integration.F90` were also patched to tag linear matrix entries by
+source term and write selected-mode dtim-scaled RHS/source actions at steps
+{step_list}:
+
+```text
+stellarator_gk_rhs_trace_00000020.dat
+stellarator_gk_rhs_trace_00000800.dat
+stellarator_gk_rhs_trace_00001600.dat
+```
+
+Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the total
+selected-row action, and the untagged, `igh`, `trapdf`, `vdgradf`,
+`hyper_collision`, `ve_grad_fm`, `vd_grad_phi_fm`, `vpgrphi`, and field-equation
+actions.
 """
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
@@ -476,7 +811,26 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Patch copied GKW diagnostics to write stellarator_gk_selected_state_<step>.dat.",
     )
+    parser.add_argument(
+        "--rhs-trace",
+        action="store_true",
+        help="Patch copied GKW to write selected-mode stellarator_gk_rhs_trace_<step>.dat.",
+    )
+    parser.add_argument(
+        "--rhs-trace-steps",
+        default="20,800,1600",
+        help="Comma-separated positive ntotstep values for --rhs-trace output.",
+    )
     return parser.parse_args()
+
+
+def _parse_step_list(value: str) -> tuple[int, ...]:
+    steps = tuple(int(item.strip()) for item in value.split(",") if item.strip())
+    if not steps:
+        raise argparse.ArgumentTypeError("at least one RHS trace step is required")
+    if any(step <= 0 for step in steps):
+        raise argparse.ArgumentTypeError("RHS trace steps must be positive")
+    return steps
 
 
 def main() -> None:
@@ -489,6 +843,8 @@ def main() -> None:
         multi_time_distr=args.multi_time_distr,
         state_trace=args.state_trace,
         selected_state_dump=args.selected_state_dump,
+        rhs_trace=args.rhs_trace,
+        rhs_trace_steps=_parse_step_list(args.rhs_trace_steps),
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")
     print(f"patched initializer: {prepared.patched_init}")

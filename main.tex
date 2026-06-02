@@ -1511,6 +1511,29 @@ after fitting one complex scale per snapshot, the maximum \(\phi(z)\) error is
 remaining discrepancy is not a scalar norm, output-order, or simple global
 phase convention.  The next production discriminator should therefore be a
 term-resolved GKW RHS/source trace at the same selected snapshots.
+The GKW side of that discriminator is now available.  The
+\(\texttt{--rhs-trace}\) copied-source patch tags matrix/source entries by term
+in \path{matdat.F90}, sets the active tag through \path{linear_terms.F90}, and
+writes dtim-scaled selected-mode actions from \path{exp_integration.F90}
+immediately after the end-of-window \(\texttt{normalize(2)}\) call.  The sampled
+fixtures in \path{fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace/} load as
+\(\texttt{GkwSelectedModeRhsTrace}\) with shape \((3,9,32,8,48)\), for the
+nine term groups
+\[
+\begin{aligned}
+&\texttt{untagged},\quad \texttt{igh},\quad \texttt{trapdf},\quad
+  \texttt{vdgradf},\quad \texttt{hyper/collision},\\
+&\texttt{ve\_grad\_fm},\quad \texttt{vd\_grad\_phi\_fm},\quad
+  \texttt{vpgrphi},\quad \texttt{field}.
+\end{aligned}
+\]
+The internal term-sum error is \(9.55\times10^{-18}\).  At the final snapshot,
+the dtim-scaled total-action norm is \(1.94\times10^{-2}\), dominated by
+\(\texttt{vdgradf}\) \((1.91\times10^{-2})\), then
+\(\texttt{ve\_grad\_fm}\) \((2.62\times10^{-3})\) and
+\(\texttt{igh}\) \((1.25\times10^{-3})\).  The remaining comparison task is to
+record solver-side full selected-mode term-action arrays and compare them
+elementwise against this GKW trace.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

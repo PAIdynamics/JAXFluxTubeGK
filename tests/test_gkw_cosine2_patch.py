@@ -9,6 +9,9 @@ from scripts.prepare_gkw_cosine2_run import (
     PATCHED_SELECTOR,
     add_cosin2_branch,
     add_multitime_velocity_slice_patch,
+    add_rhs_trace_exp_integration_patch,
+    add_rhs_trace_linear_terms_patch,
+    add_rhs_trace_matdat_patch,
     add_selected_state_dump_patch,
     add_state_trace_patch,
     prepare_gkw_cosine2_run,
@@ -22,6 +25,7 @@ from stellarator_gk import (
     compare_gkw_state_trace_to_source_term_trace,
     compare_selected_mode_state_traces,
     load_gkw_parallel_phi_trace,
+    load_gkw_selected_mode_rhs_trace,
     load_gkw_selected_mode_state_trace,
     load_gkw_state_trace,
     load_gkw_time_dat_trace,
@@ -77,6 +81,126 @@ subroutine velocity_space_output
 end subroutine velocity_space_output
 
 end module diagnostic
+"""
+
+_MINIMAL_MATDAT = """module matdat
+implicit none
+private
+public :: compress_matrix, finish_matrix_section,print_matrix, iac, ii, iir
+public :: iiy, iiz, jj, jjr, jjy, jjz, mat, matdat_allocate, matr, maty
+public :: matz, n1, n2, n2r, n3, n3r, n4, n4r, nmat, nmaty, nmatz
+public :: nmata, mata, jja
+public :: put_element, put_elem_zonal, put_source, source
+public :: put_element_correct_apar
+integer :: n1=0, n2=0, n3=0, n4=0, nmat=0, nmatr=0
+integer, allocatable :: ii(:), jj(:), iir(:), jjr(:)
+complex, allocatable :: mat(:)
+real, allocatable :: matr(:)
+complex, allocatable :: source(:)
+contains
+subroutine matdat_allocate
+integer :: ierr, i, nsolc, ntot
+nsolc = 4
+ntot = 16
+allocate(source(nsolc),stat=ierr)
+do i = 1, nsolc
+  source(i) = (0.,0.)
+end do
+  allocate(mat(ntot),stat=ierr)
+end subroutine matdat_allocate
+subroutine put_element(iih,jjh,mat_elem,itime_est)
+integer, intent(in) :: iih, jjh
+integer, optional, intent(in) :: itime_est
+complex, intent(in) :: mat_elem
+nmat = nmat + 1
+ii(nmat) = iih
+jj(nmat) = jjh
+  mat(nmat) = mat_elem
+end subroutine put_element
+subroutine put_source(iih,mat_elem)
+integer, intent(in) :: iih
+complex, intent(in) :: mat_elem
+source(iih) = source(iih) + mat_elem
+end subroutine put_source
+subroutine finish_matrix_section(isel)
+integer, intent(in) :: isel
+select case(isel)
+case(1)
+  n1 = nmat
+case(2)
+  n2 = nmat
+case(3)
+  n3 = nmat
+case(4)
+  n4 = nmat
+end select
+end subroutine finish_matrix_section
+subroutine compress_section(isel)
+integer :: i, ireduced
+    if ((ii(i).eq.ii(ireduced)).and.(jj(i).eq.jj(ireduced))) then
+  mat(ireduced) = mat(ireduced) + mat(i)
+else
+      mat(ireduced) = mat(i)
+endif
+end subroutine compress_section
+subroutine slow_heap_sort(n_elem,i_start)
+integer, intent(in) :: n_elem, i_start
+integer :: itmp, ind
+complex :: ctmp
+    ctmp = mat(ind) ; mat(ind) = mat(i_start) ; mat(i_start) = ctmp
+end subroutine slow_heap_sort
+subroutine siftd(b,e,iii)
+integer, intent(in) :: b,e,iii
+integer :: itmp, ind, ind2
+complex :: ctmp
+      ctmp = mat(ind2) ; mat(ind2) = mat(ind) ; mat(ind) = ctmp
+end subroutine siftd
+end module matdat
+"""
+
+_MINIMAL_LINEAR_TERMS = """module linear_terms
+contains
+subroutine calc_linear_terms
+  use matdat,      only : finish_matrix_section
+  if (ltrapping_arakawa) call igh(disp_par,disp_vp)
+  if (wills .eq. 1) then
+          call vpar_grad_df_4d_testnewbc(disp_par)
+  endif
+  if (wills .eq. 1) then
+          call vpar_grad_df_4d_testnewbc(disp_par)
+  endif
+        call trapdf_2d(trapping,disp_vp)
+        call trapdf_4d(trapping,disp_vp)
+  if (lvdgradf) call vdgradf
+  call finish_matrix_section(1)
+  if (lve_grad_fm) call ve_grad_fm
+  if (lvd_grad_phi_fm) call vd_grad_phi_fm
+  if (willv .eq. 1) then
+          call vpgrphi_3_newbc(landau,disp_fe)
+  endif
+  if (willv .eq. 1) then
+          call vpgrphi_3_newbc(landau,disp_fe)
+  endif
+  call finish_matrix_section(2)
+  if (lpoisson_int) call poisson_int
+  call finish_matrix_section(3)
+  call finish_matrix_section(4)
+  if (neoclassics .and. lneoclassical) call neoclassical
+end subroutine calc_linear_terms
+end module linear_terms
+"""
+
+_MINIMAL_EXP_INTEGRATION = """module exp_integration
+contains
+subroutine explicit_integration
+  ! done after calculate_fields to have the new potential
+  call normalize(2,fdisi(1),nsolc)
+
+  if (meth == 3) then
+     call normalize(3,fdisk(1,1),nsolc)
+  endif
+end subroutine explicit_integration
+end module exp_integration
 """
 
 
@@ -200,6 +324,56 @@ def test_prepare_gkw_cosine2_run_can_patch_selected_state_dump(tmp_path: Path) -
     ).read_text(encoding="utf-8")
 
 
+def test_prepare_gkw_cosine2_run_can_patch_rhs_trace(tmp_path: Path) -> None:
+    source_root = tmp_path / "gkw"
+    (source_root / "src").mkdir(parents=True)
+    source_init = source_root / "src" / "init.f90"
+    source_init.write_text(_MINIMAL_INIT, encoding="utf-8")
+    source_diagnostic = source_root / "src" / "diagnostic.F90"
+    source_diagnostic.write_text(_MINIMAL_DIAGNOSTIC, encoding="utf-8")
+    source_matdat = source_root / "src" / "matdat.F90"
+    source_matdat.write_text(_MINIMAL_MATDAT, encoding="utf-8")
+    source_linear_terms = source_root / "src" / "linear_terms.F90"
+    source_linear_terms.write_text(_MINIMAL_LINEAR_TERMS, encoding="utf-8")
+    source_exp_integration = source_root / "src" / "exp_integration.F90"
+    source_exp_integration.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+    input_path = tmp_path / "selected_ky_input.dat"
+    input_path.write_text("&SPCGENERAL\n finit = 'cosine'\n /\n", encoding="utf-8")
+
+    prepared = prepare_gkw_cosine2_run(
+        source_root=source_root,
+        output_root=tmp_path / "patched-gkw",
+        input_path=input_path,
+        rhs_trace=True,
+        rhs_trace_steps=(20, 40),
+    )
+
+    assert prepared.rhs_trace
+    assert prepared.rhs_trace_steps == (20, 40)
+    assert prepared.patched_diagnostic is None
+    exp_integration_text = (
+        prepared.output_root / "src" / "exp_integration.F90"
+    ).read_text(encoding="utf-8")
+    matdat_text = (prepared.output_root / "src" / "matdat.F90").read_text(
+        encoding="utf-8"
+    )
+    linear_terms_text = (
+        prepared.output_root / "src" / "linear_terms.F90"
+    ).read_text(encoding="utf-8")
+    assert "stellarator_gk rhs trace exp_integration patch" in exp_integration_text
+    assert "call stellarator_gk_rhs_trace_output" in exp_integration_text
+    assert "ntotstep .eq. 40" in exp_integration_text
+    assert "stellarator_gk rhs trace matdat patch" in matdat_text
+    assert "stellarator_gk_mat_term" in matdat_text
+    assert "stellarator_gk_set_trace_term(7)" in linear_terms_text
+    assert "stellarator_gk_rhs_trace_" not in source_exp_integration.read_text(
+        encoding="utf-8"
+    )
+    assert "RHS/source actions" in (
+        prepared.output_root / "README_stellarator_gk_cosin2.md"
+    ).read_text(encoding="utf-8")
+
+
 def test_cosin2_patch_is_idempotent(tmp_path: Path) -> None:
     init_path = tmp_path / "init.f90"
     init_path.write_text(_MINIMAL_INIT, encoding="utf-8")
@@ -238,6 +412,29 @@ def test_selected_state_dump_patch_is_idempotent(tmp_path: Path) -> None:
     first_patch = diagnostic_path.read_text(encoding="utf-8")
     assert not add_selected_state_dump_patch(diagnostic_path)
     assert diagnostic_path.read_text(encoding="utf-8") == first_patch
+
+
+def test_rhs_trace_patches_are_idempotent(tmp_path: Path) -> None:
+    exp_integration_path = tmp_path / "exp_integration.F90"
+    matdat_path = tmp_path / "matdat.F90"
+    linear_terms_path = tmp_path / "linear_terms.F90"
+    exp_integration_path.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+    matdat_path.write_text(_MINIMAL_MATDAT, encoding="utf-8")
+    linear_terms_path.write_text(_MINIMAL_LINEAR_TERMS, encoding="utf-8")
+
+    assert add_rhs_trace_exp_integration_patch(exp_integration_path, (20, 40))
+    assert add_rhs_trace_matdat_patch(matdat_path)
+    assert add_rhs_trace_linear_terms_patch(linear_terms_path)
+    first_exp_integration = exp_integration_path.read_text(encoding="utf-8")
+    first_matdat = matdat_path.read_text(encoding="utf-8")
+    first_linear_terms = linear_terms_path.read_text(encoding="utf-8")
+
+    assert not add_rhs_trace_exp_integration_patch(exp_integration_path, (20, 40))
+    assert not add_rhs_trace_matdat_patch(matdat_path)
+    assert not add_rhs_trace_linear_terms_patch(linear_terms_path)
+    assert exp_integration_path.read_text(encoding="utf-8") == first_exp_integration
+    assert matdat_path.read_text(encoding="utf-8") == first_matdat
+    assert linear_terms_path.read_text(encoding="utf-8") == first_linear_terms
 
 
 def test_write_cosin2_input_rejects_missing_cosine_selector(tmp_path: Path) -> None:
@@ -368,6 +565,68 @@ def test_patched_cosin2_selected_mode_state_fixtures_load() -> None:
     np.testing.assert_allclose(trace.times, np.asarray([0.06, 2.4, 4.8]))
     assert trace.state.shape == (3, 32, 8, 48)
     assert trace.phi.shape == (3, 48)
+
+
+def test_gkw_selected_mode_rhs_trace_loader(tmp_path: Path) -> None:
+    path = tmp_path / "stellarator_gk_rhs_trace_00000020.dat"
+    rows = [
+        "# step time iz imu ivpar real_total imag_total "
+        "real_untagged imag_untagged real_igh imag_igh real_trapdf imag_trapdf "
+        "real_vdgradf imag_vdgradf real_hyper_collision imag_hyper_collision "
+        "real_ve_grad_fm imag_ve_grad_fm real_vd_grad_phi_fm imag_vd_grad_phi_fm "
+        "real_vpgrphi imag_vpgrphi real_field_eq imag_field_eq"
+    ]
+    for iz in (1, 2):
+        for imu in (1, 2):
+            for ivpar in (1, 2):
+                terms = []
+                total = 0.0 + 0.0j
+                for term in range(9):
+                    value = (
+                        term
+                        + 0.1 * ivpar
+                        + 0.01 * imu
+                        + 0.001 * iz
+                        + 1j * (term + iz)
+                    )
+                    total += value
+                    terms.extend((value.real, value.imag))
+                rows.append(
+                    " ".join(
+                        [
+                            "20",
+                            "6.0e-2",
+                            str(iz),
+                            str(imu),
+                            str(ivpar),
+                            f"{total.real:.16e}",
+                            f"{total.imag:.16e}",
+                            *(f"{value:.16e}" for value in terms),
+                        ]
+                    )
+                )
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    trace = load_gkw_selected_mode_rhs_trace(path)
+
+    assert trace.steps.tolist() == [20]
+    assert trace.term_names[1] == "igh_or_term_i"
+    assert trace.total_action.shape == (1, 2, 2, 2)
+    assert trace.term_actions.shape == (1, 9, 2, 2, 2)
+    np.testing.assert_allclose(trace.term_actions[0, 7, 1, 0, 0], 7.211 + 8j)
+
+
+def test_patched_cosin2_rhs_trace_fixtures_load() -> None:
+    trace = load_gkw_selected_mode_rhs_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
+    )
+
+    np.testing.assert_array_equal(trace.steps, np.asarray([20, 800, 1600], dtype=np.int32))
+    np.testing.assert_allclose(trace.times, np.asarray([0.06, 2.4, 4.8]))
+    assert trace.total_action.shape == (3, 32, 8, 48)
+    assert trace.term_actions.shape == (3, 9, 32, 8, 48)
+    assert trace.term_names[7] == "vpgrphi"
+    assert float(np.max(np.abs(np.asarray(trace.total_action)))) > 0.0
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:
