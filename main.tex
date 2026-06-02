@@ -1491,6 +1491,26 @@ tolerance \(5\times10^{-3}\): the maximum state-norm error is
 field-norm error is \(6.11\times10^{-16}\).  Thus compact state and field
 norms are aligned; the remaining production discrepancy must be resolved with a
 full selected-mode state dump or a term-resolved GKW RHS/source trace.
+The full selected-mode dump path has now been exercised on the same patched
+GKW case.  Running \path{scripts/prepare_gkw_cosine2_run.py} with
+\(\texttt{--selected-state-dump}\) patches only the copied
+\path{diagnostic.F90} and writes
+\(\texttt{stellarator\_gk\_selected\_state\_<step>.dat}\) files containing
+\(f(v_\parallel,\mu,z)\) and complex \(\phi(z)\) for \(i_{\mathrm{mod}}=1\),
+\(i_x=1\), species 1.  The sampled production-control fixtures at steps
+20, 800, and 1600 are stored in
+\path{fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/} and load as a
+\(\texttt{SelectedModeStateTrace}\) with shape \((3,32,8,48)\).  The matching
+solver trace uses the \(\texttt{cosine2}\), \(\texttt{gkw\_igh}\), and
+post-normalization diagnostic settings.  The comparison artifact
+\path{figures/gkw_cosin2_cyclone_selected_state_comparison.csv} remains open:
+after fitting one complex scale per snapshot, the maximum \(\phi(z)\) error is
+\(5.85\times10^{-2}\), the maximum full-state error is
+\(4.78\times10^{-2}\), and the worst full-state relative \(L^2\) error is
+\(3.19\times10^{-1}\) at step 800.  Direct layout is the best layout, so the
+remaining discrepancy is not a scalar norm, output-order, or simple global
+phase convention.  The next production discriminator should therefore be a
+term-resolved GKW RHS/source trace at the same selected snapshots.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

@@ -89,6 +89,7 @@ from stellarator_gk import (
     run_cyclone_base_case_time_normalization_audit,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_source_term_trace,
+    run_cyclone_base_case_selected_state_trace,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
     run_cyclone_base_case_velocity_space_slice,
@@ -545,6 +546,28 @@ def test_cyclone_source_term_trace_reconstructs_gkw_igh_rhs(tmp_path):
             steps_per_window=1,
             output_windows=(1, 1),
         )
+
+
+def test_cyclone_selected_state_trace_records_post_normalization_snapshots():
+    trace = run_cyclone_base_case_selected_state_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_windows=(1, 2),
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+        snapshot_timing="post_normalization",
+    )
+
+    assert trace.steps.shape == (2,)
+    np.testing.assert_allclose(trace.times, jnp.asarray([0.006, 0.012]))
+    assert trace.state.shape == (2, 6, 4, 8)
+    assert trace.phi.shape == (2, 8)
+    assert jnp.all(jnp.isfinite(trace.state.real))
+    assert jnp.all(jnp.isfinite(trace.phi.real))
+    assert "snapshot_timing=post_normalization" in trace.notes
 
 
 def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):

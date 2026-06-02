@@ -1,0 +1,154 @@
+"""Compare patched GKW selected-mode state dumps against the solver.
+
+Run from the repository root:
+
+    uv run --extra dev python examples/compare_gkw_selected_state.py
+"""
+
+# ruff: noqa: E402
+
+from __future__ import annotations
+
+import argparse
+import csv
+import os
+from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+
+import jax
+import jax.numpy as jnp
+
+jax.config.update("jax_enable_x64", True)
+
+from stellarator_gk import (
+    compare_selected_mode_state_traces,
+    load_gkw_selected_mode_state_trace,
+    run_cyclone_base_case_selected_state_trace,
+)
+
+
+def main() -> None:
+    args = _parse_args()
+    gkw_trace = load_gkw_selected_mode_state_trace(args.gkw_selected_state)
+    solver_trace = run_cyclone_base_case_selected_state_trace(
+        n_z=args.n_z,
+        n_vpar=args.n_vpar,
+        n_mu=args.n_mu,
+        steps_per_window=args.steps_per_window,
+        output_windows=tuple(int(step) // args.steps_per_window for step in gkw_trace.steps),
+        initial_profile=args.initial_profile,
+        normalization_model=args.normalization_model,
+        parallel_derivative_model=args.parallel_derivative_model,
+        snapshot_timing=args.snapshot_timing,
+    )
+    report = compare_selected_mode_state_traces(
+        gkw_trace,
+        solver_trace,
+        tolerance=args.tolerance,
+    )
+    _write_csv(args.output, report, gkw_trace, solver_trace)
+    status = "PASS" if bool(report.passed) else "OPEN"
+    print(f"{status}: max_abs_error={float(report.max_abs_error):.8e}")
+    for name, value in zip(report.field_names, report.field_errors, strict=True):
+        print(f"{name}={float(value):.8e}")
+    print(args.output)
+
+
+def _write_csv(path: Path, report, gkw_trace, solver_trace) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(("metric", "value"))
+        writer.writerow(("max_abs_error", float(report.max_abs_error)))
+        for name, value in zip(report.field_names, report.field_errors, strict=True):
+            writer.writerow((f"{name}_error", float(value)))
+        writer.writerow(("passed", bool(report.passed)))
+        writer.writerow(("notes", report.notes))
+        writer.writerow(())
+        writer.writerow(
+            (
+                "step",
+                "time",
+                "phi_max_gkw",
+                "phi_max_solver",
+                "phi_phase_aligned_max_error",
+                "state_max_gkw",
+                "state_max_solver",
+                "state_phase_aligned_max_error",
+                "state_phase_aligned_relative_l2",
+            )
+        )
+        for index in range(int(gkw_trace.steps.shape[0])):
+            state_error, state_relative_l2 = _phase_aligned_errors(
+                gkw_trace.state[index],
+                solver_trace.state[index],
+            )
+            phi_error, _ = _phase_aligned_errors(
+                gkw_trace.phi[index],
+                solver_trace.phi[index],
+            )
+            writer.writerow(
+                (
+                    int(gkw_trace.steps[index]),
+                    float(gkw_trace.times[index]),
+                    float(jnp.max(jnp.abs(gkw_trace.phi[index]))),
+                    float(jnp.max(jnp.abs(solver_trace.phi[index]))),
+                    phi_error,
+                    float(jnp.max(jnp.abs(gkw_trace.state[index]))),
+                    float(jnp.max(jnp.abs(solver_trace.state[index]))),
+                    state_error,
+                    state_relative_l2,
+                )
+            )
+
+
+def _phase_aligned_errors(left, right) -> tuple[float, float]:
+    left = jnp.asarray(left)
+    right = jnp.asarray(right)
+    denominator = jnp.vdot(right, right)
+    scale = jnp.where(jnp.abs(denominator) > 0.0, jnp.vdot(right, left) / denominator, 0.0)
+    residual = left - scale * right
+    norm = jnp.linalg.norm(left)
+    relative_l2 = jnp.where(norm > 0.0, jnp.linalg.norm(residual) / norm, 0.0)
+    return float(jnp.max(jnp.abs(residual))), float(relative_l2)
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--gkw-selected-state",
+        type=Path,
+        default=Path("fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"),
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("figures/gkw_cosin2_cyclone_selected_state_comparison.csv"),
+    )
+    parser.add_argument("--n-z", type=int, default=48)
+    parser.add_argument("--n-vpar", type=int, default=32)
+    parser.add_argument("--n-mu", type=int, default=8)
+    parser.add_argument("--steps-per-window", type=int, default=20)
+    parser.add_argument("--initial-profile", choices=("cosine2", "cosine"), default="cosine2")
+    parser.add_argument(
+        "--normalization-model",
+        choices=("weighted", "gkw_unweighted"),
+        default="gkw_unweighted",
+    )
+    parser.add_argument(
+        "--parallel-derivative-model",
+        choices=("gkw_upwind", "gkw_igh", "matrix"),
+        default="gkw_igh",
+    )
+    parser.add_argument(
+        "--snapshot-timing",
+        choices=("pre_normalization", "post_normalization"),
+        default="post_normalization",
+    )
+    parser.add_argument("--tolerance", type=float, default=2.0e-2)
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    main()

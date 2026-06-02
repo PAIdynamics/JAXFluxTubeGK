@@ -344,6 +344,44 @@ class GkwStateTrace(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class SelectedModeStateTrace(_PyTreeDataclass):
+    """Full selected-mode distribution and field snapshots."""
+
+    steps: object
+    times: object
+    state: object
+    phi: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("steps", "times", "state", "phi")
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        steps = jnp.asarray(self.steps, dtype=jnp.int32)
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        state = jnp.asarray(self.state, dtype=jnp.complex128)
+        phi = jnp.asarray(self.phi, dtype=jnp.complex128)
+        if steps.ndim != 1:
+            raise ValueError("steps must be one-dimensional")
+        if times.shape != steps.shape:
+            raise ValueError("times must match steps shape")
+        if state.ndim != 4:
+            raise ValueError("state must have shape (n_time,n_vpar,n_mu,n_z)")
+        if phi.ndim != 2:
+            raise ValueError("phi must have shape (n_time,n_z)")
+        if state.shape[0] != times.shape[0] or phi.shape[0] != times.shape[0]:
+            raise ValueError("state and phi time dimension must match times")
+        if state.shape[-1] != phi.shape[-1]:
+            raise ValueError("state and phi must share the parallel-grid dimension")
+        object.__setattr__(self, "steps", steps)
+        object.__setattr__(self, "times", times)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "phi", phi)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -3424,6 +3462,271 @@ def load_gkw_state_trace(path, *, source: str | None = None, notes: str = "") ->
         phi_norm=jnp.asarray(phi_norm, dtype=jnp.float64),
         source=source or str(path),
         notes=notes or "patched GKW compact state trace",
+    )
+
+
+def load_gkw_selected_mode_state_trace(
+    paths,
+    *,
+    source: str | None = None,
+    notes: str = "",
+) -> SelectedModeStateTrace:
+    """Load patched GKW selected-mode state dump files.
+
+    ``paths`` may be a directory containing
+    ``stellarator_gk_selected_state_<step>.dat`` files, a single file, or an
+    iterable of files.  Rows are expected to contain ``step``, ``time``,
+    one-based ``z``, ``mu``, ``vpar`` indices, complex distribution value, and
+    complex selected-mode field value.
+    """
+
+    files = _selected_state_dump_files(paths)
+    snapshots = [_load_gkw_selected_state_file(path) for path in files]
+    steps = np.asarray([snapshot["step"] for snapshot in snapshots], dtype=np.int32)
+    times = np.asarray([snapshot["time"] for snapshot in snapshots], dtype=float)
+    if np.any(np.diff(times) <= 0.0):
+        raise ValueError("GKW selected-state dump times must be strictly increasing")
+    state_shape = snapshots[0]["state"].shape
+    phi_shape = snapshots[0]["phi"].shape
+    if any(snapshot["state"].shape != state_shape for snapshot in snapshots):
+        raise ValueError("all GKW selected-state dumps must share state shape")
+    if any(snapshot["phi"].shape != phi_shape for snapshot in snapshots):
+        raise ValueError("all GKW selected-state dumps must share phi shape")
+    return SelectedModeStateTrace(
+        steps=jnp.asarray(steps, dtype=jnp.int32),
+        times=jnp.asarray(times, dtype=jnp.float64),
+        state=jnp.asarray(np.stack([snapshot["state"] for snapshot in snapshots]), dtype=jnp.complex128),
+        phi=jnp.asarray(np.stack([snapshot["phi"] for snapshot in snapshots]), dtype=jnp.complex128),
+        source=source or str(files[0].parent),
+        notes=notes or "patched GKW selected-mode state dump",
+    )
+
+
+def run_cyclone_base_case_selected_state_trace(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    output_windows: tuple[int, ...] = (1, 40, 80),
+    parallel_derivative_model: str | None = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    snapshot_timing: str = "post_normalization",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> SelectedModeStateTrace:
+    """Record solver selected-mode state/field snapshots for GKW comparison."""
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    output_windows = tuple(int(window) for window in output_windows)
+    if not output_windows:
+        raise ValueError("output_windows must not be empty")
+    if any(window < 0 for window in output_windows):
+        raise ValueError("output_windows must be nonnegative")
+    if any(left >= right for left, right in zip(output_windows, output_windows[1:])):
+        raise ValueError("output_windows must be strictly increasing")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+    if snapshot_timing not in ("pre_normalization", "post_normalization"):
+        raise ValueError("snapshot_timing must be 'pre_normalization' or 'post_normalization'")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"])
+    nperiod = int(metadata["nperiod"])
+    dt = float(metadata["dt"])
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=None,
+        nperiod=nperiod,
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            parallel_derivative_model,
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(
+            metadata.get("initial_profile", "cosine2")
+            if initial_profile is None
+            else initial_profile
+        ),
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+
+    steps = []
+    times = []
+    states = []
+    phis = []
+
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    def append_snapshot(window, state_value):
+        phi = solve_phi(state_value)
+        steps.append(window * steps_per_window)
+        times.append(float(window * steps_per_window * dt))
+        states.append(state_value[..., ixzero, selected])
+        phis.append(phi[:, ixzero, selected])
+
+    requested = set(output_windows)
+    if 0 in requested:
+        append_snapshot(0, state)
+    for window in range(1, max(output_windows) + 1):
+        state = advance_window(state)
+        if window in requested and snapshot_timing == "pre_normalization":
+            append_snapshot(window, state)
+        phi = solve_phi(state)
+        amplitude = _cyclone_phi_normalization_amplitude(
+            phi,
+            setup,
+            normalization_model=normalization_model,
+        )
+        normalized = normalize_by_ky_amplitude(
+            state,
+            amplitude,
+            log_normalization=log_normalization,
+        )
+        state = normalized.state
+        log_normalization = normalized.log_normalization
+        if window in requested and snapshot_timing == "post_normalization":
+            append_snapshot(window, state)
+
+    return SelectedModeStateTrace(
+        steps=jnp.asarray(steps, dtype=jnp.int32),
+        times=jnp.asarray(times, dtype=jnp.float64),
+        state=jnp.asarray(states, dtype=jnp.complex128),
+        phi=jnp.asarray(phis, dtype=jnp.complex128),
+        source="stellarator_gk",
+        notes=(
+            "solver selected-mode state trace; "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"normalization_model={normalization_model}, "
+            f"snapshot_timing={snapshot_timing}"
+        ),
+    )
+
+
+def compare_selected_mode_state_traces(
+    observed: SelectedModeStateTrace,
+    reference: SelectedModeStateTrace,
+    *,
+    tolerance: float = 1.0e-2,
+) -> CycloneTraceComparisonReport:
+    """Compare selected-mode state traces with direct/reversed-vpar layouts."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if observed.state.shape != reference.state.shape:
+        raise ValueError("selected-mode state shapes must match")
+    if observed.phi.shape != reference.phi.shape:
+        raise ValueError("selected-mode phi shapes must match")
+    state_direct = _max_abs_error(observed.state, reference.state)
+    state_reverse_vpar = _max_abs_error(observed.state, reference.state[:, ::-1, :, :])
+    phi_direct = _max_abs_error(observed.phi, reference.phi)
+    phi_conjugate = _max_abs_error(observed.phi, jnp.conj(reference.phi))
+    phi_phase = _phase_aligned_max_abs_error(observed.phi, reference.phi)
+    phi_conjugate_phase = _phase_aligned_max_abs_error(observed.phi, jnp.conj(reference.phi))
+    state_phase = _phase_aligned_max_abs_error(observed.state, reference.state)
+    state_reverse_vpar_phase = _phase_aligned_max_abs_error(
+        observed.state,
+        reference.state[:, ::-1, :, :],
+    )
+    errors = jnp.asarray(
+        [
+            _max_abs_error(observed.times, reference.times),
+            phi_direct,
+            phi_conjugate,
+            phi_phase,
+            phi_conjugate_phase,
+            state_direct,
+            state_reverse_vpar,
+            state_phase,
+            state_reverse_vpar_phase,
+        ],
+        dtype=jnp.float64,
+    )
+    best_state = jnp.min(
+        jnp.asarray(
+            [state_direct, state_reverse_vpar, state_phase, state_reverse_vpar_phase],
+            dtype=jnp.float64,
+        )
+    )
+    best_phi = jnp.min(
+        jnp.asarray(
+            [phi_direct, phi_conjugate, phi_phase, phi_conjugate_phase],
+            dtype=jnp.float64,
+        )
+    )
+    max_error = jnp.max(
+        jnp.asarray([errors[0], best_phi, best_state], dtype=jnp.float64)
+    )
+    state_metrics = {
+        "direct": float(state_direct),
+        "reverse_vpar": float(state_reverse_vpar),
+        "direct_phase_aligned": float(state_phase),
+        "reverse_vpar_phase_aligned": float(state_reverse_vpar_phase),
+    }
+    phi_metrics = {
+        "direct": float(phi_direct),
+        "conjugate": float(phi_conjugate),
+        "direct_phase_aligned": float(phi_phase),
+        "conjugate_phase_aligned": float(phi_conjugate_phase),
+    }
+    best_layout = min(state_metrics, key=state_metrics.get)
+    best_phi_layout = min(phi_metrics, key=phi_metrics.get)
+    return CycloneTraceComparisonReport(
+        field_errors=errors,
+        max_abs_error=max_error,
+        passed=max_error <= tolerance,
+        field_names=(
+            "times",
+            "phi_direct",
+            "phi_conjugate",
+            "phi_phase_aligned",
+            "phi_conjugate_phase_aligned",
+            "state_direct",
+            "state_reverse_vpar",
+            "state_phase_aligned",
+            "state_reverse_vpar_phase_aligned",
+        ),
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            f"best_state_layout={best_layout}; best_phi_layout={best_phi_layout}; "
+            "selected-mode state trace comparison"
+        ),
     )
 
 
@@ -8500,6 +8803,76 @@ def _numeric_rows(path: Path) -> list[list[float]]:
     return rows
 
 
+def _selected_state_dump_files(paths) -> tuple[Path, ...]:
+    if isinstance(paths, (str, Path)):
+        path = Path(paths)
+        if path.is_dir():
+            files = tuple(sorted(path.glob("stellarator_gk_selected_state_*.dat")))
+        else:
+            files = (path,)
+    else:
+        files = tuple(Path(path) for path in paths)
+    if not files:
+        raise ValueError("no GKW selected-state dump files found")
+    missing = [str(path) for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"GKW selected-state dump files not found: {missing}")
+    return files
+
+
+def _load_gkw_selected_state_file(path: Path) -> dict[str, object]:
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError(f"{path} contains no selected-state rows")
+    array = np.asarray(rows, dtype=float)
+    if array.shape[1] < 9:
+        raise ValueError("GKW selected-state rows must have at least nine columns")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{path} contains non-finite selected-state values")
+    steps = array[:, 0].astype(np.int64)
+    times = array[:, 1]
+    if np.unique(steps).size != 1 or np.unique(times).size != 1:
+        raise ValueError(f"{path} must contain a single step and time")
+    iz = array[:, 2].astype(np.int64)
+    imu = array[:, 3].astype(np.int64)
+    ivpar = array[:, 4].astype(np.int64)
+    if np.any(iz < 1) or np.any(imu < 1) or np.any(ivpar < 1):
+        raise ValueError("GKW selected-state indices must be one-based positive integers")
+    n_z = int(np.max(iz))
+    n_mu = int(np.max(imu))
+    n_vpar = int(np.max(ivpar))
+    expected_rows = n_z * n_mu * n_vpar
+    if array.shape[0] != expected_rows:
+        raise ValueError(
+            f"{path} has {array.shape[0]} rows; expected {expected_rows} from index extents"
+        )
+    state = np.zeros((n_vpar, n_mu, n_z), dtype=np.complex128)
+    phi = np.zeros((n_z,), dtype=np.complex128)
+    seen = np.zeros((n_vpar, n_mu, n_z), dtype=bool)
+    phi_seen = np.zeros((n_z,), dtype=bool)
+    for row in array:
+        z_index = int(row[2]) - 1
+        mu_index = int(row[3]) - 1
+        vpar_index = int(row[4]) - 1
+        if seen[vpar_index, mu_index, z_index]:
+            raise ValueError(f"{path} contains duplicate selected-state indices")
+        state[vpar_index, mu_index, z_index] = row[5] + 1j * row[6]
+        field_value = row[7] + 1j * row[8]
+        if phi_seen[z_index] and not np.isclose(phi[z_index], field_value):
+            raise ValueError(f"{path} contains inconsistent repeated phi values")
+        phi[z_index] = field_value
+        phi_seen[z_index] = True
+        seen[vpar_index, mu_index, z_index] = True
+    if not np.all(seen) or not np.all(phi_seen):
+        raise ValueError(f"{path} does not cover the full selected-mode state grid")
+    return {
+        "step": int(steps[0]),
+        "time": float(times[0]),
+        "state": state,
+        "phi": phi,
+    }
+
+
 def _load_gkw_distr_array(path, name: str) -> np.ndarray:
     rows = _numeric_rows(Path(path))
     if not rows:
@@ -10076,3 +10449,16 @@ def _build_gkw_cell_centered_parallel_grid(
 
 def _max_abs_error(left, right):
     return jnp.max(jnp.abs(jnp.asarray(left) - jnp.asarray(right)))
+
+
+def _phase_aligned_max_abs_error(left, right):
+    left = jnp.asarray(left)
+    right = jnp.asarray(right)
+    if left.ndim > 1:
+        left_rows = left.reshape((left.shape[0], -1))
+        right_rows = right.reshape((right.shape[0], -1))
+        return jnp.max(jax.vmap(_phase_aligned_max_abs_error)(left_rows, right_rows))
+    numerator = jnp.vdot(right, left)
+    denominator = jnp.vdot(right, right)
+    scale = jnp.where(jnp.abs(denominator) > 0.0, numerator / denominator, 0.0)
+    return jnp.max(jnp.abs(left - scale * right))

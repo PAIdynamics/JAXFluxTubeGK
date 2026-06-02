@@ -33,6 +33,7 @@ class PreparedGkwCosine2Run:
     patched_diagnostic: Path | None = None
     multi_time_distr: bool = False
     state_trace: bool = False
+    selected_state_dump: bool = False
     selector: str = PATCHED_SELECTOR
 
 
@@ -71,6 +72,7 @@ def prepare_gkw_cosine2_run(
     overwrite: bool = False,
     multi_time_distr: bool = False,
     state_trace: bool = False,
+    selected_state_dump: bool = False,
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
 
@@ -98,10 +100,12 @@ def prepare_gkw_cosine2_run(
     patched_init = output_root / "src" / "init.f90"
     add_cosin2_branch(patched_init)
     patched_diagnostic = None
-    if multi_time_distr or state_trace:
+    if multi_time_distr or state_trace or selected_state_dump:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
     if state_trace:
         add_state_trace_patch(patched_diagnostic)
+    if selected_state_dump:
+        add_selected_state_dump_patch(patched_diagnostic)
     if multi_time_distr:
         add_multitime_velocity_slice_patch(patched_diagnostic)
     patched_input = output_root / "input.dat"
@@ -110,6 +114,7 @@ def prepare_gkw_cosine2_run(
         output_root,
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
+        selected_state_dump=selected_state_dump,
     )
     return PreparedGkwCosine2Run(
         source_root=source_root,
@@ -119,6 +124,7 @@ def prepare_gkw_cosine2_run(
         patched_input=patched_input,
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
+        selected_state_dump=selected_state_dump,
     )
 
 
@@ -235,6 +241,35 @@ def add_state_trace_patch(diagnostic_path: Path) -> bool:
     return True
 
 
+def add_selected_state_dump_patch(diagnostic_path: Path) -> bool:
+    """Patch copied GKW diagnostics to dump the full selected-mode state."""
+
+    text = diagnostic_path.read_text(encoding="utf-8")
+    if "stellarator_gk selected-state dump patch" in text:
+        return False
+
+    call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
+    call_patch = (
+        "  ! stellarator_gk selected-state dump patch: write imod=1, ix=1,\n"
+        "  ! species=1 distribution and phi at every diagnostic output window.\n"
+        "  call stellarator_gk_selected_state_dump_output\n\n"
+    )
+    if call_marker not in text:
+        raise ValueError(f"could not find write_output insertion marker in {diagnostic_path}")
+    text = text.replace(call_marker, call_patch + call_marker, 1)
+
+    module_marker = "end module diagnostic"
+    if module_marker not in text:
+        raise ValueError(f"could not find diagnostic module end marker in {diagnostic_path}")
+    text = text.replace(
+        module_marker,
+        SELECTED_STATE_DUMP_SUBROUTINE + "\n" + module_marker,
+        1,
+    )
+    diagnostic_path.write_text(text, encoding="utf-8")
+    return True
+
+
 STATE_TRACE_SUBROUTINE = r"""
 subroutine stellarator_gk_state_trace_output
 
@@ -281,6 +316,44 @@ end subroutine stellarator_gk_state_trace_output
 """
 
 
+SELECTED_STATE_DUMP_SUBROUTINE = r"""
+subroutine stellarator_gk_selected_state_dump_output
+
+  use control,      only : time, ntotstep
+  use dist,         only : fdisi, nsolc, phi, get_phi, indx
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+
+  integer :: iz, imu, ivpar, lun
+  character (len=64) :: dump_file
+  complex :: fval, phival
+
+  call get_phi(fdisi(1:nsolc), phi)
+
+  if (root_processor) then
+     write(dump_file,'("stellarator_gk_selected_state_",I8.8,".dat")') ntotstep
+     call get_free_lun(lun)
+     open(lun, FILE=trim(dump_file), STATUS='unknown')
+     write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
+     do iz = 1, ns
+        phival = phi(1,1,iz)
+        do imu = 1, nmu
+           do ivpar = 1, nvpar
+              fval = fdisi(indx(1,1,iz,imu,ivpar,1))
+              write(lun,'(I12,1X,1PE22.14,3(1X,I8),4(1X,1PE22.14))') &
+                   & ntotstep, time, iz, imu, ivpar, real(fval), aimag(fval), &
+                   & real(phival), aimag(phival)
+           end do
+        end do
+     end do
+     close(lun)
+  end if
+
+end subroutine stellarator_gk_selected_state_dump_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -297,7 +370,10 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     return {
         name
         for name in names
-        if name in generated_names or name.endswith(suffixes) or name == "__pycache__"
+        if name in generated_names
+        or name.startswith("stellarator_gk_selected_state_")
+        or name.endswith(suffixes)
+        or name == "__pycache__"
     }
 
 
@@ -306,6 +382,7 @@ def _write_run_readme(
     *,
     multi_time_distr: bool = False,
     state_trace: bool = False,
+    selected_state_dump: bool = False,
 ) -> None:
     extra = ""
     if multi_time_distr:
@@ -331,6 +408,20 @@ stellarator_gk_state_trace.dat
 ```
 
 The columns are `step`, `time`, `state_norm`, and `phi_norm`.
+"""
+    if selected_state_dump:
+        extra += """
+The copied `src/diagnostic.F90` was also patched to write the full selected
+single-mode state at every normal diagnostic output window:
+
+```text
+stellarator_gk_selected_state_00000020.dat
+stellarator_gk_selected_state_00000040.dat
+...
+```
+
+Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the complex
+distribution value, and the selected-mode complex field at that `z`.
 """
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
@@ -380,6 +471,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Patch copied GKW diagnostics to write stellarator_gk_state_trace.dat.",
     )
+    parser.add_argument(
+        "--selected-state-dump",
+        action="store_true",
+        help="Patch copied GKW diagnostics to write stellarator_gk_selected_state_<step>.dat.",
+    )
     return parser.parse_args()
 
 
@@ -392,6 +488,7 @@ def main() -> None:
         overwrite=args.overwrite,
         multi_time_distr=args.multi_time_distr,
         state_trace=args.state_trace,
+        selected_state_dump=args.selected_state_dump,
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")
     print(f"patched initializer: {prepared.patched_init}")

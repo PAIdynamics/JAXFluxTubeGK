@@ -323,7 +323,24 @@ compact norm-level comparison passes at tolerance `5.0e-03`: maximum error
 `0.016112898161769` and `0.016826748946865613`; final field norms agree at
 `0.144337567297406`. Compact state/field norms therefore no longer explain the
 remaining CBC growth/profile discrepancy by themselves.
-That discriminator has now been run on compact early/mid/final fixtures. The
+The full selected-mode GKW state dump is now the next completed discriminator.
+`scripts/prepare_gkw_cosine2_run.py --selected-state-dump` patches only the
+copied GKW `diagnostic.F90` and writes
+`stellarator_gk_selected_state_<step>.dat` files with the selected
+distribution on the full `(z,mu,v_parallel)` grid plus complex `phi(z)`. The
+sampled production-control fixtures at steps 20, 800, and 1600 are stored under
+`fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/` and load as
+`SelectedModeStateTrace` with shape `(3, 32, 8, 48)`. The solver comparison
+artifact is `figures/gkw_cosin2_cyclone_selected_state_comparison.csv`. Direct
+layout is best, but the comparison remains OPEN after snapshot-wise complex
+phase alignment: maximum `phi(z)` error `5.845543963934988e-02`, maximum
+full-state error `4.780479264318512e-02`, and worst state relative \(L^2\)
+error `0.3192978051120589` at step 800. This rules out scalar norms and simple
+diagnostic layout as sufficient explanations and makes a matched GKW
+term-resolved RHS/source trace at the same selected snapshots the next
+actionable target.
+The earlier multi-time velocity-slice discriminator has also been run on
+early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
 `3.990529105190601e-03`, `3.6712468463562305e-02`, and
 `3.5348895748192916e-02`; grid and time errors stay at GKW output precision.
@@ -374,10 +391,12 @@ The repository currently contains:
 - `examples/audit_cyclone_cosin2_vpar_odd_signs.py`: controlled odd-\(v_\parallel\) RHS sign audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`: controlled Term VII field-variable convention audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_velocity_phase.py`: global phase/complex-scale alignment audit for patched-GKW `cosin2` velocity slices.
-- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots.
+- `examples/compare_gkw_selected_state.py`: sampled full selected-mode GKW state dump versus solver state comparison with snapshot-wise phase alignment.
+- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots, compact state traces, or full selected-mode state dumps.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
 - `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_velocity_series_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, `figures/cyclone_igh_arakawa_series_audit.csv`, `figures/cyclone_term_vii_mode_packing_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
+- `fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/`: sampled patched-GKW `cosin2` full selected-mode state dumps at steps 20, 800, and 1600.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat` through `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`: patched GKW final-output velocity-space slices for the selected-`ky` `cosin2` run.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_multitime_distr/`: compact patched GKW multi-time velocity-space slices at steps 20, 800, and 1600, plus selected `time.dat` rows.
@@ -478,9 +497,9 @@ examples labeled as reduced until CBC parity passes:
   1-based indexing checks,
 - use the completed Term VII, multi-window fused-`igh`, solver-side
   source-term trace, and GKW compact state-trace patch as guardrails against
-  promoting diagnostic sign variants, and move from compact norms toward a
-  full selected-mode state dump or GKW term-resolved RHS/source trace for the
-  remaining cumulative gap,
+  promoting diagnostic sign variants; the full selected-mode state dump is now
+  available and leaves an OPEN phase-aligned state gap, so the next narrowed
+  target is a GKW term-resolved RHS/source trace for the same snapshots,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -507,6 +526,38 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Captured Full Selected-Mode GKW State Dumps
+
+- Prepared a copied GKW tree with:
+  - `uv run python scripts/prepare_gkw_cosine2_run.py --overwrite --selected-state-dump --output-root /tmp/stellarator_gk_gkw_cosin2_selected_state`
+- Built and ran the copied serial/no-FFT GKW tree with:
+  - `make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`
+  - `./gkw.x`
+- The copied diagnostic patch produced 80
+  `stellarator_gk_selected_state_<step>.dat` snapshots. Three production-control
+  samples are now stored as fixtures:
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/stellarator_gk_selected_state_00000020.dat`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/stellarator_gk_selected_state_00000800.dat`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/stellarator_gk_selected_state_00001600.dat`.
+- Added public `SelectedModeStateTrace`,
+  `load_gkw_selected_mode_state_trace`,
+  `run_cyclone_base_case_selected_state_trace`, and
+  `compare_selected_mode_state_traces`.
+- Added `examples/compare_gkw_selected_state.py`, which writes:
+  - `figures/gkw_cosin2_cyclone_selected_state_comparison.csv`.
+- Selected-state comparison result:
+  - OPEN at tolerance `2.0e-02`,
+  - maximum snapshot-wise phase-aligned error: `5.845543963934988e-02`,
+  - phase-aligned `phi(z)` error: `5.845543963934988e-02`,
+  - phase-aligned full-state error: `4.780479264318512e-02`,
+  - worst full-state relative \(L^2\) error: `0.3192978051120589` at step 800.
+- Interpretation: direct layout remains best, scalar norms are already aligned,
+  and a simple output phase/layout convention does not close the selected-mode
+  state gap. The next target is a term-resolved GKW RHS/source trace at the same
+  selected snapshots.
+- Verification run this round:
+  - `uv run python examples/compare_gkw_selected_state.py`
 
 ### 2026-06-02: Captured Matched GKW Compact State Trace
 
