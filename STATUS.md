@@ -580,6 +580,18 @@ Expected tests:
   - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
   - `JAX_ENABLE_X64=1 uv run python -c "... compare_selected_mode_rhs_traces(...) ..."`
 
+### 2026-06-02: Retained Dual Cyclone Growth Diagnostics
+
+- Verified the production Cyclone gate still carries both growth diagnostics:
+  - `late_fit`, the selected-mode least-squares log-amplitude fit,
+  - `late_mean_window`, the GKW `time.dat`-style late-window mean.
+- The existing `growth_diagnostic` selector and tests keep both diagnostics
+  available while the selected-mode state/RHS parity gates are OPEN.
+- Interpretation: no diagnostic convention is promoted or removed in this
+  round; the next actionable production-CBC target remains the `vdgradf`
+  magnetic-drift RHS/action mismatch identified by the selected-mode trace
+  comparison.
+
 ### 2026-06-02: Added GKW Selected-Mode RHS/Source Trace
 
 - Prepared a copied GKW tree with:
