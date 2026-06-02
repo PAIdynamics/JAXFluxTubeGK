@@ -443,7 +443,9 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add a direct reduced Gyaradax/GKW-style phi/RHS parity fixture using the Phase 7 coupled precompute inputs.
 - [x] Add a reduced zonal-flow invariant test: constant zonal mode is stationary in a flat flux tube.
 - [x] Add a true long-time Rosenbluth-Hinton zonal-flow plateau gate that passes the documented \(t>80\) residual using GKW finite-difference fallback stencils and late-window mean convergence.
-- [ ] Add Cyclone Base Case linear ITG growth-rate test.
+- [x] Add Cyclone Base Case selected-`ky` linear ITG growth-rate test. The
+  matched 48/32/8 production-control regression now passes against the
+  \(0.179\) GKW/Gyaradax scalar target; full ITG scan parity remains separate.
 - [x] Add a first GX-inspired benchmark fixture from `relevant-codes/gx/benchmarks/linear/ITG_cyclone/` after verifying TOML compatibility.
 - [x] Add named scalar benchmark targets for the documented Rosenbluth-Hinton residual and Cyclone Base Case growth-rate references.
 - [x] Load GX NetCDF growth/frequency reference curves from `omega_kxkyt` and convert selected `ky` points into optimization targets.
@@ -516,7 +518,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [x] Add and run a full selected-mode GKW state dump discriminator after the compact state-trace result. The copied GKW diagnostic patch writes `stellarator_gk_selected_state_<step>.dat` files; the sampled production-control fixtures at steps 20, 800, and 1600 load as shape `(3, 32, 8, 48)`.
 - [x] Compare the sampled selected-mode state dump against the solver `cosine2`/`gkw_igh` state trace with snapshot-wise complex phase alignment. Direct layout is best, but the comparison remains OPEN: maximum phase-aligned `phi(z)` error \(5.85\times10^{-2}\), maximum phase-aligned full-state error \(4.78\times10^{-2}\), and worst state relative \(L^2\) error \(3.19\times10^{-1}\) at step 800.
 - [x] Add a matched GKW RHS/source action trace for the selected mode and the same early/mid/final snapshots. The copied GKW patch now tags linear matrix/source entries by term, writes `stellarator_gk_rhs_trace_<step>.dat`, and stores sampled fixtures at steps 20, 800, and 1600 with shape `(3, 9, 32, 8, 48)`.
-- [ ] Compare the GKW RHS/source action trace against solver full selected-mode term-action arrays, not only solver term norms. The GKW trace is `dtim`-scaled and internally sums to the stored total with max error \(9.55\times10^{-18}\).
+- [x] Compare the GKW RHS/source action trace against solver full selected-mode term-action arrays, not only solver term norms. The GKW trace is `dtim`-scaled and internally sums to the stored total with max error \(9.55\times10^{-18}\); after the GKW internal `KTHRHO/kthnorm` convention fix, the best direct solver/GKW action comparison has max error \(2.24\times10^{-5}\), dominated by `vdgradf`.
 - [x] Add a GX DESC-block `eik.out` loader and compare solver-produced DESC/GX-convention geometry against the matched DSHAPE external-format fixture.
 - [x] Add a reduced stellarator fixture:
   - fixed surface,
@@ -527,7 +529,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
 - [ ] Compare solver-computed ITG growth-rate scans against available GS2/GX/GKW-style references.
 - [x] Compare solver-produced geometry arrays against local GX/GS2/GX-DESC-style `eik` outputs where fixtures are available.
 - [x] Supplement the matched DESC/GX eik fixture with a truly independent external eik producer suite using compatible GX/VMEC GIST fixtures. A future independently generated DESC/GX-specific runner can still strengthen DESC convention parity, but the current external-producer gate is no longer the matched block-eik fixture.
-- [ ] Add convergence tests over:
+- [x] Add convergence tests over:
   - [x] `N_s`,
   - [x] `N_vparallel`,
   - [x] `N_mu`,
@@ -535,7 +537,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, GKW finite-difference Cyclone fallback controls, the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, a passing CBC term-level parity audit, GKW time/profile/state loaders, selected-mode state/source traces, GKW final and multi-time `distr*.dat` velocity-slice loaders, real serial GKW run fixtures, explicit late-fit versus GKW-style late-window-mean growth diagnostics, DESC/GX/eik parity gates, an explicit independent GX/VMEC GIST external eik-producer report/gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, source-level algebraic audits, production-control CBC selected-`ky` regression, and eik parity gates pass their current contracts. The compact GKW state trace now matches solver post-normalization norms at \(5\times10^{-3}\) tolerance, while the full selected-mode state dump remains OPEN after snapshot-wise phase alignment with maximum \(\phi(z)\) error \(5.85\times10^{-2}\), maximum full-state error \(4.78\times10^{-2}\), and worst state relative \(L^2\) error \(3.19\times10^{-1}\) at step 800. DESC-driven optimization examples remain labeled reduced because they are fixed-topology demonstration runs rather than full DESC optimization campaigns.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, GKW finite-difference Cyclone fallback controls, the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, a passing CBC term-level parity audit, GKW time/profile/state/RHS loaders, selected-mode state/source traces, GKW final and multi-time `distr*.dat` velocity-slice loaders, real serial GKW run fixtures, explicit late-fit versus GKW-style late-window-mean growth diagnostics, DESC/GX/eik parity gates, an explicit independent GX/VMEC GIST external eik-producer report/gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, source-level algebraic audits, production-control CBC selected-`ky` scalar regression, convergence tests, and eik parity gates pass their current contracts. The remaining consistency failures are sharper: the compact GKW state trace matches solver post-normalization norms at \(5\times10^{-3}\) tolerance, but the full selected-mode state dump remains OPEN after snapshot-wise phase alignment with maximum \(\phi(z)\) error \(5.85\times10^{-2}\), maximum full-state error \(4.78\times10^{-2}\), and worst state relative \(L^2\) error \(3.19\times10^{-1}\) at step 800; the multi-time velocity slices show cumulative growth from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800; the solver/GKW selected RHS/action comparison exists but still has a strict elementwise residual \(2.24\times10^{-5}\), dominated by `vdgradf`, because it is currently comparing independently evolved states rather than a same-state operator replay. Full ITG \(k_y\)-scan parity against GX/GKW/GS2-style references remains open. DESC-driven optimization examples remain labeled reduced because they are fixed-topology demonstration runs rather than full DESC optimization campaigns.
 
 2026-06-02 update: the selected-mode Term VII mode/Fourier sign and field-packing audit now passes. It confirms `mode.F90` uses the positive single-mode `krho=0.5`, the single nonzonal \(k_x\) chain has open GKW boundary maps (`ixplus=ixminus=0`, represented as `-1` in Python), `dist.F90::get_phi` pulls `iphi` directly, and `vpgrphi_3_newbc` matches the direct packed field with action error \(3.47\times10^{-18}\). Conjugating or negating the packed field changes the Term VII action by \(\simeq2.89\times10^{-2}\), so diagnostic Term VII sign/conjugation variants are not source-level conventions.
 
@@ -587,24 +589,85 @@ Phase 12 baseline note: the current optimization layer is fixed-topology and red
 
 Phase 12 DESC-array note: the solver now supports a supplied imported geometry object in `single_surface_objective`, and `build_desc_geometry_from_arrays` maps DESC-sampled Boozer/Clebsch flux-tube arrays into the internal solver geometry. `single_surface_benchmark_objective` can compare selected reduced diagnostics against named benchmark targets on this imported geometry. `desc_geometry_arrays_from_equilibrium`, `desc_geometry_arrays_from_path`, and `scripts/extract_desc_geometry_fixture.py` provide direct DESC equilibrium/example/HDF5 extraction paths. DESC should remain the upstream equilibrium and sensitivity provider; refactoring or vendoring DESC internals into this solver is not needed for the first coupling.
 
+## Task-Roadmap Alignment and Remaining Consistency Gaps
+
+The current code base is consistent with the `task.tex` target in its core
+architecture: it is JAX-first, differentiable, linear electrostatic, flux-tube
+oriented, uses perpendicular Fourier modes, exposes time-advance and residual
+interfaces, supports spectral and GKW-parity fallback operators, and consumes
+stellarator geometry through Boozer/Clebsch-style flux-tube arrays. The strongest
+completed validation gates are the true long-time Rosenbluth--Hinton plateau,
+the production-control Cyclone selected-`ky` scalar growth regression, term-level
+GKW/Gyaradax CBC algebra, DESC/GX/eik geometry contracts, independent GX/VMEC
+GIST eik-producer coverage, and reduced differentiable optimization examples.
+
+The remaining consistency failures to fix before calling the solver production
+ready are:
+
+- Full selected-mode state-history parity against GKW remains OPEN even though
+  scalar growth now passes: the phase-aligned full-state error peaks at
+  \(4.78\times10^{-2}\), the phase-aligned \(\phi(z)\) error at
+  \(5.85\times10^{-2}\), and the worst state relative \(L^2\) error is
+  \(3.19\times10^{-1}\) at step 800.
+- Multi-time velocity-slice parity remains OPEN: direct complex max error grows
+  from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800,
+  so the mismatch is cumulative and not a final-output-only convention.
+- The strict selected RHS/action comparison on independently evolved states
+  remains nonzero at \(2.24\times10^{-5}\), dominated by `vdgradf`; the
+  same-state replay added in the next round reduces this to \(8.91\times10^{-7}\)
+  and moves the residual to `igh_or_term_i`.
+- The row-normalized GKW `parallel_phi.dat` profile-shape comparison remains
+  OPEN at roughly \(3\times10^{-2}\), even though total-power normalization and
+  field diagnostic packing match.
+- Full ITG growth-rate scans across `ky` against GX/GKW/GS2-style references
+  are not yet implemented; only the selected Cyclone `ky` scalar gate is now
+  passing.
+- `task.tex` also asks for stellarator/TEM-style benchmark cases, production
+  growth-rate/mode-frequency/mode-structure validation, CPU timing evidence on
+  target-size runs, and a simplified but real DESC-driven optimization campaign;
+  the current DESC examples remain reduced fixed-topology demonstrations.
+
 ## Immediate Next Round
 
-Use the new validation-hardening tools to close the remaining production gaps:
+Use the now-passing scalar gates as guardrails and attack the remaining
+state-history and benchmark-scan inconsistencies:
 
-- [x] Use the GKW `distr*.dat` loader, solver-side peak-\(\phi\) slice diagnostic, convention audit, and controlled odd-\(v_\parallel\) RHS sign audit to localize the remaining evolved-distribution error.
-- [x] Add the Term VII field-variable convention ladder for Terms V, VII, and VIII; global field sign/conjugation conventions are ruled out, while Term VII-only conjugation is the best diagnostic variant so far.
-- [x] Inspect Term VII (`vpgrphi_3_newbc`) at source and matrix-insertion level with the complex phase/conjugation result in mind, including `add_element`, `matdat.F90`, the complex-real split, and the `iphi` field variable used by `dist.F90::get_phi`.
-- [x] Add the velocity-slice phase-alignment audit; optimal global unit phase and unconstrained complex scale do not explain the remaining final-slice mismatch.
-- [x] Continue with \(k_y\)/Fourier sign tracing and multi-time GKW output. Multi-time velocity slices show the mismatch grows between steps 20 and 800, and the Term VII mode-packing audit rules out a source-level mode-sign/conjugation convention.
-- [x] Add a non-destructive multi-time GKW velocity-slice dump after the final peak-\(\phi\) slice proved insufficient. A full-state/restart dump remains optional for later fused-operator debugging rather than the immediate Term VII source-sign question.
-- [x] Use the completed Term VII mode-packing audit to keep diagnostic sign/conjugation variants out of the solver and continue debugging the cumulative state-history/fused-`igh` path. The added multi-window `igh` series audit shows the fused-vs-separated delta is largest at the first sampled window, then decreases.
-- [x] Add the solver-side selected-mode source-term time trace under `gkw_igh`, including raw term norms, accumulated log-normalization, and a direct RHS reconstruction guard.
-- [x] Add the non-destructive GKW compact state-trace patch plus Python loader/comparator for `stellarator_gk_state_trace.dat`.
-- [x] Run/capture the matched production-control GKW state trace and compare it against the solver source-term trace after Term VII and simple fused-`igh` sign paths are ruled out.
-- [x] Continue from the compact state-trace result with a full selected-mode state dump. The sampled early/mid/final comparison stays OPEN after snapshot-wise phase alignment, so norm-level state/field parity and simple diagnostic layout are not enough to close the profile/growth discrepancy.
-- [x] Add a GKW term-resolved RHS/source trace for the selected mode at steps 20, 800, and 1600. The copied-source patch tags `igh_or_term_i`, `trapdf`, `vdgradf`, `hyper_collision`, `ve_grad_fm`, `vd_grad_phi_fm`, `vpgrphi`, and field-equation actions.
-- [x] Add solver full selected-mode term-action snapshots and compare them against the GKW RHS trace; `CycloneSourceTermTrace` term norms are useful but not sufficient for elementwise source-action parity. The GKW s-alpha `KTHRHO/kthnorm` convention reduced the elementwise error to \(2.238\times10^{-5}\), changed the best layout back to direct, and left the remaining small residual dominated by state-history sensitivity in `vdgradf`.
-- [x] Keep both production Cyclone diagnostics (`late_fit` and `late_mean_window`) available until the GKW/Gyaradax selected-mode history gap is isolated. This remains enforced through the `growth_diagnostic` selector and regression tests; neither diagnostic is promoted away while the selected-mode state/RHS parity gates are OPEN.
-- [x] Add a production-resolution Cyclone selected-`ky` regression once the observed growth is within the GKW/GX tolerance ladder. The matched 48/32/8 GKW-control regression now passes with `late_mean_window=0.17800063460817828` against the `0.179` target after applying the internal-`krho` convention.
-- [x] Supplement the matched DESC/GX block-eik fixture with an explicit independent external eik producer report/gate using the local GX/VMEC GIST fixtures. The matched DESC/GX block-eik fixture remains a separate DESC convention check, while the independent producer suite records source names and per-producer geometry-contract errors.
-- [x] Keep DESC-driven optimization examples labeled reduced even after the RH plateau, production-control CBC selected-`ky`, and eik parity gates pass, because the current examples are reduced fixed-topology demonstrations rather than full DESC optimization campaigns.
+- [x] Add a same-state selected RHS/action replay gate: load a GKW
+  `SelectedModeStateTrace` snapshot, evaluate the solver's full term-action
+  arrays on that imported GKW state at the same geometry/grid/normalization,
+  and compare directly to the GKW `GkwSelectedModeRhsTrace`. This separates
+  operator/action mismatch from differences caused by two independently
+  evolved states. The x64 replay residual is \(8.91\times10^{-7}\), down from
+  \(2.24\times10^{-5}\), and it is dominated by `igh_or_term_i` rather than
+  `vdgradf`.
+- [x] Check the field source in same-state replay by comparing solver-computed
+  `phi` against replay with the dumped GKW `phi`; both paths leave the same
+  \(8.91\times10^{-7}\) `igh_or_term_i` residual, so field normalization and
+  quasineutrality are not the dominant same-state mismatch.
+- [ ] Inspect the remaining same-state `igh_or_term_i` replay residual at
+  source level, including GKW `ltrapping_arakawa` action timing, `disp_par` and
+  `disp_vp` insertion, `dtim` scaling, and whether the patched RHS trace stores
+  the pre- or post-compressed fused operator exactly as the solver replay
+  reconstructs it.
+- [ ] If same-state RHS/action replay reaches roundoff, add a one-window replay
+  test: initialize the solver from a GKW selected state immediately after a
+  diagnostic normalization, advance one GKW diagnostic window with the same RK4
+  and normalization cadence, and compare to the next GKW selected-state dump.
+- [ ] Generate or select adjacent GKW selected-state/RHS fixtures around the
+  worst mid-run region, e.g. windows near steps 780, 800, and 820, so the
+  one-window replay can localize when the full-state error is introduced.
+- [ ] Promote the row-normalized `parallel_phi.dat` profile-shape comparison
+  into an explicit OPEN validation gate with a recorded tolerance ladder, so
+  the remaining mode-structure mismatch is tracked separately from scalar
+  growth.
+- [ ] Add a multi-`ky` Cyclone/ITG scan gate against available GX/GKW/Gyaradax
+  references. The selected `ky=0.5` scalar gate is passing, but the
+  `task.tex` benchmark requirement needs growth-rate, frequency, and mode
+  structure consistency across a scan.
+- [ ] After the CBC same-state and scan gates are stable, extend the benchmark
+  plan to a stellarator/TEM-style fixture using DESC/GX/GIST-compatible
+  geometry arrays and keep DESC optimization examples labeled reduced until
+  those production validation gates pass.
+- [ ] Rerun CPU timing and memory estimates on the validated production
+  controls and record whether the target from `task.tex`, roughly minutes on
+  \(\mathcal{O}(100)\) CPUs, is credible for the intended design loop.

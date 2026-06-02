@@ -4022,6 +4022,133 @@ def run_cyclone_base_case_selected_rhs_trace(
     )
 
 
+def run_cyclone_base_case_same_state_rhs_replay(
+    gkw_state_trace: SelectedModeStateTrace,
+    *,
+    field_source: str = "solver",
+    parallel_derivative_model: str | None = "gkw_igh",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> SolverSelectedModeRhsTrace:
+    """Replay solver RHS/action terms on imported GKW selected-mode states."""
+
+    from .physics import solve_adiabatic_electron_phi
+
+    if field_source not in ("solver", "gkw"):
+        raise ValueError("field_source must be 'solver' or 'gkw'")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    state_snapshots = jnp.asarray(gkw_state_trace.state, dtype=jnp.complex128)
+    phi_snapshots = jnp.asarray(gkw_state_trace.phi, dtype=jnp.complex128)
+    if state_snapshots.ndim != 4:
+        raise ValueError("gkw_state_trace.state must have shape (n_time,n_vpar,n_mu,n_z)")
+    if phi_snapshots.shape != (state_snapshots.shape[0], state_snapshots.shape[-1]):
+        raise ValueError("gkw_state_trace.phi must have shape (n_time,n_z)")
+    n_vpar = int(state_snapshots.shape[1])
+    n_mu = int(state_snapshots.shape[2])
+    n_z = int(state_snapshots.shape[3])
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            parallel_derivative_model,
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(
+            metadata.get("initial_profile", "cosine2")
+            if initial_profile is None
+            else initial_profile
+        ),
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    dt = float(metadata["dt"])
+
+    total_actions = []
+    term_actions = []
+    for snapshot, gkw_phi in zip(state_snapshots, phi_snapshots, strict=True):
+        state = jnp.zeros_like(setup["state"])
+        state = state.at[:, :, :, ixzero, selected].set(snapshot)
+        if field_source == "solver":
+            phi = solve_adiabatic_electron_phi(state, setup["precompute"].field)
+        else:
+            phi = jnp.zeros(
+                (
+                    n_z,
+                    int(setup["fourier"].kx.shape[0]),
+                    int(setup["fourier"].ky.shape[0]),
+                ),
+                dtype=jnp.complex128,
+            )
+            phi = phi.at[:, ixzero, selected].set(gkw_phi)
+        names, terms = _cyclone_source_term_parts(state, phi, setup["precompute"].rhs)
+        selected_terms = _gkw_bucketed_selected_rhs_actions(
+            names,
+            terms,
+            ixzero=ixzero,
+            iy=selected,
+            dt=dt,
+        )
+        total_actions.append(jnp.sum(selected_terms, axis=0))
+        term_actions.append(selected_terms)
+
+    return SolverSelectedModeRhsTrace(
+        steps=gkw_state_trace.steps,
+        times=gkw_state_trace.times,
+        total_action=jnp.asarray(total_actions, dtype=jnp.complex128),
+        term_actions=jnp.asarray(term_actions, dtype=jnp.complex128),
+        term_names=GKW_SELECTED_MODE_RHS_TERM_NAMES,
+        source="stellarator_gk:same_state_rhs_replay",
+        notes=(
+            "solver selected-mode dt-scaled RHS/action replay on imported GKW "
+            f"states; field_source={field_source}, "
+            f"parallel_derivative_model={parallel_derivative_model}"
+        ),
+    )
+
+
+def run_cyclone_base_case_same_state_rhs_replay_gate(
+    gkw_state_trace: SelectedModeStateTrace,
+    gkw_rhs_trace: GkwSelectedModeRhsTrace,
+    *,
+    field_source: str = "solver",
+    tolerance: float = 1.0e-8,
+    parallel_derivative_model: str | None = "gkw_igh",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> SelectedModeRhsTraceComparisonReport:
+    """Compare GKW RHS actions with solver actions replayed on the same GKW states."""
+
+    replay = run_cyclone_base_case_same_state_rhs_replay(
+        gkw_state_trace,
+        field_source=field_source,
+        parallel_derivative_model=parallel_derivative_model,
+        initial_profile=initial_profile,
+        target=target,
+    )
+    return compare_selected_mode_rhs_traces(
+        gkw_rhs_trace,
+        replay,
+        tolerance=tolerance,
+    )
+
+
 def compare_selected_mode_state_traces(
     observed: SelectedModeStateTrace,
     reference: SelectedModeStateTrace,

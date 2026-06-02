@@ -374,7 +374,15 @@ The best simple layout is direct at step 20 but switches to
 `reverse_vpar_columns:identity` by steps 800 and 1600. This shows that the
 large final distribution mismatch is mostly cumulative between early and
 mid-run time, not a pure final peak-\(\phi\) output phase or isolated final
-slice-location bias.
+slice-location bias. A same-state selected RHS/action replay now loads the GKW
+selected-state snapshots and evaluates the solver term actions on those exact
+states. This reduces the strict RHS/action residual from `2.2379489422925073e-05`
+to `8.905204720648363e-07`. The remaining same-state residual is dominated by
+`igh_or_term_i`; `vdgradf` drops to `3.1370451207010515e-09`, and replaying with
+the dumped GKW `phi` instead of the solver-computed field gives the same
+residual to the reported precision. The next narrowed consistency target is
+therefore the fused GKW `ltrapping_arakawa`/`igh` action timing and trace
+construction, not the magnetic-drift frequency or field solve.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -528,7 +536,9 @@ examples labeled as reduced until CBC parity passes:
   promoting diagnostic sign variants; the full selected-mode state dump is now
   available and leaves an OPEN phase-aligned state gap; the GKW and solver
   full selected-mode RHS/action traces are now comparable elementwise, and the
-  GKW `KTHRHO/kthnorm` fix reduces the selected RHS gap to `2.24e-05`,
+  GKW `KTHRHO/kthnorm` fix reduces the selected RHS gap to `2.24e-05`; the
+  same-state replay reduces this further to `8.91e-07` and moves the residual
+  to `igh_or_term_i`,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - keep the now-passing production-control Cyclone selected-`ky` regression in
@@ -542,6 +552,8 @@ Expected file changes:
   comparison report updates,
 - selected-mode initialization or state-history diagnostics needed to explain
   the remaining full selected-mode state gap,
+- fused `ltrapping_arakawa`/`igh` same-state replay diagnostics needed to close
+  the remaining `8.91e-07` selected RHS/action residual,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `TODO.md`,
@@ -555,6 +567,30 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Same-State GKW RHS Replay Gate
+
+- Added `run_cyclone_base_case_same_state_rhs_replay()` and
+  `run_cyclone_base_case_same_state_rhs_replay_gate()`.
+- The replay loads patched GKW `SelectedModeStateTrace` snapshots, inserts each
+  selected `(kx,ky)` distribution into the solver's production-control CBC grid,
+  evaluates solver term actions immediately, and compares against the matching
+  GKW `GkwSelectedModeRhsTrace`.
+- The replay can use either solver-computed `phi` or the dumped GKW `phi` as a
+  diagnostic field source.
+- x64 fixture replay result:
+  - solver-field replay maximum residual: `8.905204720648363e-07`,
+  - GKW-field replay maximum residual: `8.90520472127105e-07`,
+  - dominant term: `igh_or_term_i=8.905204720648363e-07`,
+  - `vdgradf=3.1370451207010515e-09`,
+  - `vpgrphi=2.8711265195012825e-11`.
+- Interpretation: same-state replay removes the previous `vdgradf` dominance
+  from independently evolved state comparison; the next consistency target is
+  the fused GKW `ltrapping_arakawa`/`igh` action timing and RHS trace
+  construction.
+- Verification run this round:
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state -q`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_same_state_rhs_replay_gate(...) ..."`
 
 ### 2026-06-02: Added Independent External Eik Producer Gate
 

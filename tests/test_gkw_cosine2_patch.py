@@ -33,6 +33,8 @@ from stellarator_gk import (
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice_series,
     run_cyclone_base_case_selected_rhs_trace,
+    run_cyclone_base_case_same_state_rhs_replay,
+    run_cyclone_base_case_same_state_rhs_replay_gate,
 )
 
 
@@ -709,6 +711,39 @@ def test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot() -> None:
     term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
     assert term_error_map["vdgradf"] == pytest.approx(float(report.max_abs_error))
     assert term_error_map["vpgrphi"] < 1.0e-8
+
+
+def test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state() -> None:
+    gkw_state = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
+    )
+    gkw_rhs = load_gkw_selected_mode_rhs_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
+    )
+
+    replay = run_cyclone_base_case_same_state_rhs_replay(gkw_state)
+    report = run_cyclone_base_case_same_state_rhs_replay_gate(
+        gkw_state,
+        gkw_rhs,
+        tolerance=1.0e-8,
+    )
+
+    assert isinstance(replay, SolverSelectedModeRhsTrace)
+    np.testing.assert_array_equal(replay.steps, gkw_rhs.steps)
+    np.testing.assert_allclose(replay.times, gkw_rhs.times)
+    assert replay.total_action.shape == gkw_rhs.total_action.shape
+    assert replay.term_actions.shape == gkw_rhs.term_actions.shape
+    assert replay.term_names == gkw_rhs.term_names
+    assert report.field_names[0] == "steps"
+    assert report.term_errors.shape == (9,)
+    assert np.all(np.isfinite(np.asarray(report.field_errors)))
+    assert 0.0 < float(report.max_abs_error) < 1.0e-6
+    assert not bool(report.passed)
+    assert "same_state_rhs_replay" in replay.source
+    assert "field_source=solver" in replay.notes
+    term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
+    assert term_error_map["igh_or_term_i"] == pytest.approx(float(report.max_abs_error))
+    assert term_error_map["vdgradf"] < 1.0e-8
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:
