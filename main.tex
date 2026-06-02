@@ -1435,6 +1435,16 @@ only slightly, with maximum error \(3.28\times10^{-2}\) and best circular
 shift zero; the CSV artifacts are
 \path{figures/gkw_igh_cyclone_selected_ky_time_comparison.csv} and
 \path{figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv}.
+A multi-window version of the same fused-operator audit,
+\path{figures/cyclone_igh_arakawa_series_audit.csv}, samples output windows
+1, 40, and 80.  It remains open, but the maximum fused-versus-separated profile
+delta is largest at the first sampled window:
+\(1.40\times10^{-2}\) at \(t=0.06\), then \(2.80\times10^{-3}\) at \(t=2.4\)
+and \(6.15\times10^{-4}\) at \(t=4.8\).  Thus the fused \(\texttt{igh}\)
+difference is an early operator-shape mismatch, not by itself a monotone
+explanation of the later step-20 to step-800 distribution divergence.  The next
+comparison should use a matched state-history or source-term time trace under
+the promoted \(\texttt{gkw\_igh}\) backend.
 
 We then removed the initialization mismatch by adding a non-destructive GKW
 patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies

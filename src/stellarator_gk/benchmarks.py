@@ -1682,6 +1682,65 @@ class CycloneIghArakawaAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneIghArakawaSeriesAudit(_PyTreeDataclass):
+    """Multi-window summary of GKW fused ``igh`` versus separated fallback."""
+
+    output_windows: object
+    times: object
+    local_delta: object
+    max_delta: object
+    relative_delta: object
+    max_parallel_diffusion: object
+    max_velocity_diffusion: object
+    worst_window: object
+    worst_max_delta: object
+    passed: object
+    z: object
+    z_index: object
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "output_windows",
+        "times",
+        "local_delta",
+        "max_delta",
+        "relative_delta",
+        "max_parallel_diffusion",
+        "max_velocity_diffusion",
+        "worst_window",
+        "worst_max_delta",
+        "passed",
+        "z",
+        "z_index",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("notes",)
+
+    def __post_init__(self):
+        windows = jnp.asarray(self.output_windows, dtype=jnp.int32)
+        if windows.ndim != 1 or windows.shape[0] < 1:
+            raise ValueError("output_windows must be a nonempty one-dimensional array")
+        object.__setattr__(self, "output_windows", windows)
+        for name in (
+            "times",
+            "local_delta",
+            "max_delta",
+            "relative_delta",
+            "max_parallel_diffusion",
+            "max_velocity_diffusion",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != windows.shape:
+                raise ValueError(f"{name} must match output_windows")
+            object.__setattr__(self, name, values)
+        for name in ("worst_max_delta", "z"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        for name in ("worst_window", "z_index"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
@@ -7362,6 +7421,96 @@ def run_cyclone_base_case_igh_arakawa_audit(
             f"normalization_model={normalization_model}, "
             f"target_z={target_z}; "
             "passed means the separated solver fallback matches the fused GKW path"
+        ),
+    )
+
+
+def run_cyclone_base_case_igh_arakawa_series_audit(
+    *,
+    output_windows: tuple[int, ...] = (1, 40, 80),
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    target_z: float = 0.09375,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    tolerance: float = 5.0e-11,
+    target: BenchmarkTarget | None = None,
+) -> CycloneIghArakawaSeriesAudit:
+    """Sample the fused ``igh`` audit over several diagnostic windows."""
+
+    if not output_windows:
+        raise ValueError("output_windows must not be empty")
+    windows = tuple(int(window) for window in output_windows)
+    if any(window < 0 for window in windows):
+        raise ValueError("output_windows must be nonnegative")
+    if tuple(sorted(windows)) != windows or len(set(windows)) != len(windows):
+        raise ValueError("output_windows must be strictly increasing")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+
+    audits = tuple(
+        run_cyclone_base_case_igh_arakawa_audit(
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            output_window=window,
+            target_z=target_z,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            initial_profile=initial_profile,
+            tolerance=tolerance,
+            target=target,
+        )
+        for window in windows
+    )
+    max_delta = jnp.asarray([audit.max_delta for audit in audits], dtype=jnp.float64)
+    worst_index = int(jnp.argmax(max_delta))
+    return CycloneIghArakawaSeriesAudit(
+        output_windows=jnp.asarray(windows, dtype=jnp.int32),
+        times=jnp.asarray([audit.time for audit in audits], dtype=jnp.float64),
+        local_delta=jnp.asarray([audit.local_delta for audit in audits], dtype=jnp.float64),
+        max_delta=max_delta,
+        relative_delta=jnp.asarray([audit.relative_delta for audit in audits], dtype=jnp.float64),
+        max_parallel_diffusion=jnp.asarray(
+            [audit.max_parallel_diffusion for audit in audits],
+            dtype=jnp.float64,
+        ),
+        max_velocity_diffusion=jnp.asarray(
+            [audit.max_velocity_diffusion for audit in audits],
+            dtype=jnp.float64,
+        ),
+        worst_window=jnp.asarray(windows[worst_index], dtype=jnp.int32),
+        worst_max_delta=max_delta[worst_index],
+        passed=jnp.all(max_delta <= jnp.asarray(tolerance, dtype=jnp.float64)),
+        z=audits[0].z,
+        z_index=audits[0].z_index,
+        notes=(
+            "multi-window GKW ltrapping_arakawa fused Term I/IV audit; "
+            f"output_windows={windows}, initial_profile={initial_profile}, "
+            f"normalization_model={normalization_model}, target_z={target_z}; "
+            "passed means every sampled window matches the separated fallback"
         ),
     )
 

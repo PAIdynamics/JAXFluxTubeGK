@@ -18,6 +18,7 @@ from stellarator_gk import (
     CycloneCoefficientSourceAudit,
     CycloneDiagnosticPackingAudit,
     CycloneIghArakawaAudit,
+    CycloneIghArakawaSeriesAudit,
     CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
     CycloneSelectedKyGapAudit,
@@ -69,6 +70,7 @@ from stellarator_gk import (
     run_cyclone_base_case_coefficient_source_audit,
     run_cyclone_base_case_diagnostic_packing_audit,
     run_cyclone_base_case_igh_arakawa_audit,
+    run_cyclone_base_case_igh_arakawa_series_audit,
     run_cyclone_base_case_matdat_matrix_audit,
     run_cyclone_base_case_cosin2_gap_audit,
     run_cyclone_base_case_cosin2_velocity_convention_audit,
@@ -1610,6 +1612,39 @@ def test_cyclone_igh_arakawa_audit_quantifies_fused_path_gap():
 
     with pytest.raises(ValueError, match="normalization_model"):
         run_cyclone_base_case_igh_arakawa_audit(normalization_model="bad")
+
+
+def test_cyclone_igh_arakawa_series_audit_samples_multiple_windows():
+    audit = run_cyclone_base_case_igh_arakawa_series_audit(
+        output_windows=(1, 2),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        target_z=0.0,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-12,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneIghArakawaSeriesAudit)
+    assert len(leaves) == len(CycloneIghArakawaSeriesAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.output_windows.shape == (2,)
+    np.testing.assert_array_equal(np.asarray(audit.output_windows), np.array([1, 2]))
+    np.testing.assert_allclose(audit.times, np.array([0.006, 0.012]))
+    assert not bool(audit.passed)
+    assert audit.max_delta.shape == (2,)
+    assert audit.relative_delta.shape == (2,)
+    assert audit.worst_max_delta == jnp.max(audit.max_delta)
+    assert int(audit.worst_window) in (1, 2)
+    assert audit.max_parallel_diffusion.shape == (2,)
+    assert audit.max_velocity_diffusion.shape == (2,)
+    assert "multi-window" in audit.notes
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        run_cyclone_base_case_igh_arakawa_series_audit(output_windows=(2, 1))
 
 
 def test_rh_plateau_gate_runs_late_window_metric_without_claiming_pass():
