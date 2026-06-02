@@ -1549,6 +1549,68 @@ class CycloneCoefficientSourceAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneTermVIIModePackingAudit(_PyTreeDataclass):
+    """GKW Term VII mode-sign and field-packing source-path audit."""
+
+    direct_field_roundtrip_error: object
+    conjugate_field_pullback_error: object
+    direct_term_vii_error: object
+    packed_term_vii_error: object
+    conjugate_term_vii_delta: object
+    negative_field_term_vii_delta: object
+    positive_ky_error: object
+    selected_ky: object
+    gkw_krho: object
+    ixplus: object
+    ixminus: object
+    time: object
+    passed: object
+    output_window: int
+    field_offset: int
+    n_field_values: int
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "direct_field_roundtrip_error",
+        "conjugate_field_pullback_error",
+        "direct_term_vii_error",
+        "packed_term_vii_error",
+        "conjugate_term_vii_delta",
+        "negative_field_term_vii_delta",
+        "positive_ky_error",
+        "selected_ky",
+        "gkw_krho",
+        "ixplus",
+        "ixminus",
+        "time",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "output_window",
+        "field_offset",
+        "n_field_values",
+        "notes",
+    )
+
+    def __post_init__(self):
+        for name in self._dynamic_fields[:9] + ("time",):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.float64))
+        for name in ("ixplus", "ixminus"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.int32)
+            if values.ndim != 1:
+                raise ValueError(f"{name} must be one-dimensional")
+            object.__setattr__(self, name, values)
+        if self.output_window < 0:
+            raise ValueError("output_window must be nonnegative")
+        if self.field_offset < 0:
+            raise ValueError("field_offset must be nonnegative")
+        if self.n_field_values < 1:
+            raise ValueError("n_field_values must be positive")
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneIghArakawaAudit(_PyTreeDataclass):
     """GKW ``ltrapping_arakawa`` fused Term I/IV audit."""
 
@@ -6871,6 +6933,227 @@ def run_cyclone_base_case_coefficient_source_audit(
             f"initial_profile={initial_profile}, "
             f"normalization_model={normalization_model}, "
             f"target_z={target_z}"
+        ),
+    )
+
+
+def run_cyclone_base_case_term_vii_mode_packing_audit(
+    *,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int = 20,
+    output_window: int = 62,
+    parallel_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "gkw_unweighted",
+    initial_profile: str | None = "cosine",
+    field_phase_probe: complex = 1.0 + 0.37j,
+    tolerance: float = 5.0e-11,
+    contrast_tolerance: float = 1.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> CycloneTermVIIModePackingAudit:
+    """Audit selected-mode Term VII through GKW mode and field packing conventions."""
+
+    from .physics import gkw_parallel_field_drive, solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if output_window < 0:
+        raise ValueError("output_window must be nonnegative")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if contrast_tolerance <= 0.0:
+        raise ValueError("contrast_tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
+    )
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model="gkw_upwind",
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    rhs = setup["precompute"].rhs
+    state = setup["state"]
+    selected = int(setup["selected_ky_index"])
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(
+            state_value,
+            setup["precompute"].field,
+        )
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    phi = solve_phi(state)
+    for _ in range(output_window):
+        state = advance_window(state)
+        phi = solve_phi(state)
+        if normalize_each_window:
+            amplitude = _cyclone_phi_normalization_amplitude(
+                phi,
+                setup,
+                normalization_model=normalization_model,
+            )
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            scale = jnp.maximum(
+                amplitude[selected],
+                jnp.asarray(1.0e-300, dtype=amplitude.dtype),
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+            phi = phi / scale
+
+    phase = jnp.asarray(field_phase_probe, dtype=phi.dtype)
+    probe_phi = phase * phi
+    field_offset = int(state.size)
+    n_z_actual, n_kx, n_ky = probe_phi.shape
+    n_field_values = int(n_z_actual * n_kx * n_ky)
+    packed_direct = _pack_gkw_phi_field(probe_phi, field_offset=field_offset)
+    direct_phi = _unpack_gkw_phi_field(
+        packed_direct,
+        field_offset=field_offset,
+        n_z=n_z_actual,
+        n_kx=n_kx,
+        n_ky=n_ky,
+    )
+    conjugate_phi = _unpack_gkw_phi_field(
+        _pack_gkw_phi_field(jnp.conjugate(probe_phi), field_offset=field_offset),
+        field_offset=field_offset,
+        n_z=n_z_actual,
+        n_kx=n_kx,
+        n_ky=n_ky,
+    )
+
+    source = _cyclone_source_term_arrays(setup, metadata)
+    direct_reference = _gkw_fortran_term_vii_reference(
+        direct_phi,
+        source["parallel_field_coeff"],
+        rhs.flr_factors.bessel_j0[0],
+        rhs.gkw_parallel_stencil,
+    )
+    conjugate_reference = _gkw_fortran_term_vii_reference(
+        conjugate_phi,
+        source["parallel_field_coeff"],
+        rhs.flr_factors.bessel_j0[0],
+        rhs.gkw_parallel_stencil,
+    )
+    negative_reference = _gkw_fortran_term_vii_reference(
+        -direct_phi,
+        source["parallel_field_coeff"],
+        rhs.flr_factors.bessel_j0[0],
+        rhs.gkw_parallel_stencil,
+    )
+    current_direct = gkw_parallel_field_drive(probe_phi, rhs)
+    current_packed = gkw_parallel_field_drive(direct_phi, rhs)
+
+    direct_field_roundtrip_error = _max_abs_error(direct_phi, probe_phi)
+    conjugate_field_pullback_error = _max_abs_error(conjugate_phi, probe_phi)
+    direct_term_vii_error = _max_abs_error(current_direct, direct_reference)
+    packed_term_vii_error = _max_abs_error(current_packed, direct_reference)
+    conjugate_term_vii_delta = _max_abs_error(conjugate_reference, direct_reference)
+    negative_field_term_vii_delta = _max_abs_error(negative_reference, direct_reference)
+    selected_ky = setup["fourier"].ky[selected]
+    gkw_krho = jnp.asarray(float(metadata.get("k_theta_rhos", 0.5)), dtype=jnp.float64)
+    positive_ky_error = jnp.abs(jnp.asarray(selected_ky, dtype=jnp.float64) - gkw_krho)
+    ixplus = setup["connectivity"].ixplus[:, selected]
+    ixminus = setup["connectivity"].ixminus[:, selected]
+    passed = (
+        (direct_field_roundtrip_error <= tolerance)
+        & (direct_term_vii_error <= tolerance)
+        & (packed_term_vii_error <= tolerance)
+        & (positive_ky_error <= tolerance)
+        & (selected_ky > 0.0)
+        & jnp.all(ixplus < 0)
+        & jnp.all(ixminus < 0)
+        & (conjugate_field_pullback_error > contrast_tolerance)
+        & (conjugate_term_vii_delta > contrast_tolerance)
+        & (negative_field_term_vii_delta > contrast_tolerance)
+    )
+
+    return CycloneTermVIIModePackingAudit(
+        direct_field_roundtrip_error=direct_field_roundtrip_error,
+        conjugate_field_pullback_error=conjugate_field_pullback_error,
+        direct_term_vii_error=direct_term_vii_error,
+        packed_term_vii_error=packed_term_vii_error,
+        conjugate_term_vii_delta=conjugate_term_vii_delta,
+        negative_field_term_vii_delta=negative_field_term_vii_delta,
+        positive_ky_error=positive_ky_error,
+        selected_ky=selected_ky,
+        gkw_krho=gkw_krho,
+        ixplus=ixplus,
+        ixminus=ixminus,
+        time=output_window * steps_per_window * dt,
+        passed=passed,
+        output_window=output_window,
+        field_offset=field_offset,
+        n_field_values=n_field_values,
+        notes=(
+            "GKW Term VII mode/Fourier sign and field-packing audit; "
+            "mode.F90 positive krho convention, dist.F90::get_phi direct field "
+            "copy, linear_terms.F90::vpgrphi_3_newbc real scalar coefficients; "
+            f"initial_profile={initial_profile}, normalization_model={normalization_model}"
         ),
     )
 

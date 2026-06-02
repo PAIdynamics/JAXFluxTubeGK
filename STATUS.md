@@ -269,6 +269,17 @@ variant at step 1600 is Term VII-only conjugation, reducing the baseline
 justify a solver RHS change. It localizes the remaining issue to the selected
 mode Term VII \(k_y\)/Fourier sign and field-packing path rather than to a
 global field convention or a fused `igh` sign convention.
+The selected-mode Term VII source-path audit now closes that branch. It
+reconstructs GKW `mode.F90` positive single-mode `krho`, `dist.F90::get_phi`
+field packing, and `linear_terms.F90::vpgrphi_3_newbc` from the source-level
+contracts. The production-control run at \(t=3.72\) has selected
+`ky=gkw_krho=0.5`, Python boundary maps `ixplus=ixminus=-1` corresponding to
+GKW's open `0` maps for the single nonzonal \(k_x\) chain, direct field
+roundtrip error zero, and direct Term VII packed-field action error
+`3.471140604459642e-18`. Conjugating or negating the packed field changes the
+Term VII action by `0.028893793199993845` and `0.028925615674737656`,
+respectively. Thus Term VII sign/conjugation variants remain diagnostic only;
+the source-level mode/Fourier sign and field-packing path is direct.
 That discriminator has now been run on compact early/mid/final fixtures. The
 solver/GKW direct complex max errors at steps 20, 800, and 1600 are
 `3.990529105190601e-03`, `3.6712468463562305e-02`, and
@@ -311,6 +322,7 @@ The repository currently contains:
 - `examples/audit_cyclone_matdat_matrix.py`: reduced Cyclone `matdat.F90` sparse matrix/source convention audit.
 - `examples/audit_cyclone_coefficient_source.py`: production-control selected-`ky` GKW Term II/IV/V/VII/VIII coefficient/source audit.
 - `examples/audit_cyclone_igh_arakawa.py`: production-control selected-`ky` GKW `ltrapping_arakawa` fused Term I/IV audit.
+- `examples/audit_cyclone_term_vii_mode_packing.py`: selected-mode Term VII `mode.F90`/field-packing source-path audit.
 - `examples/audit_cyclone_cosin2_gap.py`: combined patched-GKW `cosin2` selected-`ky` growth/profile gap audit.
 - `examples/audit_cyclone_cosin2_velocity_slice.py`: patched-GKW `cosin2` selected-`ky` `distr*.dat` velocity-space slice audit.
 - `examples/audit_cyclone_cosin2_velocity_series.py`: patched-GKW `cosin2` selected-`ky` multi-time `distr*_<ntotstep>.dat` velocity-space slice audit.
@@ -320,7 +332,7 @@ The repository currently contains:
 - `examples/audit_cyclone_cosin2_velocity_phase.py`: global phase/complex-scale alignment audit for patched-GKW `cosin2` velocity slices.
 - `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
-- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_velocity_series_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
+- `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_velocity_series_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, `figures/cyclone_term_vii_mode_packing_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat` through `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`: patched GKW final-output velocity-space slices for the selected-`ky` `cosin2` run.
@@ -420,9 +432,9 @@ examples labeled as reduced until CBC parity passes:
 - audit \(v_\parallel\)-odd dynamics/sign conventions in parallel streaming,
   parallel field drive, and the fused `igh` backend with explicit Fortran
   1-based indexing checks,
-- use the completed multi-time variant audit to trace the selected-mode Term VII
-  \(k_y\)/Fourier sign and field-packing path at source level before promoting
-  any diagnostic sign/conjugation variant into the solver,
+- keep the completed Term VII mode-packing audit as a guardrail against
+  promoting diagnostic sign/conjugation variants into the solver, and refocus on
+  the cumulative state-history/fused-`igh` gap,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - promote the production-control Cyclone growth-rate gate to PASS only after it
@@ -448,6 +460,36 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-02: Added Term VII Mode-Packing Source Audit
+
+- Committed the previous multi-time velocity-series variant audit as:
+  - `d55b250 Add Cyclone velocity series variant audit`.
+- Added `CycloneTermVIIModePackingAudit` and
+  `run_cyclone_base_case_term_vii_mode_packing_audit`.
+- Added `examples/audit_cyclone_term_vii_mode_packing.py`, which writes:
+  - `figures/cyclone_term_vii_mode_packing_audit.csv`.
+- Production-control audit results at \(t=3.72\):
+  - selected `ky` / GKW `krho`: `0.5` / `0.5`,
+  - selected nonzonal single-chain maps: `ixplus=-1`, `ixminus=-1` in Python
+    for GKW's open `0` maps,
+  - direct field roundtrip error: `0.0`,
+  - direct packed-field Term VII action error:
+    `3.471140604459642e-18`,
+  - conjugated packed-field Term VII delta:
+    `0.028893793199993845`,
+  - negated packed-field Term VII delta:
+    `0.028925615674737656`.
+- Interpretation: the selected positive-\(k_y\) Term VII source path is direct,
+  not conjugated or sign-flipped. The remaining production gap should be pursued
+  through cumulative state evolution and the fused GKW `ltrapping_arakawa`/`igh`
+  path, not by promoting Term VII diagnostic sign variants.
+- Verification run this round:
+  - `python -m py_compile src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_term_vii_mode_packing.py`
+  - `uv run pytest tests/test_benchmark_references.py::test_cyclone_term_vii_mode_packing_audit_matches_source_path -q`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/audit_cyclone_term_vii_mode_packing.py`
+  - `uv run python examples/audit_cyclone_term_vii_mode_packing.py`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
 
 ### 2026-06-02: Added Multi-Time Term VII/Field Variant Audit
 

@@ -1588,6 +1588,20 @@ source-level task is to trace the selected-mode \(k_y\)/Fourier sign and
 field-packing path through \path{mode.F90}, \path{dist.F90::get_phi},
 \path{linear_terms.F90::vpgrphi_3_newbc}, and the real/complex storage
 convention.
+That trace is now recorded in
+\path{figures/cyclone_term_vii_mode_packing_audit.csv}.  For the selected
+single positive-\(k_y\) Cyclone mode, GKW's \path{mode.F90} convention gives
+\(\texttt{krho}=k_y=0.5\), and the single nonzonal \(k_x\) chain has open
+boundary maps \(\texttt{ixplus}=\texttt{ixminus}=0\), represented as \(-1\) in
+the Python static topology.  Packing \(\phi\) into the GKW field block and
+unpacking it through the \(\texttt{iphi}\) contract gives zero roundtrip error,
+and the direct packed-field reconstruction of
+\(\texttt{vpgrphi\_3\_newbc}\) differs from the solver Term VII action by only
+\(3.47\times10^{-18}\).  By contrast, conjugating or negating the packed field
+changes the Term VII action by about \(2.89\times10^{-2}\).  Thus the Term VII
+sign/conjugation variants remain useful diagnostics but are not GKW source
+conventions.  The remaining validation target is cumulative state evolution,
+especially the fused \(\texttt{ltrapping\_arakawa}\)/\(\texttt{igh}\) path.
 The optimization update used for the figures is plain gradient descent,
 \begin{equation}
   u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),

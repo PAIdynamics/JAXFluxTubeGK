@@ -21,6 +21,7 @@ from stellarator_gk import (
     CycloneMatdatMatrixAudit,
     CycloneProfileOperatorAudit,
     CycloneSelectedKyGapAudit,
+    CycloneTermVIIModePackingAudit,
     CycloneTermVIIFieldConventionAudit,
     CycloneVelocitySpaceSliceAudit,
     CycloneVelocitySpaceSliceSeriesAudit,
@@ -81,6 +82,7 @@ from stellarator_gk import (
     run_gx_gist_external_eik_suite_gate,
     run_cyclone_base_case_profile_operator_audit,
     run_cyclone_base_case_term_i_fortran_audit,
+    run_cyclone_base_case_term_vii_mode_packing_audit,
     run_cyclone_base_case_time_normalization_audit,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_parallel_phi_trace,
@@ -1532,6 +1534,44 @@ def test_cyclone_coefficient_source_audit_matches_gkw_formulas():
 
     with pytest.raises(ValueError, match="normalization_model"):
         run_cyclone_base_case_coefficient_source_audit(normalization_model="bad")
+
+
+def test_cyclone_term_vii_mode_packing_audit_matches_source_path():
+    audit = run_cyclone_base_case_term_vii_mode_packing_audit(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        output_window=2,
+        initial_profile="cosine",
+        normalization_model="gkw_unweighted",
+        tolerance=1.0e-10,
+        contrast_tolerance=1.0e-13,
+    )
+    leaves, aux = jax.tree_util.tree_flatten(audit)
+
+    assert isinstance(audit, CycloneTermVIIModePackingAudit)
+    assert len(leaves) == len(CycloneTermVIIModePackingAudit._dynamic_fields)
+    assert aux is not None
+    assert audit.output_window == 2
+    assert audit.field_offset == 8 * 6 * 4
+    assert audit.n_field_values == 8
+    assert bool(audit.passed)
+    np.testing.assert_allclose(audit.time, 0.012)
+    np.testing.assert_allclose(audit.selected_ky, audit.gkw_krho, atol=1.0e-12)
+    np.testing.assert_array_equal(np.asarray(audit.ixplus), np.array([-1], dtype=np.int32))
+    np.testing.assert_array_equal(np.asarray(audit.ixminus), np.array([-1], dtype=np.int32))
+    assert audit.direct_field_roundtrip_error < 1.0e-10
+    assert audit.direct_term_vii_error < 1.0e-10
+    assert audit.packed_term_vii_error < 1.0e-10
+    assert audit.conjugate_field_pullback_error > 1.0e-13
+    assert audit.conjugate_term_vii_delta > 1.0e-13
+    assert audit.negative_field_term_vii_delta > 1.0e-13
+    assert "mode.F90" in audit.notes
+    assert "vpgrphi_3_newbc" in audit.notes
+
+    with pytest.raises(ValueError, match="contrast_tolerance"):
+        run_cyclone_base_case_term_vii_mode_packing_audit(contrast_tolerance=0.0)
 
 
 def test_cyclone_igh_arakawa_audit_quantifies_fused_path_gap():
