@@ -19,6 +19,7 @@ from scripts.prepare_gkw_cosine2_run import (
 )
 from stellarator_gk import (
     CycloneSourceTermTrace,
+    CycloneSameStateIghReplayAudit,
     GkwStateTrace,
     GkwVelocitySpaceSliceSeries,
     SelectedModeStateTrace,
@@ -35,6 +36,7 @@ from stellarator_gk import (
     run_cyclone_base_case_selected_rhs_trace,
     run_cyclone_base_case_same_state_rhs_replay,
     run_cyclone_base_case_same_state_rhs_replay_gate,
+    run_cyclone_base_case_same_state_igh_replay_audit,
 )
 
 
@@ -368,8 +370,13 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace(tmp_path: Path) -> None:
     assert "stellarator_gk rhs trace exp_integration patch" in exp_integration_text
     assert "call stellarator_gk_rhs_trace_output" in exp_integration_text
     assert "ntotstep .eq. 40" in exp_integration_text
+    assert "use matdat,       only : mat, ii, jj, n2, source" in exp_integration_text
+    assert "do elem = 1, n2" in exp_integration_text
+    assert "do elem = 1, n4" not in exp_integration_text
     assert "stellarator_gk rhs trace matdat patch" in matdat_text
     assert "stellarator_gk_mat_term" in matdat_text
+    assert ".and.(stellarator_gk_mat_term(i).eq.stellarator_gk_mat_term(ireduced))" in matdat_text
+    assert "stellarator_gk_mat_term(ireduced) = stellarator_gk_mat_term(i)" in matdat_text
     assert "stellarator_gk_set_trace_term(7)" in linear_terms_text
     assert "stellarator_gk_rhs_trace_" not in source_exp_integration.read_text(
         encoding="utf-8"
@@ -744,6 +751,34 @@ def test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state() -> None:
     term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
     assert term_error_map["igh_or_term_i"] == pytest.approx(float(report.max_abs_error))
     assert term_error_map["vdgradf"] < 1.0e-8
+
+
+def test_same_state_igh_replay_audit_localizes_trace_gap() -> None:
+    gkw_state = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
+    )
+    gkw_rhs = load_gkw_selected_mode_rhs_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
+    )
+
+    audit = run_cyclone_base_case_same_state_igh_replay_audit(gkw_state, gkw_rhs)
+
+    assert isinstance(audit, CycloneSameStateIghReplayAudit)
+    metrics = dict(zip(audit.metric_names, np.asarray(audit.metric_values)))
+    assert not bool(audit.passed)
+    assert float(audit.max_abs_error) == pytest.approx(
+        metrics["gkw_vs_source_fused_igh"]
+    )
+    assert 0.0 < float(audit.max_abs_error) < 1.0e-6
+    assert metrics["solver_vs_source_fused_igh"] < 1.0e-16
+    assert metrics["source_fused_split_error"] < 1.0e-16
+    assert metrics["gkw_vs_solver_fused_igh"] == pytest.approx(
+        metrics["gkw_vs_source_fused_igh"]
+    )
+    assert metrics["gkw_vs_source_hamiltonian_plus_disp_par"] < (
+        metrics["gkw_vs_source_hamiltonian_only"] / 10.0
+    )
+    assert "same-state selected-mode igh replay audit" in audit.notes
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:

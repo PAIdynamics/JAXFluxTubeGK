@@ -382,7 +382,15 @@ to `8.905204720648363e-07`. The remaining same-state residual is dominated by
 the dumped GKW `phi` instead of the solver-computed field gives the same
 residual to the reported precision. The next narrowed consistency target is
 therefore the fused GKW `ltrapping_arakawa`/`igh` action timing and trace
-construction, not the magnetic-drift frequency or field solve.
+construction, not the magnetic-drift frequency or field solve. A source-level
+same-state `igh` replay audit now compares the patched GKW `igh_or_term_i`
+trace, solver fused `gkw_igh_streaming_mirror`, and reconstructed
+`linear_terms.F90::igh` action on identical imported GKW states. The solver and
+source reconstruction agree to `1.6446404919551064e-19`, while both remain
+offset from the patched GKW trace by `8.905291461911714e-07`. This localizes
+the remaining same-state `igh_or_term_i` residual to GKW RHS trace
+tagging/timing or matrix/source-action extraction rather than the implemented
+fused operator coefficients.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -538,7 +546,9 @@ examples labeled as reduced until CBC parity passes:
   full selected-mode RHS/action traces are now comparable elementwise, and the
   GKW `KTHRHO/kthnorm` fix reduces the selected RHS gap to `2.24e-05`; the
   same-state replay reduces this further to `8.91e-07` and moves the residual
-  to `igh_or_term_i`,
+  to `igh_or_term_i`; the new source-level `igh` replay audit shows the solver
+  fused action and reconstructed GKW `igh` source action match to roundoff, so
+  the next target is GKW trace tagging/timing rather than solver coefficients,
 - retain both `late_fit` and `late_mean_window` production-gate diagnostics
   until the GKW/Gyaradax selected-mode history gap is isolated,
 - keep the now-passing production-control Cyclone selected-`ky` regression in
@@ -552,10 +562,14 @@ Expected file changes:
   comparison report updates,
 - selected-mode initialization or state-history diagnostics needed to explain
   the remaining full selected-mode state gap,
-- fused `ltrapping_arakawa`/`igh` same-state replay diagnostics needed to close
-  the remaining `8.91e-07` selected RHS/action residual,
+- patched GKW `linear_terms.F90`/`matdat.F90`/`exp_integration.F90` trace
+  diagnostics needed to close the remaining `8.91e-07` selected RHS/action
+  residual now localized to traced `igh_or_term_i`,
+- regenerated matched GKW selected-state/RHS fixtures after the corrected `n2`
+  trace loop is used,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
+- `scripts/prepare_gkw_cosine2_run.py`,
 - `TODO.md`,
 - `STATUS.md`
 
@@ -567,6 +581,65 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-03: Corrected Future GKW RHS Trace Matrix-Section Contract
+
+- Audited the patched GKW RHS trace path against
+  `exp_integration.F90::calculate_rhs`.
+- Found one concrete trace-contract defect in the generated
+  `stellarator_gk_rhs_trace_output`: it summed compressed matrix entries
+  through `n4`, while explicit complex GKW RHS application uses only section
+  `n2` for the distribution RHS.
+- Updated `scripts/prepare_gkw_cosine2_run.py` so future RHS trace patches
+  import `n2` and loop `do elem = 1, n2`.
+- Kept the term-tag compression safeguards in place:
+  `stellarator_gk_mat_term` is moved during heap/sift swaps, copied during
+  compression, and included in the duplicate-merge predicate.
+- Updated the generated patched-run README text to state that the RHS trace
+  mirrors the explicit complex `calculate_rhs` matrix range.
+- Updated `TODO.md`: the next step is to regenerate the matched GKW
+  selected-state/RHS fixtures with this corrected trace patch, then rerun the
+  same-state RHS replay and source-level `igh` audit.
+- Verification run this round:
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_prepare_gkw_cosine2_run_can_patch_rhs_trace tests/test_gkw_cosine2_patch.py::test_rhs_trace_patches_are_idempotent -q`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+- Verification result:
+  - focused patch tests: `2 passed in 0.35s`,
+  - full cosine2 patch/fixture suite: `24 passed in 94.82s`.
+
+### 2026-06-02: Added Source-Level Same-State `igh` Replay Audit
+
+- Added `CycloneSameStateIghReplayAudit` and
+  `run_cyclone_base_case_same_state_igh_replay_audit()`.
+- The audit inserts each patched GKW selected-state snapshot into the solver's
+  single-mode CBC setup, compares the patched GKW `igh_or_term_i` RHS action
+  against the solver fused `gkw_igh_streaming_mirror`, and independently
+  reconstructs `linear_terms.F90::igh` from the source-level Hamiltonian,
+  `disp_par`, and `disp_vp` contributions.
+- x64 fixture audit result:
+  - `gkw_vs_solver_fused_igh=8.905291461911702e-07`,
+  - `gkw_vs_source_fused_igh=8.905291461911714e-07`,
+  - `solver_vs_source_fused_igh=1.6446404919551064e-19`,
+  - `source_fused_split_error=2.7939250479261703e-20`,
+  - `gkw_vs_source_hamiltonian_plus_disp_par=6.116326659535234e-06`,
+  - `source_parallel_diffusion_max_norm=7.993717918861919e-05`,
+  - `source_velocity_diffusion_max_norm=6.510400977692796e-06`.
+- Interpretation: the implemented fused `igh` operator matches the
+  source-level GKW reconstruction to roundoff. The remaining same-state
+  `igh_or_term_i` residual is therefore in the patched GKW RHS trace path:
+  term tagging, matrix/source-action accumulation, compression ordering, or
+  `calculate_rhs` timing.
+- Updated `TODO.md` so the next Immediate Next Round item is the patched GKW
+  trace path, not fused `igh` coefficient construction.
+- Verification run this round:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `uv run pytest -q`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_same_state_igh_replay_audit(...) ..."`
+- Verification result:
+  - focused fixture suite: `24 passed in 62.13s`,
+  - full suite: `200 passed in 535.16s`.
 
 ### 2026-06-02: Added Same-State GKW RHS Replay Gate
 

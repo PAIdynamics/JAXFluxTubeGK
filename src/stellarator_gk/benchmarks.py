@@ -524,6 +524,40 @@ class SelectedModeRhsTraceComparisonReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneSameStateIghReplayAudit(_PyTreeDataclass):
+    """Source-level audit for same-state GKW ``igh`` RHS/action replay."""
+
+    metric_values: object
+    max_abs_error: object
+    passed: object
+    metric_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "metric_values",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("metric_names", "notes")
+
+    def __post_init__(self):
+        metrics = jnp.asarray(self.metric_values, dtype=jnp.float64)
+        if metrics.ndim != 1:
+            raise ValueError("metric_values must be one-dimensional")
+        if len(self.metric_names) != metrics.shape[0]:
+            raise ValueError("metric_names length must match metric_values")
+        object.__setattr__(self, "metric_values", metrics)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "metric_names", tuple(self.metric_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -4146,6 +4180,160 @@ def run_cyclone_base_case_same_state_rhs_replay_gate(
         gkw_rhs_trace,
         replay,
         tolerance=tolerance,
+    )
+
+
+def run_cyclone_base_case_same_state_igh_replay_audit(
+    gkw_state_trace: SelectedModeStateTrace,
+    gkw_rhs_trace: GkwSelectedModeRhsTrace,
+    *,
+    tolerance: float = 1.0e-8,
+    parallel_derivative_model: str | None = "gkw_igh",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> CycloneSameStateIghReplayAudit:
+    """Compare traced GKW ``igh`` actions with solver and source reconstructions."""
+
+    from .physics import gkw_igh_streaming_mirror
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if tuple(gkw_rhs_trace.term_names) != GKW_SELECTED_MODE_RHS_TERM_NAMES:
+        raise ValueError("GKW RHS trace term names do not match the selected-mode contract")
+    if not np.array_equal(np.asarray(gkw_state_trace.steps), np.asarray(gkw_rhs_trace.steps)):
+        raise ValueError("GKW state and RHS traces must use the same diagnostic steps")
+    if not np.allclose(
+        np.asarray(gkw_state_trace.times),
+        np.asarray(gkw_rhs_trace.times),
+        rtol=2.0e-12,
+        atol=2.0e-12,
+    ):
+        raise ValueError("GKW state and RHS traces must use the same diagnostic times")
+    if gkw_rhs_trace.term_actions.shape[2:] != gkw_state_trace.state.shape[1:]:
+        raise ValueError("GKW state and RHS trace grid shapes must match")
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    state_snapshots = jnp.asarray(gkw_state_trace.state, dtype=jnp.complex128)
+    n_vpar = int(state_snapshots.shape[1])
+    n_mu = int(state_snapshots.shape[2])
+    n_z = int(state_snapshots.shape[3])
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    if parallel_derivative_model != "gkw_igh":
+        raise ValueError("same-state igh replay audit requires parallel_derivative_model='gkw_igh'")
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            parallel_derivative_model,
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(
+            metadata.get("initial_profile", "cosine2")
+            if initial_profile is None
+            else initial_profile
+        ),
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+    dt = float(metadata["dt"])
+    igh_index = GKW_SELECTED_MODE_RHS_TERM_NAMES.index("igh_or_term_i")
+    observed = jnp.asarray(gkw_rhs_trace.term_actions[:, igh_index], dtype=jnp.complex128)
+
+    solver_fused = []
+    source_fused = []
+    source_hamiltonian = []
+    source_parallel_diffusion = []
+    source_velocity_diffusion = []
+    for snapshot in state_snapshots:
+        state = jnp.zeros_like(setup["state"])
+        state = state.at[:, :, :, ixzero, selected].set(snapshot)
+        solver_action = gkw_igh_streaming_mirror(state, setup["precompute"].rhs)
+        (
+            fused_total,
+            fused_hamiltonian,
+            parallel_diffusion,
+            velocity_diffusion,
+        ) = _gkw_fortran_igh_reference(
+            state,
+            setup,
+            disp_par=float(metadata["disp_par"]),
+            disp_vp=_cyclone_velocity_recurrence_rate(metadata, None, parallel_derivative_model),
+        )
+        solver_fused.append(dt * solver_action[..., ixzero, selected])
+        source_fused.append(dt * fused_total[..., ixzero, selected])
+        source_hamiltonian.append(dt * fused_hamiltonian[..., ixzero, selected])
+        source_parallel_diffusion.append(dt * parallel_diffusion[..., ixzero, selected])
+        source_velocity_diffusion.append(dt * velocity_diffusion[..., ixzero, selected])
+
+    solver_fused = jnp.asarray(solver_fused, dtype=jnp.complex128)
+    source_fused = jnp.asarray(source_fused, dtype=jnp.complex128)
+    source_hamiltonian = jnp.asarray(source_hamiltonian, dtype=jnp.complex128)
+    source_parallel_diffusion = jnp.asarray(source_parallel_diffusion, dtype=jnp.complex128)
+    source_velocity_diffusion = jnp.asarray(source_velocity_diffusion, dtype=jnp.complex128)
+    source_h_plus_par = source_hamiltonian + source_parallel_diffusion
+    source_h_plus_vp = source_hamiltonian + source_velocity_diffusion
+    source_split = source_hamiltonian + source_parallel_diffusion + source_velocity_diffusion
+
+    metric_names = (
+        "gkw_vs_solver_fused_igh",
+        "gkw_vs_source_fused_igh",
+        "solver_vs_source_fused_igh",
+        "gkw_vs_source_hamiltonian_only",
+        "gkw_vs_source_hamiltonian_plus_disp_par",
+        "gkw_vs_source_hamiltonian_plus_disp_vp",
+        "source_fused_split_error",
+        "source_parallel_diffusion_max_norm",
+        "source_velocity_diffusion_max_norm",
+        "gkw_igh_max_norm",
+        "source_fused_max_norm",
+    )
+    metric_values = jnp.asarray(
+        [
+            _max_abs_error(observed, solver_fused),
+            _max_abs_error(observed, source_fused),
+            _max_abs_error(solver_fused, source_fused),
+            _max_abs_error(observed, source_hamiltonian),
+            _max_abs_error(observed, source_h_plus_par),
+            _max_abs_error(observed, source_h_plus_vp),
+            _max_abs_error(source_fused, source_split),
+            jnp.max(jnp.abs(source_parallel_diffusion)),
+            jnp.max(jnp.abs(source_velocity_diffusion)),
+            jnp.max(jnp.abs(observed)),
+            jnp.max(jnp.abs(source_fused)),
+        ],
+        dtype=jnp.float64,
+    )
+    max_abs_error = jnp.max(metric_values[:3])
+    return CycloneSameStateIghReplayAudit(
+        metric_values=metric_values,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        metric_names=metric_names,
+        notes=(
+            "same-state selected-mode igh replay audit; compares patched GKW "
+            "RHS trace against solver fused gkw_igh_streaming_mirror and a "
+            "source-level reconstruction of linear_terms.F90::igh, "
+            "jhg_interior, igh_zero_two, igh_two, and diffus; "
+            f"disp_par={float(metadata['disp_par']):g}, "
+            f"disp_vp={_cyclone_velocity_recurrence_rate(metadata, None, parallel_derivative_model):g}"
+        ),
     )
 
 

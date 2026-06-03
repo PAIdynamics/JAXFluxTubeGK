@@ -604,7 +604,7 @@ subroutine stellarator_gk_rhs_trace_output
   use dist,         only : fdisi, indx, nsolc
   use grid,         only : ns, nmu, nvpar
   use io,           only : get_free_lun
-  use matdat,       only : mat, ii, jj, n4, source, stellarator_gk_mat_term, &
+  use matdat,       only : mat, ii, jj, n2, source, stellarator_gk_mat_term, &
        & stellarator_gk_source_by_term, stellarator_gk_n_trace_terms
   use mpiinterface, only : root_processor
 
@@ -637,7 +637,7 @@ subroutine stellarator_gk_rhs_trace_output
               do term = 0, stellarator_gk_n_trace_terms
                  action(term) = action(term) + dtim*stellarator_gk_source_by_term(irow,term)
               end do
-              do elem = 1, n4
+              do elem = 1, n2
                  if (ii(elem) .eq. irow) then
                     term_id = stellarator_gk_mat_term(elem)
                     if (term_id .lt. 0 .or. term_id .gt. stellarator_gk_n_trace_terms) then
@@ -756,7 +756,9 @@ stellarator_gk_rhs_trace_00001600.dat
 Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the total
 selected-row action, and the untagged, `igh`, `trapdf`, `vdgradf`,
 `hyper_collision`, `ve_grad_fm`, `vd_grad_phi_fm`, `vpgrphi`, and field-equation
-actions.
+actions.  The matrix contribution mirrors the explicit complex
+`calculate_rhs` convention and therefore sums compressed matrix entries through
+section `n2`.
 """
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
