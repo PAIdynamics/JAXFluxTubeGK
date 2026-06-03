@@ -537,7 +537,7 @@ Phase 9 baseline note: dense eigensystem helpers are intentionally limited to sm
   - [x] timestep.
 - [x] Record benchmark commands and tolerances in `STATUS.md` and, later, in docs.
 
-Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, GKW finite-difference Cyclone fallback controls, the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, a passing CBC term-level parity audit, GKW time/profile/state/RHS loaders, selected-mode state/source traces, GKW final and multi-time `distr*.dat` velocity-slice loaders, real serial GKW run fixtures, explicit late-fit versus GKW-style late-window-mean growth diagnostics, DESC/GX/eik parity gates, an explicit independent GX/VMEC GIST external eik-producer report/gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, source-level algebraic audits, production-control CBC selected-`ky` scalar regression, convergence tests, and eik parity gates pass their current contracts. The remaining consistency failures are sharper: the compact GKW state trace matches solver post-normalization norms at \(5\times10^{-3}\) tolerance, but the full selected-mode state dump remains OPEN after snapshot-wise phase alignment with maximum \(\phi(z)\) error \(5.85\times10^{-2}\), maximum full-state error \(4.78\times10^{-2}\), and worst state relative \(L^2\) error \(3.19\times10^{-1}\) at step 800; the multi-time velocity slices show cumulative growth from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800; independently evolved selected RHS/action traces still differ by \(2.24\times10^{-5}\), dominated by `vdgradf`, while same-state replay reduces the strict residual to \(8.91\times10^{-7}\), dominated by traced `igh_or_term_i`. A source-level same-state `igh` audit shows the solver fused operator and reconstructed `linear_terms.F90::igh` action agree to roundoff, so the remaining `igh_or_term_i` gap is now a patched GKW RHS-trace timing/tagging or matrix/source-action extraction issue rather than a solver fused-coefficient issue. Full ITG \(k_y\)-scan parity against GX/GKW/GS2-style references remains open. DESC-driven optimization examples remain labeled reduced because they are fixed-topology demonstration runs rather than full DESC optimization campaigns.
+Phase 10 baseline note: the current validation tranche covers reduced deterministic fixtures, manufactured convergence over parallel/velocity/`ky`/time resolution, a GX Cyclone input-contract fixture, named RH/CBC scalar targets, GX NetCDF growth-curve loading, GX/GS2 eik-table loading, executable validation gates, late-window growth fitting, a passing true RH late-plateau metric, in-residual GKW/Gyaradax-scaled `disp_par` recurrence control, direct GKW fourth-difference `disp_vp` velocity recurrence control for the RH fallback path, a GKW-aligned Cyclone selected-`ky` setup with a production-control memory-light gate, GKW finite-difference Cyclone fallback controls, the GKW/Gyaradax sign-dependent upwind parallel fallback for CBC Term I/Term VII, a passing CBC term-level parity audit, GKW time/profile/state/RHS loaders, selected-mode state/source traces, GKW final and multi-time `distr*.dat` velocity-slice loaders, real serial GKW run fixtures, explicit late-fit versus GKW-style late-window-mean growth diagnostics, DESC/GX/eik parity gates, an explicit independent GX/VMEC GIST external eik-producer report/gate, and a validation-gate plotting example used in `main.tex`. The RH plateau, source-level algebraic audits, production-control CBC selected-`ky` scalar regression, convergence tests, eik parity gates, and selected-mode RHS/action parity gates pass their current contracts. The previous `igh_or_term_i` coefficient/action gap is closed by matching GKW's discrete `geom.F90::logbderiv` `gfun` convention in the `gkw_igh` parity setup: input trace max \(5.33\times10^{-15}\), matrix trace max \(5.77\times10^{-15}\), full solver-vs-GKW RHS/action max \(6.22\times10^{-12}\), same-state replay max \(2.35\times10^{-12}\), and fused source-level `igh` max \(1.81\times10^{-18}\). The remaining consistency failures are sharper: the compact GKW state trace matches solver post-normalization norms at \(5\times10^{-3}\) tolerance, but the full selected-mode state dump remains OPEN after snapshot-wise phase alignment with maximum \(\phi(z)\) error \(5.85\times10^{-2}\), maximum full-state error \(4.78\times10^{-2}\), and worst state relative \(L^2\) error \(3.19\times10^{-1}\) at step 800; the multi-time velocity slices show cumulative growth from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800. Full ITG \(k_y\)-scan parity against GX/GKW/GS2-style references remains open. DESC-driven optimization examples remain labeled reduced because they are fixed-topology demonstration runs rather than full DESC optimization campaigns.
 
 2026-06-02 update: the selected-mode Term VII mode/Fourier sign and field-packing audit now passes. It confirms `mode.F90` uses the positive single-mode `krho=0.5`, the single nonzonal \(k_x\) chain has open GKW boundary maps (`ixplus=ixminus=0`, represented as `-1` in Python), `dist.F90::get_phi` pulls `iphi` directly, and `vpgrphi_3_newbc` matches the direct packed field with action error \(3.47\times10^{-18}\). Conjugating or negating the packed field changes the Term VII action by \(\simeq2.89\times10^{-2}\), so diagnostic Term VII sign/conjugation variants are not source-level conventions.
 
@@ -604,6 +604,14 @@ GIST eik-producer coverage, and reduced differentiable optimization examples.
 The remaining consistency failures to fix before calling the solver production
 ready are:
 
+- Selected RHS/action parity against the patched GKW trace is now closed at
+  roundoff for the production selected-`ky` control path after matching
+  GKW's discrete `geom.F90::logbderiv` `gfun` convention in the `gkw_igh`
+  setup. The full solver-vs-GKW RHS/action trace is phase-aligned to
+  \(6.22\times10^{-12}\), same-state replay is \(2.35\times10^{-12}\),
+  mid-run same-state replay is \(2.36\times10^{-12}\), and the fused
+  `igh_or_term_i` source audit is \(1.81\times10^{-18}\). This is no longer
+  an open operator/action consistency failure.
 - Full selected-mode state-history parity against GKW remains OPEN even though
   scalar growth now passes: the phase-aligned full-state error peaks at
   \(4.78\times10^{-2}\), the phase-aligned \(\phi(z)\) error at
@@ -612,13 +620,6 @@ ready are:
 - Multi-time velocity-slice parity remains OPEN: direct complex max error grows
   from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800,
   so the mismatch is cumulative and not a final-output-only convention.
-- The strict selected RHS/action comparison on independently evolved states
-  remains nonzero at \(2.24\times10^{-5}\), dominated by `vdgradf`; same-state
-  replay reduces this to \(8.91\times10^{-7}\) and moves the residual to
-  `igh_or_term_i`. The new source-level `igh` audit shows the solver fused
-  action and reconstructed GKW `igh` source formula agree to \(1.6\times10^{-19}\),
-  so the remaining gap is in the patched GKW trace/extraction path, not the
-  implemented fused operator.
 - The row-normalized GKW `parallel_phi.dat` profile-shape comparison remains
   OPEN at roughly \(3\times10^{-2}\), even though total-power normalization and
   field diagnostic packing match.
@@ -632,89 +633,39 @@ ready are:
 
 ## Immediate Next Round
 
-Use the now-passing scalar gates as guardrails and attack the remaining
+Use the now-passing RHS/action gates as guardrails and attack the remaining
 state-history and benchmark-scan inconsistencies:
 
-- [x] Add a same-state selected RHS/action replay gate: load a GKW
-  `SelectedModeStateTrace` snapshot, evaluate the solver's full term-action
-  arrays on that imported GKW state at the same geometry/grid/normalization,
-  and compare directly to the GKW `GkwSelectedModeRhsTrace`. This separates
-  operator/action mismatch from differences caused by two independently
-  evolved states. The x64 replay residual is \(8.91\times10^{-7}\), down from
-  \(2.24\times10^{-5}\), and it is dominated by `igh_or_term_i` rather than
-  `vdgradf`.
-- [x] Check the field source in same-state replay by comparing solver-computed
-  `phi` against replay with the dumped GKW `phi`; both paths leave the same
-  \(8.91\times10^{-7}\) `igh_or_term_i` residual, so field normalization and
-  quasineutrality are not the dominant same-state mismatch.
-- [x] Inspect the remaining same-state `igh_or_term_i` replay residual at
-  source level. The audit compares the patched GKW `igh_or_term_i` trace,
-  solver fused `gkw_igh_streaming_mirror`, and reconstructed
-  `linear_terms.F90::igh` source action on identical imported GKW states:
-  `gkw_vs_source_fused_igh=8.905291461911714e-07`,
-  `gkw_vs_solver_fused_igh=8.905291461911702e-07`,
-  `solver_vs_source_fused_igh=1.6446404919551064e-19`, and
-  `source_fused_split_error=2.7939250479261703e-20`.
-- [x] Audit the patched GKW RHS trace path for fused `igh_or_term_i` and fix
-  the first concrete trace-contract issue: the generated
-  `stellarator_gk_rhs_trace_output` now mirrors
-  `exp_integration.F90::calculate_rhs` for explicit complex runs by summing
-  compressed matrix entries only through section `n2`, not `n4`. The patch
-  tests also lock in term-tag preservation through `matdat.F90`
-  compression/sort/copy paths.
-- [x] Regenerate the matched selected-state/RHS GKW fixtures with the corrected
-  `n2` RHS trace patch and rerun the same-state RHS replay plus source-level
-  `igh` audit. The regenerated RHS files are byte-identical to the current
-  fixtures, and the selected-state files agree to \(\sim10^{-15}\). The
-  residual is unchanged:
-  same-state max `8.905204720648109e-07`,
-  `igh_or_term_i=8.905204720648109e-07`, and
-  `solver_vs_source_fused_igh=1.6294765363968643e-19`.
-- [x] Add a trace-timing state discriminator for the remaining
-  `igh_or_term_i` gap. The patched GKW run can now write
-  `stellarator_gk_rhs_state_<step>.dat` at the same
-  `exp_integration.F90` post-normalization point as the RHS action trace.
-  Replaying the RHS trace on these same-timing states still gives
-  `8.905204720648109e-07`, while the same-timing states and later diagnostic
-  selected-state dumps agree exactly on the selected rows. This rules out
-  post-normalization/diagnostic write-site state timing as the source of the
-  remaining `igh_or_term_i` gap.
-- [x] Add an internal `calculate_rhs` row-application trace for the selected
-  rows. The patched GKW run now writes
-  `stellarator_gk_rhs_apply_<step>.dat` by calling
-  `calculate_rhs(fdisi, rhs_internal)` on the same post-normalization state.
-  The internal totals and reconstructed RHS trace totals agree to
-  `1.0191500421363742e-17`, while same-state replay against the solver/source
-  reconstruction still fails at `8.905204720648109e-07`. This rules out RHS
-  trace reconstruction and write-site timing as the remaining cause.
-- [x] Dump and compare the actual compressed `igh_or_term_i` matrix entries
-  feeding the selected rows after GKW matrix construction/compression. The
-  patched run now writes `stellarator_gk_igh_matrix_<step>.dat` with raw
-  `(ii,jj,mat,stellarator_gk_mat_term)` data plus selected-row/column
-  `(z,mu,vpar)` coordinates. The strict stencil comparison shows no invalid
-  selected columns and no nonzero entry-count mismatch, but the coefficient
-  gate fails with `coefficient_max_abs_error=0.023664443600822316`; the
-  mismatch is broad and systematic in interior `delta_z=0` coefficients rather
-  than a trace reconstruction or matrix compression issue.
-- [ ] Resolve the source-stencil coefficient mismatch exposed by
-  `GkwIghMatrixTrace`: compare `linear_terms.F90::igh` coefficient inputs
-  (`dum`, `hh`, `dvp`, `ds`, `disp_s_dum`, `disp_v_dum`, and boundary position
-  class) against the Python `build_gkw_igh_stencil` values row-by-row,
-  starting with interior `delta_z=0` rows where the max error is
-  `0.023664443600822316`.
-- [ ] If same-state RHS/action replay reaches roundoff, add a one-window replay
-  test: initialize the solver from a GKW selected state immediately after a
-  diagnostic normalization, advance one GKW diagnostic window with the same RK4
-  and normalization cadence, and compare to the next GKW selected-state dump.
-- [x] Generate or select adjacent GKW selected-state/RHS fixtures around the
-  worst mid-run region, e.g. windows near steps 780, 800, and 820, so the
-  one-window replay can localize when the full-state error is introduced. The
-  new fixture directories are
-  `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state/` and
-  `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_rhs_trace/`. The midrun
-  same-state replay still fails at `8.998731812666629e-07`, dominated by
-  `igh_or_term_i=8.998679163478323e-07`, while
-  `solver_vs_source_fused_igh=2.245388327010212e-19`.
+- [x] Add same-state selected RHS/action replay, field-source replay, trace
+  timing, internal `calculate_rhs` row-application, and source-level fused
+  `igh_or_term_i` audits. These established that the old residual was
+  operator-level, not a post-normalization or trace-write-site artifact.
+- [x] Dump and compare the compressed selected-row `igh_or_term_i` matrix.
+  The first strict matrix gate exposed a coefficient mismatch with
+  `coefficient_max_abs_error=0.023664443600822316` but no sparse-pattern,
+  invalid-column, or entry-count error.
+- [x] Resolve the source-stencil coefficient mismatch exposed by
+  `GkwIghMatrixTrace`. The new `stellarator_gk_igh_inputs.dat` patch and
+  `GkwIghInputTrace` loader showed that `dum`, `dum2`, spacings, `HH`,
+  boundary position class, and recurrence speeds matched GKW, while
+  `gfun`/`disp_v_dum` did not. The fix is to use GKW's discrete
+  `geom.F90::logbderiv` fourth-order periodic derivative for `gfun` in the
+  `gkw_igh` Cyclone parity setup. Current x64 gates:
+  input trace max \(5.33\times10^{-15}\),
+  matrix trace max \(5.77\times10^{-15}\),
+  full solver-vs-GKW RHS/action trace max \(6.22\times10^{-12}\),
+  same-state replay max \(2.35\times10^{-12}\),
+  mid-run same-state replay max \(2.36\times10^{-12}\), and fused
+  source-level `igh` max \(1.81\times10^{-18}\).
+- [x] Generate adjacent GKW selected-state/RHS fixtures around the worst
+  mid-run region, steps 780, 800, and 820. After the discrete-`gfun` fix the
+  mid-run same-state replay also passes at roundoff, so those fixtures are now
+  ready for one-window evolution replay rather than operator debugging.
+- [ ] Add a one-window replay test: initialize the solver from a GKW selected
+  state immediately after diagnostic normalization, advance one GKW diagnostic
+  window with the same RK4 and normalization cadence, and compare to the next
+  GKW selected-state dump. This is now the next narrowed target for the
+  remaining full state-history and velocity-slice mismatch.
 - [ ] Promote the row-normalized `parallel_phi.dat` profile-shape comparison
   into an explicit OPEN validation gate with a recorded tolerance ladder, so
   the remaining mode-structure mismatch is tracked separately from scalar
@@ -723,10 +674,10 @@ state-history and benchmark-scan inconsistencies:
   references. The selected `ky=0.5` scalar gate is passing, but the
   `task.tex` benchmark requirement needs growth-rate, frequency, and mode
   structure consistency across a scan.
-- [ ] After the CBC same-state and scan gates are stable, extend the benchmark
-  plan to a stellarator/TEM-style fixture using DESC/GX/GIST-compatible
-  geometry arrays and keep DESC optimization examples labeled reduced until
-  those production validation gates pass.
+- [ ] After the CBC one-window replay and scan gates are stable, extend the
+  benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
+  compatible geometry arrays and keep DESC optimization examples labeled
+  reduced until those production validation gates pass.
 - [ ] Rerun CPU timing and memory estimates on the validated production
   controls and record whether the target from `task.tex`, roughly minutes on
   \(\mathcal{O}(100)\) CPUs, is credible for the intended design loop.

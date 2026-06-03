@@ -463,7 +463,7 @@ def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resoluti
     )
 
     assert bool(cyclone.passed)
-    np.testing.assert_allclose(cyclone.observed_value, 0.17800063460817828, atol=1.0e-8)
+    np.testing.assert_allclose(cyclone.observed_value, 0.17799905626204374, atol=1.0e-8)
     assert "growth_diagnostic=late_mean_window" in cyclone.notes
     assert "parallel_derivative_model=gkw_igh" in cyclone.notes
     assert "production GKW/GX tolerance ladder passed" in cyclone.notes

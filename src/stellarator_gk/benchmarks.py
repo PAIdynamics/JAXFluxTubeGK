@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import ClassVar
 
@@ -535,7 +535,150 @@ class GkwIghMatrixComparisonReport(_PyTreeDataclass):
         if len(self.field_names) != field_errors.shape[0]:
             raise ValueError("field_names length must match field_errors")
         object.__setattr__(self, "field_errors", field_errors)
-        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "field_names", tuple(self.field_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GkwIghInputTrace(_PyTreeDataclass):
+    """Row-level GKW ``igh`` coefficient-input trace from matrix construction."""
+
+    imod: object
+    ix: object
+    species: object
+    row_z: object
+    row_mu: object
+    row_vpar: object
+    position_class: object
+    dum: object
+    dum2: object
+    disp_s_dum: object
+    disp_v_dum: object
+    disp_par: object
+    disp_vp: object
+    dvp: object
+    ds: object
+    ffun: object
+    bn: object
+    gfun: object
+    vpgr: object
+    mugr: object
+    vpgr_rms: object
+    mugr_rms: object
+    hh_values: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "imod",
+        "ix",
+        "species",
+        "row_z",
+        "row_mu",
+        "row_vpar",
+        "position_class",
+        "dum",
+        "dum2",
+        "disp_s_dum",
+        "disp_v_dum",
+        "disp_par",
+        "disp_vp",
+        "dvp",
+        "ds",
+        "ffun",
+        "bn",
+        "gfun",
+        "vpgr",
+        "mugr",
+        "vpgr_rms",
+        "mugr_rms",
+        "hh_values",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        entry_shape = None
+        for name in (
+            "imod",
+            "ix",
+            "species",
+            "row_z",
+            "row_mu",
+            "row_vpar",
+            "position_class",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.int32)
+            if values.ndim != 1:
+                raise ValueError(f"{name} must be one-dimensional")
+            entry_shape = values.shape if entry_shape is None else entry_shape
+            if values.shape != entry_shape:
+                raise ValueError("all igh input integer arrays must share shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "dum",
+            "dum2",
+            "disp_s_dum",
+            "disp_v_dum",
+            "disp_par",
+            "disp_vp",
+            "dvp",
+            "ds",
+            "ffun",
+            "bn",
+            "gfun",
+            "vpgr",
+            "mugr",
+            "vpgr_rms",
+            "mugr_rms",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != entry_shape:
+                raise ValueError(f"{name} must match igh input rows")
+            object.__setattr__(self, name, values)
+        hh_values = jnp.asarray(self.hh_values, dtype=jnp.float64)
+        if hh_values.shape != entry_shape + (5, 5):
+            raise ValueError("hh_values must have shape (n_row,5,5)")
+        if hh_values.shape[0] == 0:
+            raise ValueError("igh input trace must contain at least one row")
+        object.__setattr__(self, "hh_values", hh_values)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GkwIghInputComparisonReport(_PyTreeDataclass):
+    """Comparison between dumped GKW ``igh`` inputs and Python setup values."""
+
+    field_errors: object
+    max_abs_error: object
+    passed: object
+    field_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "field_errors",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("field_names", "notes")
+
+    def __post_init__(self):
+        field_errors = jnp.asarray(self.field_errors, dtype=jnp.float64)
+        if field_errors.ndim != 1:
+            raise ValueError("field_errors must be one-dimensional")
+        if len(self.field_names) != field_errors.shape[0]:
+            raise ValueError("field_names length must match field_errors")
+        object.__setattr__(self, "field_errors", field_errors)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
         object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
         object.__setattr__(self, "field_names", tuple(self.field_names))
 
@@ -3971,6 +4114,45 @@ def load_gkw_igh_matrix_trace(
     )
 
 
+def load_gkw_igh_input_trace(
+    path,
+    *,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwIghInputTrace:
+    """Load patched GKW row-level ``linear_terms.F90::igh`` coefficient inputs."""
+
+    file_path = _igh_input_dump_file(path)
+    data = _load_gkw_igh_input_file(file_path)
+    return GkwIghInputTrace(
+        imod=jnp.asarray(data["imod"], dtype=jnp.int32),
+        ix=jnp.asarray(data["ix"], dtype=jnp.int32),
+        species=jnp.asarray(data["species"], dtype=jnp.int32),
+        row_z=jnp.asarray(data["row_z"], dtype=jnp.int32),
+        row_mu=jnp.asarray(data["row_mu"], dtype=jnp.int32),
+        row_vpar=jnp.asarray(data["row_vpar"], dtype=jnp.int32),
+        position_class=jnp.asarray(data["position_class"], dtype=jnp.int32),
+        dum=jnp.asarray(data["dum"], dtype=jnp.float64),
+        dum2=jnp.asarray(data["dum2"], dtype=jnp.float64),
+        disp_s_dum=jnp.asarray(data["disp_s_dum"], dtype=jnp.float64),
+        disp_v_dum=jnp.asarray(data["disp_v_dum"], dtype=jnp.float64),
+        disp_par=jnp.asarray(data["disp_par"], dtype=jnp.float64),
+        disp_vp=jnp.asarray(data["disp_vp"], dtype=jnp.float64),
+        dvp=jnp.asarray(data["dvp"], dtype=jnp.float64),
+        ds=jnp.asarray(data["ds"], dtype=jnp.float64),
+        ffun=jnp.asarray(data["ffun"], dtype=jnp.float64),
+        bn=jnp.asarray(data["bn"], dtype=jnp.float64),
+        gfun=jnp.asarray(data["gfun"], dtype=jnp.float64),
+        vpgr=jnp.asarray(data["vpgr"], dtype=jnp.float64),
+        mugr=jnp.asarray(data["mugr"], dtype=jnp.float64),
+        vpgr_rms=jnp.asarray(data["vpgr_rms"], dtype=jnp.float64),
+        mugr_rms=jnp.asarray(data["mugr_rms"], dtype=jnp.float64),
+        hh_values=jnp.asarray(data["hh_values"], dtype=jnp.float64),
+        source=source or str(file_path),
+        notes=notes or "patched GKW row-level igh coefficient inputs",
+    )
+
+
 def run_cyclone_base_case_selected_state_trace(
     *,
     n_z: int = 48,
@@ -4658,6 +4840,124 @@ def compare_gkw_igh_matrix_trace_to_stencil(
             "compressed selected-row GKW igh_or_term_i matrix entries compared "
             "against solver precompute.gkw_igh_stencil coefficients; "
             f"n_time={n_time}, n_vpar={n_vpar}, n_mu={n_mu}, n_z={n_z}"
+        ),
+    )
+
+
+def compare_gkw_igh_input_trace_to_setup(
+    input_trace: GkwIghInputTrace,
+    *,
+    tolerance: float = 1.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> GkwIghInputComparisonReport:
+    """Compare dumped GKW ``igh`` row inputs to the Python Cyclone setup."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    n_vpar = int(jnp.max(input_trace.row_vpar))
+    n_mu = int(jnp.max(input_trace.row_mu))
+    n_z = int(jnp.max(input_trace.row_z))
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            "gkw_igh",
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model="gkw_igh",
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(metadata.get("initial_profile", "cosine2")),
+    )
+
+    row_z = np.asarray(input_trace.row_z, dtype=np.int64) - 1
+    row_mu = np.asarray(input_trace.row_mu, dtype=np.int64) - 1
+    row_vpar = np.asarray(input_trace.row_vpar, dtype=np.int64) - 1
+    velocity = setup["velocity"]
+    geometry = setup["geometry"]
+    vpar = np.asarray(velocity.vpar, dtype=float)
+    mu = np.asarray(velocity.mu, dtype=float)
+    b_field = np.asarray(geometry.B, dtype=float)
+    ffun = np.asarray(geometry.F, dtype=float)
+    gfun = np.asarray(geometry.G, dtype=float)
+    dvp = float(setup["precompute"].rhs.gkw_igh_stencil.spacing_vpar)
+    ds = float(setup["precompute"].rhs.gkw_igh_stencil.spacing_z)
+    disp_par = float(metadata["disp_par"])
+    disp_vp = _cyclone_velocity_recurrence_rate(metadata, None, "gkw_igh")
+    vpgr_rms = float(np.sqrt(np.mean(vpar**2)))
+    mugr_rms = float(np.sqrt(np.mean(mu**2)))
+
+    position_expected = np.asarray(
+        [_gkw_open_boundary_position_class(int(index), n_z) for index in row_z],
+        dtype=np.int32,
+    )
+    dum_expected = ffun[row_z] / (ds * dvp)
+    dum2_expected = -ffun[row_z] * vpar[row_vpar]
+    disp_s_dum_expected = ffun[row_z] * vpgr_rms
+    disp_v_dum_expected = mugr_rms * b_field[row_z] * gfun[row_z]
+
+    hh_expected = np.zeros((row_z.shape[0], 5, 5), dtype=float)
+    for row_index, (iz, imu, iv) in enumerate(
+        zip(row_z, row_mu, row_vpar, strict=True)
+    ):
+        for z_offset_index, delta_z in enumerate(range(-2, 3)):
+            source_z = int(iz) + delta_z
+            if not 0 <= source_z < n_z:
+                continue
+            for v_offset_index, delta_v in enumerate(range(-2, 3)):
+                source_v = int(iv) + delta_v
+                if 0 <= source_v < n_vpar:
+                    hh_expected[row_index, z_offset_index, v_offset_index] = (
+                        0.5 * vpar[source_v] ** 2 + mu[imu] * b_field[source_z]
+                    )
+
+    expected_by_name = {
+        "position_class": position_expected,
+        "dum": dum_expected,
+        "dum2": dum2_expected,
+        "disp_s_dum": disp_s_dum_expected,
+        "disp_v_dum": disp_v_dum_expected,
+        "disp_par": np.full(row_z.shape, disp_par),
+        "disp_vp": np.full(row_z.shape, disp_vp),
+        "dvp": np.full(row_z.shape, dvp),
+        "ds": np.full(row_z.shape, ds),
+        "ffun": ffun[row_z],
+        "bn": b_field[row_z],
+        "gfun": gfun[row_z],
+        "vpgr": vpar[row_vpar],
+        "mugr": mu[row_mu],
+        "vpgr_rms": np.full(row_z.shape, vpgr_rms),
+        "mugr_rms": np.full(row_z.shape, mugr_rms),
+        "hh_values": hh_expected,
+    }
+    field_names = tuple(f"{name}_max_abs_error" for name in expected_by_name)
+    field_errors = []
+    for name, expected in expected_by_name.items():
+        observed = np.asarray(getattr(input_trace, name), dtype=float)
+        field_errors.append(float(np.max(np.abs(observed - expected))))
+
+    field_names += ("row_count", "n_vpar", "n_mu", "n_z")
+    field_errors += [float(row_z.shape[0]), float(n_vpar), float(n_mu), float(n_z)]
+    max_abs_error = max(field_errors[: len(expected_by_name)])
+    return GkwIghInputComparisonReport(
+        field_errors=jnp.asarray(field_errors, dtype=jnp.float64),
+        max_abs_error=jnp.asarray(max_abs_error, dtype=jnp.float64),
+        passed=jnp.asarray(max_abs_error <= tolerance, dtype=bool),
+        field_names=field_names,
+        notes=(
+            "patched GKW linear_terms.F90::igh row inputs compared against "
+            "the Python Cyclone gkw_igh setup values; "
+            f"n_vpar={n_vpar}, n_mu={n_mu}, n_z={n_z}"
         ),
     )
 
@@ -10097,6 +10397,21 @@ def _igh_matrix_dump_files(paths) -> tuple[Path, ...]:
     return files
 
 
+def _igh_input_dump_file(path) -> Path:
+    if isinstance(path, (str, Path)):
+        file_path = Path(path)
+        if file_path.is_dir():
+            file_path = file_path / "stellarator_gk_igh_inputs.dat"
+    else:
+        files = tuple(Path(item) for item in path)
+        if len(files) != 1:
+            raise ValueError("GKW igh input trace expects exactly one dump file")
+        file_path = files[0]
+    if not file_path.is_file():
+        raise FileNotFoundError(f"GKW igh input file not found: {file_path}")
+    return file_path
+
+
 def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
     rows = _numeric_rows(path)
     if not rows:
@@ -10200,6 +10515,83 @@ def _load_gkw_igh_matrix_file(path: Path) -> dict[str, object]:
         **parsed,
         "matrix_value": matrix_value.astype(np.complex128),
     }
+
+
+def _load_gkw_igh_input_file(path: Path) -> dict[str, object]:
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError(f"{path} contains no igh input rows")
+    array = np.asarray(rows, dtype=float)
+    if array.shape[1] < 47:
+        raise ValueError("GKW igh input rows must have at least forty-seven columns")
+    array = array[:, :47]
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{path} contains non-finite igh input values")
+
+    integer_columns = np.rint(array[:, :7])
+    if not np.allclose(integer_columns, array[:, :7], rtol=0.0, atol=1.0e-12):
+        raise ValueError("GKW igh input integer columns must be integral")
+    integer_columns = integer_columns.astype(np.int32)
+    parsed = {
+        "imod": integer_columns[:, 0],
+        "ix": integer_columns[:, 1],
+        "species": integer_columns[:, 2],
+        "row_z": integer_columns[:, 3],
+        "row_mu": integer_columns[:, 4],
+        "row_vpar": integer_columns[:, 5],
+        "position_class": integer_columns[:, 6],
+    }
+    for name in ("imod", "ix", "species", "row_z", "row_mu", "row_vpar"):
+        if np.any(parsed[name] < 1):
+            raise ValueError(f"GKW igh input {name} values must be positive")
+    if not np.all(np.isin(parsed["position_class"], (-2, -1, 0, 1, 2))):
+        raise ValueError("GKW igh input position_class must be one of -2,-1,0,1,2")
+
+    n_z = int(np.max(parsed["row_z"]))
+    n_mu = int(np.max(parsed["row_mu"]))
+    n_vpar = int(np.max(parsed["row_vpar"]))
+    expected_rows = n_z * n_mu * n_vpar
+    if array.shape[0] != expected_rows:
+        raise ValueError(
+            f"{path} has {array.shape[0]} rows; expected {expected_rows} "
+            "from selected-mode index extents"
+        )
+    seen = np.zeros((n_vpar, n_mu, n_z), dtype=bool)
+    for iz_one, imu_one, iv_one in zip(
+        parsed["row_z"],
+        parsed["row_mu"],
+        parsed["row_vpar"],
+        strict=True,
+    ):
+        iz = int(iz_one) - 1
+        imu = int(imu_one) - 1
+        iv = int(iv_one) - 1
+        if seen[iv, imu, iz]:
+            raise ValueError(f"{path} contains duplicate GKW igh input rows")
+        seen[iv, imu, iz] = True
+    if not np.all(seen):
+        raise ValueError(f"{path} does not cover the full selected-mode igh grid")
+
+    scalar_names = (
+        "dum",
+        "dum2",
+        "disp_s_dum",
+        "disp_v_dum",
+        "disp_par",
+        "disp_vp",
+        "dvp",
+        "ds",
+        "ffun",
+        "bn",
+        "gfun",
+        "vpgr",
+        "mugr",
+        "vpgr_rms",
+        "mugr_rms",
+    )
+    data = {name: array[:, column] for column, name in enumerate(scalar_names, start=7)}
+    data["hh_values"] = array[:, 22:47].reshape((-1, 5, 5))
+    return {**parsed, **data}
 
 
 def _load_gkw_rhs_apply_file(path: Path) -> dict[str, object]:
@@ -10983,6 +11375,8 @@ def _build_cyclone_base_case_setup(
             eps=float(metadata.get("epsilon", 0.19)),
         ),
     )
+    if parallel_derivative_model == "gkw_igh":
+        geometry = _with_gkw_logbderiv_gfun(geometry, parallel)
     species = SpeciesParams(
         charge=1.0,
         mass=1.0,
@@ -11027,6 +11421,31 @@ def _build_cyclone_base_case_setup(
         "state": state,
         "selected_ky_index": 0,
     }
+
+
+def _with_gkw_logbderiv_gfun(geometry, parallel_grid):
+    """Return geometry with GKW ``geom.F90::logbderiv`` mirror coefficient."""
+
+    b_field = np.asarray(geometry.B, dtype=float)
+    ffun = np.asarray(geometry.F, dtype=float)
+    if b_field.ndim != 1 or ffun.shape != b_field.shape:
+        raise ValueError("GKW logbderiv gfun requires one-dimensional B and F arrays")
+    n_z = b_field.shape[0]
+    if n_z < 5:
+        raise ValueError("GKW logbderiv gfun requires at least five parallel points")
+    spacing = float(np.asarray(parallel_grid.w_z, dtype=float)[0])
+    gfun = np.zeros_like(b_field)
+    for index in range(n_z):
+        lbm2 = b_field[(index - 2) % n_z]
+        lbm1 = b_field[(index - 1) % n_z]
+        lbp1 = b_field[(index + 1) % n_z]
+        lbp2 = b_field[(index + 2) % n_z]
+        gfun[index] = ffun[index] * (lbm2 - 8.0 * lbm1 + 8.0 * lbp1 - lbp2)
+        gfun[index] /= 12.0 * spacing * b_field[index]
+    return replace(
+        geometry,
+        G=jnp.asarray(gfun, dtype=jnp.asarray(geometry.G).dtype),
+    )
 
 
 def _gkw_internal_krho_from_metadata(metadata) -> float:

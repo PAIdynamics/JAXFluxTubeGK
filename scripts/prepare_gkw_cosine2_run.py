@@ -38,6 +38,7 @@ class PreparedGkwCosine2Run:
     rhs_trace_state_dump: bool = False
     rhs_trace_internal_apply: bool = False
     rhs_trace_igh_matrix_dump: bool = False
+    rhs_trace_igh_input_dump: bool = False
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600)
     selector: str = PATCHED_SELECTOR
 
@@ -82,6 +83,7 @@ def prepare_gkw_cosine2_run(
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
     rhs_trace_igh_matrix_dump: bool = False,
+    rhs_trace_igh_input_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
@@ -107,6 +109,8 @@ def prepare_gkw_cosine2_run(
         raise ValueError("rhs_trace_internal_apply requires rhs_trace=True")
     if rhs_trace_igh_matrix_dump and not rhs_trace:
         raise ValueError("rhs_trace_igh_matrix_dump requires rhs_trace=True")
+    if rhs_trace_igh_input_dump and not rhs_trace:
+        raise ValueError("rhs_trace_igh_input_dump requires rhs_trace=True")
     if output_root.exists():
         if not overwrite:
             raise FileExistsError(f"{output_root} already exists; pass --overwrite")
@@ -119,6 +123,10 @@ def prepare_gkw_cosine2_run(
     if rhs_trace:
         add_rhs_trace_matdat_patch(output_root / "src" / "matdat.F90")
         add_rhs_trace_linear_terms_patch(output_root / "src" / "linear_terms.F90")
+        if rhs_trace_igh_input_dump:
+            add_igh_input_trace_linear_terms_patch(
+                output_root / "src" / "linear_terms.F90"
+            )
         add_rhs_trace_exp_integration_patch(
             output_root / "src" / "exp_integration.F90",
             rhs_trace_steps,
@@ -145,6 +153,7 @@ def prepare_gkw_cosine2_run(
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
         rhs_trace_igh_matrix_dump=rhs_trace_igh_matrix_dump,
+        rhs_trace_igh_input_dump=rhs_trace_igh_input_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
     return PreparedGkwCosine2Run(
@@ -160,6 +169,7 @@ def prepare_gkw_cosine2_run(
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
         rhs_trace_igh_matrix_dump=rhs_trace_igh_matrix_dump,
+        rhs_trace_igh_input_dump=rhs_trace_igh_input_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
 
@@ -489,6 +499,36 @@ def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
     return True
 
 
+def add_igh_input_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
+    """Patch copied GKW ``igh`` construction to dump row-level coefficient inputs."""
+
+    text = linear_terms_path.read_text(encoding="utf-8")
+    if "stellarator_gk igh input trace patch" in text:
+        return False
+
+    call_marker = "      call connect_parallel(imod,ix,i,k,i,ingrid,ixref,iref,kref,ist)\n"
+    call_patch = (
+        call_marker
+        + "      ! stellarator_gk igh input trace patch: dump row-level coefficients.\n"
+        + "      call stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &\n"
+        + "           & disp_s_dum,disp_v_dum,disp_par,disp_vp)\n"
+    )
+    if call_marker not in text:
+        raise ValueError(f"could not find igh connect_parallel marker in {linear_terms_path}")
+    text = text.replace(call_marker, call_patch, 1)
+
+    subroutine_marker = "subroutine igh(disp_par,disp_vp)\n"
+    if subroutine_marker not in text:
+        raise ValueError(f"could not find igh subroutine marker in {linear_terms_path}")
+    text = text.replace(
+        subroutine_marker,
+        IGH_INPUT_TRACE_SUBROUTINE + "\n" + subroutine_marker,
+        1,
+    )
+    linear_terms_path.write_text(text, encoding="utf-8")
+    return True
+
+
 def add_rhs_trace_exp_integration_patch(
     exp_integration_path: Path,
     steps: tuple[int, ...] = (20, 800, 1600),
@@ -556,6 +596,63 @@ def add_rhs_trace_exp_integration_patch(
     text = text.replace(module_marker, subroutine + "\n" + module_marker, 1)
     exp_integration_path.write_text(text, encoding="utf-8")
     return True
+
+
+IGH_INPUT_TRACE_SUBROUTINE = r"""
+subroutine stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
+     & disp_s_dum,disp_v_dum,disp_par,disp_vp)
+
+  use geom,         only : ffun, sgr_dist, gfun, bn
+  use grid,         only : ns, nvpar
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+  use velocitygrid, only : dvp, vpgr, mugr, vpgr_rms, mugr_rms
+
+  integer, intent(in) :: imod, ix, is, i, j, k, ist
+  real, intent(in) :: dum, dum2, disp_s_dum, disp_v_dum, disp_par, disp_vp
+  integer :: lun, hdi, hdk, hindex
+  real :: hbuf(25)
+  logical, save :: header_written = .false.
+
+  if (.not. root_processor) return
+  if (imod .ne. 1 .or. ix .ne. 1 .or. is .ne. 1) return
+
+  hindex = 0
+  do hdi = -2, 2
+     do hdk = -2, 2
+        hindex = hindex + 1
+        if (i+hdi .ge. 1 .and. i+hdi .le. ns .and. &
+             & k+hdk .ge. 1 .and. k+hdk .le. nvpar) then
+           hbuf(hindex) = HH(i+hdi,k+hdk)
+        else
+           hbuf(hindex) = 0.E0
+        endif
+     end do
+  end do
+
+  call get_free_lun(lun)
+  open(lun, FILE='stellarator_gk_igh_inputs.dat', STATUS='unknown', &
+       & POSITION='append')
+  if (.not. header_written) then
+     write(lun,'(A)') '# imod ix is iz imu ivpar ist dum dum2 disp_s_dum ' // &
+          & 'disp_v_dum disp_par disp_vp dvp ds ffun bn gfun vpgr mugr ' // &
+          & 'vpgr_rms mugr_rms ' // &
+          & 'hh_m2_m2 hh_m2_m1 hh_m2_0 hh_m2_p1 hh_m2_p2 ' // &
+          & 'hh_m1_m2 hh_m1_m1 hh_m1_0 hh_m1_p1 hh_m1_p2 ' // &
+          & 'hh_0_m2 hh_0_m1 hh_0_0 hh_0_p1 hh_0_p2 ' // &
+          & 'hh_p1_m2 hh_p1_m1 hh_p1_0 hh_p1_p1 hh_p1_p2 ' // &
+          & 'hh_p2_m2 hh_p2_m1 hh_p2_0 hh_p2_p1 hh_p2_p2'
+     header_written = .true.
+  endif
+  write(lun,'(7(1X,I8),40(1X,1PE22.14))') &
+       & imod, ix, is, i, j, k, ist, dum, dum2, disp_s_dum, disp_v_dum, &
+       & disp_par, disp_vp, dvp, sgr_dist, ffun(i), bn(i), gfun(i), &
+       & vpgr(i,j,k), mugr(j), vpgr_rms, mugr_rms, &
+       & (hbuf(hindex), hindex = 1, 25)
+  close(lun)
+
+end subroutine stellarator_gk_igh_input_output
+"""
 
 
 STATE_TRACE_SUBROUTINE = r"""
@@ -901,6 +998,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         "fluxes.dat",
         "screen.out",
         "stellarator_gk_state_trace.dat",
+        "stellarator_gk_igh_inputs.dat",
     }
     suffixes = (".o", ".mod", ".smod", ".log")
     return {
@@ -927,6 +1025,7 @@ def _write_run_readme(
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
     rhs_trace_igh_matrix_dump: bool = False,
+    rhs_trace_igh_input_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> None:
     extra = ""
@@ -1036,6 +1135,20 @@ resolved selected-mode one-based row/column `(z, mu, vpar)` coordinates when
 available, the trace term id, and the complex matrix coefficient before the
 `dtim` factor applied by `calculate_rhs`.
 """
+        if rhs_trace_igh_input_dump:
+            extra += """
+The copied `src/linear_terms.F90` was also patched to write row-level
+`igh` coefficient inputs during matrix construction:
+
+```text
+stellarator_gk_igh_inputs.dat
+```
+
+Each row stores selected-mode one-based `(z, mu, vpar)`, boundary position
+class, `dum`, `dum2`, recurrence-control inputs, local spacing/geometric
+factors, and the valid local `HH` stencil values used by the Arakawa
+coefficient construction.
+"""
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
@@ -1119,6 +1232,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--rhs-trace-igh-input-dump",
+        action="store_true",
+        help=(
+            "With --rhs-trace, also write selected-row "
+            "stellarator_gk_igh_inputs.dat construction inputs."
+        ),
+    )
+    parser.add_argument(
         "--rhs-trace-steps",
         default="20,800,1600",
         help="Comma-separated positive ntotstep values for --rhs-trace output.",
@@ -1149,6 +1270,7 @@ def main() -> None:
         rhs_trace_state_dump=args.rhs_trace_state_dump,
         rhs_trace_internal_apply=args.rhs_trace_internal_apply,
         rhs_trace_igh_matrix_dump=args.rhs_trace_igh_matrix_dump,
+        rhs_trace_igh_input_dump=args.rhs_trace_igh_input_dump,
         rhs_trace_steps=_parse_step_list(args.rhs_trace_steps),
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")

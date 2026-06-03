@@ -8,6 +8,7 @@ import pytest
 from scripts.prepare_gkw_cosine2_run import (
     PATCHED_SELECTOR,
     add_cosin2_branch,
+    add_igh_input_trace_linear_terms_patch,
     add_multitime_velocity_slice_patch,
     add_rhs_trace_exp_integration_patch,
     add_rhs_trace_linear_terms_patch,
@@ -20,14 +21,17 @@ from scripts.prepare_gkw_cosine2_run import (
 from stellarator_gk import (
     CycloneSourceTermTrace,
     CycloneSameStateIghReplayAudit,
+    GkwIghInputTrace,
     GkwStateTrace,
     GkwVelocitySpaceSliceSeries,
     SelectedModeStateTrace,
     SolverSelectedModeRhsTrace,
+    compare_gkw_igh_input_trace_to_setup,
     compare_gkw_igh_matrix_trace_to_stencil,
     compare_gkw_state_trace_to_source_term_trace,
     compare_selected_mode_rhs_traces,
     compare_selected_mode_state_traces,
+    load_gkw_igh_input_trace,
     load_gkw_igh_matrix_trace,
     load_gkw_parallel_phi_trace,
     load_gkw_selected_mode_rhs_apply_trace,
@@ -198,6 +202,14 @@ subroutine calc_linear_terms
   if (neoclassics .and. lneoclassical) call neoclassical
 end subroutine calc_linear_terms
 end module linear_terms
+"""
+
+_MINIMAL_IGH_SUBROUTINE = """subroutine igh(disp_par,disp_vp)
+  real :: dum, dum2, disp_s_dum, disp_v_dum, disp_par, disp_vp
+  integer :: imod, ix, is, i, j, k, ist, ixref, iref, kref
+  logical :: ingrid
+      call connect_parallel(imod,ix,i,k,i,ingrid,ixref,iref,kref,ist)
+end subroutine igh
 """
 
 _MINIMAL_EXP_INTEGRATION = """module exp_integration
@@ -514,6 +526,51 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_igh_matrix_dump(
     ).read_text(encoding="utf-8")
 
 
+def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_igh_input_dump(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "gkw"
+    (source_root / "src").mkdir(parents=True)
+    (source_root / "src" / "init.f90").write_text(_MINIMAL_INIT, encoding="utf-8")
+    (source_root / "src" / "diagnostic.F90").write_text(
+        _MINIMAL_DIAGNOSTIC, encoding="utf-8"
+    )
+    (source_root / "src" / "matdat.F90").write_text(_MINIMAL_MATDAT, encoding="utf-8")
+    linear_terms_text = _MINIMAL_LINEAR_TERMS.replace(
+        "end module linear_terms",
+        _MINIMAL_IGH_SUBROUTINE + "end module linear_terms",
+    )
+    source_linear_terms = source_root / "src" / "linear_terms.F90"
+    source_linear_terms.write_text(linear_terms_text, encoding="utf-8")
+    source_exp_integration = source_root / "src" / "exp_integration.F90"
+    source_exp_integration.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+    input_path = tmp_path / "selected_ky_input.dat"
+    input_path.write_text("&SPCGENERAL\n finit = 'cosine'\n /\n", encoding="utf-8")
+
+    prepared = prepare_gkw_cosine2_run(
+        source_root=source_root,
+        output_root=tmp_path / "patched-gkw",
+        input_path=input_path,
+        rhs_trace=True,
+        rhs_trace_igh_input_dump=True,
+        rhs_trace_steps=(20, 40),
+    )
+
+    assert prepared.rhs_trace_igh_input_dump
+    patched_text = (prepared.output_root / "src" / "linear_terms.F90").read_text(
+        encoding="utf-8"
+    )
+    assert "call stellarator_gk_igh_input_output" in patched_text
+    assert "subroutine stellarator_gk_igh_input_output" in patched_text
+    assert "stellarator_gk_igh_inputs.dat" in patched_text
+    assert "stellarator_gk_igh_inputs.dat" not in source_linear_terms.read_text(
+        encoding="utf-8"
+    )
+    assert "row-level\n`igh` coefficient inputs" in (
+        prepared.output_root / "README_stellarator_gk_cosin2.md"
+    ).read_text(encoding="utf-8")
+
+
 def test_cosin2_patch_is_idempotent(tmp_path: Path) -> None:
     init_path = tmp_path / "init.f90"
     init_path.write_text(_MINIMAL_INIT, encoding="utf-8")
@@ -617,6 +674,21 @@ def test_rhs_trace_igh_matrix_dump_patch_is_idempotent(tmp_path: Path) -> None:
         exp_integration_path, (20, 40), igh_matrix_dump=True
     )
     assert exp_integration_path.read_text(encoding="utf-8") == first_patch
+
+
+def test_igh_input_trace_linear_terms_patch_is_idempotent(tmp_path: Path) -> None:
+    linear_terms_path = tmp_path / "linear_terms.F90"
+    linear_terms_path.write_text(
+        "module linear_terms\ncontains\n"
+        + _MINIMAL_IGH_SUBROUTINE
+        + "end module linear_terms\n",
+        encoding="utf-8",
+    )
+
+    assert add_igh_input_trace_linear_terms_patch(linear_terms_path)
+    first_patch = linear_terms_path.read_text(encoding="utf-8")
+    assert not add_igh_input_trace_linear_terms_patch(linear_terms_path)
+    assert linear_terms_path.read_text(encoding="utf-8") == first_patch
 
 
 def test_write_cosin2_input_rejects_missing_cosine_selector(tmp_path: Path) -> None:
@@ -895,7 +967,46 @@ def test_gkw_igh_matrix_trace_loader(tmp_path: Path) -> None:
     np.testing.assert_allclose(trace.matrix_value[1], -0.5 + 0.25j)
 
 
-def test_patched_cosin2_igh_matrix_fixtures_localize_coefficient_gap() -> None:
+def test_gkw_igh_input_trace_loader(tmp_path: Path) -> None:
+    path = tmp_path / "stellarator_gk_igh_inputs.dat"
+    values = [1, 1, 1, 1, 1, 1, 0]
+    values += [float(index) for index in range(1, 16)]
+    values += [100.0 + index for index in range(25)]
+    path.write_text(
+        "# imod ix is iz imu ivpar ist dum ... hh\n"
+        + " ".join(str(value) for value in values)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    trace = load_gkw_igh_input_trace(tmp_path)
+
+    assert isinstance(trace, GkwIghInputTrace)
+    assert trace.row_z.tolist() == [1]
+    assert trace.position_class.tolist() == [0]
+    np.testing.assert_allclose(trace.dum, np.asarray([1.0]))
+    assert trace.hh_values.shape == (1, 5, 5)
+    np.testing.assert_allclose(trace.hh_values[0, 0, 0], 100.0)
+    np.testing.assert_allclose(trace.hh_values[0, 4, 4], 124.0)
+
+
+def test_patched_cosin2_igh_input_fixtures_match_setup() -> None:
+    trace = load_gkw_igh_input_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_igh_inputs"
+    )
+
+    report = compare_gkw_igh_input_trace_to_setup(trace, tolerance=1.0e-12)
+    metrics = dict(zip(report.field_names, np.asarray(report.field_errors)))
+
+    assert trace.row_z.shape == (12288,)
+    assert bool(report.passed)
+    np.testing.assert_allclose(report.max_abs_error, 5.329070518200751e-15)
+    np.testing.assert_allclose(metrics["gfun_max_abs_error"], 4.996003610813204e-16)
+    np.testing.assert_allclose(metrics["disp_v_dum_max_abs_error"], 4.718447854656915e-16)
+    np.testing.assert_allclose(metrics["hh_values_max_abs_error"], 5.329070518200751e-15)
+
+
+def test_patched_cosin2_igh_matrix_fixtures_match_stencil() -> None:
     trace = load_gkw_igh_matrix_trace(
         ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_igh_matrix"
     )
@@ -908,11 +1019,11 @@ def test_patched_cosin2_igh_matrix_fixtures_localize_coefficient_gap() -> None:
         np.asarray([20, 800, 1600], dtype=np.int32),
     )
     assert trace.matrix_value.shape == (454665,)
-    assert not bool(report.passed)
+    assert bool(report.passed)
     np.testing.assert_allclose(
         metrics["coefficient_max_abs_error"],
-        0.023664443600822316,
-        rtol=1.0e-12,
+        5.773159728050814e-15,
+        rtol=0.0,
         atol=1.0e-14,
     )
     np.testing.assert_allclose(metrics["invalid_or_nonlocal_column_count"], 0.0)
@@ -1048,12 +1159,14 @@ def test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot() -> None:
     assert report.term_names == gkw_trace.term_names
     assert report.term_errors.shape == (9,)
     assert np.all(np.isfinite(np.asarray(report.field_errors)))
-    assert 0.0 < float(report.max_abs_error) < 3.0e-5
-    assert not bool(report.passed)
-    assert "best_term_layout=direct" in report.notes
+    assert bool(report.passed)
+    assert 0.0 < float(report.max_abs_error) < 7.0e-12
+    assert "best_term_layout=direct_phase_aligned" in report.notes
     term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
-    assert term_error_map["vdgradf"] == pytest.approx(float(report.max_abs_error))
-    assert term_error_map["vpgrphi"] < 1.0e-8
+    assert term_error_map["igh_or_term_i"] < 2.0e-12
+    assert term_error_map["vdgradf"] < 2.0e-12
+    assert term_error_map["ve_grad_fm"] < 7.0e-12
+    assert term_error_map["vpgrphi"] < 5.0e-13
 
 
 def test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state() -> None:
@@ -1080,16 +1193,17 @@ def test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state() -> None:
     assert report.field_names[0] == "steps"
     assert report.term_errors.shape == (9,)
     assert np.all(np.isfinite(np.asarray(report.field_errors)))
-    assert 0.0 < float(report.max_abs_error) < 1.0e-6
-    assert not bool(report.passed)
+    assert bool(report.passed)
+    assert 0.0 < float(report.max_abs_error) < 3.0e-12
     assert "same_state_rhs_replay" in replay.source
     assert "field_source=solver" in replay.notes
     term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
-    assert term_error_map["igh_or_term_i"] == pytest.approx(float(report.max_abs_error))
-    assert term_error_map["vdgradf"] < 1.0e-8
+    assert term_error_map["igh_or_term_i"] < 2.0e-14
+    assert term_error_map["vdgradf"] < 2.0e-13
+    assert term_error_map["ve_grad_fm"] < 3.0e-12
 
 
-def test_same_state_igh_replay_audit_localizes_trace_gap() -> None:
+def test_same_state_igh_replay_audit_closes_trace_gap() -> None:
     gkw_state = load_gkw_selected_mode_state_trace(
         ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
     )
@@ -1101,11 +1215,11 @@ def test_same_state_igh_replay_audit_localizes_trace_gap() -> None:
 
     assert isinstance(audit, CycloneSameStateIghReplayAudit)
     metrics = dict(zip(audit.metric_names, np.asarray(audit.metric_values)))
-    assert not bool(audit.passed)
+    assert bool(audit.passed)
     assert float(audit.max_abs_error) == pytest.approx(
-        metrics["gkw_vs_source_fused_igh"]
+        metrics["gkw_vs_solver_fused_igh"]
     )
-    assert 0.0 < float(audit.max_abs_error) < 1.0e-6
+    assert 0.0 < float(audit.max_abs_error) < 1.0e-16
     assert metrics["solver_vs_source_fused_igh"] < 1.0e-16
     assert metrics["source_fused_split_error"] < 1.0e-16
     assert metrics["gkw_vs_solver_fused_igh"] == pytest.approx(
