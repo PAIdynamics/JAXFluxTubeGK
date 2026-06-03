@@ -3703,8 +3703,9 @@ def load_gkw_selected_mode_state_trace(
     """Load patched GKW selected-mode state dump files.
 
     ``paths`` may be a directory containing
-    ``stellarator_gk_selected_state_<step>.dat`` files, a single file, or an
-    iterable of files.  Rows are expected to contain ``step``, ``time``,
+    ``stellarator_gk_selected_state_<step>.dat`` files, a directory containing
+    same-timing ``stellarator_gk_rhs_state_<step>.dat`` files, a single file,
+    or an iterable of files.  Rows are expected to contain ``step``, ``time``,
     one-based ``z``, ``mu``, ``vpar`` indices, complex distribution value, and
     complex selected-mode field value.
     """
@@ -9707,6 +9708,8 @@ def _selected_state_dump_files(paths) -> tuple[Path, ...]:
         path = Path(paths)
         if path.is_dir():
             files = tuple(sorted(path.glob("stellarator_gk_selected_state_*.dat")))
+            if not files:
+                files = tuple(sorted(path.glob("stellarator_gk_rhs_state_*.dat")))
         else:
             files = (path,)
     else:

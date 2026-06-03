@@ -662,18 +662,42 @@ state-history and benchmark-scan inconsistencies:
   compressed matrix entries only through section `n2`, not `n4`. The patch
   tests also lock in term-tag preservation through `matdat.F90`
   compression/sort/copy paths.
-- [ ] Regenerate the matched selected-state/RHS GKW fixtures with the corrected
+- [x] Regenerate the matched selected-state/RHS GKW fixtures with the corrected
   `n2` RHS trace patch and rerun the same-state RHS replay plus source-level
-  `igh` audit. If the \(8.91\times10^{-7}\) `igh_or_term_i` gap remains, the
-  next trace suspects are exact `linear_terms.F90::igh` section tagging at
-  matrix construction time and post-normalization field refresh timing.
+  `igh` audit. The regenerated RHS files are byte-identical to the current
+  fixtures, and the selected-state files agree to \(\sim10^{-15}\). The
+  residual is unchanged:
+  same-state max `8.905204720648109e-07`,
+  `igh_or_term_i=8.905204720648109e-07`, and
+  `solver_vs_source_fused_igh=1.6294765363968643e-19`.
+- [x] Add a trace-timing state discriminator for the remaining
+  `igh_or_term_i` gap. The patched GKW run can now write
+  `stellarator_gk_rhs_state_<step>.dat` at the same
+  `exp_integration.F90` post-normalization point as the RHS action trace.
+  Replaying the RHS trace on these same-timing states still gives
+  `8.905204720648109e-07`, while the same-timing states and later diagnostic
+  selected-state dumps agree exactly on the selected rows. This rules out
+  post-normalization/diagnostic write-site state timing as the source of the
+  remaining `igh_or_term_i` gap.
+- [ ] Add an internal `calculate_rhs` row-application trace for the selected
+  rows: record the matrix-vector product contribution as GKW actually applies
+  compressed section `n2`, and compare it to the reconstructed
+  post-normalization RHS trace. This will separate matrix-entry tagging or
+  reconstruction mistakes from a mismatch in the matrix built by
+  `linear_terms.F90::igh`.
 - [ ] If same-state RHS/action replay reaches roundoff, add a one-window replay
   test: initialize the solver from a GKW selected state immediately after a
   diagnostic normalization, advance one GKW diagnostic window with the same RK4
   and normalization cadence, and compare to the next GKW selected-state dump.
-- [ ] Generate or select adjacent GKW selected-state/RHS fixtures around the
+- [x] Generate or select adjacent GKW selected-state/RHS fixtures around the
   worst mid-run region, e.g. windows near steps 780, 800, and 820, so the
-  one-window replay can localize when the full-state error is introduced.
+  one-window replay can localize when the full-state error is introduced. The
+  new fixture directories are
+  `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state/` and
+  `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_rhs_trace/`. The midrun
+  same-state replay still fails at `8.998731812666629e-07`, dominated by
+  `igh_or_term_i=8.998679163478323e-07`, while
+  `solver_vs_source_fused_igh=2.245388327010212e-19`.
 - [ ] Promote the row-normalized `parallel_phi.dat` profile-shape comparison
   into an explicit OPEN validation gate with a recorded tolerance ladder, so
   the remaining mode-structure mismatch is tracked separately from scalar

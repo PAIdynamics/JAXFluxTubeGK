@@ -567,9 +567,15 @@ Expected file changes:
   residual now localized to traced `igh_or_term_i`,
 - regenerated matched GKW selected-state/RHS fixtures after the corrected `n2`
   trace loop is used,
+- mid-run selected-state/RHS fixtures around steps `780`, `800`, and `820`
+  for one-window localization,
+- same-timing RHS selected-state fixtures
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_state/` for trace-timing
+  discrimination,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `scripts/prepare_gkw_cosine2_run.py`,
+- `src/stellarator_gk/benchmarks.py`,
 - `TODO.md`,
 - `STATUS.md`
 
@@ -581,6 +587,90 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-03: Added Same-Timing RHS State Trace Discriminator
+
+- Implemented an optional `--rhs-trace-state-dump` mode in
+  `scripts/prepare_gkw_cosine2_run.py`.
+  - The copied `exp_integration.F90` now emits
+    `stellarator_gk_rhs_state_<step>.dat` at the same post-normalization write
+    point as `stellarator_gk_rhs_trace_<step>.dat`.
+  - The new files use the selected-state row format but a distinct prefix, so
+    they do not collide with diagnostic
+    `stellarator_gk_selected_state_<step>.dat` files.
+- Taught `load_gkw_selected_mode_state_trace` to load a directory containing
+  `stellarator_gk_rhs_state_<step>.dat` files when no diagnostic selected-state
+  files are present.
+- Generated a real patched GKW run in
+  `/private/tmp/stellarator_gk_gkw_cosin2_rhs_state_trace` with:
+  - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /tmp/stellarator_gk_gkw_cosin2_rhs_state_trace --overwrite --selected-state-dump --rhs-trace --rhs-trace-state-dump --rhs-trace-steps 20,800,1600`
+  - `make FC=gfortran 'FFLAGS=-fdefault-real-8 -O2' FFTLIB=nofft PARALLEL=nompi 'LDFLAGS='`
+  - `./gkw.x`
+- Added same-timing RHS state fixtures:
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_state/`.
+- x64 same-timing state replay result:
+  - same-state max residual remains `8.905204720648109e-07`,
+  - source-level `gkw_vs_solver_fused_igh=8.905291461911555e-07`,
+  - `solver_vs_source_fused_igh=1.6294765363968643e-19`.
+- Same-timing `rhs_state` files and later diagnostic selected-state dumps agree
+  exactly on the selected rows:
+  - `rhs_vs_diag_state_passed=True`,
+  - `max_abs_error=0.0`.
+- Interpretation: the remaining `igh_or_term_i` gap is not caused by comparing
+  the RHS trace against a later diagnostic selected-state dump. The next
+  narrowed target is an internal `calculate_rhs` row-application trace that
+  records GKW's actual matrix-vector product for the selected rows.
+- Verification run this round:
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_prepare_gkw_cosine2_run_can_patch_rhs_trace_state_dump tests/test_gkw_cosine2_patch.py::test_rhs_trace_state_dump_patch_is_idempotent tests/test_gkw_cosine2_patch.py::test_gkw_selected_mode_state_loader_accepts_rhs_state_directory -q`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `PYTHONPATH=src JAX_ENABLE_X64=1 .venv/bin/python -c "... same-timing rhs_state replay audit ..."`
+- Verification result:
+  - `ruff`: all checks passed,
+  - focused discriminator tests: `3 passed in 0.24s`,
+  - full cosine2 patch/fixture suite: `29 passed in 57.91s`.
+
+### 2026-06-03: Regenerated GKW RHS Traces and Added Midrun Fixtures
+
+- Regenerated the matched selected-state/RHS GKW run with the corrected `n2`
+  RHS trace patch in `/private/tmp/stellarator_gk_gkw_cosin2_n2_trace`.
+- Build/run commands:
+  - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /tmp/stellarator_gk_gkw_cosin2_n2_trace --overwrite --selected-state-dump --rhs-trace --rhs-trace-steps 20,800,1600`
+  - `make FC=gfortran 'FFLAGS=-fdefault-real-8 -O2' FFTLIB=nofft PARALLEL=nompi 'LDFLAGS='`
+  - `./gkw.x`
+- Result:
+  - regenerated RHS trace files at steps `20`, `800`, and `1600` are
+    byte-identical to the current fixtures,
+  - regenerated selected-state files differ bytewise but agree numerically:
+    max state difference `1.0039119183961513e-15`, max phi difference
+    `9.992007221626409e-16`.
+- x64 same-state audit on the regenerated `n2` traces:
+  - same-state max residual `8.905204720648109e-07`,
+  - dominant term `igh_or_term_i=8.905204720648109e-07`,
+  - `vdgradf=3.137045121212734e-09`,
+  - source-level `solver_vs_source_fused_igh=1.6294765363968643e-19`.
+- Interpretation: the corrected `n2` trace contract is necessary for future
+  correctness, but it does not close the existing selected-row `igh_or_term_i`
+  gap because the current selected RHS trace files already have no selected-row
+  contribution from sections beyond `n2`.
+- Generated adjacent mid-run GKW selected-state/RHS fixtures around the worst
+  state-history region using a second patched run with RHS trace steps
+  `780,800,820`.
+- Added fixture directories:
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state/`,
+  - `fixtures/gkw_cyclone_selected_ky_cosin2_midrun_rhs_trace/`.
+- x64 midrun same-state audit:
+  - same-state max residual `8.998731812666629e-07`,
+  - dominant term `igh_or_term_i=8.998679163478323e-07`,
+  - `vdgradf=3.137045121212734e-09`,
+  - source-level `solver_vs_source_fused_igh=2.245388327010212e-19`.
+- Added a lightweight loader test for the midrun fixture directories.
+- Next narrowed target: add a trace-timing discriminator that records or
+  reconstructs the `igh` action at the exact GKW `calculate_rhs` timing, before
+  comparing it to post-normalization selected-state replay.
+- Verification run this round:
+  - `PYTHONPATH=src JAX_ENABLE_X64=1 .venv/bin/python -c "... regenerated n2 audit ..."`
+  - `PYTHONPATH=src JAX_ENABLE_X64=1 .venv/bin/python -c "... midrun audit ..."`
 
 ### 2026-06-03: Corrected Future GKW RHS Trace Matrix-Section Contract
 

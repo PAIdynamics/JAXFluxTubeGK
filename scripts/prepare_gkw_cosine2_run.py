@@ -35,6 +35,7 @@ class PreparedGkwCosine2Run:
     state_trace: bool = False
     selected_state_dump: bool = False
     rhs_trace: bool = False
+    rhs_trace_state_dump: bool = False
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600)
     selector: str = PATCHED_SELECTOR
 
@@ -76,6 +77,7 @@ def prepare_gkw_cosine2_run(
     state_trace: bool = False,
     selected_state_dump: bool = False,
     rhs_trace: bool = False,
+    rhs_trace_state_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
@@ -95,6 +97,8 @@ def prepare_gkw_cosine2_run(
         raise FileNotFoundError(f"GKW input file not found: {input_path}")
     if source_root == output_root:
         raise ValueError("output_root must be different from source_root")
+    if rhs_trace_state_dump and not rhs_trace:
+        raise ValueError("rhs_trace_state_dump requires rhs_trace=True")
     if output_root.exists():
         if not overwrite:
             raise FileExistsError(f"{output_root} already exists; pass --overwrite")
@@ -110,6 +114,7 @@ def prepare_gkw_cosine2_run(
         add_rhs_trace_exp_integration_patch(
             output_root / "src" / "exp_integration.F90",
             rhs_trace_steps,
+            state_dump=rhs_trace_state_dump,
         )
     if multi_time_distr or state_trace or selected_state_dump:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
@@ -127,6 +132,7 @@ def prepare_gkw_cosine2_run(
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
         rhs_trace=rhs_trace,
+        rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
     return PreparedGkwCosine2Run(
@@ -139,6 +145,7 @@ def prepare_gkw_cosine2_run(
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
         rhs_trace=rhs_trace,
+        rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
 
@@ -471,11 +478,17 @@ def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
 def add_rhs_trace_exp_integration_patch(
     exp_integration_path: Path,
     steps: tuple[int, ...] = (20, 800, 1600),
+    *,
+    state_dump: bool = False,
 ) -> bool:
     """Patch copied GKW time advancement to dump selected-mode RHS term actions."""
 
     text = exp_integration_path.read_text(encoding="utf-8")
     if "stellarator_gk rhs trace exp_integration patch" in text:
+        if state_dump and "stellarator_gk rhs trace state dump" not in text:
+            raise ValueError(
+                f"{exp_integration_path} is already patched without rhs trace state dump"
+            )
         return False
 
     if not steps:
@@ -492,7 +505,8 @@ def add_rhs_trace_exp_integration_patch(
         call_marker
         + "  ! stellarator_gk rhs trace exp_integration patch: write selected-mode\n"
         + "  ! dtim-scaled term actions after end-of-window normalization.\n"
-        "  call stellarator_gk_rhs_trace_output\n\n"
+        + ("  call stellarator_gk_rhs_trace_state_output\n" if state_dump else "")
+        + "  call stellarator_gk_rhs_trace_output\n\n"
     )
     if call_marker not in text:
         raise ValueError(
@@ -505,7 +519,10 @@ def add_rhs_trace_exp_integration_patch(
         raise ValueError(
             f"could not find exp_integration module end marker in {exp_integration_path}"
         )
-    subroutine = _rhs_trace_subroutine(step_values)
+    subroutine = ""
+    if state_dump:
+        subroutine += _rhs_trace_state_subroutine(step_values) + "\n"
+    subroutine += _rhs_trace_subroutine(step_values)
     text = text.replace(module_marker, subroutine + "\n" + module_marker, 1)
     exp_integration_path.write_text(text, encoding="utf-8")
     return True
@@ -667,6 +684,53 @@ end subroutine stellarator_gk_rhs_trace_output
 """
 
 
+def _rhs_trace_state_subroutine(steps: tuple[int, ...]) -> str:
+    keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
+    return rf"""
+subroutine stellarator_gk_rhs_trace_state_output
+
+  use control,      only : time, ntotstep
+  use dist,         only : fdisi, indx, nsolc, phi, get_phi
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+
+  integer :: iz, imu, ivpar, lun
+  character (len=64) :: state_file
+  complex :: fval, phival
+  logical :: keep_snapshot
+
+  ! stellarator_gk rhs trace state dump: write the selected state at the same
+  ! post-normalization timing used by stellarator_gk_rhs_trace_output.
+  keep_snapshot = .false.
+{keep_checks}
+  if (.not. keep_snapshot) return
+
+  call get_phi(fdisi(1:nsolc), phi)
+
+  if (root_processor) then
+     write(state_file,'("stellarator_gk_rhs_state_",I8.8,".dat")') ntotstep
+     call get_free_lun(lun)
+     open(lun, FILE=trim(state_file), STATUS='unknown')
+     write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
+     do iz = 1, ns
+        phival = phi(1,1,iz)
+        do imu = 1, nmu
+           do ivpar = 1, nvpar
+              fval = fdisi(indx(1,1,iz,imu,ivpar,1))
+              write(lun,'(I12,1X,1PE22.14,3(1X,I8),4(1X,1PE22.14))') &
+                   & ntotstep, time, iz, imu, ivpar, real(fval), aimag(fval), &
+                   & real(phival), aimag(phival)
+           end do
+        end do
+     end do
+     close(lun)
+  end if
+
+end subroutine stellarator_gk_rhs_trace_state_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -686,6 +750,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         if name in generated_names
         or name.startswith("stellarator_gk_selected_state_")
         or name.startswith("stellarator_gk_rhs_trace_")
+        or name.startswith("stellarator_gk_rhs_state_")
         or name.endswith(suffixes)
         or name == "__pycache__"
     }
@@ -698,6 +763,7 @@ def _write_run_readme(
     state_trace: bool = False,
     selected_state_dump: bool = False,
     rhs_trace: bool = False,
+    rhs_trace_state_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> None:
     extra = ""
@@ -760,6 +826,21 @@ actions.  The matrix contribution mirrors the explicit complex
 `calculate_rhs` convention and therefore sums compressed matrix entries through
 section `n2`.
 """
+        if rhs_trace_state_dump:
+            extra += """
+The RHS trace patch also writes same-timing selected states from
+`exp_integration.F90`, immediately after the same normalization point used for
+the RHS action trace:
+
+```text
+stellarator_gk_rhs_state_00000020.dat
+stellarator_gk_rhs_state_00000800.dat
+stellarator_gk_rhs_state_00001600.dat
+```
+
+These files use the selected-state row format and are intended as a
+trace-timing discriminator against later diagnostic selected-state dumps.
+"""
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
@@ -819,6 +900,14 @@ def _parse_args() -> argparse.Namespace:
         help="Patch copied GKW to write selected-mode stellarator_gk_rhs_trace_<step>.dat.",
     )
     parser.add_argument(
+        "--rhs-trace-state-dump",
+        action="store_true",
+        help=(
+            "With --rhs-trace, also write same-timing "
+            "stellarator_gk_rhs_state_<step>.dat selected states."
+        ),
+    )
+    parser.add_argument(
         "--rhs-trace-steps",
         default="20,800,1600",
         help="Comma-separated positive ntotstep values for --rhs-trace output.",
@@ -846,6 +935,7 @@ def main() -> None:
         state_trace=args.state_trace,
         selected_state_dump=args.selected_state_dump,
         rhs_trace=args.rhs_trace,
+        rhs_trace_state_dump=args.rhs_trace_state_dump,
         rhs_trace_steps=_parse_step_list(args.rhs_trace_steps),
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")
