@@ -37,6 +37,7 @@ class PreparedGkwCosine2Run:
     rhs_trace: bool = False
     rhs_trace_state_dump: bool = False
     rhs_trace_internal_apply: bool = False
+    rhs_trace_igh_matrix_dump: bool = False
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600)
     selector: str = PATCHED_SELECTOR
 
@@ -80,6 +81,7 @@ def prepare_gkw_cosine2_run(
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
+    rhs_trace_igh_matrix_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
@@ -103,6 +105,8 @@ def prepare_gkw_cosine2_run(
         raise ValueError("rhs_trace_state_dump requires rhs_trace=True")
     if rhs_trace_internal_apply and not rhs_trace:
         raise ValueError("rhs_trace_internal_apply requires rhs_trace=True")
+    if rhs_trace_igh_matrix_dump and not rhs_trace:
+        raise ValueError("rhs_trace_igh_matrix_dump requires rhs_trace=True")
     if output_root.exists():
         if not overwrite:
             raise FileExistsError(f"{output_root} already exists; pass --overwrite")
@@ -120,6 +124,7 @@ def prepare_gkw_cosine2_run(
             rhs_trace_steps,
             state_dump=rhs_trace_state_dump,
             internal_apply=rhs_trace_internal_apply,
+            igh_matrix_dump=rhs_trace_igh_matrix_dump,
         )
     if multi_time_distr or state_trace or selected_state_dump:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
@@ -139,6 +144,7 @@ def prepare_gkw_cosine2_run(
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
+        rhs_trace_igh_matrix_dump=rhs_trace_igh_matrix_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
     return PreparedGkwCosine2Run(
@@ -153,6 +159,7 @@ def prepare_gkw_cosine2_run(
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
+        rhs_trace_igh_matrix_dump=rhs_trace_igh_matrix_dump,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
 
@@ -488,6 +495,7 @@ def add_rhs_trace_exp_integration_patch(
     *,
     state_dump: bool = False,
     internal_apply: bool = False,
+    igh_matrix_dump: bool = False,
 ) -> bool:
     """Patch copied GKW time advancement to dump selected-mode RHS term actions."""
 
@@ -500,6 +508,10 @@ def add_rhs_trace_exp_integration_patch(
         if internal_apply and "stellarator_gk rhs trace internal apply" not in text:
             raise ValueError(
                 f"{exp_integration_path} is already patched without internal apply dump"
+            )
+        if igh_matrix_dump and "stellarator_gk igh matrix dump" not in text:
+            raise ValueError(
+                f"{exp_integration_path} is already patched without igh matrix dump"
             )
         return False
 
@@ -519,6 +531,7 @@ def add_rhs_trace_exp_integration_patch(
         + "  ! dtim-scaled term actions after end-of-window normalization.\n"
         + ("  call stellarator_gk_rhs_trace_state_output\n" if state_dump else "")
         + ("  call stellarator_gk_rhs_apply_output\n" if internal_apply else "")
+        + ("  call stellarator_gk_igh_matrix_output\n" if igh_matrix_dump else "")
         + "  call stellarator_gk_rhs_trace_output\n\n"
     )
     if call_marker not in text:
@@ -537,6 +550,8 @@ def add_rhs_trace_exp_integration_patch(
         subroutine += _rhs_trace_state_subroutine(step_values) + "\n"
     if internal_apply:
         subroutine += _rhs_trace_apply_subroutine(step_values) + "\n"
+    if igh_matrix_dump:
+        subroutine += _igh_matrix_dump_subroutine(step_values) + "\n"
     subroutine += _rhs_trace_subroutine(step_values)
     text = text.replace(module_marker, subroutine + "\n" + module_marker, 1)
     exp_integration_path.write_text(text, encoding="utf-8")
@@ -796,6 +811,85 @@ end subroutine stellarator_gk_rhs_apply_output
 """
 
 
+def _igh_matrix_dump_subroutine(steps: tuple[int, ...]) -> str:
+    keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
+    return rf"""
+subroutine stellarator_gk_igh_matrix_output
+
+  use control,      only : time, ntotstep
+  use dist,         only : indx, nsolc
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use matdat,       only : mat, ii, jj, n2, stellarator_gk_mat_term
+  use mpiinterface, only : root_processor
+
+  integer :: iz, imu, ivpar, elem, row_index, col_index, lun, ierr
+  integer :: term_id
+  integer, allocatable :: map_iz(:), map_imu(:), map_ivpar(:)
+  character (len=64) :: matrix_file
+  logical :: keep_snapshot
+
+  ! stellarator_gk igh matrix dump: dump compressed selected-row matrix
+  ! entries tagged as igh_or_term_i after matdat compression/sorting.
+  keep_snapshot = .false.
+{keep_checks}
+  if (.not. keep_snapshot) return
+  if (.not. root_processor) return
+
+  allocate(map_iz(nsolc), map_imu(nsolc), map_ivpar(nsolc), stat=ierr)
+  if (ierr .ne. 0) stop 'Could not allocate index maps in stellarator_gk_igh_matrix_output'
+  map_iz = -1
+  map_imu = -1
+  map_ivpar = -1
+
+  do iz = 1, ns
+     do imu = 1, nmu
+        do ivpar = 1, nvpar
+           row_index = indx(1,1,iz,imu,ivpar,1)
+           if (row_index .ge. 1 .and. row_index .le. nsolc) then
+              map_iz(row_index) = iz
+              map_imu(row_index) = imu
+              map_ivpar(row_index) = ivpar
+           endif
+        end do
+     end do
+  end do
+
+  write(matrix_file,'("stellarator_gk_igh_matrix_",I8.8,".dat")') ntotstep
+  call get_free_lun(lun)
+  open(lun, FILE=trim(matrix_file), STATUS='unknown')
+  write(lun,'(A)') '# step time elem row_index col_index row_iz row_imu row_ivpar ' // &
+       & 'col_iz col_imu col_ivpar term real_mat imag_mat'
+
+  do elem = 1, n2
+     row_index = ii(elem)
+     col_index = jj(elem)
+     term_id = stellarator_gk_mat_term(elem)
+     if (term_id .eq. 1 .and. row_index .ge. 1 .and. row_index .le. nsolc) then
+        if (map_iz(row_index) .gt. 0) then
+           if (col_index .ge. 1 .and. col_index .le. nsolc) then
+              write(lun,'(I12,1X,1PE22.14,10(1X,I12),2(1X,1PE22.14))') &
+                   & ntotstep, time, elem, row_index, col_index, &
+                   & map_iz(row_index), map_imu(row_index), map_ivpar(row_index), &
+                   & map_iz(col_index), map_imu(col_index), map_ivpar(col_index), &
+                   & term_id, real(mat(elem)), aimag(mat(elem))
+           else
+              write(lun,'(I12,1X,1PE22.14,10(1X,I12),2(1X,1PE22.14))') &
+                   & ntotstep, time, elem, row_index, col_index, &
+                   & map_iz(row_index), map_imu(row_index), map_ivpar(row_index), &
+                   & -1, -1, -1, term_id, real(mat(elem)), aimag(mat(elem))
+           endif
+        endif
+     endif
+  end do
+  close(lun)
+
+  deallocate(map_iz, map_imu, map_ivpar)
+
+end subroutine stellarator_gk_igh_matrix_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -817,6 +911,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         or name.startswith("stellarator_gk_rhs_trace_")
         or name.startswith("stellarator_gk_rhs_state_")
         or name.startswith("stellarator_gk_rhs_apply_")
+        or name.startswith("stellarator_gk_igh_matrix_")
         or name.endswith(suffixes)
         or name == "__pycache__"
     }
@@ -831,6 +926,7 @@ def _write_run_readme(
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
+    rhs_trace_igh_matrix_dump: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> None:
     extra = ""
@@ -924,6 +1020,22 @@ These files record the selected-row totals returned by GKW's own
 RHS trace reconstruction from the matrix-vector product actually applied by
 GKW.
 """
+        if rhs_trace_igh_matrix_dump:
+            extra += """
+The RHS trace patch also writes compressed selected-row `igh_or_term_i` matrix
+entries after GKW matrix construction/compression:
+
+```text
+stellarator_gk_igh_matrix_00000020.dat
+stellarator_gk_igh_matrix_00000800.dat
+stellarator_gk_igh_matrix_00001600.dat
+```
+
+Each row stores the compressed element number, raw row/column indices,
+resolved selected-mode one-based row/column `(z, mu, vpar)` coordinates when
+available, the trace term id, and the complex matrix coefficient before the
+`dtim` factor applied by `calculate_rhs`.
+"""
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
@@ -999,6 +1111,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--rhs-trace-igh-matrix-dump",
+        action="store_true",
+        help=(
+            "With --rhs-trace, also write compressed selected-row "
+            "stellarator_gk_igh_matrix_<step>.dat coefficient dumps."
+        ),
+    )
+    parser.add_argument(
         "--rhs-trace-steps",
         default="20,800,1600",
         help="Comma-separated positive ntotstep values for --rhs-trace output.",
@@ -1028,6 +1148,7 @@ def main() -> None:
         rhs_trace=args.rhs_trace,
         rhs_trace_state_dump=args.rhs_trace_state_dump,
         rhs_trace_internal_apply=args.rhs_trace_internal_apply,
+        rhs_trace_igh_matrix_dump=args.rhs_trace_igh_matrix_dump,
         rhs_trace_steps=_parse_step_list(args.rhs_trace_steps),
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")

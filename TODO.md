@@ -687,12 +687,21 @@ state-history and benchmark-scan inconsistencies:
   `1.0191500421363742e-17`, while same-state replay against the solver/source
   reconstruction still fails at `8.905204720648109e-07`. This rules out RHS
   trace reconstruction and write-site timing as the remaining cause.
-- [ ] Dump and compare the actual compressed `igh_or_term_i` matrix entries
-  feeding the selected rows after GKW matrix construction/compression. Record
-  `(ii,jj,mat,stellarator_gk_mat_term)` for the selected rows, separate
-  pre-compression and post-compression forms if needed, and compare those
-  coefficients against the source-level `linear_terms.F90::igh` reconstruction
-  used by `CycloneSameStateIghReplayAudit`.
+- [x] Dump and compare the actual compressed `igh_or_term_i` matrix entries
+  feeding the selected rows after GKW matrix construction/compression. The
+  patched run now writes `stellarator_gk_igh_matrix_<step>.dat` with raw
+  `(ii,jj,mat,stellarator_gk_mat_term)` data plus selected-row/column
+  `(z,mu,vpar)` coordinates. The strict stencil comparison shows no invalid
+  selected columns and no nonzero entry-count mismatch, but the coefficient
+  gate fails with `coefficient_max_abs_error=0.023664443600822316`; the
+  mismatch is broad and systematic in interior `delta_z=0` coefficients rather
+  than a trace reconstruction or matrix compression issue.
+- [ ] Resolve the source-stencil coefficient mismatch exposed by
+  `GkwIghMatrixTrace`: compare `linear_terms.F90::igh` coefficient inputs
+  (`dum`, `hh`, `dvp`, `ds`, `disp_s_dum`, `disp_v_dum`, and boundary position
+  class) against the Python `build_gkw_igh_stencil` values row-by-row,
+  starting with interior `delta_z=0` rows where the max error is
+  `0.023664443600822316`.
 - [ ] If same-state RHS/action replay reaches roundoff, add a one-window replay
   test: initialize the solver from a GKW selected state immediately after a
   diagnostic normalization, advance one GKW diagnostic window with the same RK4

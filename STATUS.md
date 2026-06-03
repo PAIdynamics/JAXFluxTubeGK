@@ -575,6 +575,9 @@ Expected file changes:
 - internal `calculate_rhs` selected-row total fixtures
   `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_apply/` for reconstruction
   parity,
+- compressed selected-row `igh_or_term_i` matrix fixtures
+  `fixtures/gkw_cyclone_selected_ky_cosin2_igh_matrix/` for coefficient
+  parity,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `scripts/prepare_gkw_cosine2_run.py`,
@@ -590,6 +593,55 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-03: Added Compressed GKW `igh` Matrix Trace
+
+- Implemented optional `--rhs-trace-igh-matrix-dump` support in
+  `scripts/prepare_gkw_cosine2_run.py`.
+  - The copied `exp_integration.F90` can now emit
+    `stellarator_gk_igh_matrix_<step>.dat`.
+  - Each row records the compressed matrix element number, raw GKW row/column
+    indices, selected-mode row/column `(z,mu,vpar)` coordinates where
+    available, trace term id, and complex matrix coefficient before `dtim`.
+- Added `GkwIghMatrixTrace`, `GkwIghMatrixComparisonReport`,
+  `load_gkw_igh_matrix_trace`, and `compare_gkw_igh_matrix_trace_to_stencil`.
+- Generated a real patched GKW run in
+  `/private/tmp/stellarator_gk_gkw_cosin2_igh_matrix_trace` with:
+  - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /tmp/stellarator_gk_gkw_cosin2_igh_matrix_trace --overwrite --selected-state-dump --rhs-trace --rhs-trace-state-dump --rhs-trace-igh-matrix-dump --rhs-trace-steps 20,800,1600`
+  - `make FC=gfortran 'FFLAGS=-fdefault-real-8 -O2' FFTLIB=nofft PARALLEL=nompi 'LDFLAGS='`
+  - `./gkw.x`
+- Added compressed `igh_or_term_i` matrix fixtures:
+  `fixtures/gkw_cyclone_selected_ky_cosin2_igh_matrix/`.
+- x64 coefficient comparison result:
+  - `coefficient_max_abs_error=0.023664443600822316`,
+  - `invalid_or_nonlocal_column_count=0.0`,
+  - `entry_count_error=0.0`,
+  - `observed_nonzero_entry_count=437808`,
+  - `expected_nonzero_entry_count=437808`,
+  - `raw_dump_entry_count=454665`.
+- Additional localization:
+  - valid-shift masking was needed because the Python source coefficient table
+    stores boundary-shift coefficients that are zeroed during application,
+    while GKW's compressed matrix omits invalid columns,
+  - after masking, observed and expected nonzero entry counts match exactly,
+  - the remaining coefficient mismatch is broad and systematic in interior
+    `delta_z=0` rows, not a trace reconstruction, timing, compression-count,
+    or invalid-column problem.
+- Interpretation: the remaining same-state `igh_or_term_i` residual is now
+  narrowed to source-stencil coefficient values used by
+  `build_gkw_igh_stencil` versus GKW's actual `linear_terms.F90::igh` matrix
+  coefficients. The next target is row-by-row coefficient-input tracing:
+  `dum`, `hh`, `dvp`, `ds`, `disp_s_dum`, `disp_v_dum`, and boundary position
+  class.
+- Verification run this round:
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_prepare_gkw_cosine2_run_can_patch_rhs_trace_igh_matrix_dump tests/test_gkw_cosine2_patch.py::test_rhs_trace_igh_matrix_dump_patch_is_idempotent tests/test_gkw_cosine2_patch.py::test_gkw_igh_matrix_trace_loader tests/test_gkw_cosine2_patch.py::test_patched_cosin2_igh_matrix_fixtures_localize_coefficient_gap -q`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `PYTHONPATH=src JAX_ENABLE_X64=1 .venv/bin/python -c "... igh matrix trace comparison ..."`
+- Verification result:
+  - `ruff`: all checks passed,
+  - focused matrix tests: `4 passed in 3.97s`,
+  - full cosine2 patch/fixture suite: `37 passed in 52.29s`.
 
 ### 2026-06-03: Added Internal `calculate_rhs` Apply Trace
 

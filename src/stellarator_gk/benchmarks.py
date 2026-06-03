@@ -433,6 +433,115 @@ class GkwSelectedModeRhsTrace(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class GkwIghMatrixTrace(_PyTreeDataclass):
+    """Compressed selected-row GKW ``igh_or_term_i`` matrix-entry trace."""
+
+    steps: object
+    times: object
+    snapshot_index: object
+    element_index: object
+    row_index: object
+    col_index: object
+    row_z: object
+    row_mu: object
+    row_vpar: object
+    col_z: object
+    col_mu: object
+    col_vpar: object
+    term_id: object
+    matrix_value: object
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "steps",
+        "times",
+        "snapshot_index",
+        "element_index",
+        "row_index",
+        "col_index",
+        "row_z",
+        "row_mu",
+        "row_vpar",
+        "col_z",
+        "col_mu",
+        "col_vpar",
+        "term_id",
+        "matrix_value",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "notes")
+
+    def __post_init__(self):
+        steps = jnp.asarray(self.steps, dtype=jnp.int32)
+        times = jnp.asarray(self.times, dtype=jnp.float64)
+        if steps.ndim != 1:
+            raise ValueError("steps must be one-dimensional")
+        if times.shape != steps.shape:
+            raise ValueError("times must match steps shape")
+        object.__setattr__(self, "steps", steps)
+        object.__setattr__(self, "times", times)
+
+        entry_shape = None
+        for name in (
+            "snapshot_index",
+            "element_index",
+            "row_index",
+            "col_index",
+            "row_z",
+            "row_mu",
+            "row_vpar",
+            "col_z",
+            "col_mu",
+            "col_vpar",
+            "term_id",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.int32)
+            if values.ndim != 1:
+                raise ValueError(f"{name} must be one-dimensional")
+            entry_shape = values.shape if entry_shape is None else entry_shape
+            if values.shape != entry_shape:
+                raise ValueError("all matrix-entry integer arrays must share shape")
+            object.__setattr__(self, name, values)
+        matrix_value = jnp.asarray(self.matrix_value, dtype=jnp.complex128)
+        if matrix_value.shape != entry_shape:
+            raise ValueError("matrix_value must match matrix-entry arrays")
+        if matrix_value.shape[0] == 0:
+            raise ValueError("matrix trace must contain at least one entry")
+        object.__setattr__(self, "matrix_value", matrix_value)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GkwIghMatrixComparisonReport(_PyTreeDataclass):
+    """Comparison between dumped GKW ``igh`` matrix entries and solver stencil."""
+
+    field_errors: object
+    max_abs_error: object
+    passed: object
+    field_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "field_errors",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("field_names", "notes")
+
+    def __post_init__(self):
+        field_errors = jnp.asarray(self.field_errors, dtype=jnp.float64)
+        if field_errors.ndim != 1:
+            raise ValueError("field_errors must be one-dimensional")
+        if len(self.field_names) != field_errors.shape[0]:
+            raise ValueError("field_names length must match field_errors")
+        object.__setattr__(self, "field_errors", field_errors)
+        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "field_names", tuple(self.field_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class SolverSelectedModeRhsTrace(_PyTreeDataclass):
     """Solver selected-mode RHS/action snapshots in GKW term buckets."""
 
@@ -3798,6 +3907,70 @@ def load_gkw_selected_mode_rhs_apply_trace(
     )
 
 
+def load_gkw_igh_matrix_trace(
+    paths,
+    *,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwIghMatrixTrace:
+    """Load patched GKW compressed selected-row ``igh_or_term_i`` matrix dumps."""
+
+    files = _igh_matrix_dump_files(paths)
+    snapshots = [_load_gkw_igh_matrix_file(path) for path in files]
+    steps = np.asarray([snapshot["step"] for snapshot in snapshots], dtype=np.int32)
+    times = np.asarray([snapshot["time"] for snapshot in snapshots], dtype=float)
+    if np.any(np.diff(times) <= 0.0):
+        raise ValueError("GKW igh matrix dump times must be strictly increasing")
+    entry_parts = []
+    for snapshot_index, snapshot in enumerate(snapshots):
+        count = snapshot["matrix_value"].shape[0]
+        entry_parts.append(
+            {
+                **snapshot,
+                "snapshot_index": np.full(count, snapshot_index, dtype=np.int32),
+            }
+        )
+    return GkwIghMatrixTrace(
+        steps=jnp.asarray(steps, dtype=jnp.int32),
+        times=jnp.asarray(times, dtype=jnp.float64),
+        snapshot_index=jnp.asarray(
+            np.concatenate([part["snapshot_index"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        element_index=jnp.asarray(
+            np.concatenate([part["element_index"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        row_index=jnp.asarray(
+            np.concatenate([part["row_index"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        col_index=jnp.asarray(
+            np.concatenate([part["col_index"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        row_z=jnp.asarray(np.concatenate([part["row_z"] for part in entry_parts]), dtype=jnp.int32),
+        row_mu=jnp.asarray(np.concatenate([part["row_mu"] for part in entry_parts]), dtype=jnp.int32),
+        row_vpar=jnp.asarray(
+            np.concatenate([part["row_vpar"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        col_z=jnp.asarray(np.concatenate([part["col_z"] for part in entry_parts]), dtype=jnp.int32),
+        col_mu=jnp.asarray(np.concatenate([part["col_mu"] for part in entry_parts]), dtype=jnp.int32),
+        col_vpar=jnp.asarray(
+            np.concatenate([part["col_vpar"] for part in entry_parts]),
+            dtype=jnp.int32,
+        ),
+        term_id=jnp.asarray(np.concatenate([part["term_id"] for part in entry_parts]), dtype=jnp.int32),
+        matrix_value=jnp.asarray(
+            np.concatenate([part["matrix_value"] for part in entry_parts]),
+            dtype=jnp.complex128,
+        ),
+        source=source or str(files[0].parent),
+        notes=notes or "patched GKW selected-row igh matrix trace",
+    )
+
+
 def run_cyclone_base_case_selected_state_trace(
     *,
     n_z: int = 48,
@@ -4356,6 +4529,135 @@ def run_cyclone_base_case_same_state_igh_replay_audit(
             "jhg_interior, igh_zero_two, igh_two, and diffus; "
             f"disp_par={float(metadata['disp_par']):g}, "
             f"disp_vp={_cyclone_velocity_recurrence_rate(metadata, None, parallel_derivative_model):g}"
+        ),
+    )
+
+
+def compare_gkw_igh_matrix_trace_to_stencil(
+    matrix_trace: GkwIghMatrixTrace,
+    *,
+    tolerance: float = 1.0e-12,
+    target: BenchmarkTarget | None = None,
+) -> GkwIghMatrixComparisonReport:
+    """Compare dumped GKW compressed ``igh`` matrix entries to solver stencil coefficients."""
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    n_vpar = int(jnp.max(matrix_trace.row_vpar))
+    n_mu = int(jnp.max(matrix_trace.row_mu))
+    n_z = int(jnp.max(matrix_trace.row_z))
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            "gkw_igh",
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model="gkw_igh",
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(metadata.get("initial_profile", "cosine2")),
+    )
+    ixzero = int(setup["fourier"].ixzero)
+    selected = int(setup["selected_ky_index"])
+    gkw_igh_stencil = setup["precompute"].rhs.gkw_igh_stencil
+    expected = np.asarray(
+        gkw_igh_stencil.coefficients[
+            :, :, 0, :, :, :, ixzero, selected
+        ],
+        dtype=np.complex128,
+    )
+    valid_v_shift = np.asarray(gkw_igh_stencil.valid_v_shift, dtype=bool)
+    valid_z_shift = np.asarray(
+        setup["precompute"].rhs.gkw_parallel_stencil.valid_shift[
+            :, :, ixzero, selected
+        ],
+        dtype=bool,
+    )
+    expected = expected.copy()
+    for v_shift_index in range(5):
+        expected[v_shift_index, :, ~valid_v_shift[v_shift_index], :, :] = 0.0
+    for z_shift_index, delta_z in enumerate(range(-2, 3)):
+        expected[:, z_shift_index, :, :, ~valid_z_shift[delta_z + 4]] = 0.0
+    n_time = int(jnp.asarray(matrix_trace.steps).shape[0])
+    observed = np.zeros((n_time, 5, 5, n_vpar, n_mu, n_z), dtype=np.complex128)
+
+    snapshot_index = np.asarray(matrix_trace.snapshot_index, dtype=np.int64)
+    row_vpar = np.asarray(matrix_trace.row_vpar, dtype=np.int64) - 1
+    row_mu = np.asarray(matrix_trace.row_mu, dtype=np.int64) - 1
+    row_z = np.asarray(matrix_trace.row_z, dtype=np.int64) - 1
+    col_vpar = np.asarray(matrix_trace.col_vpar, dtype=np.int64) - 1
+    col_mu = np.asarray(matrix_trace.col_mu, dtype=np.int64) - 1
+    col_z = np.asarray(matrix_trace.col_z, dtype=np.int64) - 1
+    values = np.asarray(matrix_trace.matrix_value, dtype=np.complex128)
+    selected_column = (col_vpar >= 0) & (col_mu >= 0) & (col_z >= 0)
+    same_mu = selected_column & (col_mu == row_mu)
+    delta_v = col_vpar - row_vpar
+    delta_z = col_z - row_z
+    valid_shift = same_mu & (-2 <= delta_v) & (delta_v <= 2) & (-2 <= delta_z) & (delta_z <= 2)
+    for entry in np.nonzero(valid_shift)[0]:
+        observed[
+            snapshot_index[entry],
+            delta_v[entry] + 2,
+            delta_z[entry] + 2,
+            row_vpar[entry],
+            row_mu[entry],
+            row_z[entry],
+        ] += values[entry]
+
+    expected_all = np.broadcast_to(expected, observed.shape)
+    coefficient_error = np.max(np.abs(observed - expected_all))
+    unexpected_column_count = float(np.count_nonzero(~valid_shift))
+    raw_dump_entry_count = float(values.shape[0])
+    observed_entry_count = float(np.count_nonzero(np.abs(observed) > 1.0e-14))
+    expected_entry_count = float(n_time * np.count_nonzero(np.abs(expected) > 1.0e-14))
+    entry_count_error = abs(observed_entry_count - expected_entry_count)
+    field_names = (
+        "coefficient_max_abs_error",
+        "invalid_or_nonlocal_column_count",
+        "entry_count_error",
+        "observed_nonzero_entry_count",
+        "expected_nonzero_entry_count",
+        "raw_dump_entry_count",
+        "observed_matrix_max_norm",
+        "expected_stencil_max_norm",
+    )
+    field_errors = jnp.asarray(
+        [
+            coefficient_error,
+            unexpected_column_count,
+            entry_count_error,
+            observed_entry_count,
+            expected_entry_count,
+            raw_dump_entry_count,
+            np.max(np.abs(observed)),
+            np.max(np.abs(expected)),
+        ],
+        dtype=jnp.float64,
+    )
+    max_abs_error = jnp.asarray(
+        max(coefficient_error, unexpected_column_count, entry_count_error),
+        dtype=jnp.float64,
+    )
+    return GkwIghMatrixComparisonReport(
+        field_errors=field_errors,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        field_names=field_names,
+        notes=(
+            "compressed selected-row GKW igh_or_term_i matrix entries compared "
+            "against solver precompute.gkw_igh_stencil coefficients; "
+            f"n_time={n_time}, n_vpar={n_vpar}, n_mu={n_mu}, n_z={n_z}"
         ),
     )
 
@@ -9778,6 +10080,23 @@ def _rhs_apply_dump_files(paths) -> tuple[Path, ...]:
     return files
 
 
+def _igh_matrix_dump_files(paths) -> tuple[Path, ...]:
+    if isinstance(paths, (str, Path)):
+        path = Path(paths)
+        if path.is_dir():
+            files = tuple(sorted(path.glob("stellarator_gk_igh_matrix_*.dat")))
+        else:
+            files = (path,)
+    else:
+        files = tuple(Path(path) for path in paths)
+    if not files:
+        raise ValueError("no GKW igh matrix files found")
+    missing = [str(path) for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"GKW igh matrix files not found: {missing}")
+    return files
+
+
 def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
     rows = _numeric_rows(path)
     if not rows:
@@ -9832,6 +10151,54 @@ def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
         "time": float(times[0]),
         "total_action": total_action,
         "term_actions": term_actions,
+    }
+
+
+def _load_gkw_igh_matrix_file(path: Path) -> dict[str, object]:
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError(f"{path} contains no igh matrix rows")
+    array = np.asarray(rows, dtype=float)
+    if array.shape[1] < 14:
+        raise ValueError("GKW igh matrix rows must have at least fourteen columns")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{path} contains non-finite igh matrix values")
+    steps = array[:, 0].astype(np.int64)
+    times = array[:, 1]
+    if np.unique(steps).size != 1 or np.unique(times).size != 1:
+        raise ValueError(f"{path} must contain a single step and time")
+    integer_columns = {
+        "element_index": array[:, 2],
+        "row_index": array[:, 3],
+        "col_index": array[:, 4],
+        "row_z": array[:, 5],
+        "row_mu": array[:, 6],
+        "row_vpar": array[:, 7],
+        "col_z": array[:, 8],
+        "col_mu": array[:, 9],
+        "col_vpar": array[:, 10],
+        "term_id": array[:, 11],
+    }
+    parsed = {
+        name: values.astype(np.int32)
+        for name, values in integer_columns.items()
+    }
+    for name in ("element_index", "row_index", "col_index", "row_z", "row_mu", "row_vpar"):
+        if np.any(parsed[name] < 1):
+            raise ValueError(f"GKW igh matrix {name} values must be positive")
+    if np.any(parsed["term_id"] != 1):
+        raise ValueError("GKW igh matrix dump must only contain term_id=1 entries")
+    selected_col = parsed["col_z"] > 0
+    if np.any(selected_col):
+        for name in ("col_z", "col_mu", "col_vpar"):
+            if np.any(parsed[name][selected_col] < 1):
+                raise ValueError(f"GKW igh matrix selected {name} values must be positive")
+    matrix_value = array[:, 12] + 1j * array[:, 13]
+    return {
+        "step": int(steps[0]),
+        "time": float(times[0]),
+        **parsed,
+        "matrix_value": matrix_value.astype(np.complex128),
     }
 
 
