@@ -3776,6 +3776,28 @@ def load_gkw_selected_mode_rhs_trace(
     )
 
 
+def load_gkw_selected_mode_rhs_apply_trace(
+    paths,
+    *,
+    source: str | None = None,
+    notes: str = "",
+) -> GkwSelectedModeRhsTrace:
+    """Load patched GKW selected-mode internal ``calculate_rhs`` total dumps."""
+
+    files = _rhs_apply_dump_files(paths)
+    snapshots = [_load_gkw_rhs_apply_file(path) for path in files]
+    total_action = np.stack([snapshot["total_action"] for snapshot in snapshots])
+    return GkwSelectedModeRhsTrace(
+        steps=jnp.asarray([snapshot["step"] for snapshot in snapshots], dtype=jnp.int32),
+        times=jnp.asarray([snapshot["time"] for snapshot in snapshots], dtype=jnp.float64),
+        total_action=jnp.asarray(total_action, dtype=jnp.complex128),
+        term_actions=jnp.asarray(total_action[:, None, :, :, :], dtype=jnp.complex128),
+        term_names=("calculate_rhs_total",),
+        source=source or str(files[0].parent),
+        notes=notes or "patched GKW selected-mode calculate_rhs total trace",
+    )
+
+
 def run_cyclone_base_case_selected_state_trace(
     *,
     n_z: int = 48,
@@ -9739,6 +9761,23 @@ def _rhs_trace_dump_files(paths) -> tuple[Path, ...]:
     return files
 
 
+def _rhs_apply_dump_files(paths) -> tuple[Path, ...]:
+    if isinstance(paths, (str, Path)):
+        path = Path(paths)
+        if path.is_dir():
+            files = tuple(sorted(path.glob("stellarator_gk_rhs_apply_*.dat")))
+        else:
+            files = (path,)
+    else:
+        files = tuple(Path(path) for path in paths)
+    if not files:
+        raise ValueError("no GKW RHS apply files found")
+    missing = [str(path) for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"GKW RHS apply files not found: {missing}")
+    return files
+
+
 def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
     rows = _numeric_rows(path)
     if not rows:
@@ -9793,6 +9832,51 @@ def _load_gkw_rhs_trace_file(path: Path) -> dict[str, object]:
         "time": float(times[0]),
         "total_action": total_action,
         "term_actions": term_actions,
+    }
+
+
+def _load_gkw_rhs_apply_file(path: Path) -> dict[str, object]:
+    rows = _numeric_rows(path)
+    if not rows:
+        raise ValueError(f"{path} contains no RHS apply rows")
+    array = np.asarray(rows, dtype=float)
+    if array.shape[1] < 7:
+        raise ValueError("GKW RHS apply rows must have at least seven columns")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{path} contains non-finite RHS apply values")
+    steps = array[:, 0].astype(np.int64)
+    times = array[:, 1]
+    if np.unique(steps).size != 1 or np.unique(times).size != 1:
+        raise ValueError(f"{path} must contain a single step and time")
+    iz = array[:, 2].astype(np.int64)
+    imu = array[:, 3].astype(np.int64)
+    ivpar = array[:, 4].astype(np.int64)
+    if np.any(iz < 1) or np.any(imu < 1) or np.any(ivpar < 1):
+        raise ValueError("GKW RHS apply indices must be one-based positive integers")
+    n_z = int(np.max(iz))
+    n_mu = int(np.max(imu))
+    n_vpar = int(np.max(ivpar))
+    expected_rows = n_z * n_mu * n_vpar
+    if array.shape[0] != expected_rows:
+        raise ValueError(
+            f"{path} has {array.shape[0]} rows; expected {expected_rows} from index extents"
+        )
+    total_action = np.zeros((n_vpar, n_mu, n_z), dtype=np.complex128)
+    seen = np.zeros((n_vpar, n_mu, n_z), dtype=bool)
+    for row in array:
+        z_index = int(row[2]) - 1
+        mu_index = int(row[3]) - 1
+        vpar_index = int(row[4]) - 1
+        if seen[vpar_index, mu_index, z_index]:
+            raise ValueError(f"{path} contains duplicate RHS apply indices")
+        total_action[vpar_index, mu_index, z_index] = row[5] + 1j * row[6]
+        seen[vpar_index, mu_index, z_index] = True
+    if not np.all(seen):
+        raise ValueError(f"{path} does not cover the full selected-mode RHS apply grid")
+    return {
+        "step": int(steps[0]),
+        "time": float(times[0]),
+        "total_action": total_action,
     }
 
 

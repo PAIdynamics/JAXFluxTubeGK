@@ -36,6 +36,7 @@ class PreparedGkwCosine2Run:
     selected_state_dump: bool = False
     rhs_trace: bool = False
     rhs_trace_state_dump: bool = False
+    rhs_trace_internal_apply: bool = False
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600)
     selector: str = PATCHED_SELECTOR
 
@@ -78,6 +79,7 @@ def prepare_gkw_cosine2_run(
     selected_state_dump: bool = False,
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
+    rhs_trace_internal_apply: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> PreparedGkwCosine2Run:
     """Copy GKW, patch only the copy, and install a ``finit='cosin2'`` input.
@@ -99,6 +101,8 @@ def prepare_gkw_cosine2_run(
         raise ValueError("output_root must be different from source_root")
     if rhs_trace_state_dump and not rhs_trace:
         raise ValueError("rhs_trace_state_dump requires rhs_trace=True")
+    if rhs_trace_internal_apply and not rhs_trace:
+        raise ValueError("rhs_trace_internal_apply requires rhs_trace=True")
     if output_root.exists():
         if not overwrite:
             raise FileExistsError(f"{output_root} already exists; pass --overwrite")
@@ -115,6 +119,7 @@ def prepare_gkw_cosine2_run(
             output_root / "src" / "exp_integration.F90",
             rhs_trace_steps,
             state_dump=rhs_trace_state_dump,
+            internal_apply=rhs_trace_internal_apply,
         )
     if multi_time_distr or state_trace or selected_state_dump:
         patched_diagnostic = output_root / "src" / "diagnostic.F90"
@@ -133,6 +138,7 @@ def prepare_gkw_cosine2_run(
         selected_state_dump=selected_state_dump,
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
+        rhs_trace_internal_apply=rhs_trace_internal_apply,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
     return PreparedGkwCosine2Run(
@@ -146,6 +152,7 @@ def prepare_gkw_cosine2_run(
         selected_state_dump=selected_state_dump,
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
+        rhs_trace_internal_apply=rhs_trace_internal_apply,
         rhs_trace_steps=tuple(int(step) for step in rhs_trace_steps),
     )
 
@@ -480,6 +487,7 @@ def add_rhs_trace_exp_integration_patch(
     steps: tuple[int, ...] = (20, 800, 1600),
     *,
     state_dump: bool = False,
+    internal_apply: bool = False,
 ) -> bool:
     """Patch copied GKW time advancement to dump selected-mode RHS term actions."""
 
@@ -488,6 +496,10 @@ def add_rhs_trace_exp_integration_patch(
         if state_dump and "stellarator_gk rhs trace state dump" not in text:
             raise ValueError(
                 f"{exp_integration_path} is already patched without rhs trace state dump"
+            )
+        if internal_apply and "stellarator_gk rhs trace internal apply" not in text:
+            raise ValueError(
+                f"{exp_integration_path} is already patched without internal apply dump"
             )
         return False
 
@@ -506,6 +518,7 @@ def add_rhs_trace_exp_integration_patch(
         + "  ! stellarator_gk rhs trace exp_integration patch: write selected-mode\n"
         + "  ! dtim-scaled term actions after end-of-window normalization.\n"
         + ("  call stellarator_gk_rhs_trace_state_output\n" if state_dump else "")
+        + ("  call stellarator_gk_rhs_apply_output\n" if internal_apply else "")
         + "  call stellarator_gk_rhs_trace_output\n\n"
     )
     if call_marker not in text:
@@ -522,6 +535,8 @@ def add_rhs_trace_exp_integration_patch(
     subroutine = ""
     if state_dump:
         subroutine += _rhs_trace_state_subroutine(step_values) + "\n"
+    if internal_apply:
+        subroutine += _rhs_trace_apply_subroutine(step_values) + "\n"
     subroutine += _rhs_trace_subroutine(step_values)
     text = text.replace(module_marker, subroutine + "\n" + module_marker, 1)
     exp_integration_path.write_text(text, encoding="utf-8")
@@ -731,6 +746,56 @@ end subroutine stellarator_gk_rhs_trace_state_output
 """
 
 
+def _rhs_trace_apply_subroutine(steps: tuple[int, ...]) -> str:
+    keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
+    return rf"""
+subroutine stellarator_gk_rhs_apply_output
+
+  use control,      only : time, ntotstep
+  use dist,         only : fdisi, indx, nsolc
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+
+  integer :: iz, imu, ivpar, irow, lun, ierr
+  character (len=64) :: apply_file
+  complex, allocatable :: rhs_internal(:)
+  logical :: keep_snapshot
+
+  ! stellarator_gk rhs trace internal apply: run GKW calculate_rhs on the
+  ! post-normalization state and dump the actual selected-row RHS totals.
+  keep_snapshot = .false.
+{keep_checks}
+  if (.not. keep_snapshot) return
+
+  allocate(rhs_internal(nsolc), stat=ierr)
+  if (ierr .ne. 0) stop 'Could not allocate rhs_internal in stellarator_gk_rhs_apply_output'
+  call calculate_rhs(fdisi, rhs_internal)
+
+  if (root_processor) then
+     write(apply_file,'("stellarator_gk_rhs_apply_",I8.8,".dat")') ntotstep
+     call get_free_lun(lun)
+     open(lun, FILE=trim(apply_file), STATUS='unknown')
+     write(lun,'(A)') '# step time iz imu ivpar real_calculate_rhs imag_calculate_rhs'
+     do iz = 1, ns
+        do imu = 1, nmu
+           do ivpar = 1, nvpar
+              irow = indx(1,1,iz,imu,ivpar,1)
+              write(lun,'(I12,1X,1PE22.14,3(1X,I8),2(1X,1PE22.14))') &
+                   & ntotstep, time, iz, imu, ivpar, real(rhs_internal(irow)), &
+                   & aimag(rhs_internal(irow))
+           end do
+        end do
+     end do
+     close(lun)
+  end if
+
+  deallocate(rhs_internal)
+
+end subroutine stellarator_gk_rhs_apply_output
+"""
+
+
 def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
     generated_names = {
         ".DS_Store",
@@ -751,6 +816,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         or name.startswith("stellarator_gk_selected_state_")
         or name.startswith("stellarator_gk_rhs_trace_")
         or name.startswith("stellarator_gk_rhs_state_")
+        or name.startswith("stellarator_gk_rhs_apply_")
         or name.endswith(suffixes)
         or name == "__pycache__"
     }
@@ -764,6 +830,7 @@ def _write_run_readme(
     selected_state_dump: bool = False,
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
+    rhs_trace_internal_apply: bool = False,
     rhs_trace_steps: tuple[int, ...] = (20, 800, 1600),
 ) -> None:
     extra = ""
@@ -841,6 +908,22 @@ stellarator_gk_rhs_state_00001600.dat
 These files use the selected-state row format and are intended as a
 trace-timing discriminator against later diagnostic selected-state dumps.
 """
+        if rhs_trace_internal_apply:
+            extra += """
+The RHS trace patch also writes an internal `calculate_rhs` total-action trace
+on the same post-normalization state:
+
+```text
+stellarator_gk_rhs_apply_00000020.dat
+stellarator_gk_rhs_apply_00000800.dat
+stellarator_gk_rhs_apply_00001600.dat
+```
+
+These files record the selected-row totals returned by GKW's own
+`calculate_rhs(fdisi, rhs_internal)` call, and are intended to discriminate
+RHS trace reconstruction from the matrix-vector product actually applied by
+GKW.
+"""
     readme = output_root / "README_stellarator_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
@@ -908,6 +991,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--rhs-trace-internal-apply",
+        action="store_true",
+        help=(
+            "With --rhs-trace, also write "
+            "stellarator_gk_rhs_apply_<step>.dat calculate_rhs totals."
+        ),
+    )
+    parser.add_argument(
         "--rhs-trace-steps",
         default="20,800,1600",
         help="Comma-separated positive ntotstep values for --rhs-trace output.",
@@ -936,6 +1027,7 @@ def main() -> None:
         selected_state_dump=args.selected_state_dump,
         rhs_trace=args.rhs_trace,
         rhs_trace_state_dump=args.rhs_trace_state_dump,
+        rhs_trace_internal_apply=args.rhs_trace_internal_apply,
         rhs_trace_steps=_parse_step_list(args.rhs_trace_steps),
     )
     print(f"prepared patched GKW tree: {prepared.output_root}")

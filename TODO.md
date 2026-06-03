@@ -679,12 +679,20 @@ state-history and benchmark-scan inconsistencies:
   selected-state dumps agree exactly on the selected rows. This rules out
   post-normalization/diagnostic write-site state timing as the source of the
   remaining `igh_or_term_i` gap.
-- [ ] Add an internal `calculate_rhs` row-application trace for the selected
-  rows: record the matrix-vector product contribution as GKW actually applies
-  compressed section `n2`, and compare it to the reconstructed
-  post-normalization RHS trace. This will separate matrix-entry tagging or
-  reconstruction mistakes from a mismatch in the matrix built by
-  `linear_terms.F90::igh`.
+- [x] Add an internal `calculate_rhs` row-application trace for the selected
+  rows. The patched GKW run now writes
+  `stellarator_gk_rhs_apply_<step>.dat` by calling
+  `calculate_rhs(fdisi, rhs_internal)` on the same post-normalization state.
+  The internal totals and reconstructed RHS trace totals agree to
+  `1.0191500421363742e-17`, while same-state replay against the solver/source
+  reconstruction still fails at `8.905204720648109e-07`. This rules out RHS
+  trace reconstruction and write-site timing as the remaining cause.
+- [ ] Dump and compare the actual compressed `igh_or_term_i` matrix entries
+  feeding the selected rows after GKW matrix construction/compression. Record
+  `(ii,jj,mat,stellarator_gk_mat_term)` for the selected rows, separate
+  pre-compression and post-compression forms if needed, and compare those
+  coefficients against the source-level `linear_terms.F90::igh` reconstruction
+  used by `CycloneSameStateIghReplayAudit`.
 - [ ] If same-state RHS/action replay reaches roundoff, add a one-window replay
   test: initialize the solver from a GKW selected state immediately after a
   diagnostic normalization, advance one GKW diagnostic window with the same RK4

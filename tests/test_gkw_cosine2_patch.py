@@ -28,6 +28,7 @@ from stellarator_gk import (
     compare_selected_mode_rhs_traces,
     compare_selected_mode_state_traces,
     load_gkw_parallel_phi_trace,
+    load_gkw_selected_mode_rhs_apply_trace,
     load_gkw_selected_mode_rhs_trace,
     load_gkw_selected_mode_state_trace,
     load_gkw_state_trace,
@@ -426,6 +427,49 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_state_dump(tmp_path: Path) 
     ).read_text(encoding="utf-8")
 
 
+def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_internal_apply(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "gkw"
+    (source_root / "src").mkdir(parents=True)
+    (source_root / "src" / "init.f90").write_text(_MINIMAL_INIT, encoding="utf-8")
+    (source_root / "src" / "diagnostic.F90").write_text(
+        _MINIMAL_DIAGNOSTIC, encoding="utf-8"
+    )
+    (source_root / "src" / "matdat.F90").write_text(_MINIMAL_MATDAT, encoding="utf-8")
+    (source_root / "src" / "linear_terms.F90").write_text(
+        _MINIMAL_LINEAR_TERMS, encoding="utf-8"
+    )
+    source_exp_integration = source_root / "src" / "exp_integration.F90"
+    source_exp_integration.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+    input_path = tmp_path / "selected_ky_input.dat"
+    input_path.write_text("&SPCGENERAL\n finit = 'cosine'\n /\n", encoding="utf-8")
+
+    prepared = prepare_gkw_cosine2_run(
+        source_root=source_root,
+        output_root=tmp_path / "patched-gkw",
+        input_path=input_path,
+        rhs_trace=True,
+        rhs_trace_internal_apply=True,
+        rhs_trace_steps=(20, 40),
+    )
+
+    assert prepared.rhs_trace_internal_apply
+    exp_integration_text = (
+        prepared.output_root / "src" / "exp_integration.F90"
+    ).read_text(encoding="utf-8")
+    assert "call stellarator_gk_rhs_apply_output" in exp_integration_text
+    assert "subroutine stellarator_gk_rhs_apply_output" in exp_integration_text
+    assert "call calculate_rhs(fdisi, rhs_internal)" in exp_integration_text
+    assert "stellarator_gk_rhs_apply_" in exp_integration_text
+    assert "stellarator_gk_rhs_apply_" not in source_exp_integration.read_text(
+        encoding="utf-8"
+    )
+    assert "calculate_rhs(fdisi, rhs_internal)" in (
+        prepared.output_root / "README_stellarator_gk_cosin2.md"
+    ).read_text(encoding="utf-8")
+
+
 def test_cosin2_patch_is_idempotent(tmp_path: Path) -> None:
     init_path = tmp_path / "init.f90"
     init_path.write_text(_MINIMAL_INIT, encoding="utf-8")
@@ -499,6 +543,20 @@ def test_rhs_trace_state_dump_patch_is_idempotent(tmp_path: Path) -> None:
     first_patch = exp_integration_path.read_text(encoding="utf-8")
     assert not add_rhs_trace_exp_integration_patch(
         exp_integration_path, (20, 40), state_dump=True
+    )
+    assert exp_integration_path.read_text(encoding="utf-8") == first_patch
+
+
+def test_rhs_trace_internal_apply_patch_is_idempotent(tmp_path: Path) -> None:
+    exp_integration_path = tmp_path / "exp_integration.F90"
+    exp_integration_path.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+
+    assert add_rhs_trace_exp_integration_patch(
+        exp_integration_path, (20, 40), internal_apply=True
+    )
+    first_patch = exp_integration_path.read_text(encoding="utf-8")
+    assert not add_rhs_trace_exp_integration_patch(
+        exp_integration_path, (20, 40), internal_apply=True
     )
     assert exp_integration_path.read_text(encoding="utf-8") == first_patch
 
@@ -736,6 +794,29 @@ def test_gkw_selected_mode_rhs_trace_loader(tmp_path: Path) -> None:
     np.testing.assert_allclose(trace.term_actions[0, 7, 1, 0, 0], 7.211 + 8j)
 
 
+def test_gkw_selected_mode_rhs_apply_trace_loader(tmp_path: Path) -> None:
+    path = tmp_path / "stellarator_gk_rhs_apply_00000020.dat"
+    rows = ["# step time iz imu ivpar real_calculate_rhs imag_calculate_rhs"]
+    for iz in (1, 2):
+        for imu in (1, 2):
+            for ivpar in (1, 2):
+                value = ivpar + 0.1 * imu + 0.01 * iz + 1j * (iz - imu)
+                rows.append(
+                    f"20 6.0e-2 {iz} {imu} {ivpar} "
+                    f"{value.real:.16e} {value.imag:.16e}"
+                )
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    trace = load_gkw_selected_mode_rhs_apply_trace(tmp_path)
+
+    assert trace.steps.tolist() == [20]
+    assert trace.term_names == ("calculate_rhs_total",)
+    assert trace.total_action.shape == (1, 2, 2, 2)
+    assert trace.term_actions.shape == (1, 1, 2, 2, 2)
+    np.testing.assert_allclose(trace.total_action[0, 1, 0, 1], 2.12 + 1j)
+    np.testing.assert_allclose(trace.term_actions[0, 0], trace.total_action[0])
+
+
 def test_patched_cosin2_rhs_trace_fixtures_load() -> None:
     trace = load_gkw_selected_mode_rhs_trace(
         ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
@@ -747,6 +828,28 @@ def test_patched_cosin2_rhs_trace_fixtures_load() -> None:
     assert trace.term_actions.shape == (3, 9, 32, 8, 48)
     assert trace.term_names[7] == "vpgrphi"
     assert float(np.max(np.abs(np.asarray(trace.total_action)))) > 0.0
+
+
+def test_patched_cosin2_rhs_apply_fixtures_match_reconstructed_rhs_trace() -> None:
+    apply_trace = load_gkw_selected_mode_rhs_apply_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_apply"
+    )
+    rhs_trace = load_gkw_selected_mode_rhs_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
+    )
+
+    np.testing.assert_array_equal(
+        apply_trace.steps,
+        np.asarray([20, 800, 1600], dtype=np.int32),
+    )
+    assert apply_trace.term_names == ("calculate_rhs_total",)
+    assert apply_trace.total_action.shape == (3, 32, 8, 48)
+    np.testing.assert_allclose(
+        apply_trace.total_action,
+        rhs_trace.total_action,
+        atol=2.0e-17,
+        rtol=0.0,
+    )
 
 
 def test_patched_cosin2_midrun_state_and_rhs_fixtures_load() -> None:

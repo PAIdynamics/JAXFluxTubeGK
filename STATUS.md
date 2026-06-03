@@ -572,6 +572,9 @@ Expected file changes:
 - same-timing RHS selected-state fixtures
   `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_state/` for trace-timing
   discrimination,
+- internal `calculate_rhs` selected-row total fixtures
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_apply/` for reconstruction
+  parity,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `scripts/prepare_gkw_cosine2_run.py`,
@@ -587,6 +590,47 @@ Expected tests:
 - continued reduced DESC objective and gradient checks.
 
 ## Round Log
+
+### 2026-06-03: Added Internal `calculate_rhs` Apply Trace
+
+- Implemented optional `--rhs-trace-internal-apply` support in
+  `scripts/prepare_gkw_cosine2_run.py`.
+  - The copied `exp_integration.F90` can now emit
+    `stellarator_gk_rhs_apply_<step>.dat`.
+  - Each file is produced by calling GKW's own
+    `calculate_rhs(fdisi, rhs_internal)` on the same post-normalization state
+    used by the selected RHS trace, then dumping selected-row totals.
+- Added `load_gkw_selected_mode_rhs_apply_trace`, exported through
+  `stellarator_gk`, returning a one-term `GkwSelectedModeRhsTrace` with
+  `term_names=("calculate_rhs_total",)`.
+- Generated a real patched GKW run in
+  `/private/tmp/stellarator_gk_gkw_cosin2_rhs_apply_trace` with:
+  - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /tmp/stellarator_gk_gkw_cosin2_rhs_apply_trace --overwrite --selected-state-dump --rhs-trace --rhs-trace-state-dump --rhs-trace-internal-apply --rhs-trace-steps 20,800,1600`
+  - `make FC=gfortran 'FFLAGS=-fdefault-real-8 -O2' FFTLIB=nofft PARALLEL=nompi 'LDFLAGS='`
+  - `./gkw.x`
+- Added internal apply fixtures:
+  `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_apply/`.
+- x64 comparison result:
+  - internal `calculate_rhs` total vs reconstructed RHS trace total:
+    `1.0191500421363742e-17`,
+  - same-state replay vs solver/source reconstruction remains
+    `8.905204720648109e-07`,
+  - same-timing state vs diagnostic selected-state max difference in this run:
+    `7.816041058999314e-16`.
+- Interpretation: the remaining selected-row mismatch is not caused by
+  post-normalization state timing or by the reconstructed RHS trace summation.
+  GKW's own `calculate_rhs` total agrees with the trace; the next target is the
+  actual compressed `igh_or_term_i` matrix entries created during
+  `linear_terms.F90::igh`/`matdat.F90` construction and compression.
+- Verification run this round:
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py::test_prepare_gkw_cosine2_run_can_patch_rhs_trace_internal_apply tests/test_gkw_cosine2_patch.py::test_rhs_trace_internal_apply_patch_is_idempotent tests/test_gkw_cosine2_patch.py::test_gkw_selected_mode_rhs_apply_trace_loader tests/test_gkw_cosine2_patch.py::test_patched_cosin2_rhs_apply_fixtures_match_reconstructed_rhs_trace -q`
+  - `uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `PYTHONPATH=src JAX_ENABLE_X64=1 .venv/bin/python -c "... rhs_apply vs rhs_trace comparison ..."`
+- Verification result:
+  - `ruff`: all checks passed,
+  - focused internal-apply tests: `4 passed in 0.65s`.
+  - full cosine2 patch/fixture suite: `33 passed in 55.20s`.
 
 ### 2026-06-03: Added Same-Timing RHS State Trace Discriminator
 
