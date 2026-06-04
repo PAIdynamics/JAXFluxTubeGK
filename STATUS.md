@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 
 ## Current State
 
@@ -387,10 +387,19 @@ on identical imported GKW states; it passes with
 `gkw_vs_solver_fused_igh=1.807370631148948e-18`,
 `gkw_vs_source_fused_igh=1.7482234731686756e-18`,
 `solver_vs_source_fused_igh=1.5938630469618245e-19`, and
-`source_fused_split_error=5.421010862427522e-20`. The next narrowed
-consistency target is therefore not operator/action parity, but one-window
-evolution replay from an imported GKW selected state to localize the remaining
-full state-history and velocity-slice mismatch.
+`source_fused_split_error=5.421010862427522e-20`. The imported-state
+one-window replay now also passes: the early 20-to-40 window closes with
+max phase-aligned gate error `1.115250317428544e-09`, and the mid-run
+780-to-800-to-820 windows close with max error
+`2.0224925626889334e-10`. The initial/first-window contract now also passes:
+GKW pre/post initial `normalize(2)` selected states are identical, the solver
+initialized distribution matches GKW at `4.87890977618477e-19`, GKW stores
+zero selected `phi` at step 0 while the solver's self-consistent solved field
+has max norm `0.014983892939428313`, and replay from GKW step 0 to step 20
+closes with max gate error `1.1708576174967147e-09`. The next narrowed
+consistency target is therefore not operator/action parity, RK4/window
+normalization cadence, or initialization, but the row-normalized
+`parallel_phi.dat` profile-shape gate and tolerance ladder.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -435,11 +444,13 @@ The repository currently contains:
 - `examples/audit_cyclone_cosin2_term_vii_field_conventions.py`: controlled Term VII field-variable convention audit against patched-GKW `cosin2` velocity slices.
 - `examples/audit_cyclone_cosin2_velocity_phase.py`: global phase/complex-scale alignment audit for patched-GKW `cosin2` velocity slices.
 - `examples/compare_gkw_selected_state.py`: sampled full selected-mode GKW state dump versus solver state comparison with snapshot-wise phase alignment.
-- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics/source to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots, compact state traces, full selected-mode state dumps, selected-mode RHS/source action traces, compressed `igh` matrix dumps, and row-level `igh` coefficient-input dumps.
+- `scripts/prepare_gkw_cosine2_run.py`: non-destructive helper that copies GKW to a scratch tree, adds the six-character `finit='cosin2'` initializer, writes a matched selected-`ky` input, and can optionally patch copied diagnostics/source to emit multi-time `distr*_<ntotstep>.dat` velocity-slice snapshots, compact state traces, full selected-mode state dumps, initial pre/post-normalization selected-state dumps, selected-mode RHS/source action traces, compressed `igh` matrix dumps, and row-level `igh` coefficient-input dumps.
 - `scripts/export_gyaradax_cyclone_trace.py`: optional Gyaradax trace exporter with reduced, production-control-smoke, full production-control, and explicit `finit` profiles.
 - `figures/validation_gate_status.pdf`, `figures/rh_plateau_demo.csv`, `figures/validation_gate_summary.csv`, `figures/cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_reduced.csv`, `figures/gyaradax_cyclone_trace_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke.csv`, `figures/gyaradax_cyclone_trace_production_control_smoke_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control.csv`, `figures/gyaradax_cyclone_trace_production_control_comparison.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine.csv`, `figures/gyaradax_cyclone_trace_production_control_gkw_cosine_comparison.csv`, `figures/gkw_simple_example_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_igh_cyclone_selected_ky_time_trace.csv`, `figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_comparison.csv`, `figures/gkw_cosin2_cyclone_selected_ky_time_trace.csv`, `figures/gkw_cosin2_cyclone_parallel_phi_profile_comparison.csv`, `figures/gkw_cosin2_cyclone_gap_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv`, `figures/gkw_cosin2_cyclone_velocity_series_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv`, `figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv`, `figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv`, `figures/gkw_cosin2_cyclone_velocity_phase_audit.csv`, `figures/cyclone_profile_operator_audit.csv`, `figures/cyclone_term_i_fortran_audit.csv`, `figures/cyclone_time_normalization_audit.csv`, `figures/cyclone_diagnostic_packing_audit.csv`, `figures/cyclone_matdat_matrix_audit.csv`, `figures/cyclone_coefficient_source_audit.csv`, `figures/cyclone_igh_arakawa_audit.csv`, `figures/cyclone_igh_arakawa_series_audit.csv`, `figures/cyclone_term_vii_mode_packing_audit.csv`, and `figures/cyclone_growth_diagnostic_convention_comparison.csv`: current reduced validation-gate and CBC trace result artifacts.
 - `fixtures/gkw_cyclone_selected_ky_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_time.dat`, and `fixtures/gkw_cyclone_selected_ky_parallel_phi.dat`: matched native-GKW selected-`ky` linear input, compact time diagnostic, and parallel `|phi|^2` diagnostic.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/`: sampled patched-GKW `cosin2` full selected-mode state dumps at steps 20, 800, and 1600.
+- `fixtures/gkw_cyclone_selected_ky_cosin2_initial_state/`: patched-GKW `cosin2` selected-mode state dumps immediately before and after the initial `normalize(2)` call, plus the matching step-20 first-window dump.
+- `fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state/`: adjacent patched-GKW `cosin2` full selected-mode state dumps at steps 20 and 40 for the first available one-window replay gate.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace/`: sampled patched-GKW `cosin2` selected-mode dtim-scaled RHS/source action traces at steps 20, 800, and 1600.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_igh_inputs/`: patched-GKW `cosin2` row-level `linear_terms.F90::igh` coefficient-input dump for the selected mode.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_linear_input.dat`, `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`, and `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat`: patched, non-destructive GKW `cosin2` selected-`ky` input and raw diagnostics for the solver/Gyaradax `cosine2` profile.
@@ -527,33 +538,33 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: use the now-passing RHS/action parity gates to isolate the remaining
-selected-mode state-history, velocity-slice, and parallel-profile mismatch.
-The next narrowed target is a one-window replay from imported GKW selected
-states:
+Goal: use the now-passing RHS/action, initialization, and one-window replay
+gates to isolate the remaining selected-mode state-history, velocity-slice,
+and parallel-profile mismatch. The next narrowed target is the explicit
+row-normalized `parallel_phi.dat` profile-shape gate:
 
-- initialize the solver from a GKW selected-state dump immediately after
-  diagnostic normalization,
-- advance exactly one GKW diagnostic window with the same RK4 step count,
-  timestep, field solve, and end-of-window normalization cadence,
-- compare the evolved solver state/field to the next GKW selected-state dump
-  for the early window and the mid-run 780/800/820 window fixtures,
+- promote the existing `parallel_phi.dat` comparison into a named validation
+  report/gate with a recorded tolerance ladder,
+- separate total-power normalization, row-normalized profile shape, circular
+  shifts/reversal, and phase/complex-scale invariance into distinct metrics,
+- record the current OPEN row-normalized profile-shape error and keep it out
+  of scalar growth gates until the profile convention is resolved,
 - keep the passing full RHS/action trace (`6.22e-12`), same-state replay
   (`2.35e-12`), mid-run same-state replay (`2.36e-12`), matrix trace
-  (`5.77e-15`), and input trace (`5.33e-15`) as guardrails,
-- promote the row-normalized `parallel_phi.dat` profile-shape comparison into
-  an explicit OPEN validation gate with a tolerance ladder,
-- after one-window replay is understood, add a multi-`ky` Cyclone/ITG scan gate
-  and then extend the benchmark ladder to a stellarator/TEM-style DESC/GX/GIST
-  geometry fixture.
+  (`5.77e-15`), input trace (`5.33e-15`), early one-window replay
+  (`1.12e-9`), mid-run one-window replay (`2.03e-10`), and first-window replay
+  (`1.17e-9`) as guardrails,
+- after the profile-shape gate is explicit, add a multi-`ky` Cyclone/ITG
+  scan gate and then extend the benchmark ladder to a stellarator/TEM-style
+  DESC/GX/GIST geometry fixture.
 
 Expected file changes:
 
-- selected-mode one-window replay helpers and tests in `benchmarks.py`,
-- optional one-window comparison example/CSV if useful for inspection,
-- `parallel_phi.dat` profile-shape gate/report updates,
-- no new GKW source patch unless the one-window replay shows a missing
-  diagnostic-timing datum,
+- `parallel_phi.dat` profile-shape gate/report updates in `benchmarks.py`,
+- optional `examples/compare_gkw_parallel_phi_profile.py` CSV updates if useful
+  for inspection,
+- no new operator/RHS source patch unless the profile-shape gate points to a
+  specific missing diagnostic or packing convention,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `src/stellarator_gk/benchmarks.py`,
@@ -562,12 +573,88 @@ Expected file changes:
 
 Expected tests:
 
-- focused one-window replay tests for steps 20→40 and 780→800/800→820,
+- retained one-window replay tests for steps 20→40, 780→800/800→820, and
+  0→20,
+- focused `parallel_phi.dat` profile-shape report/gate tests,
 - retained `tests/test_gkw_cosine2_patch.py` RHS/action parity gates,
 - retained selected Cyclone scalar growth, RH plateau, DESC/GX/eik geometry,
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-04: Closed GKW Initial and First-Window Contract
+
+- Added `--initial-state-dump` support to
+  `scripts/prepare_gkw_cosine2_run.py`. The copied GKW
+  `exp_integration.F90` now writes selected-mode state dumps immediately
+  before and after the first `normalize(2)` call:
+  - `stellarator_gk_initial_state_pre_normalize.dat`,
+  - `stellarator_gk_initial_state_post_normalize.dat`.
+- Generated
+  `fixtures/gkw_cyclone_selected_ky_cosin2_initial_state/` from a patched
+  serial/no-FFT GKW run, storing the pre-normalize, post-normalize, and
+  matching step-20 selected-state dumps.
+- Added `CycloneInitialStateContractReport` and
+  `run_cyclone_base_case_initial_state_contract`.
+- Results:
+  - GKW pre/post initial `normalize(2)` selected-state difference is zero,
+  - solver initialized selected distribution matches GKW post-initial state at
+    `4.87890977618477e-19`,
+  - GKW stores zero selected `phi` at step 0, while the solver's
+    self-consistent initial field solve has max norm
+    `0.014983892939428313`,
+  - first-window replay from GKW step 0 to step 20 passes with max gate error
+    `1.1708576174967147e-09`,
+  - first-window state phase-aligned error is
+    `2.0688965815476025e-11`, with relative \(L^2\)
+    `1.935596142002624e-10`.
+- Interpretation: the remaining selected-state/profile mismatch is not caused
+  by initialization, first normalization, same-state RHS/action, or one-window
+  RK4 evolution from imported GKW states. The next target is to make the
+  row-normalized `parallel_phi.dat` profile-shape comparison an explicit OPEN
+  gate with a tolerance ladder.
+- Commands run:
+  - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /private/tmp/stellarator_gk_gkw_cosin2_initial_state_trace --overwrite --initial-state-dump --selected-state-dump`
+  - `make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`
+  - `./gkw.x`
+  - `uv run ruff check scripts/prepare_gkw_cosine2_run.py src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_gkw_cosine2_patch.py::test_patched_cosin2_initial_state_fixtures_load tests/test_gkw_cosine2_patch.py::test_patched_cosin2_initial_state_contract_closes_first_window -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused initial-state tests passed: `2 passed in 12.85s`,
+  - focused GKW patch/parity file passed: `48 passed in 119.86s`,
+  - full x64 suite passed: `224 passed in 440.49s`.
+
+### 2026-06-04: Closed Imported-State One-Window Replay
+
+- Added `CycloneOneWindowReplayReport` and
+  `run_cyclone_base_case_one_window_replay` in `benchmarks.py`.
+- Added the adjacent early selected-state fixture
+  `fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state/` using the
+  patched GKW step-20 and step-40 dumps.
+- Added replay tests covering a solver-generated self-replay, the early
+  GKW 20-to-40 window, and the mid-run GKW 780-to-800-to-820 windows.
+- Results:
+  - solver-generated self-replay passes below `1e-12`,
+  - GKW 20-to-40 imported-state replay passes with max gate error
+    `1.115250317428544e-09`,
+  - GKW 780-to-800-to-820 imported-state replay passes with max gate error
+    `2.0224925626889334e-10`.
+- Interpretation: the remaining selected-state and velocity-slice mismatch is
+  not caused by same-state RHS/action parity or by RK4/window normalization
+  from an imported GKW state. The next narrowed target is the initialization
+  and first-window contract before the first post-normalization GKW diagnostic
+  snapshot at step 20.
+- Verification:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_gkw_cosine2_patch.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_gkw_cosine2_patch.py::test_one_window_replay_passes_for_solver_generated_selected_state_trace tests/test_gkw_cosine2_patch.py::test_patched_cosin2_one_window_replay_closes_window_evolution_gap -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_gkw_cosine2_patch.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused one-window tests passed: `2 passed in 16.93s`,
+  - focused GKW patch/parity file passed: `44 passed in 92.47s`,
+  - full x64 suite passed: `220 passed in 606.89s`.
 
 ### 2026-06-03: Closed GKW `igh` Coefficient and RHS/Action Parity
 

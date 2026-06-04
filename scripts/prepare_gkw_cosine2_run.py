@@ -34,6 +34,7 @@ class PreparedGkwCosine2Run:
     multi_time_distr: bool = False
     state_trace: bool = False
     selected_state_dump: bool = False
+    initial_state_dump: bool = False
     rhs_trace: bool = False
     rhs_trace_state_dump: bool = False
     rhs_trace_internal_apply: bool = False
@@ -79,6 +80,7 @@ def prepare_gkw_cosine2_run(
     multi_time_distr: bool = False,
     state_trace: bool = False,
     selected_state_dump: bool = False,
+    initial_state_dump: bool = False,
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
@@ -119,6 +121,10 @@ def prepare_gkw_cosine2_run(
     shutil.copytree(source_root, output_root, ignore=_ignore_generated_gkw_files)
     patched_init = output_root / "src" / "init.f90"
     add_cosin2_branch(patched_init)
+    if initial_state_dump:
+        add_initial_state_dump_exp_integration_patch(
+            output_root / "src" / "exp_integration.F90"
+        )
     patched_diagnostic = None
     if rhs_trace:
         add_rhs_trace_matdat_patch(output_root / "src" / "matdat.F90")
@@ -149,6 +155,7 @@ def prepare_gkw_cosine2_run(
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
+        initial_state_dump=initial_state_dump,
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
@@ -165,6 +172,7 @@ def prepare_gkw_cosine2_run(
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
+        initial_state_dump=initial_state_dump,
         rhs_trace=rhs_trace,
         rhs_trace_state_dump=rhs_trace_state_dump,
         rhs_trace_internal_apply=rhs_trace_internal_apply,
@@ -313,6 +321,48 @@ def add_selected_state_dump_patch(diagnostic_path: Path) -> bool:
         1,
     )
     diagnostic_path.write_text(text, encoding="utf-8")
+    return True
+
+
+def add_initial_state_dump_exp_integration_patch(exp_integration_path: Path) -> bool:
+    """Patch copied GKW to dump selected states around initial normalization."""
+
+    text = exp_integration_path.read_text(encoding="utf-8")
+    if "stellarator_gk initial selected-state dump patch" in text:
+        return False
+
+    call_pattern = re.compile(
+        r"  if \(itime == 1\) then\s*\n"
+        r"    call normalize\(2,fdisi\(1\),nsolc\)\n"
+        r"  endif\s*\n"
+    )
+    call_patch = (
+        "  if (itime == 1) then\n"
+        "    ! stellarator_gk initial selected-state dump patch: write before\n"
+        "    ! and after the first normalize(2) call.\n"
+        "    call stellarator_gk_initial_state_output('pre_normalize')\n"
+        "    call normalize(2,fdisi(1),nsolc)\n"
+        "    call stellarator_gk_initial_state_output('post_normalize')\n"
+        "  endif\n"
+    )
+    match = call_pattern.search(text)
+    if match is None:
+        raise ValueError(
+            f"could not find initial normalization marker in {exp_integration_path}"
+        )
+    text = text[: match.start()] + call_patch + text[match.end() :]
+
+    module_marker = "end module exp_integration"
+    if module_marker not in text:
+        raise ValueError(
+            f"could not find exp_integration module end marker in {exp_integration_path}"
+        )
+    text = text.replace(
+        module_marker,
+        INITIAL_STATE_DUMP_SUBROUTINE + "\n" + module_marker,
+        1,
+    )
+    exp_integration_path.write_text(text, encoding="utf-8")
     return True
 
 
@@ -652,6 +702,45 @@ subroutine stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
   close(lun)
 
 end subroutine stellarator_gk_igh_input_output
+"""
+
+
+INITIAL_STATE_DUMP_SUBROUTINE = r"""
+subroutine stellarator_gk_initial_state_output(label)
+
+  use control,      only : time, ntotstep
+  use dist,         only : fdisi, nsolc, phi, get_phi, indx
+  use grid,         only : ns, nmu, nvpar
+  use io,           only : get_free_lun
+  use mpiinterface, only : root_processor
+
+  character(len=*), intent(in) :: label
+  integer :: iz, imu, ivpar, lun
+  character (len=96) :: dump_file
+  complex :: fval, phival
+
+  call get_phi(fdisi(1:nsolc), phi)
+
+  if (root_processor) then
+     write(dump_file,'("stellarator_gk_initial_state_",A,".dat")') trim(label)
+     call get_free_lun(lun)
+     open(lun, FILE=trim(dump_file), STATUS='unknown')
+     write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
+     do iz = 1, ns
+        phival = phi(1,1,iz)
+        do imu = 1, nmu
+           do ivpar = 1, nvpar
+              fval = fdisi(indx(1,1,iz,imu,ivpar,1))
+              write(lun,'(I12,1X,1PE22.14,3(1X,I8),4(1X,1PE22.14))') &
+                   & ntotstep, time, iz, imu, ivpar, real(fval), aimag(fval), &
+                   & real(phival), aimag(phival)
+           end do
+        end do
+     end do
+     close(lun)
+  end if
+
+end subroutine stellarator_gk_initial_state_output
 """
 
 
@@ -999,6 +1088,8 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         "screen.out",
         "stellarator_gk_state_trace.dat",
         "stellarator_gk_igh_inputs.dat",
+        "stellarator_gk_initial_state_pre_normalize.dat",
+        "stellarator_gk_initial_state_post_normalize.dat",
     }
     suffixes = (".o", ".mod", ".smod", ".log")
     return {
@@ -1021,6 +1112,7 @@ def _write_run_readme(
     multi_time_distr: bool = False,
     state_trace: bool = False,
     selected_state_dump: bool = False,
+    initial_state_dump: bool = False,
     rhs_trace: bool = False,
     rhs_trace_state_dump: bool = False,
     rhs_trace_internal_apply: bool = False,
@@ -1066,6 +1158,20 @@ stellarator_gk_selected_state_00000040.dat
 
 Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the complex
 distribution value, and the selected-mode complex field at that `z`.
+"""
+    if initial_state_dump:
+        extra += """
+The copied `src/exp_integration.F90` was also patched to write the selected
+single-mode state immediately before and after the first `normalize(2)` call:
+
+```text
+stellarator_gk_initial_state_pre_normalize.dat
+stellarator_gk_initial_state_post_normalize.dat
+```
+
+Each row uses the same selected-state columns as
+`stellarator_gk_selected_state_<step>.dat`, with `step=0` and `time=0` for the
+initialization contract.
 """
     if rhs_trace:
         step_list = ", ".join(str(step) for step in rhs_trace_steps)
@@ -1203,6 +1309,14 @@ def _parse_args() -> argparse.Namespace:
         help="Patch copied GKW diagnostics to write stellarator_gk_selected_state_<step>.dat.",
     )
     parser.add_argument(
+        "--initial-state-dump",
+        action="store_true",
+        help=(
+            "Patch copied GKW exp_integration.F90 to write selected states "
+            "before and after the initial normalize(2) call."
+        ),
+    )
+    parser.add_argument(
         "--rhs-trace",
         action="store_true",
         help="Patch copied GKW to write selected-mode stellarator_gk_rhs_trace_<step>.dat.",
@@ -1266,6 +1380,7 @@ def main() -> None:
         multi_time_distr=args.multi_time_distr,
         state_trace=args.state_trace,
         selected_state_dump=args.selected_state_dump,
+        initial_state_dump=args.initial_state_dump,
         rhs_trace=args.rhs_trace,
         rhs_trace_state_dump=args.rhs_trace_state_dump,
         rhs_trace_internal_apply=args.rhs_trace_internal_apply,

@@ -810,6 +810,111 @@ class CycloneSameStateIghReplayAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneOneWindowReplayReport(_PyTreeDataclass):
+    """One diagnostic-window replay from imported selected-mode states."""
+
+    start_steps: object
+    end_steps: object
+    start_times: object
+    end_times: object
+    normalization_scale: object
+    post_normalization_field_norm: object
+    metric_values: object
+    max_abs_error: object
+    passed: object
+    metric_names: tuple[str, ...]
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "start_steps",
+        "end_steps",
+        "start_times",
+        "end_times",
+        "normalization_scale",
+        "post_normalization_field_norm",
+        "metric_values",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("metric_names", "source", "notes")
+
+    def __post_init__(self):
+        start_steps = jnp.asarray(self.start_steps, dtype=jnp.int32)
+        end_steps = jnp.asarray(self.end_steps, dtype=jnp.int32)
+        start_times = jnp.asarray(self.start_times, dtype=jnp.float64)
+        end_times = jnp.asarray(self.end_times, dtype=jnp.float64)
+        if start_steps.ndim != 1:
+            raise ValueError("start_steps must be one-dimensional")
+        for name, values in (
+            ("end_steps", end_steps),
+            ("start_times", start_times),
+            ("end_times", end_times),
+        ):
+            if values.shape != start_steps.shape:
+                raise ValueError(f"{name} must match start_steps shape")
+        for name in ("normalization_scale", "post_normalization_field_norm"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != start_steps.shape:
+                raise ValueError(f"{name} must match start_steps shape")
+            object.__setattr__(self, name, values)
+        metric_values = jnp.asarray(self.metric_values, dtype=jnp.float64)
+        if metric_values.ndim != 2:
+            raise ValueError("metric_values must have shape (n_window,n_metric)")
+        if metric_values.shape[0] != start_steps.shape[0]:
+            raise ValueError("metric_values window dimension must match start_steps")
+        if metric_values.shape[1] != len(self.metric_names):
+            raise ValueError("metric_names length must match metric_values")
+        object.__setattr__(self, "start_steps", start_steps)
+        object.__setattr__(self, "end_steps", end_steps)
+        object.__setattr__(self, "start_times", start_times)
+        object.__setattr__(self, "end_times", end_times)
+        object.__setattr__(self, "metric_values", metric_values)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "metric_names", tuple(self.metric_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class CycloneInitialStateContractReport(_PyTreeDataclass):
+    """GKW/solver initialization and first-window selected-state contract."""
+
+    metric_values: object
+    max_abs_error: object
+    passed: object
+    metric_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "metric_values",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("metric_names", "notes")
+
+    def __post_init__(self):
+        metrics = jnp.asarray(self.metric_values, dtype=jnp.float64)
+        if metrics.ndim != 1:
+            raise ValueError("metric_values must be one-dimensional")
+        if metrics.shape[0] != len(self.metric_names):
+            raise ValueError("metric_names length must match metric_values")
+        object.__setattr__(self, "metric_values", metrics)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "metric_names", tuple(self.metric_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ParallelPhiTrace(_PyTreeDataclass):
     """Parallel profile history of the selected-mode electrostatic field energy."""
 
@@ -4711,6 +4816,344 @@ def run_cyclone_base_case_same_state_igh_replay_audit(
             "jhg_interior, igh_zero_two, igh_two, and diffus; "
             f"disp_par={float(metadata['disp_par']):g}, "
             f"disp_vp={_cyclone_velocity_recurrence_rate(metadata, None, parallel_derivative_model):g}"
+        ),
+    )
+
+
+def run_cyclone_base_case_one_window_replay(
+    gkw_state_trace: SelectedModeStateTrace,
+    *,
+    steps_per_window: int = 20,
+    tolerance: float = 1.0e-8,
+    normalization_model: str = "gkw_unweighted",
+    parallel_derivative_model: str | None = "gkw_igh",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> CycloneOneWindowReplayReport:
+    """Advance imported GKW selected states by exactly one diagnostic window.
+
+    The input snapshots are interpreted as post-normalization diagnostics.  For
+    each adjacent pair separated by ``steps_per_window`` GKW steps, the solver
+    embeds the first selected-mode slice into the full state, advances with the
+    same RK4 window used in the Cyclone fixtures, applies the GKW unweighted
+    end-of-window normalization by default, and compares the selected slice and
+    electrostatic field with the next GKW dump.
+    """
+
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude
+
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    state_snapshots = jnp.asarray(gkw_state_trace.state, dtype=jnp.complex128)
+    phi_snapshots = jnp.asarray(gkw_state_trace.phi, dtype=jnp.complex128)
+    steps = np.asarray(gkw_state_trace.steps, dtype=np.int32)
+    times = np.asarray(gkw_state_trace.times, dtype=float)
+    if state_snapshots.ndim != 4:
+        raise ValueError("gkw_state_trace.state must have shape (n_time,n_vpar,n_mu,n_z)")
+    if state_snapshots.shape[0] < 2:
+        raise ValueError("one-window replay requires at least two selected-state snapshots")
+    if phi_snapshots.shape != (state_snapshots.shape[0], state_snapshots.shape[-1]):
+        raise ValueError("gkw_state_trace.phi must have shape (n_time,n_z)")
+    step_deltas = np.diff(steps)
+    if not np.all(step_deltas == steps_per_window):
+        raise ValueError(
+            "GKW selected-state snapshots must be adjacent one-window pairs; "
+            f"expected step delta {steps_per_window}, got {tuple(int(v) for v in step_deltas)}"
+        )
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    dt = float(metadata["dt"])
+    n_vpar = int(state_snapshots.shape[1])
+    n_mu = int(state_snapshots.shape[2])
+    n_z = int(state_snapshots.shape[3])
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=float(metadata["vpar_max"]),
+        mu_max=None,
+        nperiod=int(metadata["nperiod"]),
+        parallel_recurrence_rate=float(metadata["disp_par"]),
+        velocity_recurrence_rate=_cyclone_velocity_recurrence_rate(
+            metadata,
+            None,
+            parallel_derivative_model,
+        ),
+        parallel_backend=str(metadata.get("parallel_backend", "finite_difference")),
+        parallel_boundary=str(metadata.get("parallel_boundary", "zero")),
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=str(metadata.get("velocity_backend", "finite_difference")),
+        initial_profile=str(
+            metadata.get("initial_profile", "cosine2")
+            if initial_profile is None
+            else initial_profile
+        ),
+    )
+    selected = int(setup["selected_ky_index"])
+    ixzero = int(setup["fourier"].ixzero)
+
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    normalization_scales = []
+    post_normalization_norms = []
+    metric_rows = []
+    time_delta_expected = dt * steps_per_window
+    for index in range(state_snapshots.shape[0] - 1):
+        state = jnp.zeros_like(setup["state"])
+        state = state.at[:, :, :, ixzero, selected].set(state_snapshots[index])
+        advanced = advance_window(state)
+        raw_phi = solve_phi(advanced)
+        amplitude = _cyclone_phi_normalization_amplitude(
+            raw_phi,
+            setup,
+            normalization_model=normalization_model,
+        )
+        normalized = normalize_by_ky_amplitude(advanced, amplitude)
+        predicted_state = normalized.state
+        predicted_phi = solve_phi(predicted_state)
+        predicted_selected_state = predicted_state[..., ixzero, selected]
+        predicted_selected_phi = predicted_phi[:, ixzero, selected]
+        reference_state = state_snapshots[index + 1]
+        reference_phi = phi_snapshots[index + 1]
+        aligned_state = _snapshot_phase_aligned_reference(
+            reference_state[None, ...],
+            predicted_selected_state[None, ...],
+        )[0]
+        state_norm = jnp.linalg.norm(reference_state.ravel())
+        relative_l2 = jnp.linalg.norm((reference_state - aligned_state).ravel()) / jnp.maximum(
+            state_norm,
+            jnp.asarray(1.0e-300, dtype=state_norm.dtype),
+        )
+        post_norm = _cyclone_phi_normalization_amplitude(
+            predicted_phi,
+            setup,
+            normalization_model=normalization_model,
+        )[selected]
+        metric_rows.append(
+            jnp.asarray(
+                [
+                    abs(float(step_deltas[index]) - float(steps_per_window)),
+                    abs(float(times[index + 1] - times[index]) - time_delta_expected),
+                    jnp.abs(post_norm - 1.0),
+                    _max_abs_error(predicted_selected_phi, reference_phi),
+                    _phase_aligned_max_abs_error(reference_phi, predicted_selected_phi),
+                    _max_abs_error(predicted_selected_state, reference_state),
+                    _phase_aligned_max_abs_error(reference_state, predicted_selected_state),
+                    relative_l2,
+                ],
+                dtype=jnp.float64,
+            )
+        )
+        normalization_scales.append(normalized.scale[selected])
+        post_normalization_norms.append(post_norm)
+
+    metric_names = (
+        "step_delta_error",
+        "time_delta_error",
+        "post_normalization_field_norm_error",
+        "phi_direct",
+        "phi_phase_aligned",
+        "state_direct",
+        "state_phase_aligned",
+        "state_relative_l2_phase_aligned",
+    )
+    metric_values = jnp.asarray(metric_rows, dtype=jnp.float64)
+    gate_indices = jnp.asarray([0, 1, 2, 4, 6], dtype=jnp.int32)
+    max_abs_error = jnp.max(metric_values[:, gate_indices])
+    return CycloneOneWindowReplayReport(
+        start_steps=jnp.asarray(steps[:-1], dtype=jnp.int32),
+        end_steps=jnp.asarray(steps[1:], dtype=jnp.int32),
+        start_times=jnp.asarray(times[:-1], dtype=jnp.float64),
+        end_times=jnp.asarray(times[1:], dtype=jnp.float64),
+        normalization_scale=jnp.asarray(normalization_scales, dtype=jnp.float64),
+        post_normalization_field_norm=jnp.asarray(post_normalization_norms, dtype=jnp.float64),
+        metric_values=metric_values,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        metric_names=metric_names,
+        source="stellarator_gk:one_window_replay",
+        notes=(
+            "one-window replay from imported post-normalization GKW selected "
+            "state snapshots; gate uses phase-aligned field/state errors, "
+            f"steps_per_window={steps_per_window}, "
+            f"normalization_model={normalization_model}, "
+            f"parallel_derivative_model={parallel_derivative_model}"
+        ),
+    )
+
+
+def run_cyclone_base_case_initial_state_contract(
+    gkw_pre_normalize_state: SelectedModeStateTrace,
+    gkw_post_normalize_state: SelectedModeStateTrace,
+    gkw_first_window_state: SelectedModeStateTrace,
+    *,
+    steps_per_window: int = 20,
+    tolerance: float = 2.0e-9,
+    normalization_model: str = "gkw_unweighted",
+    parallel_derivative_model: str | None = "gkw_igh",
+    initial_profile: str | None = "cosine2",
+    target: BenchmarkTarget | None = None,
+) -> CycloneInitialStateContractReport:
+    """Check GKW initialization, initial normalization, and 0-to-20 replay.
+
+    GKW calls ``normalize(2)`` once before its first averaged timestep window,
+    when the field slots may still be zero.  This contract verifies that the
+    pre/post initial-normalization selected distribution is unchanged, the
+    solver initialized distribution matches GKW's post-normalization state,
+    and the solver advances the imported GKW post-normalization state to the
+    first diagnostic dump.
+    """
+
+    if tolerance <= 0.0:
+        raise ValueError("tolerance must be positive")
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    for name, trace in (
+        ("gkw_pre_normalize_state", gkw_pre_normalize_state),
+        ("gkw_post_normalize_state", gkw_post_normalize_state),
+        ("gkw_first_window_state", gkw_first_window_state),
+    ):
+        if trace.state.shape[0] != 1:
+            raise ValueError(f"{name} must contain exactly one selected-state snapshot")
+    if gkw_pre_normalize_state.state.shape[1:] != gkw_post_normalize_state.state.shape[1:]:
+        raise ValueError("pre/post initial states must share the same grid shape")
+    if gkw_post_normalize_state.state.shape[1:] != gkw_first_window_state.state.shape[1:]:
+        raise ValueError("initial and first-window states must share the same grid shape")
+
+    n_vpar = int(gkw_post_normalize_state.state.shape[1])
+    n_mu = int(gkw_post_normalize_state.state.shape[2])
+    n_z = int(gkw_post_normalize_state.state.shape[3])
+    solver_initial = run_cyclone_base_case_selected_state_trace(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        output_windows=(0,),
+        parallel_derivative_model=parallel_derivative_model,
+        normalization_model=normalization_model,
+        snapshot_timing="post_normalization",
+        initial_profile=initial_profile,
+        target=target,
+    )
+    first_window_trace = SelectedModeStateTrace(
+        steps=jnp.asarray(
+            [
+                int(gkw_post_normalize_state.steps[0]),
+                int(gkw_first_window_state.steps[0]),
+            ],
+            dtype=jnp.int32,
+        ),
+        times=jnp.asarray(
+            [
+                float(gkw_post_normalize_state.times[0]),
+                float(gkw_first_window_state.times[0]),
+            ],
+            dtype=jnp.float64,
+        ),
+        state=jnp.concatenate(
+            [gkw_post_normalize_state.state, gkw_first_window_state.state],
+            axis=0,
+        ),
+        phi=jnp.concatenate(
+            [gkw_post_normalize_state.phi, gkw_first_window_state.phi],
+            axis=0,
+        ),
+        source=f"{gkw_post_normalize_state.source}:first_window",
+        notes="GKW post-initial-normalization and first diagnostic snapshots",
+    )
+    replay = run_cyclone_base_case_one_window_replay(
+        first_window_trace,
+        steps_per_window=steps_per_window,
+        tolerance=tolerance,
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+        initial_profile=initial_profile,
+        target=target,
+    )
+    replay_metrics = dict(zip(replay.metric_names, replay.metric_values[0], strict=True))
+    pre_state = gkw_pre_normalize_state.state[0]
+    post_state = gkw_post_normalize_state.state[0]
+    pre_phi = gkw_pre_normalize_state.phi[0]
+    post_phi = gkw_post_normalize_state.phi[0]
+    solver_state = solver_initial.state[0]
+    solver_phi = solver_initial.phi[0]
+    metric_names = (
+        "gkw_initial_pre_post_state",
+        "gkw_initial_pre_post_phi",
+        "solver_vs_gkw_initial_state",
+        "solver_initial_solved_phi_max_norm",
+        "gkw_initial_stored_phi_max_norm",
+        "first_window_replay_max",
+        "first_window_phi_phase_aligned",
+        "first_window_state_phase_aligned",
+        "first_window_state_relative_l2_phase_aligned",
+    )
+    metric_values = jnp.asarray(
+        [
+            _max_abs_error(pre_state, post_state),
+            _max_abs_error(pre_phi, post_phi),
+            _max_abs_error(solver_state, post_state),
+            jnp.max(jnp.abs(solver_phi)),
+            jnp.max(jnp.abs(post_phi)),
+            replay.max_abs_error,
+            replay_metrics["phi_phase_aligned"],
+            replay_metrics["state_phase_aligned"],
+            replay_metrics["state_relative_l2_phase_aligned"],
+        ],
+        dtype=jnp.float64,
+    )
+    gate_values = jnp.asarray(
+        [
+            metric_values[0],
+            metric_values[1],
+            metric_values[2],
+            metric_values[4],
+            metric_values[5],
+        ],
+        dtype=jnp.float64,
+    )
+    max_abs_error = jnp.max(gate_values)
+    return CycloneInitialStateContractReport(
+        metric_values=metric_values,
+        max_abs_error=max_abs_error,
+        passed=max_abs_error <= tolerance,
+        metric_names=metric_names,
+        notes=(
+            "GKW initial normalize(2) selected-state contract; "
+            "GKW stores zero selected phi at step 0 while the solver reports "
+            "the self-consistent field solved from the same initial "
+            "distribution; that solver phi norm is diagnostic, not a gate; "
+            f"steps_per_window={steps_per_window}, "
+            f"normalization_model={normalization_model}, "
+            f"parallel_derivative_model={parallel_derivative_model}"
         ),
     )
 

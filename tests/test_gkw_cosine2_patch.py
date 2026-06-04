@@ -8,6 +8,7 @@ import pytest
 from scripts.prepare_gkw_cosine2_run import (
     PATCHED_SELECTOR,
     add_cosin2_branch,
+    add_initial_state_dump_exp_integration_patch,
     add_igh_input_trace_linear_terms_patch,
     add_multitime_velocity_slice_patch,
     add_rhs_trace_exp_integration_patch,
@@ -20,6 +21,8 @@ from scripts.prepare_gkw_cosine2_run import (
 )
 from stellarator_gk import (
     CycloneSourceTermTrace,
+    CycloneInitialStateContractReport,
+    CycloneOneWindowReplayReport,
     CycloneSameStateIghReplayAudit,
     GkwIghInputTrace,
     GkwStateTrace,
@@ -40,7 +43,10 @@ from stellarator_gk import (
     load_gkw_state_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice_series,
+    run_cyclone_base_case_one_window_replay,
+    run_cyclone_base_case_initial_state_contract,
     run_cyclone_base_case_selected_rhs_trace,
+    run_cyclone_base_case_selected_state_trace,
     run_cyclone_base_case_same_state_rhs_replay,
     run_cyclone_base_case_same_state_rhs_replay_gate,
     run_cyclone_base_case_same_state_igh_replay_audit,
@@ -214,7 +220,12 @@ end subroutine igh
 
 _MINIMAL_EXP_INTEGRATION = """module exp_integration
 contains
-subroutine explicit_integration
+subroutine explicit_integration(itime)
+  integer :: itime
+  if (itime == 1) then
+    call normalize(2,fdisi(1),nsolc)
+  endif
+
   ! done after calculate_fields to have the new potential
   call normalize(2,fdisi(1),nsolc)
 
@@ -342,6 +353,41 @@ def test_prepare_gkw_cosine2_run_can_patch_selected_state_dump(tmp_path: Path) -
         encoding="utf-8"
     )
     assert "full selected\nsingle-mode state" in (
+        prepared.output_root / "README_stellarator_gk_cosin2.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_prepare_gkw_cosine2_run_can_patch_initial_state_dump(tmp_path: Path) -> None:
+    source_root = tmp_path / "gkw"
+    (source_root / "src").mkdir(parents=True)
+    source_init = source_root / "src" / "init.f90"
+    source_init.write_text(_MINIMAL_INIT, encoding="utf-8")
+    source_exp_integration = source_root / "src" / "exp_integration.F90"
+    source_exp_integration.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+    input_path = tmp_path / "selected_ky_input.dat"
+    input_path.write_text("&SPCGENERAL\n finit = 'cosine'\n /\n", encoding="utf-8")
+
+    prepared = prepare_gkw_cosine2_run(
+        source_root=source_root,
+        output_root=tmp_path / "patched-gkw",
+        input_path=input_path,
+        initial_state_dump=True,
+    )
+
+    assert prepared.initial_state_dump
+    assert prepared.patched_diagnostic is None
+    patched_text = (prepared.output_root / "src" / "exp_integration.F90").read_text(
+        encoding="utf-8"
+    )
+    assert "stellarator_gk initial selected-state dump patch" in patched_text
+    assert "call stellarator_gk_initial_state_output('pre_normalize')" in patched_text
+    assert "call stellarator_gk_initial_state_output('post_normalize')" in patched_text
+    assert "subroutine stellarator_gk_initial_state_output" in patched_text
+    assert '("stellarator_gk_initial_state_",A,".dat")' in patched_text
+    assert "stellarator_gk_initial_state_post_normalize.dat" not in (
+        source_exp_integration.read_text(encoding="utf-8")
+    )
+    assert "first `normalize(2)` call" in (
         prepared.output_root / "README_stellarator_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
@@ -609,6 +655,16 @@ def test_selected_state_dump_patch_is_idempotent(tmp_path: Path) -> None:
     first_patch = diagnostic_path.read_text(encoding="utf-8")
     assert not add_selected_state_dump_patch(diagnostic_path)
     assert diagnostic_path.read_text(encoding="utf-8") == first_patch
+
+
+def test_initial_state_dump_patch_is_idempotent(tmp_path: Path) -> None:
+    exp_integration_path = tmp_path / "exp_integration.F90"
+    exp_integration_path.write_text(_MINIMAL_EXP_INTEGRATION, encoding="utf-8")
+
+    assert add_initial_state_dump_exp_integration_patch(exp_integration_path)
+    first_patch = exp_integration_path.read_text(encoding="utf-8")
+    assert not add_initial_state_dump_exp_integration_patch(exp_integration_path)
+    assert exp_integration_path.read_text(encoding="utf-8") == first_patch
 
 
 def test_rhs_trace_patches_are_idempotent(tmp_path: Path) -> None:
@@ -1088,6 +1144,45 @@ def test_patched_cosin2_midrun_state_and_rhs_fixtures_load() -> None:
     assert float(np.max(np.abs(np.asarray(rhs.term_actions[:, 1])))) > 0.0
 
 
+def test_patched_cosin2_early_adjacent_state_fixture_loads() -> None:
+    state = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state"
+    )
+
+    np.testing.assert_array_equal(state.steps, np.asarray([20, 40], dtype=np.int32))
+    np.testing.assert_allclose(state.times, np.asarray([0.06, 0.12]))
+    assert state.state.shape == (2, 32, 8, 48)
+    assert state.phi.shape == (2, 48)
+    assert float(np.max(np.abs(np.asarray(state.state)))) > 0.0
+
+
+def test_patched_cosin2_initial_state_fixtures_load() -> None:
+    fixture_dir = ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_initial_state"
+    pre = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_initial_state_pre_normalize.dat"
+    )
+    post = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_initial_state_post_normalize.dat"
+    )
+    first = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_selected_state_00000020.dat"
+    )
+
+    np.testing.assert_array_equal(pre.steps, np.asarray([0], dtype=np.int32))
+    np.testing.assert_array_equal(post.steps, np.asarray([0], dtype=np.int32))
+    np.testing.assert_array_equal(first.steps, np.asarray([20], dtype=np.int32))
+    np.testing.assert_allclose(pre.times, np.asarray([0.0]))
+    np.testing.assert_allclose(post.times, np.asarray([0.0]))
+    np.testing.assert_allclose(first.times, np.asarray([0.06]))
+    assert pre.state.shape == (1, 32, 8, 48)
+    assert post.state.shape == (1, 32, 8, 48)
+    assert first.state.shape == (1, 32, 8, 48)
+    np.testing.assert_allclose(pre.state, post.state, atol=0.0, rtol=0.0)
+    np.testing.assert_allclose(pre.phi, 0.0, atol=0.0, rtol=0.0)
+    np.testing.assert_allclose(post.phi, 0.0, atol=0.0, rtol=0.0)
+    assert float(np.max(np.abs(np.asarray(first.phi)))) > 0.0
+
+
 def test_solver_selected_mode_rhs_trace_records_gkw_bucketed_actions() -> None:
     trace = run_cyclone_base_case_selected_rhs_trace(
         n_z=12,
@@ -1120,6 +1215,111 @@ def test_solver_selected_mode_rhs_trace_records_gkw_bucketed_actions() -> None:
     )
     assert float(np.max(np.abs(np.asarray(trace.term_actions[:, 1])))) > 0.0
     assert float(np.max(np.abs(np.asarray(trace.term_actions[:, 3])))) > 0.0
+
+
+def test_one_window_replay_passes_for_solver_generated_selected_state_trace() -> None:
+    trace = run_cyclone_base_case_selected_state_trace(
+        n_z=10,
+        n_vpar=6,
+        n_mu=3,
+        steps_per_window=2,
+        output_windows=(1, 2),
+    )
+
+    report = run_cyclone_base_case_one_window_replay(
+        trace,
+        steps_per_window=2,
+        tolerance=1.0e-10,
+    )
+
+    assert isinstance(report, CycloneOneWindowReplayReport)
+    assert bool(report.passed)
+    np.testing.assert_array_equal(report.start_steps, np.asarray([2], dtype=np.int32))
+    np.testing.assert_array_equal(report.end_steps, np.asarray([4], dtype=np.int32))
+    assert report.metric_values.shape == (1, len(report.metric_names))
+    metrics = dict(zip(report.metric_names, np.asarray(report.metric_values[0])))
+    assert metrics["step_delta_error"] == pytest.approx(0.0)
+    assert metrics["time_delta_error"] == pytest.approx(0.0)
+    assert metrics["post_normalization_field_norm_error"] < 1.0e-12
+    assert metrics["phi_phase_aligned"] < 1.0e-12
+    assert metrics["state_phase_aligned"] < 1.0e-12
+    assert "one-window replay" in report.notes
+
+
+def test_patched_cosin2_initial_state_contract_closes_first_window() -> None:
+    fixture_dir = ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_initial_state"
+    pre = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_initial_state_pre_normalize.dat"
+    )
+    post = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_initial_state_post_normalize.dat"
+    )
+    first = load_gkw_selected_mode_state_trace(
+        fixture_dir / "stellarator_gk_selected_state_00000020.dat"
+    )
+
+    report = run_cyclone_base_case_initial_state_contract(
+        pre,
+        post,
+        first,
+        steps_per_window=20,
+        tolerance=2.0e-9,
+    )
+
+    assert isinstance(report, CycloneInitialStateContractReport)
+    assert bool(report.passed)
+    metrics = dict(zip(report.metric_names, np.asarray(report.metric_values)))
+    assert metrics["gkw_initial_pre_post_state"] == pytest.approx(0.0)
+    assert metrics["gkw_initial_pre_post_phi"] == pytest.approx(0.0)
+    assert metrics["gkw_initial_stored_phi_max_norm"] == pytest.approx(0.0)
+    assert metrics["solver_vs_gkw_initial_state"] < 1.0e-18
+    assert metrics["solver_initial_solved_phi_max_norm"] > 1.0e-2
+    assert metrics["first_window_replay_max"] < 2.0e-9
+    assert metrics["first_window_phi_phase_aligned"] < 2.0e-9
+    assert metrics["first_window_state_phase_aligned"] < 3.0e-11
+    assert float(report.max_abs_error) == pytest.approx(
+        metrics["first_window_replay_max"]
+    )
+    assert "initial normalize(2)" in report.notes
+
+
+def test_patched_cosin2_one_window_replay_closes_window_evolution_gap() -> None:
+    early = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state"
+    )
+    midrun = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state"
+    )
+
+    early_report = run_cyclone_base_case_one_window_replay(
+        early,
+        steps_per_window=20,
+        tolerance=1.0e-8,
+    )
+    midrun_report = run_cyclone_base_case_one_window_replay(
+        midrun,
+        steps_per_window=20,
+        tolerance=1.0e-8,
+    )
+
+    assert isinstance(early_report, CycloneOneWindowReplayReport)
+    assert isinstance(midrun_report, CycloneOneWindowReplayReport)
+    np.testing.assert_array_equal(early_report.start_steps, np.asarray([20], dtype=np.int32))
+    np.testing.assert_array_equal(midrun_report.start_steps, np.asarray([780, 800], dtype=np.int32))
+    assert early_report.metric_values.shape == (1, len(early_report.metric_names))
+    assert midrun_report.metric_values.shape == (2, len(midrun_report.metric_names))
+    assert bool(early_report.passed)
+    assert bool(midrun_report.passed)
+    assert np.all(np.isfinite(np.asarray(early_report.metric_values)))
+    assert np.all(np.isfinite(np.asarray(midrun_report.metric_values)))
+    early_metrics = dict(zip(early_report.metric_names, np.asarray(early_report.metric_values[0])))
+    midrun_metrics = dict(zip(midrun_report.metric_names, np.asarray(midrun_report.metric_values[0])))
+    assert early_metrics["step_delta_error"] == pytest.approx(0.0)
+    assert midrun_metrics["step_delta_error"] == pytest.approx(0.0)
+    assert early_metrics["post_normalization_field_norm_error"] < 1.0e-12
+    assert midrun_metrics["post_normalization_field_norm_error"] < 1.0e-12
+    assert 0.0 < float(early_report.max_abs_error) < 2.0e-9
+    assert 0.0 < float(midrun_report.max_abs_error) < 3.0e-10
 
 
 def test_selected_mode_rhs_trace_comparator_detects_reversed_vpar_layout() -> None:
