@@ -91,19 +91,18 @@ public `ParallelPhiTrace` API. The solver-side selected-`ky` parallel
 GKW-native `cosine` initialization. The trace now supports GKW's unweighted
 field normalization, which removes the raw total-power scale mismatch: the
 mean solver/GKW total-power ratio is `1.0000000565887992` with maximum
-deviation below `1.7e-06`. The row-normalized profile comparison is still
-OPEN: maximum profile-shape error `3.38801745e-02`, mean row error
-`1.84122540e-02`, and final-row error `2.20871902e-02` at exploratory
-tolerance `2.0e-02`. Reversing the output order and circularly shifting the
-GKW rows do not reduce the best-aligned error (`best_shift=0`). The localized
-audit now identifies the worst signed shape error at `t=3.72`, `z=0.09375`:
-the solver normalized value is `0.35697806498567025` while GKW's is
-`0.3230978904417056`, with signed error `3.38801745e-02` and negative
-profile-width error in that row. This confirms that the remaining CBC gap
-includes a real central-curvature/width mismatch in the parallel mode
-structure, not only a compact `time.dat` growth-window, scalar normalization,
-output-ordering convention, center-of-power shift, or boundary-edge
-concentration. A selected-mode operator audit at the same point now passes the
+deviation below `1.7e-06`. The older native-`cosine` exploratory profile
+comparison exposed a real central-curvature/width mismatch before the later
+`cosin2`/`gkw_igh` contract was closed: maximum profile-shape error
+`3.38801745e-02`, mean row error `1.84122540e-02`, final-row error
+`2.20871902e-02`, and worst signed error at `t=3.72`, `z=0.09375`. The
+current direct production-control `cosin2` `parallel_phi.dat` gate now passes:
+maximum row-normalized error `3.970355014759619e-07`, best-aligned error
+`3.970355014759619e-07`, raw absolute max `4.96409503836226e-07`, total-power
+ratio mean error `1.7278179220703294e-08`, and maximum total-power deviation
+`1.9533788158110355e-06`. Its tolerance ladder passes `5e-2`, `3e-2`,
+`2e-2`, and `1e-2`. A selected-mode operator audit at the historical
+localized point now passes the
 field/RHS consistency checks: field residual `4.742874840267547e-16`, phi
 reconstruction error `3.7238012298709097e-16`, and RHS assembly error `0.0`.
 The local matrix-versus-GKW-upwind streaming delta is
@@ -398,8 +397,8 @@ zero selected `phi` at step 0 while the solver's self-consistent solved field
 has max norm `0.014983892939428313`, and replay from GKW step 0 to step 20
 closes with max gate error `1.1708576174967147e-09`. The next narrowed
 consistency target is therefore not operator/action parity, RK4/window
-normalization cadence, or initialization, but the row-normalized
-`parallel_phi.dat` profile-shape gate and tolerance ladder.
+normalization cadence, initialization, or direct `parallel_phi.dat`
+profile-shape parity, but the multi-`ky` Cyclone/ITG benchmark scan.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -538,33 +537,34 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: use the now-passing RHS/action, initialization, and one-window replay
-gates to isolate the remaining selected-mode state-history, velocity-slice,
-and parallel-profile mismatch. The next narrowed target is the explicit
-row-normalized `parallel_phi.dat` profile-shape gate:
+Goal: use the now-passing RHS/action, initialization, one-window replay, and
+direct `parallel_phi.dat` profile-shape gates to broaden validation from a
+single selected `ky=0.5` Cyclone point to a multi-`ky` Cyclone/ITG scan. The
+next narrowed target is a production-style scan gate:
 
-- promote the existing `parallel_phi.dat` comparison into a named validation
-  report/gate with a recorded tolerance ladder,
-- separate total-power normalization, row-normalized profile shape, circular
-  shifts/reversal, and phase/complex-scale invariance into distinct metrics,
-- record the current OPEN row-normalized profile-shape error and keep it out
-  of scalar growth gates until the profile convention is resolved,
+- collect or synthesize matched GX/GKW/Gyaradax/GS2-style reference points for
+  several Cyclone `ky` values, including growth rate, real frequency when
+  available, and mode-structure/profile diagnostics,
+- implement a public scan report/gate that distinguishes scalar growth,
+  frequency, and mode-structure tolerances instead of folding them into one
+  selected-mode result,
+- reuse the new direct `parallel_phi.dat` profile gate for any selected
+  reference points that have profile histories,
 - keep the passing full RHS/action trace (`6.22e-12`), same-state replay
   (`2.35e-12`), mid-run same-state replay (`2.36e-12`), matrix trace
   (`5.77e-15`), input trace (`5.33e-15`), early one-window replay
   (`1.12e-9`), mid-run one-window replay (`2.03e-10`), and first-window replay
   (`1.17e-9`) as guardrails,
-- after the profile-shape gate is explicit, add a multi-`ky` Cyclone/ITG
-  scan gate and then extend the benchmark ladder to a stellarator/TEM-style
-  DESC/GX/GIST geometry fixture.
+- after the scan gate is stable, extend the benchmark ladder to a
+  stellarator/TEM-style DESC/GX/GIST geometry fixture.
 
 Expected file changes:
 
-- `parallel_phi.dat` profile-shape gate/report updates in `benchmarks.py`,
-- optional `examples/compare_gkw_parallel_phi_profile.py` CSV updates if useful
-  for inspection,
-- no new operator/RHS source patch unless the profile-shape gate points to a
-  specific missing diagnostic or packing convention,
+- Cyclone/ITG scan report/gate updates in `benchmarks.py`,
+- optional scan fixture loaders or CSV writers if external references are
+  available,
+- no new operator/RHS source patch unless the scan gate localizes a new
+  source-term, matrix-format, or geometry convention gap,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
 - `src/stellarator_gk/benchmarks.py`,
@@ -575,12 +575,54 @@ Expected tests:
 
 - retained one-window replay tests for steps 20→40, 780→800/800→820, and
   0→20,
-- focused `parallel_phi.dat` profile-shape report/gate tests,
+- focused multi-`ky` scan report/gate tests,
 - retained `tests/test_gkw_cosine2_patch.py` RHS/action parity gates,
 - retained selected Cyclone scalar growth, RH plateau, DESC/GX/eik geometry,
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-04: Promoted Direct `parallel_phi.dat` Profile Gate
+
+- Committed the previous initial/first-window contract work as
+  `caf4a97` (`Close GKW first-window replay contract`) before starting this
+  round.
+- Added `ParallelPhiProfileGateReport`,
+  `evaluate_parallel_phi_profile_gate`, and
+  `run_cyclone_base_case_parallel_phi_profile_gate` to the public benchmark
+  API. The new gate uses the direct row-normalized profile shape as the
+  contract and keeps circular shifts, reversal, raw total-power scale,
+  center/edge/moment diagnostics, and worst `(t,z)` information as explanatory
+  metrics only.
+- Added tests showing that a shifted profile can be diagnosed by the alignment
+  audit while still failing the direct profile gate, plus a reduced matched
+  Cyclone fixture that passes the new runner.
+- Ran the production-control `cosin2` profile gate against
+  `fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat` and
+  `fixtures/gkw_cyclone_selected_ky_cosin2_time.dat`:
+  - gate passed,
+  - maximum direct row-normalized error:
+    `3.970355014759619e-07`,
+  - tolerance ladder `5e-2`, `3e-2`, `2e-2`, and `1e-2`: all passed,
+  - raw absolute maximum error: `4.96409503836226e-07`,
+  - total-power ratio mean error: `1.7278179220703294e-08`,
+  - maximum total-power deviation: `1.9533788158110355e-06`,
+  - worst signed profile error: `3.970355014759619e-07` at
+    `t=4.14`, `z=-0.09375`.
+- Updated `TODO.md` so the Immediate Next Round now targets a multi-`ky`
+  Cyclone/ITG scan gate rather than the already-closed direct profile gate.
+- Commands run:
+  - `git commit -m "Close GKW first-window replay contract"`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "parallel_phi_profile_gate or gkw_parallel_phi_trace_loader_compares_row_normalized_profiles or parallel_phi_profile_audit_detects_output_order_shift or cosin2_gap_audit_runner_accepts_matched_reduced_fixtures"`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_parallel_phi_profile_gate() ..."`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused profile-gate selection passed: `5 passed, 53 deselected in 18.51s`,
+  - full x64 pytest suite passed: `226 passed in 416.25s`.
+- Next action: implement the multi-`ky` Cyclone/ITG scan report/gate using
+  matched external references where available, with separate scalar growth,
+  frequency, and mode-structure tolerances.
 
 ### 2026-06-04: Closed GKW Initial and First-Window Contract
 
@@ -610,9 +652,10 @@ Expected tests:
     `1.935596142002624e-10`.
 - Interpretation: the remaining selected-state/profile mismatch is not caused
   by initialization, first normalization, same-state RHS/action, or one-window
-  RK4 evolution from imported GKW states. The next target is to make the
-  row-normalized `parallel_phi.dat` profile-shape comparison an explicit OPEN
-  gate with a tolerance ladder.
+  RK4 evolution from imported GKW states. This round's proposed next target was
+  the row-normalized `parallel_phi.dat` profile gate; the newer log above
+  records that direct gate as passing and moves the active target to the
+  multi-`ky` scan.
 - Commands run:
   - `python3 scripts/prepare_gkw_cosine2_run.py --source-root relevant-codes/gkw --input fixtures/gkw_cyclone_selected_ky_linear_input.dat --output-root /private/tmp/stellarator_gk_gkw_cosin2_initial_state_trace --overwrite --initial-state-dump --selected-state-dump`
   - `make FC=gfortran FFLAGS="-fdefault-real-8 -O2" FFTLIB=nofft PARALLEL=nompi LDFLAGS=""`

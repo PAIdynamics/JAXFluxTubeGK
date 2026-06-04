@@ -35,6 +35,7 @@ from stellarator_gk import (
     ExternalEikProducerReport,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
+    ParallelPhiProfileGateReport,
     ParallelPhiTrace,
     VelocitySliceConventionAudit,
     VelocitySlicePhaseAudit,
@@ -58,6 +59,7 @@ from stellarator_gk import (
     compare_cyclone_base_case_traces,
     compare_geometry_to_gx_eik_reference,
     compare_parallel_phi_traces,
+    evaluate_parallel_phi_profile_gate,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
     load_cyclone_trace_csv,
@@ -93,6 +95,7 @@ from stellarator_gk import (
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_source_term_trace,
     run_cyclone_base_case_selected_state_trace,
+    run_cyclone_base_case_parallel_phi_profile_gate,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
     run_cyclone_base_case_velocity_space_slice,
@@ -763,6 +766,39 @@ def test_parallel_phi_profile_audit_detects_output_order_shift():
     assert "alignment/normalization audit" in audit.notes
 
 
+def test_parallel_phi_profile_gate_uses_direct_shape_not_best_shift():
+    observed = ParallelPhiTrace(
+        times=(0.1, 0.2),
+        z=(0.0, 1.0, 2.0),
+        phi_power=((0.0, 1.0, 0.0), (0.0, 2.0, 0.0)),
+        source="observed",
+    )
+    shifted_reference = ParallelPhiTrace(
+        times=(0.1, 0.2),
+        z=(0.0, 1.0, 2.0),
+        phi_power=((0.0, 0.0, 1.0), (0.0, 0.0, 2.0)),
+        source="shifted-reference",
+    )
+
+    gate = evaluate_parallel_phi_profile_gate(
+        observed,
+        shifted_reference,
+        profile_tolerance=1.0e-12,
+        tolerance_ladder=(2.0, 0.5),
+    )
+    metrics = dict(zip(gate.metric_names, np.asarray(gate.metric_values), strict=True))
+
+    assert isinstance(gate, ParallelPhiProfileGateReport)
+    assert not bool(gate.passed)
+    np.testing.assert_allclose(gate.max_abs_error, 1.0)
+    np.testing.assert_array_equal(np.asarray(gate.tolerance_passed), np.asarray([True, False]))
+    np.testing.assert_allclose(metrics["row_normalized_direct_max"], 1.0)
+    np.testing.assert_allclose(metrics["row_normalized_best_aligned_max"], 0.0)
+    np.testing.assert_allclose(metrics["best_circular_shift"], 2.0)
+    np.testing.assert_allclose(metrics["total_power_ratio_max_deviation"], 0.0)
+    assert "direct row-normalized" in gate.notes
+
+
 def test_cyclone_selected_ky_gap_audit_aligns_post_window_samples():
     solver_trace = CycloneTrace(
         times=(0.0, 1.0, 2.0),
@@ -929,6 +965,43 @@ def test_cosin2_gap_audit_runner_accepts_matched_reduced_fixtures(tmp_path):
     assert bool(audit.passed)
     np.testing.assert_allclose(audit.late_mean_delta, 0.0, atol=1.0e-12)
     np.testing.assert_allclose(audit.max_profile_error, 0.0, atol=1.0e-12)
+
+
+def test_parallel_phi_profile_gate_runner_accepts_matched_reduced_fixture(tmp_path):
+    solver_profile = run_cyclone_base_case_parallel_phi_trace(
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        initial_profile="cosine2",
+        normalization_model="gkw_unweighted",
+        parallel_derivative_model="gkw_igh",
+    )
+    time_path = tmp_path / "time.dat"
+    phi_path = tmp_path / "parallel_phi.dat"
+    with time_path.open("w") as handle:
+        for time in np.asarray(solver_profile.times):
+            handle.write(f"{time:.16e} 0.0\n")
+    with phi_path.open("w") as handle:
+        for row in np.asarray(solver_profile.phi_power):
+            handle.write(" ".join(f"{value:.16e}" for value in row) + "\n")
+
+    gate = run_cyclone_base_case_parallel_phi_profile_gate(
+        gkw_time_path=time_path,
+        gkw_parallel_phi_path=phi_path,
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=3,
+        profile_tolerance=1.0e-10,
+        tolerance_ladder=(1.0e-8, 1.0e-10),
+    )
+
+    assert bool(gate.passed)
+    np.testing.assert_allclose(gate.max_abs_error, 0.0, atol=1.0e-12)
+    assert bool(jnp.all(gate.tolerance_passed))
 
 
 def test_gkw_velocity_space_slice_loader_reads_distr_files(tmp_path):

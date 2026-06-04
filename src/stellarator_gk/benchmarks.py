@@ -1080,6 +1080,60 @@ class ParallelPhiProfileAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class ParallelPhiProfileGateReport(_PyTreeDataclass):
+    """Direct row-normalized ``parallel_phi.dat`` profile-shape validation gate."""
+
+    metric_values: object
+    tolerance_values: object
+    tolerance_passed: object
+    max_abs_error: object
+    passed: object
+    metric_names: tuple[str, ...]
+    tolerance_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "metric_values",
+        "tolerance_values",
+        "tolerance_passed",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "metric_names",
+        "tolerance_names",
+        "notes",
+    )
+
+    def __post_init__(self):
+        metrics = jnp.asarray(self.metric_values, dtype=jnp.float64)
+        tolerances = jnp.asarray(self.tolerance_values, dtype=jnp.float64)
+        tolerance_passed = jnp.asarray(self.tolerance_passed, dtype=bool)
+        if metrics.ndim != 1:
+            raise ValueError("metric_values must be one-dimensional")
+        if tolerances.ndim != 1:
+            raise ValueError("tolerance_values must be one-dimensional")
+        if tolerance_passed.shape != tolerances.shape:
+            raise ValueError("tolerance_passed must match tolerance_values shape")
+        if len(self.metric_names) != metrics.shape[0]:
+            raise ValueError("metric_names length must match metric_values")
+        if len(self.tolerance_names) != tolerances.shape[0]:
+            raise ValueError("tolerance_names length must match tolerance_values")
+        object.__setattr__(self, "metric_values", metrics)
+        object.__setattr__(self, "tolerance_values", tolerances)
+        object.__setattr__(self, "tolerance_passed", tolerance_passed)
+        object.__setattr__(
+            self,
+            "max_abs_error",
+            jnp.asarray(self.max_abs_error, dtype=jnp.float64),
+        )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "metric_names", tuple(self.metric_names))
+        object.__setattr__(self, "tolerance_names", tuple(self.tolerance_names))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneSelectedKyGapAudit(_PyTreeDataclass):
     """Combined growth/profile audit for the production selected-``ky`` gap."""
 
@@ -7381,6 +7435,132 @@ def audit_parallel_phi_profile_alignment(
     )
 
 
+def evaluate_parallel_phi_profile_gate(
+    observed: ParallelPhiTrace,
+    reference: ParallelPhiTrace,
+    *,
+    profile_tolerance: float = 2.0e-2,
+    tolerance_ladder: tuple[float, ...] = (5.0e-2, 3.0e-2, 2.0e-2, 1.0e-2),
+    time_tolerance: float = 1.0e-8,
+    z_tolerance: float = 1.0e-12,
+    power_floor: float = 1.0e-300,
+) -> ParallelPhiProfileGateReport:
+    """Evaluate the direct row-normalized ``parallel_phi.dat`` profile gate.
+
+    The gate itself uses the profiles exactly as written after row
+    normalization.  Reversal, circular-shift, raw-power, and moment diagnostics
+    are reported to explain failures without relaxing the contract.
+    """
+
+    if profile_tolerance <= 0.0:
+        raise ValueError("profile_tolerance must be positive")
+    tolerance_ladder_np = np.asarray(tolerance_ladder, dtype=float)
+    if tolerance_ladder_np.ndim != 1 or tolerance_ladder_np.size == 0:
+        raise ValueError("tolerance_ladder must not be empty")
+    if np.any(~np.isfinite(tolerance_ladder_np)) or np.any(tolerance_ladder_np <= 0.0):
+        raise ValueError("tolerance_ladder entries must be positive")
+    if power_floor <= 0.0:
+        raise ValueError("power_floor must be positive")
+
+    direct_report = compare_parallel_phi_traces(
+        observed,
+        reference,
+        tolerance=profile_tolerance,
+        time_tolerance=time_tolerance,
+        z_tolerance=z_tolerance,
+        normalize_profiles=True,
+    )
+    raw_report = compare_parallel_phi_traces(
+        observed,
+        reference,
+        tolerance=profile_tolerance,
+        time_tolerance=time_tolerance,
+        z_tolerance=z_tolerance,
+        normalize_profiles=False,
+    )
+    alignment = audit_parallel_phi_profile_alignment(
+        observed,
+        reference,
+        tolerance=profile_tolerance,
+        time_tolerance=time_tolerance,
+        z_tolerance=z_tolerance,
+        normalize_profiles=True,
+        power_floor=power_floor,
+    )
+
+    total_power_ratio = jnp.asarray(alignment.total_power_ratio, dtype=jnp.float64)
+    total_power_ratio_mean_error = jnp.abs(jnp.mean(total_power_ratio) - 1.0)
+    total_power_ratio_max_deviation = jnp.max(jnp.abs(total_power_ratio - 1.0))
+    metric_names = (
+        "time_error",
+        "z_error",
+        "row_normalized_direct_max",
+        "row_normalized_reversed_max",
+        "row_normalized_best_shift_max",
+        "row_normalized_best_aligned_max",
+        "best_circular_shift",
+        "raw_absolute_max",
+        "total_power_ratio_mean_error",
+        "total_power_ratio_max_deviation",
+        "center_of_power_max_abs_error",
+        "edge_fraction_max_abs_error",
+        "peak_z_max_abs_error",
+        "second_moment_max_abs_error",
+        "worst_time",
+        "worst_z",
+        "worst_signed_error",
+        "worst_observed_value",
+        "worst_reference_value",
+    )
+    metric_values = jnp.asarray(
+        [
+            direct_report.time_error,
+            direct_report.z_error,
+            direct_report.max_abs_error,
+            jnp.max(alignment.reversed_profile_errors),
+            jnp.max(alignment.best_shift_profile_errors),
+            alignment.best_aligned_max_error,
+            alignment.best_shift,
+            raw_report.max_abs_error,
+            total_power_ratio_mean_error,
+            total_power_ratio_max_deviation,
+            jnp.max(jnp.abs(alignment.center_of_power_error)),
+            jnp.max(jnp.abs(alignment.edge_fraction_error)),
+            jnp.max(jnp.abs(alignment.peak_z_error)),
+            jnp.max(jnp.abs(alignment.second_moment_error)),
+            alignment.worst_time,
+            alignment.worst_z,
+            alignment.worst_signed_error,
+            alignment.worst_observed_value,
+            alignment.worst_reference_value,
+        ],
+        dtype=jnp.float64,
+    )
+    tolerance_values = jnp.asarray(tolerance_ladder_np, dtype=jnp.float64)
+    tolerance_passed = (
+        (direct_report.max_abs_error <= tolerance_values)
+        & (direct_report.time_error <= time_tolerance)
+        & (direct_report.z_error <= z_tolerance)
+    )
+    tolerance_names = tuple(
+        f"direct_profile_lte_{tolerance:g}" for tolerance in tolerance_ladder_np
+    )
+    return ParallelPhiProfileGateReport(
+        metric_values=metric_values,
+        tolerance_values=tolerance_values,
+        tolerance_passed=tolerance_passed,
+        max_abs_error=direct_report.max_abs_error,
+        passed=direct_report.passed,
+        metric_names=metric_names,
+        tolerance_names=tolerance_names,
+        notes=(
+            f"observed={observed.source}; reference={reference.source}; "
+            "direct row-normalized parallel |phi|^2 profile-shape gate; "
+            "alignment and total-power metrics are diagnostics only"
+        ),
+    )
+
+
 def audit_cyclone_selected_ky_gap(
     solver_trace: CycloneTrace,
     reference_trace: CycloneTrace,
@@ -8012,6 +8192,66 @@ def run_cyclone_base_case_cosin2_gap_audit(
         growth_window_fraction=growth_window_fraction,
         growth_tolerance=growth_tolerance,
         profile_tolerance=profile_tolerance,
+    )
+
+
+def run_cyclone_base_case_parallel_phi_profile_gate(
+    *,
+    gkw_time_path=None,
+    gkw_parallel_phi_path=None,
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    initial_profile: str = "cosine2",
+    parallel_derivative_model: str = "gkw_igh",
+    normalization_model: str = "gkw_unweighted",
+    profile_tolerance: float = 2.0e-2,
+    tolerance_ladder: tuple[float, ...] = (5.0e-2, 3.0e-2, 2.0e-2, 1.0e-2),
+    time_tolerance: float = 1.0e-8,
+    z_tolerance: float = 1.0e-12,
+) -> ParallelPhiProfileGateReport:
+    """Run the solver and evaluate the direct GKW ``parallel_phi.dat`` profile gate."""
+
+    gkw_time_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_time.dat"
+        if gkw_time_path is None
+        else gkw_time_path
+    )
+    gkw_parallel_phi_path = Path(
+        "fixtures/gkw_cyclone_selected_ky_cosin2_parallel_phi.dat"
+        if gkw_parallel_phi_path is None
+        else gkw_parallel_phi_path
+    )
+    solver_profile = run_cyclone_base_case_parallel_phi_trace(
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        initial_profile=initial_profile,
+        normalization_model=normalization_model,
+        parallel_derivative_model=parallel_derivative_model,
+    )
+    reference_profile = load_gkw_parallel_phi_trace(
+        gkw_parallel_phi_path,
+        time_path=gkw_time_path,
+        z=np.asarray(solver_profile.z),
+        source=(
+            "gkw:cosin2:parallel_phi.dat"
+            if initial_profile == "cosine2"
+            else f"gkw:{initial_profile}:parallel_phi.dat"
+        ),
+        notes="selected-ky direct parallel profile-shape gate reference",
+    )
+    return evaluate_parallel_phi_profile_gate(
+        solver_profile,
+        reference_profile,
+        profile_tolerance=profile_tolerance,
+        tolerance_ladder=tolerance_ladder,
+        time_tolerance=time_tolerance,
+        z_tolerance=z_tolerance,
     )
 
 
