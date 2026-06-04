@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 
 ## Current State
 
@@ -412,9 +412,15 @@ this reduced resolution, with maximum growth/frequency errors
 `3.4126147136700866` and `32.96113280061864`. These convention checks are now
 repeatable through `CycloneKyScanConventionAudit`; the reduced GX audit ranks
 `k_theta_rhos:freq_sign=1:freq_scale=1` as the best candidate with combined
-normalized score `1492.32209614`, but no candidate passes. The next narrowed
-target is production-control multi-`ky` normalization/calibration and
-mode-structure fixture coverage.
+normalized score `1492.32209614`, but no candidate passes. The audit now also
+stores candidate growth-window diagnostics and normalization models, so
+production-control calibration can rank `late_fit` versus `late_mean_window`
+and `weighted` versus `gkw_unweighted` alongside `ky` and frequency
+conventions. At the deliberately tiny two-window smoke resolution those new
+diagnostic/normalization variants tie numerically, with max growth/frequency
+errors `2.23469787` and `29.76266488`. The next narrowed target is
+production-control multi-`ky` normalization/calibration and mode-structure
+fixture coverage.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -600,6 +606,60 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-05: Extended Scan Audit to Diagnostic and Normalization Candidates
+
+- There were no tracked changes to commit at the start of this round; only
+  long-lived untracked reference/build artifacts were present.
+- Extended `CycloneKyScanConventionAudit` with static candidate metadata for:
+  - `growth_diagnostics`,
+  - `normalization_models`.
+- Extended `evaluate_cyclone_ky_scan_convention_audit` and
+  `run_cyclone_base_case_ky_scan_convention_audit` so the convention audit can
+  rank combinations of growth-window diagnostic, field-normalization model,
+  `ky` input convention, observed frequency sign, and observed frequency
+  scale.
+- Kept the public runner backward compatible: the existing singular
+  `growth_diagnostic` and `normalization_model` arguments still define the
+  default one-choice candidate family when the new plural arguments are not
+  supplied.
+- Reduced GX two-point smoke audit at `ky=(0.3,0.5)`, `n_z=8`, `n_vpar=6`,
+  `n_mu=4`, `steps_per_window=2`, `n_windows=2`, `gkw_igh`, expanded only over
+  `late_fit`/`late_mean_window` and `weighted`/`gkw_unweighted`:
+  - gate OPEN,
+  - best reported candidate:
+    `late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1`,
+  - maximum growth errors:
+    `[2.23469787, 2.23469787, 2.23469787, 2.23469787]`,
+  - maximum frequency errors:
+    `[29.76266488, 29.76266488, 29.76266488, 29.76266488]`,
+  - combined normalized errors:
+    `[1492.32209614, 1492.32209614, 1492.32209614, 1492.32209614]`.
+- Interpretation: the new metadata path is working, but at this tiny
+  two-window smoke resolution the growth-window and normalization variants are
+  numerically degenerate. The production-control scan calibration remains the
+  next physics/benchmark item.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `tests/test_benchmark_references.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `git status --short`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan_convention"`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_ky_scan_convention_audit(...) ..."`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - ruff passed,
+  - focused convention-audit tests passed: `2 passed, 60 deselected in 9.52s`.
+  - `main.tex` built successfully to a 30-page `main.pdf`.
+  - full x64 pytest suite passed: `230 passed in 363.88s`.
+- Next action: run the expanded scan-audit grid at production-control windows
+  and add per-`ky` profile/eigenfunction fixtures where external references are
+  available.
 
 ### 2026-06-05: Added Repeatable Scan Convention Audit
 

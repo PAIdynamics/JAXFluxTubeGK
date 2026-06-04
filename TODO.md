@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-06-02
+Last planned: 2026-06-05
 
 ## Project Goal
 
@@ -704,10 +704,18 @@ state-history and benchmark-scan inconsistencies:
   reduced GX two-point smoke audit, the best candidate is
   `k_theta_rhos:freq_sign=1:freq_scale=1`, but it remains OPEN with max growth
   error `2.23` and max frequency error `29.76`.
+- [x] Extend `CycloneKyScanConventionAudit` so scan candidates also carry
+  growth-window diagnostics (`late_fit` versus `late_mean_window`) and field
+  normalization labels (`weighted` versus `gkw_unweighted`). A reduced
+  two-point smoke run with the expanded candidate grid remains OPEN and ties
+  across those two labels at the tiny two-window resolution: max growth error
+  `2.23`, max frequency error `29.76`, and best reported candidate
+  `late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1`.
 - [ ] Calibrate the multi-`ky` Cyclone/ITG scan gate with production-control
-  resolution and matched reference normalization. The next target is to reduce
-  the scan-level growth/frequency gaps and add per-`ky` mode-structure
-  fixtures where external `parallel_phi.dat`/eigenfunction data are available.
+  resolution and matched reference normalization. The next target is to run
+  the expanded candidate grid on production-control windows, then reduce the
+  scan-level growth/frequency gaps and add per-`ky` mode-structure fixtures
+  where external `parallel_phi.dat`/eigenfunction data are available.
 - [ ] After the CBC scan gates are stable, extend the
   benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
   compatible geometry arrays and keep DESC optimization examples labeled

@@ -199,6 +199,8 @@ class CycloneKyScanConventionAudit(_PyTreeDataclass):
     passed: object
     candidate_names: tuple[str, ...]
     ky_input_conventions: tuple[str, ...]
+    growth_diagnostics: tuple[str, ...]
+    normalization_models: tuple[str, ...]
     observed_frequency_signs: tuple[float, ...]
     observed_frequency_scales: tuple[float, ...]
     growth_tolerance: float
@@ -228,6 +230,8 @@ class CycloneKyScanConventionAudit(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = (
         "candidate_names",
         "ky_input_conventions",
+        "growth_diagnostics",
+        "normalization_models",
         "observed_frequency_signs",
         "observed_frequency_scales",
         "growth_tolerance",
@@ -249,6 +253,15 @@ class CycloneKyScanConventionAudit(_PyTreeDataclass):
         n_candidate = len(self.candidate_names)
         if n_candidate == 0:
             raise ValueError("candidate_names must not be empty")
+        for name in (
+            "ky_input_conventions",
+            "growth_diagnostics",
+            "normalization_models",
+            "observed_frequency_signs",
+            "observed_frequency_scales",
+        ):
+            if len(getattr(self, name)) != n_candidate:
+                raise ValueError(f"{name} must match candidate_names length")
         shape = (n_candidate, ky.shape[0])
         object.__setattr__(self, "ky", ky)
         matched = jnp.asarray(self.matched_reference_ky, dtype=jnp.float64)
@@ -292,6 +305,8 @@ class CycloneKyScanConventionAudit(_PyTreeDataclass):
         object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
         object.__setattr__(self, "candidate_names", tuple(self.candidate_names))
         object.__setattr__(self, "ky_input_conventions", tuple(self.ky_input_conventions))
+        object.__setattr__(self, "growth_diagnostics", tuple(self.growth_diagnostics))
+        object.__setattr__(self, "normalization_models", tuple(self.normalization_models))
         object.__setattr__(
             self,
             "observed_frequency_signs",
@@ -3033,6 +3048,8 @@ def evaluate_cyclone_ky_scan_convention_audit(
     *,
     candidate_names: tuple[str, ...] | None = None,
     ky_input_conventions: tuple[str, ...] | None = None,
+    growth_diagnostics: tuple[str, ...] | None = None,
+    normalization_models: tuple[str, ...] | None = None,
     observed_frequency_signs: tuple[float, ...] | None = None,
     observed_frequency_scales: tuple[float, ...] | None = None,
     notes: str = "",
@@ -3061,6 +3078,16 @@ def evaluate_cyclone_ky_scan_convention_audit(
         if ky_input_conventions is None
         else tuple(ky_input_conventions)
     )
+    growth_diagnostics = (
+        tuple("" for _ in range(n_candidate))
+        if growth_diagnostics is None
+        else tuple(growth_diagnostics)
+    )
+    normalization_models = (
+        tuple("" for _ in range(n_candidate))
+        if normalization_models is None
+        else tuple(normalization_models)
+    )
     observed_frequency_signs = (
         tuple(1.0 for _ in range(n_candidate))
         if observed_frequency_signs is None
@@ -3073,6 +3100,8 @@ def evaluate_cyclone_ky_scan_convention_audit(
     )
     for name, values in (
         ("ky_input_conventions", ky_input_conventions),
+        ("growth_diagnostics", growth_diagnostics),
+        ("normalization_models", normalization_models),
         ("observed_frequency_signs", observed_frequency_signs),
         ("observed_frequency_scales", observed_frequency_scales),
     ):
@@ -3116,7 +3145,10 @@ def evaluate_cyclone_ky_scan_convention_audit(
     observed_frequency = jnp.stack([report.observed_frequency for report in reports])
     frequency_error = jnp.stack([report.frequency_error for report in reports])
     profile_error = jnp.stack([report.profile_error for report in reports])
-    max_growth_errors = jnp.asarray([report.max_growth_error for report in reports], dtype=jnp.float64)
+    max_growth_errors = jnp.asarray(
+        [report.max_growth_error for report in reports],
+        dtype=jnp.float64,
+    )
     max_frequency_errors = jnp.asarray(
         [report.max_frequency_error for report in reports],
         dtype=jnp.float64,
@@ -3158,6 +3190,8 @@ def evaluate_cyclone_ky_scan_convention_audit(
         passed=jnp.any(candidate_passed),
         candidate_names=candidate_names,
         ky_input_conventions=ky_input_conventions,
+        growth_diagnostics=growth_diagnostics,
+        normalization_models=normalization_models,
         observed_frequency_signs=observed_frequency_signs,
         observed_frequency_scales=observed_frequency_scales,
         growth_tolerance=first.growth_tolerance,
@@ -4246,6 +4280,7 @@ def run_cyclone_base_case_ky_scan_convention_audit(
     n_windows: int | None = None,
     growth_window_fraction: float = 0.5,
     growth_diagnostic: str = "late_fit",
+    growth_diagnostics: tuple[str, ...] | None = None,
     growth_tolerance: float = 2.0e-2,
     frequency_tolerance: float = 2.0e-2,
     profile_tolerance: float = 2.0e-2,
@@ -4261,16 +4296,35 @@ def run_cyclone_base_case_ky_scan_convention_audit(
     velocity_backend: str | None = None,
     normalize_each_window: bool = True,
     normalization_model: str = "weighted",
+    normalization_models: tuple[str, ...] | None = None,
     initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
 ) -> CycloneKyScanConventionAudit:
     """Run and rank candidate ``ky``/frequency conventions for the scan gate."""
 
     ky_input_conventions = tuple(ky_input_conventions)
+    growth_diagnostics = (
+        (growth_diagnostic,)
+        if growth_diagnostics is None
+        else tuple(growth_diagnostics)
+    )
+    normalization_models = (
+        (normalization_model,)
+        if normalization_models is None
+        else tuple(normalization_models)
+    )
     observed_frequency_signs = tuple(float(value) for value in observed_frequency_signs)
     observed_frequency_scales = tuple(float(value) for value in observed_frequency_scales)
     if not ky_input_conventions:
         raise ValueError("ky_input_conventions must not be empty")
+    if not growth_diagnostics:
+        raise ValueError("growth_diagnostics must not be empty")
+    if not normalization_models:
+        raise ValueError("normalization_models must not be empty")
+    if any(value not in ("late_fit", "late_mean_window") for value in growth_diagnostics):
+        raise ValueError("growth_diagnostics entries must be 'late_fit' or 'late_mean_window'")
+    if any(value not in ("weighted", "gkw_unweighted") for value in normalization_models):
+        raise ValueError("normalization_models entries must be 'weighted' or 'gkw_unweighted'")
     if not observed_frequency_signs:
         raise ValueError("observed_frequency_signs must not be empty")
     if not observed_frequency_scales:
@@ -4281,50 +4335,56 @@ def run_cyclone_base_case_ky_scan_convention_audit(
         raise ValueError("observed_frequency_scales entries must be positive")
 
     base_reports = {}
-    for convention in ky_input_conventions:
-        base_reports[convention] = run_cyclone_base_case_ky_scan_gate(
-            reference=reference,
-            gx_reference_path=gx_reference_path,
-            ky_values=ky_values,
-            n_z=n_z,
-            n_vpar=n_vpar,
-            n_mu=n_mu,
-            vpar_max=vpar_max,
-            mu_max=mu_max,
-            dt=dt,
-            nperiod=nperiod,
-            steps_per_window=steps_per_window,
-            n_windows=n_windows,
-            growth_window_fraction=growth_window_fraction,
-            growth_diagnostic=growth_diagnostic,
-            ky_input_convention=convention,
-            observed_frequency_sign=1.0,
-            observed_frequency_scale=1.0,
-            growth_tolerance=growth_tolerance,
-            frequency_tolerance=frequency_tolerance,
-            profile_tolerance=profile_tolerance,
-            ky_tolerance=ky_tolerance,
-            profile_error=profile_error,
-            require_frequency=require_frequency,
-            require_profile=require_profile,
-            parallel_recurrence_rate=parallel_recurrence_rate,
-            velocity_recurrence_rate=velocity_recurrence_rate,
-            parallel_backend=parallel_backend,
-            parallel_boundary=parallel_boundary,
-            parallel_derivative_model=parallel_derivative_model,
-            velocity_backend=velocity_backend,
-            normalize_each_window=normalize_each_window,
-            normalization_model=normalization_model,
-            initial_profile=initial_profile,
-            target=target,
-        )
+    for growth_name in growth_diagnostics:
+        for norm_name in normalization_models:
+            for convention in ky_input_conventions:
+                base_reports[(growth_name, norm_name, convention)] = (
+                    run_cyclone_base_case_ky_scan_gate(
+                        reference=reference,
+                        gx_reference_path=gx_reference_path,
+                        ky_values=ky_values,
+                        n_z=n_z,
+                        n_vpar=n_vpar,
+                        n_mu=n_mu,
+                        vpar_max=vpar_max,
+                        mu_max=mu_max,
+                        dt=dt,
+                        nperiod=nperiod,
+                        steps_per_window=steps_per_window,
+                        n_windows=n_windows,
+                        growth_window_fraction=growth_window_fraction,
+                        growth_diagnostic=growth_name,
+                        ky_input_convention=convention,
+                        observed_frequency_sign=1.0,
+                        observed_frequency_scale=1.0,
+                        growth_tolerance=growth_tolerance,
+                        frequency_tolerance=frequency_tolerance,
+                        profile_tolerance=profile_tolerance,
+                        ky_tolerance=ky_tolerance,
+                        profile_error=profile_error,
+                        require_frequency=require_frequency,
+                        require_profile=require_profile,
+                        parallel_recurrence_rate=parallel_recurrence_rate,
+                        velocity_recurrence_rate=velocity_recurrence_rate,
+                        parallel_backend=parallel_backend,
+                        parallel_boundary=parallel_boundary,
+                        parallel_derivative_model=parallel_derivative_model,
+                        velocity_backend=velocity_backend,
+                        normalize_each_window=normalize_each_window,
+                        normalization_model=norm_name,
+                        initial_profile=initial_profile,
+                        target=target,
+                    )
+                )
 
     reports = []
     names = []
     conventions = []
+    growth_names = []
+    norm_names = []
     signs = []
     scales = []
-    for convention, base in base_reports.items():
+    for (growth_name, norm_name, convention), base in base_reports.items():
         for sign in observed_frequency_signs:
             for scale in observed_frequency_scales:
                 reports.append(
@@ -4345,14 +4405,22 @@ def run_cyclone_base_case_ky_scan_convention_audit(
                         require_profile=base.require_profile,
                         source=base.source,
                         notes=(
-                            f"scan convention candidate; ky_input_convention={convention}, "
+                            "scan convention candidate; "
+                            f"growth_diagnostic={growth_name}, "
+                            f"normalization_model={norm_name}, "
+                            f"ky_input_convention={convention}, "
                             f"observed_frequency_sign={sign:g}, "
                             f"observed_frequency_scale={scale:g}"
                         ),
                     )
                 )
-                names.append(f"{convention}:freq_sign={sign:g}:freq_scale={scale:g}")
+                names.append(
+                    f"{growth_name}:{norm_name}:{convention}:"
+                    f"freq_sign={sign:g}:freq_scale={scale:g}"
+                )
                 conventions.append(convention)
+                growth_names.append(growth_name)
+                norm_names.append(norm_name)
                 signs.append(sign)
                 scales.append(scale)
 
@@ -4360,13 +4428,15 @@ def run_cyclone_base_case_ky_scan_convention_audit(
         reports,
         candidate_names=tuple(names),
         ky_input_conventions=tuple(conventions),
+        growth_diagnostics=tuple(growth_names),
+        normalization_models=tuple(norm_names),
         observed_frequency_signs=tuple(signs),
         observed_frequency_scales=tuple(scales),
         notes=(
             "multi-ky Cyclone/ITG scan convention audit; "
-            f"growth_diagnostic={growth_diagnostic}, "
+            f"growth_diagnostics={growth_diagnostics}, "
             f"growth_window_fraction={growth_window_fraction:g}, "
-            f"normalization_model={normalization_model}"
+            f"normalization_models={normalization_models}"
         ),
     )
 

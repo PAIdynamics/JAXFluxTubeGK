@@ -253,6 +253,8 @@ def test_cyclone_ky_scan_convention_audit_ranks_candidates():
         (worse, better),
         candidate_names=("worse", "better"),
         ky_input_conventions=("k_theta_rhos", "internal_krho"),
+        growth_diagnostics=("late_fit", "late_mean_window"),
+        normalization_models=("weighted", "gkw_unweighted"),
         observed_frequency_signs=(1.0, -1.0),
         observed_frequency_scales=(1.0, 1.0),
     )
@@ -261,6 +263,8 @@ def test_cyclone_ky_scan_convention_audit_ranks_candidates():
     assert bool(audit.passed)
     assert int(audit.best_index) == 1
     assert audit.candidate_names == ("worse", "better")
+    assert audit.growth_diagnostics == ("late_fit", "late_mean_window")
+    assert audit.normalization_models == ("weighted", "gkw_unweighted")
     np.testing.assert_allclose(audit.ky, jnp.asarray([0.2, 0.4]))
     np.testing.assert_allclose(audit.solver_ky[1], jnp.asarray([0.2, 0.4]))
     assert float(audit.combined_errors[1]) < float(audit.combined_errors[0])
@@ -611,7 +615,9 @@ def test_cyclone_ky_scan_convention_audit_runs_reduced_candidates():
         reference=reference,
         ky_values=(0.2,),
         ky_input_conventions=("k_theta_rhos",),
-        observed_frequency_signs=(1.0, -1.0),
+        growth_diagnostics=("late_fit", "late_mean_window"),
+        normalization_models=("weighted", "gkw_unweighted"),
+        observed_frequency_signs=(1.0,),
         n_z=8,
         n_vpar=6,
         n_mu=4,
@@ -626,15 +632,30 @@ def test_cyclone_ky_scan_convention_audit_runs_reduced_candidates():
     assert isinstance(audit, CycloneKyScanConventionAudit)
     assert bool(audit.passed)
     assert audit.ky.shape == (1,)
-    assert audit.observed_growth.shape == (2, 1)
-    assert audit.observed_frequency.shape == (2, 1)
+    assert audit.observed_growth.shape == (4, 1)
+    assert audit.observed_frequency.shape == (4, 1)
     assert audit.candidate_names == (
-        "k_theta_rhos:freq_sign=1:freq_scale=1",
-        "k_theta_rhos:freq_sign=-1:freq_scale=1",
+        "late_fit:weighted:k_theta_rhos:freq_sign=1:freq_scale=1",
+        "late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1",
+        "late_mean_window:weighted:k_theta_rhos:freq_sign=1:freq_scale=1",
+        "late_mean_window:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1",
     )
-    assert audit.ky_input_conventions == ("k_theta_rhos", "k_theta_rhos")
-    np.testing.assert_allclose(audit.observed_frequency[0], -audit.observed_frequency[1])
-    assert int(audit.best_index) in (0, 1)
+    assert audit.ky_input_conventions == ("k_theta_rhos",) * 4
+    assert audit.growth_diagnostics == (
+        "late_fit",
+        "late_fit",
+        "late_mean_window",
+        "late_mean_window",
+    )
+    assert audit.normalization_models == (
+        "weighted",
+        "gkw_unweighted",
+        "weighted",
+        "gkw_unweighted",
+    )
+    assert jnp.all(jnp.isfinite(audit.observed_frequency))
+    np.testing.assert_allclose(audit.observed_frequency[0], audit.observed_frequency[1])
+    assert int(audit.best_index) in (0, 1, 2, 3)
     assert "scan convention audit" in audit.notes
 
 
