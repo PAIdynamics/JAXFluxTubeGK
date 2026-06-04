@@ -30,6 +30,7 @@ from stellarator_gk import (
     CycloneVparOddSignAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
+    CycloneKyScanConventionAudit,
     CycloneKyScanGateReport,
     CycloneSourceTermTrace,
     CycloneTrace,
@@ -61,6 +62,7 @@ from stellarator_gk import (
     compare_cyclone_base_case_traces,
     compare_geometry_to_gx_eik_reference,
     compare_parallel_phi_traces,
+    evaluate_cyclone_ky_scan_convention_audit,
     evaluate_cyclone_ky_scan_gate,
     evaluate_parallel_phi_profile_gate,
     geometry_to_gx_eik_reference,
@@ -98,6 +100,7 @@ from stellarator_gk import (
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_source_term_trace,
     run_cyclone_base_case_selected_state_trace,
+    run_cyclone_base_case_ky_scan_convention_audit,
     run_cyclone_base_case_ky_scan_gate,
     run_cyclone_base_case_parallel_phi_profile_gate,
     run_cyclone_base_case_parallel_phi_trace,
@@ -218,6 +221,50 @@ def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
     assert bool(without_profile_reference.passed)
     np.testing.assert_allclose(without_profile_reference.solver_ky, without_profile_reference.ky)
     assert bool(without_profile_reference.profile_passed[0])
+
+
+def test_cyclone_ky_scan_convention_audit_ranks_candidates():
+    worse = evaluate_cyclone_ky_scan_gate(
+        ky=(0.2, 0.4),
+        solver_ky=(0.17, 0.34),
+        matched_reference_ky=(0.2, 0.4),
+        observed_growth=(0.2, 0.1),
+        reference_growth=(0.1, 0.1),
+        observed_frequency=(0.7, 0.8),
+        reference_frequency=(0.2, 0.3),
+        growth_tolerance=5.0e-2,
+        frequency_tolerance=2.0e-1,
+        require_profile=False,
+    )
+    better = evaluate_cyclone_ky_scan_gate(
+        ky=(0.2, 0.4),
+        solver_ky=(0.2, 0.4),
+        matched_reference_ky=(0.2, 0.4),
+        observed_growth=(0.11, 0.09),
+        reference_growth=(0.1, 0.1),
+        observed_frequency=(0.25, 0.35),
+        reference_frequency=(0.2, 0.3),
+        growth_tolerance=5.0e-2,
+        frequency_tolerance=2.0e-1,
+        require_profile=False,
+    )
+
+    audit = evaluate_cyclone_ky_scan_convention_audit(
+        (worse, better),
+        candidate_names=("worse", "better"),
+        ky_input_conventions=("k_theta_rhos", "internal_krho"),
+        observed_frequency_signs=(1.0, -1.0),
+        observed_frequency_scales=(1.0, 1.0),
+    )
+
+    assert isinstance(audit, CycloneKyScanConventionAudit)
+    assert bool(audit.passed)
+    assert int(audit.best_index) == 1
+    assert audit.candidate_names == ("worse", "better")
+    np.testing.assert_allclose(audit.ky, jnp.asarray([0.2, 0.4]))
+    np.testing.assert_allclose(audit.solver_ky[1], jnp.asarray([0.2, 0.4]))
+    assert float(audit.combined_errors[1]) < float(audit.combined_errors[0])
+    np.testing.assert_array_equal(np.asarray(audit.candidate_passed), np.asarray([False, True]))
 
 
 def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
@@ -550,6 +597,45 @@ def test_cyclone_ky_scan_gate_runs_reduced_against_synthetic_reference():
     np.testing.assert_allclose(internal_report.solver_ky, internal_report.ky)
     assert "ky_input_convention=internal_krho" in internal_report.notes
     assert "observed_frequency_sign=-1" in internal_report.notes
+
+
+def test_cyclone_ky_scan_convention_audit_runs_reduced_candidates():
+    reference = GxGrowthRateReference(
+        ky=(0.2,),
+        growth_rate=(0.0,),
+        frequency=(0.0,),
+        source="synthetic-gx-scan",
+    )
+
+    audit = run_cyclone_base_case_ky_scan_convention_audit(
+        reference=reference,
+        ky_values=(0.2,),
+        ky_input_conventions=("k_theta_rhos",),
+        observed_frequency_signs=(1.0, -1.0),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=1,
+        parallel_derivative_model="gkw_igh",
+        growth_tolerance=1.0e3,
+        frequency_tolerance=1.0e3,
+        require_profile=False,
+    )
+
+    assert isinstance(audit, CycloneKyScanConventionAudit)
+    assert bool(audit.passed)
+    assert audit.ky.shape == (1,)
+    assert audit.observed_growth.shape == (2, 1)
+    assert audit.observed_frequency.shape == (2, 1)
+    assert audit.candidate_names == (
+        "k_theta_rhos:freq_sign=1:freq_scale=1",
+        "k_theta_rhos:freq_sign=-1:freq_scale=1",
+    )
+    assert audit.ky_input_conventions == ("k_theta_rhos", "k_theta_rhos")
+    np.testing.assert_allclose(audit.observed_frequency[0], -audit.observed_frequency[1])
+    assert int(audit.best_index) in (0, 1)
+    assert "scan convention audit" in audit.notes
 
 
 def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution():

@@ -698,6 +698,12 @@ state-history and benchmark-scan inconsistencies:
   case, the GKW `k_theta_rhos` convention gives solver `ky=(0.2558,0.4264)`
   and remains less bad than treating GX `ky` as internal `krho`, but both
   conventions are still OPEN.
+- [x] Promote the scan-convention smoke checks into a repeatable
+  `CycloneKyScanConventionAudit` that ranks candidate `ky` and frequency
+  conventions by tolerance-normalized growth/frequency/profile errors. On the
+  reduced GX two-point smoke audit, the best candidate is
+  `k_theta_rhos:freq_sign=1:freq_scale=1`, but it remains OPEN with max growth
+  error `2.23` and max frequency error `29.76`.
 - [ ] Calibrate the multi-`ky` Cyclone/ITG scan gate with production-control
   resolution and matched reference normalization. The next target is to reduce
   the scan-level growth/frequency gaps and add per-`ky` mode-structure

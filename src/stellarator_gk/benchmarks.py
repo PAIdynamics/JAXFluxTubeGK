@@ -177,6 +177,135 @@ class CycloneKyScanGateReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneKyScanConventionAudit(_PyTreeDataclass):
+    """Audit candidate normalization/convention choices for a ``ky`` scan."""
+
+    ky: object
+    matched_reference_ky: object
+    solver_ky: object
+    observed_growth: object
+    reference_growth: object
+    growth_error: object
+    observed_frequency: object
+    reference_frequency: object
+    frequency_error: object
+    profile_error: object
+    max_growth_errors: object
+    max_frequency_errors: object
+    max_profile_errors: object
+    combined_errors: object
+    candidate_passed: object
+    best_index: object
+    passed: object
+    candidate_names: tuple[str, ...]
+    ky_input_conventions: tuple[str, ...]
+    observed_frequency_signs: tuple[float, ...]
+    observed_frequency_scales: tuple[float, ...]
+    growth_tolerance: float
+    frequency_tolerance: float
+    profile_tolerance: float
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "ky",
+        "matched_reference_ky",
+        "solver_ky",
+        "observed_growth",
+        "reference_growth",
+        "growth_error",
+        "observed_frequency",
+        "reference_frequency",
+        "frequency_error",
+        "profile_error",
+        "max_growth_errors",
+        "max_frequency_errors",
+        "max_profile_errors",
+        "combined_errors",
+        "candidate_passed",
+        "best_index",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "candidate_names",
+        "ky_input_conventions",
+        "observed_frequency_signs",
+        "observed_frequency_scales",
+        "growth_tolerance",
+        "frequency_tolerance",
+        "profile_tolerance",
+        "notes",
+    )
+
+    def __post_init__(self):
+        if self.growth_tolerance <= 0.0:
+            raise ValueError("growth_tolerance must be positive")
+        if self.frequency_tolerance <= 0.0:
+            raise ValueError("frequency_tolerance must be positive")
+        if self.profile_tolerance <= 0.0:
+            raise ValueError("profile_tolerance must be positive")
+        ky = jnp.asarray(self.ky, dtype=jnp.float64)
+        if ky.ndim != 1 or ky.shape[0] == 0:
+            raise ValueError("ky must be a nonempty one-dimensional array")
+        n_candidate = len(self.candidate_names)
+        if n_candidate == 0:
+            raise ValueError("candidate_names must not be empty")
+        shape = (n_candidate, ky.shape[0])
+        object.__setattr__(self, "ky", ky)
+        matched = jnp.asarray(self.matched_reference_ky, dtype=jnp.float64)
+        reference_growth = jnp.asarray(self.reference_growth, dtype=jnp.float64)
+        reference_frequency = jnp.asarray(self.reference_frequency, dtype=jnp.float64)
+        for name, values in (
+            ("matched_reference_ky", matched),
+            ("reference_growth", reference_growth),
+            ("reference_frequency", reference_frequency),
+        ):
+            if values.shape != ky.shape:
+                raise ValueError(f"{name} must match ky shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "solver_ky",
+            "observed_growth",
+            "growth_error",
+            "observed_frequency",
+            "frequency_error",
+            "profile_error",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != shape:
+                raise ValueError(f"{name} must have shape (n_candidate,n_ky)")
+            object.__setattr__(self, name, values)
+        for name in (
+            "max_growth_errors",
+            "max_frequency_errors",
+            "max_profile_errors",
+            "combined_errors",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != (n_candidate,):
+                raise ValueError(f"{name} must match candidate_names length")
+            object.__setattr__(self, name, values)
+        candidate_passed = jnp.asarray(self.candidate_passed, dtype=bool)
+        if candidate_passed.shape != (n_candidate,):
+            raise ValueError("candidate_passed must match candidate_names length")
+        object.__setattr__(self, "candidate_passed", candidate_passed)
+        object.__setattr__(self, "best_index", jnp.asarray(self.best_index, dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "candidate_names", tuple(self.candidate_names))
+        object.__setattr__(self, "ky_input_conventions", tuple(self.ky_input_conventions))
+        object.__setattr__(
+            self,
+            "observed_frequency_signs",
+            tuple(float(value) for value in self.observed_frequency_signs),
+        )
+        object.__setattr__(
+            self,
+            "observed_frequency_scales",
+            tuple(float(value) for value in self.observed_frequency_scales),
+        )
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryReference(_PyTreeDataclass):
     """GS2/GX eik-style geometry table sampled along a field line."""
 
@@ -2899,6 +3028,145 @@ def evaluate_cyclone_ky_scan_gate(
     )
 
 
+def evaluate_cyclone_ky_scan_convention_audit(
+    reports,
+    *,
+    candidate_names: tuple[str, ...] | None = None,
+    ky_input_conventions: tuple[str, ...] | None = None,
+    observed_frequency_signs: tuple[float, ...] | None = None,
+    observed_frequency_scales: tuple[float, ...] | None = None,
+    notes: str = "",
+) -> CycloneKyScanConventionAudit:
+    """Rank candidate scan normalization/convention reports.
+
+    The combined score is a tolerance-normalized Euclidean norm of the maximum
+    growth, frequency, and finite profile errors.  Lower is better; a candidate
+    with all scan gate masks passing has ``candidate_passed=True``.
+    """
+
+    reports = tuple(reports)
+    if not reports:
+        raise ValueError("reports must not be empty")
+    first = reports[0]
+    n_candidate = len(reports)
+    candidate_names = (
+        tuple(f"candidate_{index}" for index in range(n_candidate))
+        if candidate_names is None
+        else tuple(candidate_names)
+    )
+    if len(candidate_names) != n_candidate:
+        raise ValueError("candidate_names length must match reports")
+    ky_input_conventions = (
+        tuple("" for _ in range(n_candidate))
+        if ky_input_conventions is None
+        else tuple(ky_input_conventions)
+    )
+    observed_frequency_signs = (
+        tuple(1.0 for _ in range(n_candidate))
+        if observed_frequency_signs is None
+        else tuple(float(value) for value in observed_frequency_signs)
+    )
+    observed_frequency_scales = (
+        tuple(1.0 for _ in range(n_candidate))
+        if observed_frequency_scales is None
+        else tuple(float(value) for value in observed_frequency_scales)
+    )
+    for name, values in (
+        ("ky_input_conventions", ky_input_conventions),
+        ("observed_frequency_signs", observed_frequency_signs),
+        ("observed_frequency_scales", observed_frequency_scales),
+    ):
+        if len(values) != n_candidate:
+            raise ValueError(f"{name} length must match reports")
+
+    ky = jnp.asarray(first.ky, dtype=jnp.float64)
+    matched_reference_ky = jnp.asarray(first.matched_reference_ky, dtype=jnp.float64)
+    reference_growth = jnp.asarray(first.reference_growth, dtype=jnp.float64)
+    reference_frequency = jnp.asarray(first.reference_frequency, dtype=jnp.float64)
+    for report in reports[1:]:
+        if tuple(report.ky.shape) != tuple(ky.shape):
+            raise ValueError("all reports must use the same ky shape")
+        if not np.allclose(np.asarray(report.ky), np.asarray(ky), rtol=0.0, atol=1.0e-12):
+            raise ValueError("all reports must use the same requested ky values")
+        if not np.allclose(
+            np.asarray(report.matched_reference_ky),
+            np.asarray(matched_reference_ky),
+            rtol=0.0,
+            atol=1.0e-12,
+        ):
+            raise ValueError("all reports must use the same matched reference ky values")
+        if not np.allclose(
+            np.asarray(report.reference_growth),
+            np.asarray(reference_growth),
+            rtol=0.0,
+            atol=1.0e-12,
+        ):
+            raise ValueError("all reports must use the same reference growth values")
+        if not np.allclose(
+            np.asarray(report.reference_frequency),
+            np.asarray(reference_frequency),
+            rtol=0.0,
+            atol=1.0e-12,
+        ):
+            raise ValueError("all reports must use the same reference frequency values")
+
+    solver_ky = jnp.stack([report.solver_ky for report in reports])
+    observed_growth = jnp.stack([report.observed_growth for report in reports])
+    growth_error = jnp.stack([report.growth_error for report in reports])
+    observed_frequency = jnp.stack([report.observed_frequency for report in reports])
+    frequency_error = jnp.stack([report.frequency_error for report in reports])
+    profile_error = jnp.stack([report.profile_error for report in reports])
+    max_growth_errors = jnp.asarray([report.max_growth_error for report in reports], dtype=jnp.float64)
+    max_frequency_errors = jnp.asarray(
+        [report.max_frequency_error for report in reports],
+        dtype=jnp.float64,
+    )
+    max_profile_errors = jnp.asarray(
+        [report.max_profile_error for report in reports],
+        dtype=jnp.float64,
+    )
+    profile_finite = jnp.any(jnp.isfinite(profile_error), axis=1)
+    profile_term = jnp.where(
+        profile_finite,
+        max_profile_errors / first.profile_tolerance,
+        0.0,
+    )
+    combined_errors = jnp.sqrt(
+        (max_growth_errors / first.growth_tolerance) ** 2
+        + (max_frequency_errors / first.frequency_tolerance) ** 2
+        + profile_term**2
+    )
+    candidate_passed = jnp.asarray([report.passed for report in reports], dtype=bool)
+    best_index = jnp.argmin(combined_errors)
+    return CycloneKyScanConventionAudit(
+        ky=ky,
+        matched_reference_ky=matched_reference_ky,
+        solver_ky=solver_ky,
+        observed_growth=observed_growth,
+        reference_growth=reference_growth,
+        growth_error=growth_error,
+        observed_frequency=observed_frequency,
+        reference_frequency=reference_frequency,
+        frequency_error=frequency_error,
+        profile_error=profile_error,
+        max_growth_errors=max_growth_errors,
+        max_frequency_errors=max_frequency_errors,
+        max_profile_errors=max_profile_errors,
+        combined_errors=combined_errors,
+        candidate_passed=candidate_passed,
+        best_index=best_index,
+        passed=jnp.any(candidate_passed),
+        candidate_names=candidate_names,
+        ky_input_conventions=ky_input_conventions,
+        observed_frequency_signs=observed_frequency_signs,
+        observed_frequency_scales=observed_frequency_scales,
+        growth_tolerance=first.growth_tolerance,
+        frequency_tolerance=first.frequency_tolerance,
+        profile_tolerance=first.profile_tolerance,
+        notes=notes,
+    )
+
+
 def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     """Load a numeric GS2/GX eik geometry table.
 
@@ -3955,6 +4223,150 @@ def run_cyclone_base_case_ky_scan_gate(
             f"normalization_model={normalization_model}, "
             f"require_frequency={require_frequency}, "
             f"require_profile={require_profile}"
+        ),
+    )
+
+
+def run_cyclone_base_case_ky_scan_convention_audit(
+    *,
+    reference: GxGrowthRateReference | None = None,
+    gx_reference_path=None,
+    ky_values=None,
+    ky_input_conventions: tuple[str, ...] = ("k_theta_rhos", "internal_krho"),
+    observed_frequency_signs: tuple[float, ...] = (1.0, -1.0),
+    observed_frequency_scales: tuple[float, ...] = (1.0,),
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int | None = None,
+    n_windows: int | None = None,
+    growth_window_fraction: float = 0.5,
+    growth_diagnostic: str = "late_fit",
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    profile_error=None,
+    require_frequency: bool = True,
+    require_profile: bool = False,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "weighted",
+    initial_profile: str | None = None,
+    target: BenchmarkTarget | None = None,
+) -> CycloneKyScanConventionAudit:
+    """Run and rank candidate ``ky``/frequency conventions for the scan gate."""
+
+    ky_input_conventions = tuple(ky_input_conventions)
+    observed_frequency_signs = tuple(float(value) for value in observed_frequency_signs)
+    observed_frequency_scales = tuple(float(value) for value in observed_frequency_scales)
+    if not ky_input_conventions:
+        raise ValueError("ky_input_conventions must not be empty")
+    if not observed_frequency_signs:
+        raise ValueError("observed_frequency_signs must not be empty")
+    if not observed_frequency_scales:
+        raise ValueError("observed_frequency_scales must not be empty")
+    if any(sign not in (-1.0, 1.0) for sign in observed_frequency_signs):
+        raise ValueError("observed_frequency_signs entries must be -1.0 or 1.0")
+    if any(scale <= 0.0 for scale in observed_frequency_scales):
+        raise ValueError("observed_frequency_scales entries must be positive")
+
+    base_reports = {}
+    for convention in ky_input_conventions:
+        base_reports[convention] = run_cyclone_base_case_ky_scan_gate(
+            reference=reference,
+            gx_reference_path=gx_reference_path,
+            ky_values=ky_values,
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            n_windows=n_windows,
+            growth_window_fraction=growth_window_fraction,
+            growth_diagnostic=growth_diagnostic,
+            ky_input_convention=convention,
+            observed_frequency_sign=1.0,
+            observed_frequency_scale=1.0,
+            growth_tolerance=growth_tolerance,
+            frequency_tolerance=frequency_tolerance,
+            profile_tolerance=profile_tolerance,
+            ky_tolerance=ky_tolerance,
+            profile_error=profile_error,
+            require_frequency=require_frequency,
+            require_profile=require_profile,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            parallel_derivative_model=parallel_derivative_model,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            initial_profile=initial_profile,
+            target=target,
+        )
+
+    reports = []
+    names = []
+    conventions = []
+    signs = []
+    scales = []
+    for convention, base in base_reports.items():
+        for sign in observed_frequency_signs:
+            for scale in observed_frequency_scales:
+                reports.append(
+                    evaluate_cyclone_ky_scan_gate(
+                        base.ky,
+                        base.observed_growth,
+                        base.reference_growth,
+                        solver_ky=base.solver_ky,
+                        matched_reference_ky=base.matched_reference_ky,
+                        observed_frequency=sign * scale * base.observed_frequency,
+                        reference_frequency=base.reference_frequency,
+                        profile_error=base.profile_error,
+                        growth_tolerance=base.growth_tolerance,
+                        frequency_tolerance=base.frequency_tolerance,
+                        profile_tolerance=base.profile_tolerance,
+                        ky_tolerance=ky_tolerance,
+                        require_frequency=base.require_frequency,
+                        require_profile=base.require_profile,
+                        source=base.source,
+                        notes=(
+                            f"scan convention candidate; ky_input_convention={convention}, "
+                            f"observed_frequency_sign={sign:g}, "
+                            f"observed_frequency_scale={scale:g}"
+                        ),
+                    )
+                )
+                names.append(f"{convention}:freq_sign={sign:g}:freq_scale={scale:g}")
+                conventions.append(convention)
+                signs.append(sign)
+                scales.append(scale)
+
+    return evaluate_cyclone_ky_scan_convention_audit(
+        reports,
+        candidate_names=tuple(names),
+        ky_input_conventions=tuple(conventions),
+        observed_frequency_signs=tuple(signs),
+        observed_frequency_scales=tuple(scales),
+        notes=(
+            "multi-ky Cyclone/ITG scan convention audit; "
+            f"growth_diagnostic={growth_diagnostic}, "
+            f"growth_window_fraction={growth_window_fraction:g}, "
+            f"normalization_model={normalization_model}"
         ),
     )
 

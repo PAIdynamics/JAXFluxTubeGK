@@ -409,9 +409,12 @@ With the GKW `k_theta_rhos` convention, the solver uses internal
 `2.2346978713143635` and `29.762664881869764`. Treating the same GX `ky`
 values as already-internal `krho` uses solver `krho=(0.3,0.5)` and is worse at
 this reduced resolution, with maximum growth/frequency errors
-`3.4126147136700866` and `32.96113280061864`. The next narrowed target is
-production-control multi-`ky` normalization/calibration and mode-structure
-fixture coverage.
+`3.4126147136700866` and `32.96113280061864`. These convention checks are now
+repeatable through `CycloneKyScanConventionAudit`; the reduced GX audit ranks
+`k_theta_rhos:freq_sign=1:freq_scale=1` as the best candidate with combined
+normalized score `1492.32209614`, but no candidate passes. The next narrowed
+target is production-control multi-`ky` normalization/calibration and
+mode-structure fixture coverage.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -597,6 +600,53 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-05: Added Repeatable Scan Convention Audit
+
+- Committed the previous scan-convention control work as `a0ecc5c`
+  (`Expose Cyclone scan convention controls`) before starting this round.
+- Added `CycloneKyScanConventionAudit`,
+  `evaluate_cyclone_ky_scan_convention_audit`, and
+  `run_cyclone_base_case_ky_scan_convention_audit`.
+- The audit ranks candidate combinations of:
+  - `ky_input_convention`,
+  - observed frequency sign,
+  - observed frequency scale,
+  using tolerance-normalized maximum growth, frequency, and finite profile
+  errors.
+- The runner evaluates each `ky_input_convention` once and reuses those base
+  scan results for sign/scale variants, so production calibration can add
+  candidates without multiplying solver runs unnecessarily.
+- Reduced GX two-point audit at `ky=(0.3,0.5)`, `n_z=8`, `n_vpar=6`,
+  `n_mu=4`, `steps_per_window=2`, `n_windows=2`, `gkw_igh`:
+  - gate OPEN,
+  - candidates:
+    `k_theta_rhos:freq_sign=1:freq_scale=1`,
+    `k_theta_rhos:freq_sign=-1:freq_scale=1`,
+    `internal_krho:freq_sign=1:freq_scale=1`,
+    `internal_krho:freq_sign=-1:freq_scale=1`,
+  - maximum growth errors:
+    `[2.23469787, 2.23469787, 3.41261471, 3.41261471]`,
+  - maximum frequency errors:
+    `[29.76266488, 30.67449479, 32.9611328, 33.87296271]`,
+  - combined normalized errors:
+    `[1492.32209614, 1537.78940771, 1656.86617948, 1702.22174057]`,
+  - best candidate: `k_theta_rhos:freq_sign=1:freq_scale=1`.
+- Interpretation: the reduced scan convention audit confirms the standard
+  GKW `k_theta_rhos` positive-frequency convention remains the least-bad
+  candidate, but the gap is far too large for a production parity claim. The
+  next target remains production-control scan calibration and per-`ky`
+  mode-structure/profile fixture coverage.
+- Commands run:
+  - `git commit -m "Expose Cyclone scan convention controls"`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan"`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_ky_scan_convention_audit(...) ..."`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused scan/convention selection passed:
+    `4 passed, 58 deselected in 11.65s`,
+  - full x64 pytest suite passed: `230 passed in 339.71s`.
 
 ### 2026-06-04: Exposed Scan `ky` and Frequency Conventions
 
