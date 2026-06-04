@@ -30,11 +30,13 @@ from stellarator_gk import (
     CycloneVparOddSignAudit,
     CycloneTermIFortranAudit,
     CycloneTimeNormalizationAudit,
+    CycloneKyScanGateReport,
     CycloneSourceTermTrace,
     CycloneTrace,
     ExternalEikProducerReport,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
+    GxGrowthRateReference,
     ParallelPhiProfileGateReport,
     ParallelPhiTrace,
     VelocitySliceConventionAudit,
@@ -59,6 +61,7 @@ from stellarator_gk import (
     compare_cyclone_base_case_traces,
     compare_geometry_to_gx_eik_reference,
     compare_parallel_phi_traces,
+    evaluate_cyclone_ky_scan_gate,
     evaluate_parallel_phi_profile_gate,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
@@ -95,6 +98,7 @@ from stellarator_gk import (
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_source_term_trace,
     run_cyclone_base_case_selected_state_trace,
+    run_cyclone_base_case_ky_scan_gate,
     run_cyclone_base_case_parallel_phi_profile_gate,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
@@ -174,6 +178,44 @@ def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
     np.testing.assert_allclose(target.reference_value, 0.054058794, rtol=2e-6)
     assert target.quantity == "selected_growth_rate"
     assert dict(target.metadata)["matched_ky"] == pytest.approx(0.5)
+
+
+def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
+    report = evaluate_cyclone_ky_scan_gate(
+        ky=(0.2, 0.4),
+        matched_reference_ky=(0.2, 0.4),
+        observed_growth=(0.11, 0.18),
+        reference_growth=(0.10, 0.20),
+        observed_frequency=(-0.21, -0.31),
+        reference_frequency=(-0.20, -0.30),
+        profile_error=(0.01, 0.03),
+        growth_tolerance=2.5e-2,
+        frequency_tolerance=1.5e-2,
+        profile_tolerance=2.0e-2,
+        require_profile=True,
+        source="synthetic",
+    )
+
+    assert isinstance(report, CycloneKyScanGateReport)
+    assert not bool(report.passed)
+    np.testing.assert_allclose(report.growth_error, jnp.asarray([0.01, -0.02]))
+    np.testing.assert_allclose(report.frequency_error, jnp.asarray([-0.01, -0.01]))
+    np.testing.assert_array_equal(np.asarray(report.growth_passed), np.asarray([True, True]))
+    np.testing.assert_array_equal(np.asarray(report.frequency_passed), np.asarray([True, True]))
+    np.testing.assert_array_equal(np.asarray(report.profile_passed), np.asarray([True, False]))
+    np.testing.assert_allclose(report.max_growth_error, 0.02)
+    np.testing.assert_allclose(report.max_frequency_error, 0.01)
+    np.testing.assert_allclose(report.max_profile_error, 0.03)
+
+    without_profile_reference = evaluate_cyclone_ky_scan_gate(
+        ky=(0.2,),
+        observed_growth=(0.1,),
+        reference_growth=(0.1,),
+        require_frequency=False,
+        require_profile=False,
+    )
+    assert bool(without_profile_reference.passed)
+    assert bool(without_profile_reference.profile_passed[0])
 
 
 def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
@@ -451,6 +493,39 @@ def test_production_cyclone_gate_supports_gkw_igh_backend():
     assert jnp.isfinite(cyclone.observed_value)
     assert "parallel_derivative_model=gkw_igh" in cyclone.notes
     assert "velocity_recurrence_rate=0.2" in cyclone.notes
+
+
+def test_cyclone_ky_scan_gate_runs_reduced_against_synthetic_reference():
+    reference = GxGrowthRateReference(
+        ky=(0.2, 0.5),
+        growth_rate=(0.0, 0.0),
+        frequency=(0.0, 0.0),
+        source="synthetic-gx-scan",
+    )
+
+    report = run_cyclone_base_case_ky_scan_gate(
+        reference=reference,
+        ky_values=(0.2, 0.5),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=2,
+        parallel_derivative_model="gkw_igh",
+        growth_tolerance=1.0e3,
+        frequency_tolerance=1.0e3,
+        require_profile=False,
+    )
+
+    assert isinstance(report, CycloneKyScanGateReport)
+    assert bool(report.passed)
+    assert report.ky.shape == (2,)
+    assert report.observed_growth.shape == (2,)
+    assert report.observed_frequency.shape == (2,)
+    assert jnp.all(jnp.isfinite(report.observed_growth))
+    assert jnp.all(jnp.isfinite(report.observed_frequency))
+    np.testing.assert_allclose(report.matched_reference_ky, jnp.asarray([0.2, 0.5]))
+    assert "multi-ky Cyclone/ITG scan gate" in report.notes
 
 
 def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution():

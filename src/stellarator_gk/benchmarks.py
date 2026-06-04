@@ -78,6 +78,102 @@ class GxGrowthRateReference(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class CycloneKyScanGateReport(_PyTreeDataclass):
+    """Multi-``ky`` Cyclone/ITG scan validation against external references."""
+
+    ky: object
+    matched_reference_ky: object
+    observed_growth: object
+    reference_growth: object
+    growth_error: object
+    observed_frequency: object
+    reference_frequency: object
+    frequency_error: object
+    profile_error: object
+    growth_passed: object
+    frequency_passed: object
+    profile_passed: object
+    max_growth_error: object
+    max_frequency_error: object
+    max_profile_error: object
+    passed: object
+    growth_tolerance: float
+    frequency_tolerance: float
+    profile_tolerance: float
+    require_frequency: bool = True
+    require_profile: bool = False
+    source: str = ""
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "ky",
+        "matched_reference_ky",
+        "observed_growth",
+        "reference_growth",
+        "growth_error",
+        "observed_frequency",
+        "reference_frequency",
+        "frequency_error",
+        "profile_error",
+        "growth_passed",
+        "frequency_passed",
+        "profile_passed",
+        "max_growth_error",
+        "max_frequency_error",
+        "max_profile_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "growth_tolerance",
+        "frequency_tolerance",
+        "profile_tolerance",
+        "require_frequency",
+        "require_profile",
+        "source",
+        "notes",
+    )
+
+    def __post_init__(self):
+        if self.growth_tolerance <= 0.0:
+            raise ValueError("growth_tolerance must be positive")
+        if self.frequency_tolerance <= 0.0:
+            raise ValueError("frequency_tolerance must be positive")
+        if self.profile_tolerance <= 0.0:
+            raise ValueError("profile_tolerance must be positive")
+        ky = jnp.asarray(self.ky, dtype=jnp.float64)
+        if ky.ndim != 1 or ky.shape[0] == 0:
+            raise ValueError("ky must be a nonempty one-dimensional array")
+        object.__setattr__(self, "ky", ky)
+        for name in (
+            "matched_reference_ky",
+            "observed_growth",
+            "reference_growth",
+            "growth_error",
+            "observed_frequency",
+            "reference_frequency",
+            "frequency_error",
+            "profile_error",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != ky.shape:
+                raise ValueError(f"{name} must match ky shape")
+            object.__setattr__(self, name, values)
+        for name in ("growth_passed", "frequency_passed", "profile_passed"):
+            values = jnp.asarray(getattr(self, name), dtype=bool)
+            if values.shape != ky.shape:
+                raise ValueError(f"{name} must match ky shape")
+            object.__setattr__(self, name, values)
+        for name in ("max_growth_error", "max_frequency_error", "max_profile_error"):
+            object.__setattr__(
+                self,
+                name,
+                jnp.asarray(getattr(self, name), dtype=jnp.float64),
+            )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class GxEikGeometryReference(_PyTreeDataclass):
     """GS2/GX eik-style geometry table sampled along a field line."""
 
@@ -2676,6 +2772,122 @@ def gx_growth_rate_target(
     )
 
 
+def evaluate_cyclone_ky_scan_gate(
+    ky,
+    observed_growth,
+    reference_growth,
+    *,
+    matched_reference_ky=None,
+    observed_frequency=None,
+    reference_frequency=None,
+    profile_error=None,
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    require_frequency: bool = True,
+    require_profile: bool = False,
+    source: str = "",
+    notes: str = "",
+) -> CycloneKyScanGateReport:
+    """Evaluate a multi-``ky`` Cyclone/ITG scan gate.
+
+    Growth and frequency are first-class scan metrics.  ``profile_error`` is an
+    optional per-``ky`` mode-structure/profile metric, used when independent
+    profile references are available.  If profile data are absent and
+    ``require_profile=False``, the report records ``NaN`` profile errors and
+    does not fail the scan on that slot.
+    """
+
+    if growth_tolerance <= 0.0:
+        raise ValueError("growth_tolerance must be positive")
+    if frequency_tolerance <= 0.0:
+        raise ValueError("frequency_tolerance must be positive")
+    if profile_tolerance <= 0.0:
+        raise ValueError("profile_tolerance must be positive")
+    if ky_tolerance < 0.0:
+        raise ValueError("ky_tolerance must be nonnegative")
+
+    ky_values = jnp.asarray(ky, dtype=jnp.float64)
+    observed_growth = jnp.asarray(observed_growth, dtype=jnp.float64)
+    reference_growth = jnp.asarray(reference_growth, dtype=jnp.float64)
+    if ky_values.ndim != 1 or ky_values.shape[0] == 0:
+        raise ValueError("ky must be a nonempty one-dimensional array")
+    if observed_growth.shape != ky_values.shape or reference_growth.shape != ky_values.shape:
+        raise ValueError("growth arrays must match ky shape")
+
+    if matched_reference_ky is None:
+        matched_reference_ky = ky_values
+    matched_reference_ky = jnp.asarray(matched_reference_ky, dtype=jnp.float64)
+    if matched_reference_ky.shape != ky_values.shape:
+        raise ValueError("matched_reference_ky must match ky shape")
+
+    if observed_frequency is None:
+        observed_frequency = jnp.full_like(ky_values, jnp.nan)
+    if reference_frequency is None:
+        reference_frequency = jnp.full_like(ky_values, jnp.nan)
+    observed_frequency = jnp.asarray(observed_frequency, dtype=jnp.float64)
+    reference_frequency = jnp.asarray(reference_frequency, dtype=jnp.float64)
+    if observed_frequency.shape != ky_values.shape or reference_frequency.shape != ky_values.shape:
+        raise ValueError("frequency arrays must match ky shape")
+
+    if profile_error is None:
+        profile_error = jnp.full_like(ky_values, jnp.nan)
+    profile_error = jnp.asarray(profile_error, dtype=jnp.float64)
+    if profile_error.shape != ky_values.shape:
+        raise ValueError("profile_error must match ky shape")
+
+    growth_error = observed_growth - reference_growth
+    frequency_error = observed_frequency - reference_frequency
+    ky_passed = jnp.abs(ky_values - matched_reference_ky) <= ky_tolerance
+    growth_passed = jnp.abs(growth_error) <= growth_tolerance
+    frequency_finite = jnp.isfinite(observed_frequency) & jnp.isfinite(reference_frequency)
+    frequency_passed = jnp.where(
+        frequency_finite,
+        jnp.abs(frequency_error) <= frequency_tolerance,
+        jnp.logical_not(require_frequency),
+    )
+    profile_finite = jnp.isfinite(profile_error)
+    profile_passed = jnp.where(
+        profile_finite,
+        profile_error <= profile_tolerance,
+        jnp.logical_not(require_profile),
+    )
+    finite_frequency_error = jnp.where(frequency_finite, jnp.abs(frequency_error), 0.0)
+    finite_profile_error = jnp.where(profile_finite, jnp.abs(profile_error), 0.0)
+    passed = (
+        jnp.all(ky_passed)
+        & jnp.all(growth_passed)
+        & jnp.all(frequency_passed)
+        & jnp.all(profile_passed)
+    )
+    return CycloneKyScanGateReport(
+        ky=ky_values,
+        matched_reference_ky=matched_reference_ky,
+        observed_growth=observed_growth,
+        reference_growth=reference_growth,
+        growth_error=growth_error,
+        observed_frequency=observed_frequency,
+        reference_frequency=reference_frequency,
+        frequency_error=frequency_error,
+        profile_error=profile_error,
+        growth_passed=growth_passed & ky_passed,
+        frequency_passed=frequency_passed & ky_passed,
+        profile_passed=profile_passed & ky_passed,
+        max_growth_error=jnp.max(jnp.abs(growth_error)),
+        max_frequency_error=jnp.max(finite_frequency_error),
+        max_profile_error=jnp.max(finite_profile_error),
+        passed=passed,
+        growth_tolerance=float(growth_tolerance),
+        frequency_tolerance=float(frequency_tolerance),
+        profile_tolerance=float(profile_tolerance),
+        require_frequency=bool(require_frequency),
+        require_profile=bool(require_profile),
+        source=source,
+        notes=notes,
+    )
+
+
 def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     """Load a numeric GS2/GX eik geometry table.
 
@@ -3578,6 +3790,142 @@ def run_production_cyclone_base_case_gate(
             f"initial_profile={initial_profile}, "
             f"growth_diagnostic={growth_diagnostic}; "
             f"{gate_status}"
+        ),
+    )
+
+
+def run_cyclone_base_case_ky_scan_gate(
+    *,
+    reference: GxGrowthRateReference | None = None,
+    gx_reference_path=None,
+    ky_values=None,
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int | None = None,
+    n_windows: int | None = None,
+    growth_window_fraction: float = 0.5,
+    growth_diagnostic: str = "late_fit",
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    profile_error=None,
+    require_frequency: bool = True,
+    require_profile: bool = False,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "weighted",
+    initial_profile: str | None = None,
+    target: BenchmarkTarget | None = None,
+) -> CycloneKyScanGateReport:
+    """Run conservative single-mode Cyclone cases over a ``ky`` scan.
+
+    Each point uses the same GKW-compatible single-mode setup as the selected
+    Cyclone gate, with only ``k_theta rho_s`` changed.  This avoids changing
+    the coupled-mode topology while establishing the scan-level benchmark
+    contract for growth, phase frequency, and optional mode-structure/profile
+    errors.
+    """
+
+    if reference is not None and gx_reference_path is not None:
+        raise ValueError("supply either reference or gx_reference_path, not both")
+    if reference is None:
+        gx_reference_path = Path(
+            "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+            "itg_salpha_adiabatic_electrons_correct.out.nc"
+            if gx_reference_path is None
+            else gx_reference_path
+        )
+        reference = load_gx_growth_rate_reference(gx_reference_path)
+    target = target or cyclone_base_case_growth_target()
+    reference_ky = np.asarray(reference.ky, dtype=float)
+    reference_growth = np.asarray(reference.growth_rate, dtype=float)
+    reference_frequency = np.asarray(reference.frequency, dtype=float)
+    if reference_ky.ndim != 1 or reference_ky.size == 0:
+        raise ValueError("reference ky grid must be nonempty")
+
+    requested_ky = reference_ky if ky_values is None else np.asarray(ky_values, dtype=float)
+    if requested_ky.ndim != 1 or requested_ky.size == 0:
+        raise ValueError("ky_values must be a nonempty one-dimensional array")
+    if np.any(~np.isfinite(requested_ky)) or np.any(requested_ky < 0.0):
+        raise ValueError("ky_values must be finite and nonnegative")
+
+    matched_indices = np.asarray(
+        [int(np.argmin(np.abs(reference_ky - value))) for value in requested_ky],
+        dtype=int,
+    )
+    matched_ky = reference_ky[matched_indices]
+    matched_growth = reference_growth[matched_indices]
+    matched_frequency = reference_frequency[matched_indices]
+
+    observed_growth = []
+    observed_frequency = []
+    for ky_value, growth_ref in zip(requested_ky, matched_growth, strict=True):
+        point_target = _cyclone_target_with_ky(
+            target,
+            target_ky=float(ky_value),
+            reference_value=float(growth_ref),
+            tolerance=growth_tolerance,
+            source=reference.source,
+        )
+        point = _run_cyclone_single_ky_scan_point(
+            point_target,
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            n_windows=n_windows,
+            growth_window_fraction=growth_window_fraction,
+            growth_diagnostic=growth_diagnostic,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            parallel_derivative_model=parallel_derivative_model,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            initial_profile=initial_profile,
+        )
+        observed_growth.append(point["growth"])
+        observed_frequency.append(point["frequency"])
+
+    return evaluate_cyclone_ky_scan_gate(
+        requested_ky,
+        jnp.asarray(observed_growth, dtype=jnp.float64),
+        jnp.asarray(matched_growth, dtype=jnp.float64),
+        matched_reference_ky=matched_ky,
+        observed_frequency=jnp.asarray(observed_frequency, dtype=jnp.float64),
+        reference_frequency=jnp.asarray(matched_frequency, dtype=jnp.float64),
+        profile_error=profile_error,
+        growth_tolerance=growth_tolerance,
+        frequency_tolerance=frequency_tolerance,
+        profile_tolerance=profile_tolerance,
+        ky_tolerance=ky_tolerance,
+        require_frequency=require_frequency,
+        require_profile=require_profile,
+        source=f"stellarator_gk scan against {reference.source}",
+        notes=(
+            "multi-ky Cyclone/ITG scan gate using GKW-compatible single-mode "
+            f"runs; growth_diagnostic={growth_diagnostic}, "
+            f"growth_window_fraction={growth_window_fraction:g}, "
+            f"normalization_model={normalization_model}, "
+            f"require_frequency={require_frequency}, "
+            f"require_profile={require_profile}"
         ),
     )
 
@@ -11961,6 +12309,218 @@ def _gkw_complex_real_split_action(matrix, vector, *, threshold: float):
     n_real = int(np.count_nonzero((np.abs(matrix) > threshold) & real_mask))
     n_complex = int(np.count_nonzero((np.abs(matrix) > threshold) & ~real_mask))
     return action, n_real, n_complex
+
+
+def _cyclone_target_with_ky(
+    target: BenchmarkTarget,
+    *,
+    target_ky: float,
+    reference_value: float,
+    tolerance: float,
+    source: str,
+) -> BenchmarkTarget:
+    metadata = dict(target.metadata)
+    metadata["k_theta_rhos"] = float(target_ky)
+    metadata["scan_reference_source"] = source
+    return replace(
+        target,
+        reference_value=float(reference_value),
+        tolerance=float(tolerance),
+        source=source,
+        metadata=tuple(metadata.items()),
+    )
+
+
+def _run_cyclone_single_ky_scan_point(
+    target: BenchmarkTarget,
+    *,
+    n_z: int | None,
+    n_vpar: int | None,
+    n_mu: int | None,
+    vpar_max: float | None,
+    mu_max: float | None,
+    dt: float | None,
+    nperiod: int | None,
+    steps_per_window: int | None,
+    n_windows: int | None,
+    growth_window_fraction: float,
+    growth_diagnostic: str,
+    parallel_recurrence_rate: float | None,
+    velocity_recurrence_rate: float | None,
+    parallel_backend: str | None,
+    parallel_boundary: str | None,
+    parallel_derivative_model: str | None,
+    velocity_backend: str | None,
+    normalize_each_window: bool,
+    normalization_model: str,
+    initial_profile: str | None,
+) -> dict[str, object]:
+    from .physics import solve_adiabatic_electron_phi
+    from .solver import linear_residual
+    from .time_advance import integrate_fixed_step, normalize_by_ky_amplitude, real_frequency
+
+    metadata = dict(target.metadata)
+    n_z = int(metadata["n_z"] if n_z is None else n_z)
+    n_vpar = int(metadata["n_vpar"] if n_vpar is None else n_vpar)
+    n_mu = int(metadata["n_mu"] if n_mu is None else n_mu)
+    vpar_max = float(metadata["vpar_max"] if vpar_max is None else vpar_max)
+    nperiod = int(metadata["nperiod"] if nperiod is None else nperiod)
+    dt = float(metadata["dt"] if dt is None else dt)
+    steps_per_window = int(
+        metadata["steps_per_window"] if steps_per_window is None else steps_per_window
+    )
+    n_windows = int(metadata["n_windows"] if n_windows is None else n_windows)
+    parallel_recurrence_rate = float(
+        metadata["disp_par"] if parallel_recurrence_rate is None else parallel_recurrence_rate
+    )
+    parallel_backend = str(
+        metadata.get("parallel_backend", "finite_difference")
+        if parallel_backend is None
+        else parallel_backend
+    )
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    parallel_derivative_model = str(
+        metadata.get("parallel_derivative_model", "gkw_upwind")
+        if parallel_derivative_model is None
+        else parallel_derivative_model
+    )
+    velocity_recurrence_rate = _cyclone_velocity_recurrence_rate(
+        metadata,
+        velocity_recurrence_rate,
+        parallel_derivative_model,
+    )
+    velocity_backend = str(
+        metadata.get("velocity_backend", "finite_difference")
+        if velocity_backend is None
+        else velocity_backend
+    )
+    initial_profile = str(
+        metadata.get("initial_profile", "cosine2") if initial_profile is None else initial_profile
+    )
+    if steps_per_window < 1:
+        raise ValueError("steps_per_window must be positive")
+    if n_windows < 1:
+        raise ValueError("n_windows must be positive")
+    if not 0.0 <= growth_window_fraction < 1.0:
+        raise ValueError("growth_window_fraction must lie in [0, 1)")
+    if growth_diagnostic not in ("late_fit", "late_mean_window"):
+        raise ValueError("growth_diagnostic must be 'late_fit' or 'late_mean_window'")
+    if normalization_model not in ("weighted", "gkw_unweighted"):
+        raise ValueError("normalization_model must be 'weighted' or 'gkw_unweighted'")
+
+    setup = _build_cyclone_base_case_setup(
+        target,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        nperiod=nperiod,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        initial_profile=initial_profile,
+    )
+    selected = int(setup["selected_ky_index"])
+    state = setup["state"]
+    log_normalization = jnp.zeros((setup["fourier"].ky.shape[0],), dtype=jnp.float64)
+    late_start_index = max(0, min(int(n_windows * growth_window_fraction), n_windows - 1))
+    late_start_phi = None
+    late_start_time = None
+    final_phi = None
+    final_time = None
+    times = []
+    log_amplitudes = []
+
+    solve_phi = jax.jit(
+        lambda state_value: solve_adiabatic_electron_phi(state_value, setup["precompute"].field)
+    )
+    advance_window = jax.jit(
+        lambda state_value: (
+            integrate_fixed_step(
+                state_value,
+                dt,
+                steps_per_window,
+                linear_residual,
+                setup["precompute"],
+                store_history=False,
+            ).state
+        )
+    )
+
+    def snapshot(time_value, state_value, accumulated_log):
+        phi_value = solve_phi(state_value)
+        amplitude = _cyclone_phi_normalization_amplitude(
+            phi_value,
+            setup,
+            normalization_model=normalization_model,
+        )
+        floor = jnp.asarray(1.0e-300, dtype=amplitude.dtype)
+        log_amplitudes.append(jnp.log(jnp.maximum(amplitude, floor)) + accumulated_log)
+        times.append(float(time_value))
+        return phi_value, amplitude
+
+    phi, amplitude = snapshot(0.0, state, log_normalization)
+    if late_start_index == 0:
+        late_start_phi = phi
+        late_start_time = 0.0
+    for window in range(n_windows):
+        state = advance_window(state)
+        current_time = (window + 1) * steps_per_window * dt
+        phi, amplitude = snapshot(current_time, state, log_normalization)
+        sample_index = window + 1
+        if sample_index == late_start_index:
+            late_start_phi = phi
+            late_start_time = current_time
+        if normalize_each_window:
+            normalized = normalize_by_ky_amplitude(
+                state,
+                amplitude,
+                log_normalization=log_normalization,
+            )
+            state = normalized.state
+            log_normalization = normalized.log_normalization
+    final_phi = phi
+    final_time = n_windows * steps_per_window * dt
+    if late_start_phi is None or late_start_time is None:
+        raise RuntimeError("internal error: missing late-window scan snapshot")
+
+    times_array = jnp.asarray(times, dtype=jnp.float64)
+    log_amplitude_array = jnp.stack(log_amplitudes)
+    if growth_diagnostic == "late_fit":
+        growth = _fit_growth_from_log_amplitudes(
+            times_array,
+            log_amplitude_array,
+            start_fraction=growth_window_fraction,
+        )[selected]
+    else:
+        window_growth = jnp.diff(log_amplitude_array[:, selected]) / jnp.diff(times_array)
+        n_window = window_growth.shape[0]
+        start = max(0, min(int(n_window * growth_window_fraction), n_window - 1))
+        growth = jnp.mean(window_growth[start:])
+    frequency = real_frequency(
+        late_start_phi,
+        final_phi,
+        late_start_time,
+        final_time,
+        w_z=setup["geometry"].w_z,
+        connectivity=setup["connectivity"],
+    )[selected]
+    profile = _normalize_profile_rows(
+        jnp.abs(final_phi[:, setup["fourier"].ixzero, selected])[None, :] ** 2
+    )[0]
+    return {
+        "growth": growth,
+        "frequency": frequency,
+        "profile": profile,
+    }
 
 
 def _l2_norm(values):

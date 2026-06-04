@@ -398,7 +398,14 @@ has max norm `0.014983892939428313`, and replay from GKW step 0 to step 20
 closes with max gate error `1.1708576174967147e-09`. The next narrowed
 consistency target is therefore not operator/action parity, RK4/window
 normalization cadence, initialization, or direct `parallel_phi.dat`
-profile-shape parity, but the multi-`ky` Cyclone/ITG benchmark scan.
+profile-shape parity. A public multi-`ky` Cyclone/ITG scan gate now exists:
+`CycloneKyScanGateReport`, `evaluate_cyclone_ky_scan_gate`, and
+`run_cyclone_base_case_ky_scan_gate` compare per-`ky` growth, real frequency,
+and optional mode-structure/profile errors. The first reduced two-point GX
+smoke comparison at `ky=(0.3,0.5)` is finite but OPEN, with maximum growth
+error `2.2346978713143635` and maximum frequency error
+`29.762664881869764`; the next narrowed target is production-control
+multi-`ky` normalization/calibration and mode-structure fixture coverage.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -537,19 +544,20 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: use the now-passing RHS/action, initialization, one-window replay, and
-direct `parallel_phi.dat` profile-shape gates to broaden validation from a
-single selected `ky=0.5` Cyclone point to a multi-`ky` Cyclone/ITG scan. The
-next narrowed target is a production-style scan gate:
+Goal: use the new multi-`ky` scan gate to calibrate production-control
+Cyclone/ITG scan parity instead of another selected-point scalar comparison.
+The next narrowed target is scan normalization and reference matching:
 
-- collect or synthesize matched GX/GKW/Gyaradax/GS2-style reference points for
-  several Cyclone `ky` values, including growth rate, real frequency when
-  available, and mode-structure/profile diagnostics,
-- implement a public scan report/gate that distinguishes scalar growth,
-  frequency, and mode-structure tolerances instead of folding them into one
-  selected-mode result,
-- reuse the new direct `parallel_phi.dat` profile gate for any selected
-  reference points that have profile histories,
+- run the scan gate at production-control resolution for a small set of
+  available GX/GKW/Gyaradax/GS2 `ky` points and record whether the growth and
+  real-frequency errors remain normalization/convention gaps or resolution
+  gaps,
+- align frequency sign, time-window, `k_theta rho_s` versus internal `krho`,
+  and GKW/GX normalization conventions across the scan,
+- add per-`ky` mode-structure/profile references where external
+  `parallel_phi.dat`, eigenfunction, or equivalent GX/GKW outputs are
+  available, reusing the direct `parallel_phi.dat` profile gate for selected
+  points,
 - keep the passing full RHS/action trace (`6.22e-12`), same-state replay
   (`2.35e-12`), mid-run same-state replay (`2.36e-12`), matrix trace
   (`5.77e-15`), input trace (`5.33e-15`), early one-window replay
@@ -560,9 +568,9 @@ next narrowed target is a production-style scan gate:
 
 Expected file changes:
 
-- Cyclone/ITG scan report/gate updates in `benchmarks.py`,
-- optional scan fixture loaders or CSV writers if external references are
+- production-control scan examples/CSV writers if external references are
   available,
+- optional mode-structure/profile fixture loaders for per-`ky` scan points,
 - no new operator/RHS source patch unless the scan gate localizes a new
   source-term, matrix-format, or geometry convention gap,
 - any future independently generated DESC/GX-specific eik fixture if an
@@ -575,12 +583,59 @@ Expected tests:
 
 - retained one-window replay tests for steps 20→40, 780→800/800→820, and
   0→20,
-- focused multi-`ky` scan report/gate tests,
+- retained focused multi-`ky` scan report/gate tests,
+- new production-control or smoke scan calibration tests once tolerances are
+  justified,
 - retained `tests/test_gkw_cosine2_patch.py` RHS/action parity gates,
 - retained selected Cyclone scalar growth, RH plateau, DESC/GX/eik geometry,
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-04: Added Multi-`ky` Cyclone/ITG Scan Gate
+
+- Committed the previous profile-gate work as `aa8523e`
+  (`Add GKW parallel profile validation gate`) before starting this round.
+- Added the public scan validation API:
+  - `CycloneKyScanGateReport`,
+  - `evaluate_cyclone_ky_scan_gate`,
+  - `run_cyclone_base_case_ky_scan_gate`.
+- The scan report separates:
+  - requested and matched reference `ky`,
+  - observed/reference growth and growth error,
+  - observed/reference real frequency and frequency error,
+  - optional per-`ky` profile/mode-structure error,
+  - independent growth, frequency, and profile pass masks.
+- The runner uses conservative GKW-compatible single-mode Cyclone cases for
+  each requested `ky`, changing only `k_theta rho_s`. It computes late-window
+  growth and endpoint phase frequency without storing full histories.
+- Added tests for:
+  - evaluator metric separation and optional profile gating,
+  - a reduced two-point scan against a synthetic `GxGrowthRateReference`.
+- Reduced GX smoke comparison against
+  `relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons_correct.out.nc`
+  at `ky=(0.3,0.5)`, `n_z=8`, `n_vpar=6`, `n_mu=4`,
+  `steps_per_window=2`, `n_windows=2`, `gkw_igh`:
+  - gate OPEN,
+  - observed growth: `[0.39310825, -2.18063908]`,
+  - GX reference growth: `[0.09302952, 0.05405879]`,
+  - maximum growth error: `2.2346978713143635`,
+  - observed frequency: `[11.53503151, 30.21857983]`,
+  - GX reference frequency: `[0.28199405, 0.45591495]`,
+  - maximum frequency error: `29.762664881869764`.
+- Interpretation: the scan contract/scaffold is now in place, but production
+  scan parity is not closed. The next target is production-control
+  normalization/calibration across the scan and per-`ky` profile/eigenfunction
+  fixtures where external references are available.
+- Commands run:
+  - `git commit -m "Add GKW parallel profile validation gate"`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan_gate"`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_ky_scan_gate(ky_values=(0.3,0.5), ...) ..."`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused scan-gate selection passed: `2 passed, 58 deselected in 7.83s`,
+  - full x64 pytest suite passed: `228 passed in 316.47s`.
 
 ### 2026-06-04: Promoted Direct `parallel_phi.dat` Profile Gate
 

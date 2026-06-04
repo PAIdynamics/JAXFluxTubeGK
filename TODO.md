@@ -624,9 +624,10 @@ ready are:
   passes on the current production-control `cosin2` path with maximum error
   \(3.97\times10^{-7}\); the older \(3\times10^{-2}\) mismatch is kept only as
   historical context for the pre-contract audit path.
-- Full ITG growth-rate scans across `ky` against GX/GKW/GS2-style references
-  are not yet implemented; only the selected Cyclone `ky` scalar gate is now
-  passing.
+- A public multi-`ky` Cyclone/ITG scan gate is now implemented against
+  GX/GKW/GS2-style growth/frequency references, with optional profile-error
+  slots. Production scan parity remains OPEN; only the selected Cyclone
+  `ky=0.5` scalar gate is currently passing at production-control resolution.
 - `task.tex` also asks for stellarator/TEM-style benchmark cases, production
   growth-rate/mode-frequency/mode-structure validation, CPU timing evidence on
   target-size runs, and a simplified but real DESC-driven optimization campaign;
@@ -684,10 +685,17 @@ state-history and benchmark-scan inconsistencies:
   tolerances \(5\times10^{-2}\), \(3\times10^{-2}\), \(2\times10^{-2}\), and
   \(1\times10^{-2}\), separating the mode-structure contract from scalar
   growth.
-- [ ] Add a multi-`ky` Cyclone/ITG scan gate against available GX/GKW/Gyaradax
-  references. The selected `ky=0.5` scalar gate is passing, but the
-  `task.tex` benchmark requirement needs growth-rate, frequency, and mode
-  structure consistency across a scan.
+- [x] Add a multi-`ky` Cyclone/ITG scan gate against available GX/GKW/Gyaradax
+  references. The new `CycloneKyScanGateReport` separates growth, real
+  frequency, and optional mode-structure/profile tolerances, and the runner
+  executes conservative GKW-compatible single-mode cases for each requested
+  `ky`. A reduced two-point GX smoke scan at `ky=(0.3,0.5)` is finite but
+  OPEN, with max growth error `2.23` and max frequency error `29.76`, so this
+  is a contract/scaffold closure rather than a production parity closure.
+- [ ] Calibrate the multi-`ky` Cyclone/ITG scan gate with production-control
+  resolution and matched reference normalization. The next target is to reduce
+  the scan-level growth/frequency gaps and add per-`ky` mode-structure
+  fixtures where external `parallel_phi.dat`/eigenfunction data are available.
 - [ ] After the CBC scan gates are stable, extend the
   benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
   compatible geometry arrays and keep DESC optimization examples labeled
