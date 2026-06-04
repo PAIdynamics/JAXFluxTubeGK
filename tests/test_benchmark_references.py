@@ -198,6 +198,7 @@ def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
 
     assert isinstance(report, CycloneKyScanGateReport)
     assert not bool(report.passed)
+    np.testing.assert_allclose(report.solver_ky, report.ky)
     np.testing.assert_allclose(report.growth_error, jnp.asarray([0.01, -0.02]))
     np.testing.assert_allclose(report.frequency_error, jnp.asarray([-0.01, -0.01]))
     np.testing.assert_array_equal(np.asarray(report.growth_passed), np.asarray([True, True]))
@@ -215,6 +216,7 @@ def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
         require_profile=False,
     )
     assert bool(without_profile_reference.passed)
+    np.testing.assert_allclose(without_profile_reference.solver_ky, without_profile_reference.ky)
     assert bool(without_profile_reference.profile_passed[0])
 
 
@@ -524,8 +526,30 @@ def test_cyclone_ky_scan_gate_runs_reduced_against_synthetic_reference():
     assert report.observed_frequency.shape == (2,)
     assert jnp.all(jnp.isfinite(report.observed_growth))
     assert jnp.all(jnp.isfinite(report.observed_frequency))
+    assert jnp.all(report.solver_ky > 0.0)
+    assert not np.allclose(np.asarray(report.solver_ky), np.asarray(report.ky))
     np.testing.assert_allclose(report.matched_reference_ky, jnp.asarray([0.2, 0.5]))
+    assert "ky_input_convention=k_theta_rhos" in report.notes
     assert "multi-ky Cyclone/ITG scan gate" in report.notes
+
+    internal_report = run_cyclone_base_case_ky_scan_gate(
+        reference=reference,
+        ky_values=(0.2,),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=1,
+        parallel_derivative_model="gkw_igh",
+        ky_input_convention="internal_krho",
+        observed_frequency_sign=-1.0,
+        growth_tolerance=1.0e3,
+        frequency_tolerance=1.0e3,
+        require_profile=False,
+    )
+    np.testing.assert_allclose(internal_report.solver_ky, internal_report.ky)
+    assert "ky_input_convention=internal_krho" in internal_report.notes
+    assert "observed_frequency_sign=-1" in internal_report.notes
 
 
 def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution():

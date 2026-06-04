@@ -401,11 +401,17 @@ normalization cadence, initialization, or direct `parallel_phi.dat`
 profile-shape parity. A public multi-`ky` Cyclone/ITG scan gate now exists:
 `CycloneKyScanGateReport`, `evaluate_cyclone_ky_scan_gate`, and
 `run_cyclone_base_case_ky_scan_gate` compare per-`ky` growth, real frequency,
-and optional mode-structure/profile errors. The first reduced two-point GX
-smoke comparison at `ky=(0.3,0.5)` is finite but OPEN, with maximum growth
-error `2.2346978713143635` and maximum frequency error
-`29.762664881869764`; the next narrowed target is production-control
-multi-`ky` normalization/calibration and mode-structure fixture coverage.
+and optional mode-structure/profile errors, while also reporting the solver's
+actual internal `krho` for each requested/reference-space `ky`. The first
+reduced two-point GX smoke comparison at `ky=(0.3,0.5)` is finite but OPEN.
+With the GKW `k_theta_rhos` convention, the solver uses internal
+`krho=(0.2558154,0.426359)` and the maximum growth/frequency errors are
+`2.2346978713143635` and `29.762664881869764`. Treating the same GX `ky`
+values as already-internal `krho` uses solver `krho=(0.3,0.5)` and is worse at
+this reduced resolution, with maximum growth/frequency errors
+`3.4126147136700866` and `32.96113280061864`. The next narrowed target is
+production-control multi-`ky` normalization/calibration and mode-structure
+fixture coverage.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -591,6 +597,45 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-04: Exposed Scan `ky` and Frequency Conventions
+
+- Committed the previous multi-`ky` scan scaffold as `6ae4e6d`
+  (`Add Cyclone ky scan validation gate`) before starting this round.
+- Extended `CycloneKyScanGateReport` with `solver_ky`, the actual internal
+  solver `krho` used at each requested/reference-space `ky`.
+- Added `ky_input_convention` to `run_cyclone_base_case_ky_scan_gate`:
+  - `k_theta_rhos` keeps the GKW s-alpha conversion
+    \(krho = k_\theta\rho_s / (q/(2\pi\epsilon))\),
+  - `internal_krho` treats the supplied scan `ky` values as already in the
+    solver/GX-style internal perpendicular wave-number convention.
+- Added explicit `observed_frequency_sign` and `observed_frequency_scale`
+  controls so future scan-calibration runs can test frequency sign/normalization
+  conventions without changing the raw phase-frequency diagnostic.
+- Reduced GX two-convention smoke comparison at `ky=(0.3,0.5)`,
+  `n_z=8`, `n_vpar=6`, `n_mu=4`, `steps_per_window=2`, `n_windows=2`,
+  `gkw_igh`:
+  - `k_theta_rhos`: solver `krho=[0.2558154, 0.426359]`,
+    observed growth `[0.39310825, -2.18063908]`, max growth error
+    `2.2346978713143635`, observed frequency `[11.53503151, 30.21857983]`,
+    max frequency error `29.762664881869764`,
+  - `internal_krho`: solver `krho=[0.3, 0.5]`, observed growth
+    `[-0.45106443, -3.35855592]`, max growth error
+    `3.4126147136700866`, observed frequency `[13.65431255, 33.41704775]`,
+    max frequency error `32.96113280061864`.
+- Interpretation: the standard GKW `k_theta_rhos` conversion is the better of
+  these two reduced smoke conventions, but both remain OPEN. The next target is
+  production-control scan calibration and external per-`ky` mode-structure
+  fixtures.
+- Commands run:
+  - `git commit -m "Add Cyclone ky scan validation gate"`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan_gate"`
+  - `JAX_ENABLE_X64=1 uv run python -c "... run_cyclone_base_case_ky_scan_gate(... ky_input_convention=...) ..."`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - focused scan-gate selection passed: `2 passed, 58 deselected in 8.67s`,
+  - full x64 pytest suite passed: `228 passed in 334.96s`.
 
 ### 2026-06-04: Added Multi-`ky` Cyclone/ITG Scan Gate
 

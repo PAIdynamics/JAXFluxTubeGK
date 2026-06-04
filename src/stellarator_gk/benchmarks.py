@@ -82,6 +82,7 @@ class CycloneKyScanGateReport(_PyTreeDataclass):
     """Multi-``ky`` Cyclone/ITG scan validation against external references."""
 
     ky: object
+    solver_ky: object
     matched_reference_ky: object
     observed_growth: object
     reference_growth: object
@@ -107,6 +108,7 @@ class CycloneKyScanGateReport(_PyTreeDataclass):
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
         "ky",
+        "solver_ky",
         "matched_reference_ky",
         "observed_growth",
         "reference_growth",
@@ -145,6 +147,7 @@ class CycloneKyScanGateReport(_PyTreeDataclass):
             raise ValueError("ky must be a nonempty one-dimensional array")
         object.__setattr__(self, "ky", ky)
         for name in (
+            "solver_ky",
             "matched_reference_ky",
             "observed_growth",
             "reference_growth",
@@ -2777,6 +2780,7 @@ def evaluate_cyclone_ky_scan_gate(
     observed_growth,
     reference_growth,
     *,
+    solver_ky=None,
     matched_reference_ky=None,
     observed_frequency=None,
     reference_frequency=None,
@@ -2815,6 +2819,12 @@ def evaluate_cyclone_ky_scan_gate(
         raise ValueError("ky must be a nonempty one-dimensional array")
     if observed_growth.shape != ky_values.shape or reference_growth.shape != ky_values.shape:
         raise ValueError("growth arrays must match ky shape")
+
+    if solver_ky is None:
+        solver_ky = ky_values
+    solver_ky = jnp.asarray(solver_ky, dtype=jnp.float64)
+    if solver_ky.shape != ky_values.shape:
+        raise ValueError("solver_ky must match ky shape")
 
     if matched_reference_ky is None:
         matched_reference_ky = ky_values
@@ -2863,6 +2873,7 @@ def evaluate_cyclone_ky_scan_gate(
     )
     return CycloneKyScanGateReport(
         ky=ky_values,
+        solver_ky=solver_ky,
         matched_reference_ky=matched_reference_ky,
         observed_growth=observed_growth,
         reference_growth=reference_growth,
@@ -3810,6 +3821,9 @@ def run_cyclone_base_case_ky_scan_gate(
     n_windows: int | None = None,
     growth_window_fraction: float = 0.5,
     growth_diagnostic: str = "late_fit",
+    ky_input_convention: str = "k_theta_rhos",
+    observed_frequency_sign: float = 1.0,
+    observed_frequency_scale: float = 1.0,
     growth_tolerance: float = 2.0e-2,
     frequency_tolerance: float = 2.0e-2,
     profile_tolerance: float = 2.0e-2,
@@ -3853,6 +3867,12 @@ def run_cyclone_base_case_ky_scan_gate(
     reference_frequency = np.asarray(reference.frequency, dtype=float)
     if reference_ky.ndim != 1 or reference_ky.size == 0:
         raise ValueError("reference ky grid must be nonempty")
+    if ky_input_convention not in ("k_theta_rhos", "internal_krho"):
+        raise ValueError("ky_input_convention must be 'k_theta_rhos' or 'internal_krho'")
+    if observed_frequency_sign not in (-1.0, 1.0):
+        raise ValueError("observed_frequency_sign must be -1.0 or 1.0")
+    if observed_frequency_scale <= 0.0:
+        raise ValueError("observed_frequency_scale must be positive")
 
     requested_ky = reference_ky if ky_values is None else np.asarray(ky_values, dtype=float)
     if requested_ky.ndim != 1 or requested_ky.size == 0:
@@ -3870,10 +3890,12 @@ def run_cyclone_base_case_ky_scan_gate(
 
     observed_growth = []
     observed_frequency = []
+    solver_ky = []
     for ky_value, growth_ref in zip(requested_ky, matched_growth, strict=True):
         point_target = _cyclone_target_with_ky(
             target,
             target_ky=float(ky_value),
+            ky_input_convention=ky_input_convention,
             reference_value=float(growth_ref),
             tolerance=growth_tolerance,
             source=reference.source,
@@ -3902,12 +3924,16 @@ def run_cyclone_base_case_ky_scan_gate(
             initial_profile=initial_profile,
         )
         observed_growth.append(point["growth"])
-        observed_frequency.append(point["frequency"])
+        observed_frequency.append(
+            observed_frequency_sign * observed_frequency_scale * point["frequency"]
+        )
+        solver_ky.append(point["solver_ky"])
 
     return evaluate_cyclone_ky_scan_gate(
         requested_ky,
         jnp.asarray(observed_growth, dtype=jnp.float64),
         jnp.asarray(matched_growth, dtype=jnp.float64),
+        solver_ky=jnp.asarray(solver_ky, dtype=jnp.float64),
         matched_reference_ky=matched_ky,
         observed_frequency=jnp.asarray(observed_frequency, dtype=jnp.float64),
         reference_frequency=jnp.asarray(matched_frequency, dtype=jnp.float64),
@@ -3923,6 +3949,9 @@ def run_cyclone_base_case_ky_scan_gate(
             "multi-ky Cyclone/ITG scan gate using GKW-compatible single-mode "
             f"runs; growth_diagnostic={growth_diagnostic}, "
             f"growth_window_fraction={growth_window_fraction:g}, "
+            f"ky_input_convention={ky_input_convention}, "
+            f"observed_frequency_sign={observed_frequency_sign:g}, "
+            f"observed_frequency_scale={observed_frequency_scale:g}, "
             f"normalization_model={normalization_model}, "
             f"require_frequency={require_frequency}, "
             f"require_profile={require_profile}"
@@ -12315,12 +12344,21 @@ def _cyclone_target_with_ky(
     target: BenchmarkTarget,
     *,
     target_ky: float,
+    ky_input_convention: str,
     reference_value: float,
     tolerance: float,
     source: str,
 ) -> BenchmarkTarget:
     metadata = dict(target.metadata)
-    metadata["k_theta_rhos"] = float(target_ky)
+    if ky_input_convention == "k_theta_rhos":
+        metadata.pop("internal_krho", None)
+        metadata["k_theta_rhos"] = float(target_ky)
+    elif ky_input_convention == "internal_krho":
+        metadata["internal_krho"] = float(target_ky)
+        metadata["k_theta_rhos"] = float(target_ky)
+    else:
+        raise ValueError("ky_input_convention must be 'k_theta_rhos' or 'internal_krho'")
+    metadata["ky_input_convention"] = ky_input_convention
     metadata["scan_reference_source"] = source
     return replace(
         target,
@@ -12520,6 +12558,7 @@ def _run_cyclone_single_ky_scan_point(
         "growth": growth,
         "frequency": frequency,
         "profile": profile,
+        "solver_ky": setup["fourier"].ky[selected],
     }
 
 
@@ -12694,6 +12733,8 @@ def _with_gkw_logbderiv_gfun(geometry, parallel_grid):
 def _gkw_internal_krho_from_metadata(metadata) -> float:
     """Return GKW's internal ``krho`` for the Cyclone benchmark setup."""
 
+    if "internal_krho" in metadata:
+        return float(metadata["internal_krho"])
     k_theta_rhos = float(metadata.get("k_theta_rhos", 0.5))
     geometry = str(metadata.get("geometry", "s-alpha")).lower()
     if geometry != "s-alpha":

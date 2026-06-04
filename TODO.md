@@ -692,6 +692,12 @@ state-history and benchmark-scan inconsistencies:
   `ky`. A reduced two-point GX smoke scan at `ky=(0.3,0.5)` is finite but
   OPEN, with max growth error `2.23` and max frequency error `29.76`, so this
   is a contract/scaffold closure rather than a production parity closure.
+- [x] Add explicit scan-convention controls for `k_theta rho_s` versus
+  internal `krho`, observed frequency sign/scale, and report the actual
+  solver-space `ky` used at each scan point. On the reduced two-point GX smoke
+  case, the GKW `k_theta_rhos` convention gives solver `ky=(0.2558,0.4264)`
+  and remains less bad than treating GX `ky` as internal `krho`, but both
+  conventions are still OPEN.
 - [ ] Calibrate the multi-`ky` Cyclone/ITG scan gate with production-control
   resolution and matched reference normalization. The next target is to reduce
   the scan-level growth/frequency gaps and add per-`ky` mode-structure
