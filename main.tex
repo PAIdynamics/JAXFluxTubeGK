@@ -1839,9 +1839,32 @@ observed frequency sign/scale, late-time growth diagnostic, and
 field-normalization model.  A
 deliberately tiny two-window GX smoke audit at \(k_y=(0.3,0.5)\) is finite but
 open: the expanded diagnostic/normalization variants tie at this resolution
-with maximum growth and frequency errors \(2.23\) and \(29.76\).  The next
-meaningful comparison is therefore a production-control scan with matched
-reference normalization and per-\(k_y\) mode-structure fixtures.
+with maximum growth and frequency errors \(2.23\) and \(29.76\).  The script
+\path{examples/run_cyclone_ky_scan_calibration.py} writes the corresponding
+candidate-by-\(k_y\) CSV table for reduced or production-control settings.
+After explicitly calibrating the GX growth curve to the GKW/Gyaradax selected
+Cyclone target at \(k_y=0.5\), the production-control scan wrapper passes that
+anchor with growth error \(1.00\times10^{-3}\).  The calibrated two-point scan
+still fails at low \(k_y\): the best tested memory-light GX-style setup gives
+\(\gamma(k_y=0.3)=0.138\) versus calibrated reference \(0.308\).  A subsequent
+GX input-convention audit found an additional domain mismatch that must be
+removed before interpreting this as an RHS defect: GX's
+\texttt{ntheta=32} is per \(2\pi\) segment and, with \texttt{nperiod=2}, the
+full stored field-line grid is \(N_z=96\), not 32.  The same audit records the
+remaining true cross-method differences: GX uses a linked boundary,
+Hermite--Laguerre moment evolution with \(48/16\) moments, and a default
+\(k_z\)-dependent hypercollision model, while the current scan path is still the
+collocation/GKW-parity RHS and lacks a per-\(k_y\) complex eigenfunction
+fixture.  The next meaningful comparison is therefore the calibrated
+\texttt{gx-salpha-input} scan on the \(96/48/16\) grid.  That exact-grid scan
+was run with the calibrated GX curve and internal-\(k_\rho\) convention; it
+remains open with
+\(\gamma(k_y=0.3)=0.1433\) versus \(0.3080\) and
+\(\gamma(k_y=0.5)=0.1476\) versus \(0.179\).  Thus the corrected domain is not
+the sole explanation.  The next discriminator is either a GX-style
+Hermite--Laguerre moment RHS with linked-boundary \(k_z\) hypercollision, or an
+external per-\(k_y\) complex mode-structure fixture before changing the
+collocation RHS.
 
 \begin{figure}[htbp]
   \centering

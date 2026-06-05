@@ -418,9 +418,21 @@ production-control calibration can rank `late_fit` versus `late_mean_window`
 and `weighted` versus `gkw_unweighted` alongside `ky` and frequency
 conventions. At the deliberately tiny two-window smoke resolution those new
 diagnostic/normalization variants tie numerically, with max growth/frequency
-errors `2.23469787` and `29.76266488`. The next narrowed target is
-production-control multi-`ky` normalization/calibration and mode-structure
-fixture coverage.
+errors `2.23469787` and `29.76266488`. A production-control scan calibration
+wrapper and CSV exporter now make the next run reproducible:
+`run_production_control_cyclone_ky_scan_convention_audit` fixes the matched
+selected-`ky` production-control settings, and
+`write_cyclone_ky_scan_convention_audit_csv` records every candidate-by-`ky`
+row. The GX reference-normalization mismatch is now separated from the real
+multi-`ky` curve-shape gap: calibrating the GX growth curve to the
+GKW/Gyaradax selected Cyclone target at `ky=0.5` makes the production-control
+scan wrapper pass that anchor with growth error `1.00094374e-03` when
+frequency is not required. The calibrated two-point production scan remains
+OPEN because the low-`ky` point is too weak: with GX-style `nperiod=2` and the
+better `internal_krho` convention, `gamma(0.3)=0.138382805661334` versus
+calibrated reference `0.3080402563529299`, while `gamma(0.5)=0.1639246539370428`
+versus `0.179`. The next narrowed target is therefore low-`ky` branch/domain,
+GX hypercollision/moment, and per-`ky` mode-structure fixture coverage.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -606,6 +618,197 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-05: GX s-alpha Input-Convention Audit for Multi-`ky`
+
+- Added `GxCycloneInputReference` and `load_gx_cyclone_input_reference` for the
+  local GX Cyclone input
+  `relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`.
+  The parser records:
+  - `ntheta=32` per \(2\pi\) segment,
+  - `nperiod=2`,
+  - full stored field-line size `n_z_total=96`,
+  - `ky=0:0.05:0.55`,
+  - `nhermite/nlaguerre=48/16`,
+  - linked parallel boundary,
+  - s-alpha geometry (`q=1.4`, `shat=0.8`, `eps=0.18`, `Rmaj=2.77778`),
+  - GX's requested `k_z` hypercollision path with default
+    `nu_hyper_m=1`, `p_hyper_m=20`, and no constant hypercollision.
+- Added `GxCycloneConventionReport` and
+  `compare_gx_cyclone_input_to_solver_controls`. The report separates numeric
+  setup mismatches from physics gaps:
+  - linked GX boundary not enabled,
+  - GX Hermite-Laguerre moment RHS not enabled,
+  - GX `k_z` hypercollision not enabled,
+  - missing per-`ky` mode-structure/eigenfunction reference.
+- Corrected `gx_salpha_cyclone_growth_target` metadata so `n_z=96` means the
+  full GX field-line grid. The previous `n_z=32` value was only the per-segment
+  `ntheta` and should not be used as a GX-total parallel-grid comparison.
+- Added a `gx-salpha-input` profile to
+  `examples/run_cyclone_ky_scan_calibration.py`, with `n_z=96`,
+  `n_vpar=48`, `n_mu=16`, and 20-by-80 diagnostic windows. This gives an
+  unambiguous command for the next calibrated scan:
+  `--profile gx-salpha-input --target-convention gx-salpha --nperiod 2
+  --ky-input-conventions internal_krho`.
+- Interpretation: the remaining low-`ky` scan gap should be remeasured on the
+  true GX input-control grid before changing RHS physics. If it persists there,
+  the dominant known differences are no longer scalar normalization; they are
+  the GX linked/moment/hypercollision path and the lack of a per-`ky`
+  eigenfunction fixture.
+- Ran the calibrated exact-grid GX-input scan with:
+  `uv run python examples/run_cyclone_ky_scan_calibration.py --profile gx-salpha-input --target-convention gx-salpha --ky-values 0.3,0.5 --ky-input-conventions internal_krho --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --output /tmp/stellarator_gk_cyclone_ky03_ky05_gx_salpha_input_scan.csv`.
+  The scan remains OPEN:
+  - `ky=0.3`: observed growth `0.14325556436195153`, calibrated reference
+    `0.3080402563529299`, growth error `-0.1647846919909784`;
+  - `ky=0.5`: observed growth `0.14759624156710394`, calibrated reference
+    `0.179`, growth error `-0.031403758432896056`;
+  - best max growth error `0.1647846919909784`.
+- Updated interpretation after the exact-grid run: the corrected GX domain does
+  not close the low-`ky` branch-shape gap. The next discriminator should be a
+  GX-style Hermite-Laguerre moment RHS with linked-boundary `k_z`
+  hypercollision, or an external per-`ky` complex mode-structure fixture.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/run_cyclone_ky_scan_calibration.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_cyclone_ky_scan_calibration.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "gx_cyclone_input or gx_salpha_cyclone_target or cyclone_ky_scan or calibrate_gx"`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run python examples/run_cyclone_ky_scan_calibration.py --profile gx-salpha-input --target-convention gx-salpha --ky-values 0.3,0.5 --ky-input-conventions internal_krho --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --output /tmp/stellarator_gk_cyclone_ky03_ky05_gx_salpha_input_scan.csv`
+- Test results:
+  - ruff passed,
+  - focused benchmark-reference tests passed: `11 passed, 58 deselected in 25.43s`.
+  - `main.tex` rebuilt successfully to a 30-page `main.pdf` with only
+    pre-existing underfull-box warnings.
+- Next action: implement the moment/hypercollision discriminator or obtain an
+  external per-`ky` complex mode-structure fixture before changing the
+  collocation RHS.
+
+### 2026-06-05: Anchored GX Scan Normalization and Localized Low-`ky` Gap
+
+- Added `calibrate_gx_growth_rate_reference_to_target`, which explicitly
+  rescales a GX growth curve so one anchor `ky` matches a named
+  GKW/Gyaradax target. This avoids silently comparing the GX native
+  `a/v_t`-style growth curve to the solver's GKW-compatible Cyclone target.
+- Extended the scan runners with:
+  - `calibrate_reference_growth`,
+  - `reference_calibration_ky`,
+  - `reference_calibration_growth`,
+  - `scale_reference_frequency_with_growth`.
+- Fixed the scan gate and convention-audit scoring so
+  `require_frequency=False` and `require_profile=False` really make those
+  finite errors optional. The errors are still recorded in the CSV, but they
+  no longer fail the gate or dominate the combined score when not required.
+- Updated `examples/run_cyclone_ky_scan_calibration.py` with
+  `--calibrate-reference-growth`, `--reference-calibration-ky`,
+  `--reference-calibration-growth`, and
+  `--scale-reference-frequency-with-growth`.
+- Production-control calibration checks:
+  - uncalibrated `ky=0.5`, `nperiod=5`, growth-only:
+    solver `0.17799905626204302` versus GX reference `0.054058791448672615`,
+    growth error `0.1239402648133704`, OPEN;
+  - calibrated `ky=0.5`, `nperiod=5`, growth-only:
+    solver `0.17799905626204302` versus calibrated reference `0.179`,
+    growth error `1.0009437379569774e-03`, PASS;
+  - calibrated `ky=(0.3,0.5)`, `nperiod=5`, GKW `k_theta_rhos` convention:
+    OPEN with max growth error `0.2463962821154987`;
+  - calibrated `ky=(0.3,0.5)`, GX-style `nperiod=2`, GKW `k_theta_rhos`
+    convention: OPEN with max growth error `0.2190173247608752`;
+  - calibrated `ky=(0.3,0.5)`, GX-style `nperiod=2`, comparing
+    `k_theta_rhos` and `internal_krho`: best candidate is
+    `late_mean_window:gkw_unweighted:internal_krho:freq_sign=1:freq_scale=1`,
+    OPEN with max growth error `0.1696574506915959`.
+- Interpretation: the selected-mode growth anchor is no longer the multi-`ky`
+  blocker. The remaining production-control scan gap is a low-`ky` curve-shape
+  problem: at the best tested convention, `gamma(0.3)=0.138382805661334`
+  versus calibrated GX reference `0.3080402563529299`, while
+  `gamma(0.5)=0.1639246539370428` versus `0.179`.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/run_cyclone_ky_scan_calibration.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_cyclone_ky_scan_calibration.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan or calibrate_gx"`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --profile production-control --ky-values 0.5 --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --output /tmp/stellarator_gk_cyclone_ky05_production_scan.csv`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --profile production-control --ky-values 0.5 --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --output /tmp/stellarator_gk_cyclone_ky05_production_scan_calibrated.csv`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --profile production-control --ky-values 0.3,0.5 --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --output /tmp/stellarator_gk_cyclone_ky03_ky05_production_scan_calibrated.csv`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --profile production-control --ky-values 0.3,0.5 --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --nperiod 2 --output /tmp/stellarator_gk_cyclone_ky03_ky05_production_scan_calibrated_nperiod2.csv`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --profile production-control --ky-values 0.3,0.5 --ky-input-conventions k_theta_rhos,internal_krho --growth-diagnostics late_mean_window --normalization-models gkw_unweighted --observed-frequency-signs 1 --ignore-frequency --calibrate-reference-growth --nperiod 2 --output /tmp/stellarator_gk_cyclone_ky03_ky05_production_scan_calibrated_nperiod2_kyconventions.csv`
+- Test results:
+  - ruff passed,
+  - focused calibrated scan tests passed: `8 passed, 58 deselected in 32.28s`.
+- Next action: compare the low-`ky` mode structure and GX `s-alpha`
+  hypercollision/moment conventions before treating the calibrated GX scan as
+  a strict solver-validation gate.
+
+### 2026-06-05: Added Production-Control Scan Calibration Export
+
+- Added `run_production_control_cyclone_ky_scan_convention_audit`, a named
+  wrapper around the generic convention audit with the matched selected-`ky`
+  production-control defaults:
+  - `n_z=48`, `n_vpar=32`, `n_mu=8`,
+  - `nperiod=5`,
+  - `steps_per_window=20`, `n_windows=80`,
+  - `parallel_derivative_model="gkw_igh"`,
+  - `initial_profile="cosine2"`,
+  - `normalization_models=("gkw_unweighted",)`.
+- Added `write_cyclone_ky_scan_convention_audit_csv`, which writes a flat
+  candidate-by-`ky` table with candidate names, best-candidate flag,
+  growth-diagnostic/normalization/`ky`/frequency conventions, requested and
+  matched `ky`, observed/reference growth and frequency, profile errors, and
+  combined scores.
+- Added `examples/run_cyclone_ky_scan_calibration.py`. Its default
+  `reduced-smoke` profile writes a small CSV; `--profile production-control`
+  switches to the 48/32/8 control settings.
+- Reduced example run:
+  - command:
+    `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --output /tmp/stellarator_gk_cyclone_ky_scan_convention_audit.csv`
+  - status: OPEN,
+  - best candidate:
+    `late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1`,
+  - best max growth error: `2.23469787`,
+  - best max frequency error: `29.7626649`,
+  - best combined error: `1492.32210`.
+- Interpretation: the production-control calibration path is now executable and
+  creates an inspection artifact, but the actual production-control multi-`ky`
+  gap is not calibrated yet. The next implementation/debugging step is to run
+  the wrapper at production-control settings on a small real `ky` set and use
+  the CSV-ranked candidate table to decide whether the remaining gap is
+  resolution, reference normalization, frequency convention, or mode-structure
+  data.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/run_cyclone_ky_scan_calibration.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/run_cyclone_ky_scan_calibration.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "cyclone_ky_scan"`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_ky_scan_calibration.py --output /tmp/stellarator_gk_cyclone_ky_scan_convention_audit.csv`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `JAX_ENABLE_X64=1 uv run pytest -q`
+- Test results:
+  - ruff passed,
+  - focused scan tests passed: `6 passed, 58 deselected in 21.83s`,
+  - reduced example wrote `/tmp/stellarator_gk_cyclone_ky_scan_convention_audit.csv`,
+  - `main.tex` built successfully to a 30-page `main.pdf`,
+  - full x64 pytest suite passed: `232 passed in 381.92s`.
+- Next action: run `examples/run_cyclone_ky_scan_calibration.py --profile production-control`
+  on a deliberately small external-reference `ky` set and inspect the exported
+  candidate rows before adding per-`ky` eigenfunction/profile fixtures.
 
 ### 2026-06-05: Extended Scan Audit to Diagnostic and Normalization Candidates
 

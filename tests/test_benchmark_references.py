@@ -1,3 +1,4 @@
+import csv
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -35,6 +36,8 @@ from stellarator_gk import (
     CycloneSourceTermTrace,
     CycloneTrace,
     ExternalEikProducerReport,
+    GxCycloneConventionReport,
+    GxCycloneInputReference,
     GkwVelocitySpaceSlice,
     GkwVelocitySpaceSliceSeries,
     GxGrowthRateReference,
@@ -58,8 +61,10 @@ from stellarator_gk import (
     build_mode_connectivity,
     build_parallel_grid,
     build_velocity_grid,
+    calibrate_gx_growth_rate_reference_to_target,
     cyclone_base_case_growth_target,
     compare_cyclone_base_case_traces,
+    compare_gx_cyclone_input_to_solver_controls,
     compare_geometry_to_gx_eik_reference,
     compare_parallel_phi_traces,
     evaluate_cyclone_ky_scan_convention_audit,
@@ -67,11 +72,13 @@ from stellarator_gk import (
     evaluate_parallel_phi_profile_gate,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
+    gx_salpha_cyclone_growth_target,
     load_cyclone_trace_csv,
     load_gkw_parallel_phi_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice,
     load_gkw_velocity_space_slice_series,
+    load_gx_cyclone_input_reference,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
     resample_gx_eik_geometry_reference,
@@ -111,12 +118,14 @@ from stellarator_gk import (
     rosenbluth_hinton_target,
     run_gx_eik_geometry_gate,
     run_production_cyclone_base_case_gate,
+    run_production_control_cyclone_ky_scan_convention_audit,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_solver_geometry_to_gx_eik_gate,
     single_surface_benchmark_objective,
     write_cyclone_source_term_trace_csv,
+    write_cyclone_ky_scan_convention_audit_csv,
     write_cyclone_trace_csv,
 )
 
@@ -157,6 +166,107 @@ def test_named_benchmark_targets_and_costs_are_differentiable():
     np.testing.assert_allclose(residual, (0.2 - 0.179) / cyclone.tolerance)
     np.testing.assert_allclose(cost, 0.5 * residual**2)
     np.testing.assert_allclose(gradient, residual / cyclone.tolerance)
+
+
+def test_gx_salpha_cyclone_target_matches_input_metadata():
+    target = gx_salpha_cyclone_growth_target()
+    metadata = dict(target.metadata)
+
+    assert target.source.endswith("itg_salpha_adiabatic_electrons.in")
+    assert metadata["q"] == pytest.approx(1.4)
+    assert metadata["shat"] == pytest.approx(0.8)
+    assert metadata["epsilon"] == pytest.approx(0.18)
+    assert metadata["nperiod"] == 2
+    assert metadata["ntheta_per_2pi"] == 32
+    assert metadata["n_z_total"] == 96
+    assert metadata["n_z"] == 96
+    assert metadata["Rmaj_over_Lref"] == pytest.approx(2.77778)
+    assert metadata["R_over_Ln"] == pytest.approx(0.8 * 2.77778)
+    assert metadata["R_over_LT"] == pytest.approx(2.49 * 2.77778)
+    assert metadata["gx_hypercollision_model"] == "kz"
+
+
+def test_gx_cyclone_input_reference_records_domain_and_hypercollision_conventions():
+    path = (
+        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+        "itg_salpha_adiabatic_electrons.in"
+    )
+
+    reference = load_gx_cyclone_input_reference(path)
+
+    assert isinstance(reference, GxCycloneInputReference)
+    assert reference.ntheta_per_2pi == 32
+    assert reference.nperiod == 2
+    assert reference.n_z_total == 96
+    assert reference.nhermite == 48
+    assert reference.nlaguerre == 16
+    assert reference.boundary == "linked"
+    assert reference.geometry == "s-alpha"
+    assert reference.hypercollisions_requested
+    assert reference.hypercollisions_kz
+    assert not reference.hypercollisions_const
+    assert reference.nu_hyper_m == pytest.approx(1.0)
+    assert reference.p_hyper_m == 20
+    assert reference.has_fields_diagnostic
+    assert reference.has_moments_diagnostic
+    assert not reference.has_eigenfunctions_diagnostic
+    np.testing.assert_allclose(reference.ky[:3], [0.0, 0.05, 0.1])
+    np.testing.assert_allclose(reference.ky[-1], 0.55)
+
+
+def test_gx_cyclone_input_convention_report_separates_numeric_and_physics_gaps():
+    path = (
+        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+        "itg_salpha_adiabatic_electrons.in"
+    )
+    reference = load_gx_cyclone_input_reference(path)
+    target = gx_salpha_cyclone_growth_target()
+
+    current_solver = compare_gx_cyclone_input_to_solver_controls(
+        reference,
+        target=target,
+        ky_values=(0.3, 0.5),
+    )
+    gx_like_solver = compare_gx_cyclone_input_to_solver_controls(
+        reference,
+        target=target,
+        ky_values=(0.3, 0.5),
+        parallel_boundary="linked",
+        velocity_representation="hermite_laguerre_moment_rhs",
+        hypercollision_model="gx_kz_hypercollision",
+        mode_structure_reference="external-per-ky-eigenfunction",
+    )
+    underresolved = compare_gx_cyclone_input_to_solver_controls(
+        reference,
+        target=target,
+        n_z=32,
+        n_vpar=32,
+        n_mu=8,
+        ky_values=(0.3, 0.5),
+        parallel_boundary="linked",
+        velocity_representation="hermite_laguerre_moment_rhs",
+        hypercollision_model="gx_kz_hypercollision",
+        mode_structure_reference="external-per-ky-eigenfunction",
+    )
+
+    assert isinstance(current_solver, GxCycloneConventionReport)
+    assert not bool(current_solver.passed)
+    assert bool(jnp.all(current_solver.metric_passed))
+    gap_map = dict(zip(current_solver.gap_names, np.asarray(current_solver.gap_present), strict=True))
+    assert gap_map["linked_parallel_boundary_not_enabled"]
+    assert gap_map["gx_hermite_laguerre_moment_rhs_not_enabled"]
+    assert gap_map["gx_kz_hypercollision_not_enabled"]
+    assert gap_map["per_ky_mode_structure_reference_missing"]
+
+    assert bool(gx_like_solver.passed)
+    np.testing.assert_allclose(gx_like_solver.metric_values, 0.0, atol=1.0e-12)
+    assert not bool(jnp.any(gx_like_solver.gap_present))
+
+    assert not bool(underresolved.passed)
+    metric_map = dict(zip(underresolved.metric_names, np.asarray(underresolved.metric_values), strict=True))
+    assert metric_map["n_z_total"] == pytest.approx(64.0)
+    assert metric_map["n_vpar_or_nhermite"] == pytest.approx(16.0)
+    assert metric_map["n_mu_or_nlaguerre"] == pytest.approx(8.0)
 
 
 def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
@@ -219,6 +329,22 @@ def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
         require_profile=False,
     )
     assert bool(without_profile_reference.passed)
+
+    optional_metric_errors = evaluate_cyclone_ky_scan_gate(
+        ky=(0.2,),
+        observed_growth=(0.1,),
+        reference_growth=(0.1,),
+        observed_frequency=(100.0,),
+        reference_frequency=(0.0,),
+        profile_error=(100.0,),
+        require_frequency=False,
+        require_profile=False,
+    )
+    assert bool(optional_metric_errors.passed)
+    np.testing.assert_array_equal(np.asarray(optional_metric_errors.frequency_passed), [True])
+    np.testing.assert_array_equal(np.asarray(optional_metric_errors.profile_passed), [True])
+    np.testing.assert_allclose(optional_metric_errors.max_frequency_error, 100.0)
+    np.testing.assert_allclose(optional_metric_errors.max_profile_error, 100.0)
     np.testing.assert_allclose(without_profile_reference.solver_ky, without_profile_reference.ky)
     assert bool(without_profile_reference.profile_passed[0])
 
@@ -269,6 +395,70 @@ def test_cyclone_ky_scan_convention_audit_ranks_candidates():
     np.testing.assert_allclose(audit.solver_ky[1], jnp.asarray([0.2, 0.4]))
     assert float(audit.combined_errors[1]) < float(audit.combined_errors[0])
     np.testing.assert_array_equal(np.asarray(audit.candidate_passed), np.asarray([False, True]))
+
+
+def test_cyclone_ky_scan_convention_score_respects_ignore_frequency():
+    first = evaluate_cyclone_ky_scan_gate(
+        ky=(0.5,),
+        observed_growth=(0.179,),
+        reference_growth=(0.179,),
+        observed_frequency=(100.0,),
+        reference_frequency=(0.0,),
+        growth_tolerance=1.0e-2,
+        frequency_tolerance=1.0e-2,
+        require_frequency=False,
+    )
+    second = evaluate_cyclone_ky_scan_gate(
+        ky=(0.5,),
+        observed_growth=(0.189,),
+        reference_growth=(0.179,),
+        observed_frequency=(0.0,),
+        reference_frequency=(0.0,),
+        growth_tolerance=1.0e-2,
+        frequency_tolerance=1.0e-2,
+        require_frequency=False,
+    )
+
+    audit = evaluate_cyclone_ky_scan_convention_audit(
+        (first, second),
+        candidate_names=("growth_best_frequency_bad", "growth_worse_frequency_best"),
+    )
+
+    assert int(audit.best_index) == 0
+    assert float(audit.combined_errors[0]) == pytest.approx(0.0)
+    assert float(audit.combined_errors[1]) == pytest.approx(1.0)
+
+
+def test_calibrate_gx_growth_rate_reference_to_selected_cyclone_target():
+    reference = GxGrowthRateReference(
+        ky=(0.3, 0.5),
+        growth_rate=(0.05, 0.1),
+        frequency=(0.2, 0.4),
+        source="synthetic-gx-scan",
+    )
+    target = replace(cyclone_base_case_growth_target(), reference_value=0.2)
+
+    calibrated = calibrate_gx_growth_rate_reference_to_target(
+        reference,
+        target=target,
+        target_ky=0.5,
+    )
+    calibrated_with_frequency = calibrate_gx_growth_rate_reference_to_target(
+        reference,
+        target=target,
+        target_ky=0.5,
+        scale_frequency=True,
+    )
+
+    np.testing.assert_allclose(calibrated.growth_rate, jnp.asarray([0.1, 0.2]))
+    np.testing.assert_allclose(calibrated.frequency, reference.frequency)
+    assert calibrated.growth_scale == pytest.approx(2.0)
+    assert calibrated.frequency_scale == pytest.approx(1.0)
+    np.testing.assert_allclose(
+        calibrated_with_frequency.frequency,
+        jnp.asarray([0.4, 0.8]),
+    )
+    assert "growth calibrated" in calibrated.source
 
 
 def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
@@ -657,6 +847,82 @@ def test_cyclone_ky_scan_convention_audit_runs_reduced_candidates():
     np.testing.assert_allclose(audit.observed_frequency[0], audit.observed_frequency[1])
     assert int(audit.best_index) in (0, 1, 2, 3)
     assert "scan convention audit" in audit.notes
+
+
+def test_cyclone_ky_scan_convention_audit_csv_writer_records_candidate_rows(tmp_path):
+    reference = GxGrowthRateReference(
+        ky=(0.2,),
+        growth_rate=(0.0,),
+        frequency=(0.0,),
+        source="synthetic-gx-scan",
+    )
+    audit = run_cyclone_base_case_ky_scan_convention_audit(
+        reference=reference,
+        ky_values=(0.2,),
+        ky_input_conventions=("k_theta_rhos",),
+        growth_diagnostics=("late_fit", "late_mean_window"),
+        normalization_models=("gkw_unweighted",),
+        observed_frequency_signs=(1.0, -1.0),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=1,
+        parallel_derivative_model="gkw_igh",
+        growth_tolerance=1.0e3,
+        frequency_tolerance=1.0e3,
+        require_profile=False,
+    )
+    path = tmp_path / "ky_scan_audit.csv"
+
+    write_cyclone_ky_scan_convention_audit_csv(path, audit)
+
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 4
+    assert rows[0]["candidate_name"] == (
+        "late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1"
+    )
+    assert rows[0]["growth_diagnostic"] == "late_fit"
+    assert rows[0]["normalization_model"] == "gkw_unweighted"
+    assert float(rows[0]["requested_ky"]) == pytest.approx(0.2)
+    assert float(rows[0]["solver_ky"]) == pytest.approx(float(audit.solver_ky[0, 0]))
+    assert {row["best_candidate"] for row in rows} <= {"True", "False"}
+
+
+def test_production_control_cyclone_ky_scan_convention_audit_runs_reduced_override():
+    reference = GxGrowthRateReference(
+        ky=(0.2,),
+        growth_rate=(0.0,),
+        frequency=(0.0,),
+        source="synthetic-gx-scan",
+    )
+
+    audit = run_production_control_cyclone_ky_scan_convention_audit(
+        reference=reference,
+        ky_values=(0.2,),
+        ky_input_conventions=("k_theta_rhos",),
+        growth_diagnostics=("late_mean_window",),
+        normalization_models=("gkw_unweighted",),
+        observed_frequency_signs=(1.0,),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=2,
+        n_windows=1,
+        growth_tolerance=1.0e3,
+        frequency_tolerance=1.0e3,
+        require_profile=False,
+    )
+
+    assert isinstance(audit, CycloneKyScanConventionAudit)
+    assert bool(audit.passed)
+    assert audit.candidate_names == (
+        "late_mean_window:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1",
+    )
+    assert audit.growth_diagnostics == ("late_mean_window",)
+    assert audit.normalization_models == ("gkw_unweighted",)
+    assert "production-control multi-ky" in audit.notes
 
 
 def test_production_cyclone_selected_ky_gate_passes_matched_gkw_control_resolution():

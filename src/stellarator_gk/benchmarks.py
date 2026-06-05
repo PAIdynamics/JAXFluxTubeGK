@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import ClassVar
@@ -57,9 +58,17 @@ class GxGrowthRateReference(_PyTreeDataclass):
     source: str
     ikx: int = 0
     average_fraction: float = 0.5
+    growth_scale: float = 1.0
+    frequency_scale: float = 1.0
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = ("ky", "growth_rate", "frequency")
-    _static_fields: ClassVar[tuple[str, ...]] = ("source", "ikx", "average_fraction")
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "source",
+        "ikx",
+        "average_fraction",
+        "growth_scale",
+        "frequency_scale",
+    )
 
     def __post_init__(self):
         ky = jnp.asarray(self.ky, dtype=jnp.float64)
@@ -71,9 +80,196 @@ class GxGrowthRateReference(_PyTreeDataclass):
             raise ValueError("growth_rate and frequency must match ky shape")
         if not 0.0 <= self.average_fraction < 1.0:
             raise ValueError("average_fraction must lie in [0, 1)")
+        if not np.isfinite(self.growth_scale):
+            raise ValueError("growth_scale must be finite")
+        if not np.isfinite(self.frequency_scale):
+            raise ValueError("frequency_scale must be finite")
         object.__setattr__(self, "ky", ky)
         object.__setattr__(self, "growth_rate", growth)
         object.__setattr__(self, "frequency", frequency)
+        object.__setattr__(self, "growth_scale", float(self.growth_scale))
+        object.__setattr__(self, "frequency_scale", float(self.frequency_scale))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GxCycloneInputReference(_PyTreeDataclass):
+    """Parsed GX s-alpha Cyclone input conventions used by scan parity audits."""
+
+    ky: object
+    source: str
+    ntheta_per_2pi: int
+    nperiod: int
+    n_z_total: int
+    nky: int
+    nkx: int
+    nhermite: int
+    nlaguerre: int
+    y0: float
+    boundary: str
+    geometry: str
+    epsilon: float
+    rmaj: float
+    q: float
+    shat: float
+    shift: float
+    fprim: float
+    tprim: float
+    beta: float
+    nonlinear_mode: bool
+    boltzmann_type: str
+    tau_fac: float
+    closure_model: str
+    hypercollisions_requested: bool
+    hypercollisions_const: bool
+    hypercollisions_kz: bool
+    nu_hyper_l: float
+    nu_hyper_m: float
+    nu_hyper_lm: float
+    p_hyper_l: int
+    p_hyper_m: int
+    p_hyper_lm: int
+    d_hyper: float
+    has_fields_diagnostic: bool
+    has_moments_diagnostic: bool
+    has_eigenfunctions_diagnostic: bool
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("ky",)
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "source",
+        "ntheta_per_2pi",
+        "nperiod",
+        "n_z_total",
+        "nky",
+        "nkx",
+        "nhermite",
+        "nlaguerre",
+        "y0",
+        "boundary",
+        "geometry",
+        "epsilon",
+        "rmaj",
+        "q",
+        "shat",
+        "shift",
+        "fprim",
+        "tprim",
+        "beta",
+        "nonlinear_mode",
+        "boltzmann_type",
+        "tau_fac",
+        "closure_model",
+        "hypercollisions_requested",
+        "hypercollisions_const",
+        "hypercollisions_kz",
+        "nu_hyper_l",
+        "nu_hyper_m",
+        "nu_hyper_lm",
+        "p_hyper_l",
+        "p_hyper_m",
+        "p_hyper_lm",
+        "d_hyper",
+        "has_fields_diagnostic",
+        "has_moments_diagnostic",
+        "has_eigenfunctions_diagnostic",
+    )
+
+    def __post_init__(self):
+        ky = jnp.asarray(self.ky, dtype=jnp.float64)
+        if ky.ndim != 1 or ky.shape[0] != self.nky:
+            raise ValueError("ky must be one-dimensional with length nky")
+        if any(
+            int(value) < 1
+            for value in (
+                self.ntheta_per_2pi,
+                self.nperiod,
+                self.n_z_total,
+                self.nky,
+                self.nkx,
+                self.nhermite,
+                self.nlaguerre,
+            )
+        ):
+            raise ValueError("GX dimensions must be positive")
+        if self.n_z_total != self.ntheta_per_2pi * (2 * self.nperiod - 1):
+            raise ValueError("n_z_total must equal ntheta_per_2pi*(2*nperiod-1)")
+        if self.y0 <= 0.0:
+            raise ValueError("y0 must be positive")
+        for name in (
+            "epsilon",
+            "rmaj",
+            "q",
+            "shat",
+            "shift",
+            "fprim",
+            "tprim",
+            "beta",
+            "tau_fac",
+            "nu_hyper_l",
+            "nu_hyper_m",
+            "nu_hyper_lm",
+            "d_hyper",
+        ):
+            value = float(getattr(self, name))
+            if not np.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+            object.__setattr__(self, name, value)
+        object.__setattr__(self, "ky", ky)
+        object.__setattr__(self, "source", str(self.source))
+        object.__setattr__(self, "boundary", str(self.boundary))
+        object.__setattr__(self, "geometry", str(self.geometry))
+        object.__setattr__(self, "boltzmann_type", str(self.boltzmann_type))
+        object.__setattr__(self, "closure_model", str(self.closure_model))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GxCycloneConventionReport(_PyTreeDataclass):
+    """GX input/setup parity report for the multi-ky Cyclone scan."""
+
+    metric_values: object
+    tolerance_values: object
+    metric_passed: object
+    gap_present: object
+    max_abs_error: object
+    passed: object
+    metric_names: tuple[str, ...]
+    gap_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "metric_values",
+        "tolerance_values",
+        "metric_passed",
+        "gap_present",
+        "max_abs_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("metric_names", "gap_names", "notes")
+
+    def __post_init__(self):
+        metrics = jnp.asarray(self.metric_values, dtype=jnp.float64)
+        tolerances = jnp.asarray(self.tolerance_values, dtype=jnp.float64)
+        metric_passed = jnp.asarray(self.metric_passed, dtype=bool)
+        gaps = jnp.asarray(self.gap_present, dtype=bool)
+        if metrics.ndim != 1:
+            raise ValueError("metric_values must be one-dimensional")
+        if tolerances.shape != metrics.shape or metric_passed.shape != metrics.shape:
+            raise ValueError("tolerance_values and metric_passed must match metric_values")
+        if gaps.ndim != 1:
+            raise ValueError("gap_present must be one-dimensional")
+        if len(self.metric_names) != metrics.shape[0]:
+            raise ValueError("metric_names length must match metric_values")
+        if len(self.gap_names) != gaps.shape[0]:
+            raise ValueError("gap_names length must match gap_present")
+        object.__setattr__(self, "metric_values", metrics)
+        object.__setattr__(self, "tolerance_values", tolerances)
+        object.__setattr__(self, "metric_passed", metric_passed)
+        object.__setattr__(self, "gap_present", gaps)
+        object.__setattr__(self, "max_abs_error", jnp.asarray(self.max_abs_error, dtype=jnp.float64))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+        object.__setattr__(self, "metric_names", tuple(str(name) for name in self.metric_names))
+        object.__setattr__(self, "gap_names", tuple(str(name) for name in self.gap_names))
 
 
 @jax.tree_util.register_pytree_node_class
@@ -2855,6 +3051,271 @@ def cyclone_base_case_growth_target() -> BenchmarkTarget:
     )
 
 
+def gx_salpha_cyclone_growth_target() -> BenchmarkTarget:
+    """Return the local target metadata matching GX's s-alpha Cyclone input."""
+
+    rmaj = 2.77778
+    ntheta_per_2pi = 32
+    nperiod = 2
+    n_z_total = ntheta_per_2pi * (2 * nperiod - 1)
+    return BenchmarkTarget(
+        name="gx_salpha_cyclone_kt05",
+        quantity="selected_growth_rate",
+        reference_value=0.179,
+        tolerance=1.0e-2,
+        source=(
+            "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+            "itg_salpha_adiabatic_electrons.in"
+        ),
+        metadata=(
+            ("q", 1.4),
+            ("shat", 0.8),
+            ("epsilon", 0.18),
+            ("Rmaj_over_Lref", rmaj),
+            ("R_over_Ln", 0.8 * rmaj),
+            ("R_over_LT", 2.49 * rmaj),
+            ("gx_fprim", 0.8),
+            ("gx_tprim", 2.49),
+            ("k_theta_rhos", 0.5),
+            ("geometry", "s-alpha"),
+            ("electrons", "adiabatic"),
+            ("ntheta_per_2pi", ntheta_per_2pi),
+            ("n_z_total", n_z_total),
+            ("n_z", n_z_total),
+            ("nperiod", nperiod),
+            ("n_vpar", 48),
+            ("n_mu", 16),
+            ("vpar_max", 3.0),
+            ("parallel_backend", "finite_difference"),
+            ("parallel_boundary", "zero"),
+            ("parallel_derivative_model", "gkw_upwind"),
+            ("velocity_backend", "finite_difference"),
+            ("velocity_representation", "collocation"),
+            ("gx_velocity_representation", "hermite_laguerre_moment_rhs"),
+            ("gx_boundary", "linked"),
+            ("gx_hypercollision_model", "kz"),
+            ("gx_hypercollisions", True),
+            ("gx_nu_hyper_l", 0.0),
+            ("gx_nu_hyper_m", 1.0),
+            ("gx_p_hyper_l", 6),
+            ("gx_p_hyper_m", 20),
+            ("disp_par", 1.0),
+            ("dt", 0.003),
+            ("steps_per_window", 20),
+            ("n_windows", 80),
+        ),
+    )
+
+
+def load_gx_cyclone_input_reference(path) -> GxCycloneInputReference:
+    """Parse a GX Cyclone TOML input into explicit benchmark conventions."""
+
+    path = Path(path)
+    data = tomllib.loads(path.read_text())
+    dimensions = data.get("Dimensions", {})
+    domain = data.get("Domain", {})
+    physics = data.get("Physics", {})
+    geometry = data.get("Geometry", {})
+    species = data.get("species", {})
+    boltzmann = data.get("Boltzmann", {})
+    dissipation = data.get("Dissipation", {})
+    diagnostics = data.get("Diagnostics", {})
+
+    ntheta = int(dimensions["ntheta"])
+    nperiod = int(dimensions["nperiod"])
+    nky = int(dimensions["nky"])
+    nhermite = int(dimensions["nhermite"])
+    y0 = float(domain["y0"])
+    n_z_total = ntheta * (2 * nperiod - 1)
+    p_hyper_m_default = min(20, nhermite // 2)
+    hypercollisions_requested = bool(dissipation.get("hypercollisions", False))
+    hypercollisions_kz = bool(
+        dissipation.get(
+            "hypercollisions_kz",
+            hypercollisions_requested,
+        )
+    )
+    hypercollisions_const = bool(dissipation.get("hypercollisions_const", False))
+    return GxCycloneInputReference(
+        ky=np.arange(nky, dtype=float) / y0,
+        source=str(path),
+        ntheta_per_2pi=ntheta,
+        nperiod=nperiod,
+        n_z_total=n_z_total,
+        nky=nky,
+        nkx=int(dimensions["nkx"]),
+        nhermite=nhermite,
+        nlaguerre=int(dimensions["nlaguerre"]),
+        y0=y0,
+        boundary=str(domain.get("boundary", "periodic")),
+        geometry=str(geometry.get("geo_option", "")),
+        epsilon=float(geometry["eps"]),
+        rmaj=float(geometry["Rmaj"]),
+        q=float(geometry["qinp"]),
+        shat=float(geometry["shat"]),
+        shift=float(geometry.get("shift", 0.0)),
+        fprim=float(_first_species_value(species, "fprim")),
+        tprim=float(_first_species_value(species, "tprim")),
+        beta=float(physics.get("beta", 0.0)),
+        nonlinear_mode=bool(physics.get("nonlinear_mode", False)),
+        boltzmann_type=str(boltzmann.get("Boltzmann_type", "")),
+        tau_fac=float(boltzmann.get("tau_fac", 1.0)),
+        closure_model=str(dissipation.get("closure_model", "none")),
+        hypercollisions_requested=hypercollisions_requested,
+        hypercollisions_const=hypercollisions_const,
+        hypercollisions_kz=hypercollisions_kz,
+        nu_hyper_l=float(dissipation.get("nu_hyper_l", 0.0)),
+        nu_hyper_m=float(dissipation.get("nu_hyper_m", 1.0)),
+        nu_hyper_lm=float(dissipation.get("nu_hyper_lm", 0.0)),
+        p_hyper_l=int(dissipation.get("p_hyper_l", 6)),
+        p_hyper_m=int(dissipation.get("p_hyper_m", p_hyper_m_default)),
+        p_hyper_lm=int(dissipation.get("p_hyper_lm", 6)),
+        d_hyper=float(dissipation.get("D_hyper", 0.1)),
+        has_fields_diagnostic=bool(diagnostics.get("fields", False)),
+        has_moments_diagnostic=bool(diagnostics.get("moments", False)),
+        has_eigenfunctions_diagnostic=bool(diagnostics.get("eigenfunctions", False)),
+    )
+
+
+def compare_gx_cyclone_input_to_solver_controls(
+    reference: GxCycloneInputReference,
+    *,
+    target: BenchmarkTarget | None = None,
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    nperiod: int | None = None,
+    ky_values=None,
+    parallel_boundary: str | None = None,
+    velocity_representation: str | None = None,
+    hypercollision_model: str | None = None,
+    mode_structure_reference: str | None = None,
+    numeric_tolerance: float = 1.0e-12,
+) -> GxCycloneConventionReport:
+    """Compare a solver scan setup with GX's s-alpha Cyclone input contract."""
+
+    if numeric_tolerance <= 0.0:
+        raise ValueError("numeric_tolerance must be positive")
+    target = target or gx_salpha_cyclone_growth_target()
+    metadata = dict(target.metadata)
+    n_z = int(metadata.get("n_z", reference.n_z_total) if n_z is None else n_z)
+    n_vpar = int(metadata.get("n_vpar", reference.nhermite) if n_vpar is None else n_vpar)
+    n_mu = int(metadata.get("n_mu", reference.nlaguerre) if n_mu is None else n_mu)
+    nperiod = int(metadata.get("nperiod", reference.nperiod) if nperiod is None else nperiod)
+    parallel_boundary = str(
+        metadata.get("parallel_boundary", "zero")
+        if parallel_boundary is None
+        else parallel_boundary
+    )
+    velocity_representation = str(
+        metadata.get("velocity_representation", metadata.get("velocity_backend", "collocation"))
+        if velocity_representation is None
+        else velocity_representation
+    )
+    hypercollision_model = str(
+        metadata.get("hypercollision_model", "none")
+        if hypercollision_model is None
+        else hypercollision_model
+    )
+    if ky_values is None:
+        ky_values = (float(metadata.get("k_theta_rhos", 0.5)),)
+    requested_ky = np.asarray(ky_values, dtype=float)
+    if requested_ky.ndim != 1 or requested_ky.size == 0:
+        raise ValueError("ky_values must be a nonempty one-dimensional sequence")
+    gx_ky = np.asarray(reference.ky, dtype=float)
+    nearest_ky_error = np.asarray(
+        [np.min(np.abs(gx_ky - float(value))) for value in requested_ky],
+        dtype=float,
+    )
+    gx_fprim = float(metadata.get("gx_fprim", metadata.get("R_over_Ln", 0.0) / reference.rmaj))
+    gx_tprim = float(metadata.get("gx_tprim", metadata.get("R_over_LT", 0.0) / reference.rmaj))
+    metric_names = (
+        "q",
+        "shat",
+        "epsilon",
+        "Rmaj_over_Lref",
+        "fprim",
+        "tprim",
+        "nperiod",
+        "n_z_total",
+        "n_vpar_or_nhermite",
+        "n_mu_or_nlaguerre",
+        "max_requested_ky_grid_error",
+    )
+    metric_values = jnp.asarray(
+        [
+            abs(float(metadata.get("q", reference.q)) - reference.q),
+            abs(float(metadata.get("shat", reference.shat)) - reference.shat),
+            abs(float(metadata.get("epsilon", reference.epsilon)) - reference.epsilon),
+            abs(float(metadata.get("Rmaj_over_Lref", reference.rmaj)) - reference.rmaj),
+            abs(gx_fprim - reference.fprim),
+            abs(gx_tprim - reference.tprim),
+            abs(float(nperiod) - reference.nperiod),
+            abs(float(n_z) - reference.n_z_total),
+            abs(float(n_vpar) - reference.nhermite),
+            abs(float(n_mu) - reference.nlaguerre),
+            float(np.max(nearest_ky_error)),
+        ],
+        dtype=jnp.float64,
+    )
+    tolerance_values = jnp.asarray(
+        [
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            numeric_tolerance,
+            0.5 / reference.y0 + numeric_tolerance,
+        ],
+        dtype=jnp.float64,
+    )
+    metric_passed = metric_values <= tolerance_values
+    gap_names = (
+        "linked_parallel_boundary_not_enabled",
+        "gx_hermite_laguerre_moment_rhs_not_enabled",
+        "gx_kz_hypercollision_not_enabled",
+        "gx_const_hypercollision_not_enabled",
+        "per_ky_mode_structure_reference_missing",
+    )
+    gap_present = jnp.asarray(
+        [
+            reference.boundary == "linked" and parallel_boundary != "linked",
+            velocity_representation != "hermite_laguerre_moment_rhs",
+            reference.hypercollisions_kz
+            and hypercollision_model not in ("gx_kz_hypercollision", "gx_kz_hypercollisions"),
+            reference.hypercollisions_const
+            and hypercollision_model not in ("gx_const_hypercollision", "gx_const_hypercollisions"),
+            not mode_structure_reference and not reference.has_eigenfunctions_diagnostic,
+        ],
+        dtype=bool,
+    )
+    max_abs_error = jnp.max(metric_values)
+    passed = jnp.logical_and(jnp.all(metric_passed), ~jnp.any(gap_present))
+    return GxCycloneConventionReport(
+        metric_values=metric_values,
+        tolerance_values=tolerance_values,
+        metric_passed=metric_passed,
+        gap_present=gap_present,
+        max_abs_error=max_abs_error,
+        passed=passed,
+        metric_names=metric_names,
+        gap_names=gap_names,
+        notes=(
+            "GX s-alpha Cyclone input convention report; "
+            f"requested_ky={tuple(float(value) for value in requested_ky)}, "
+            f"solver n_z/n_vpar/n_mu={n_z}/{n_vpar}/{n_mu}, "
+            f"nperiod={nperiod}, parallel_boundary={parallel_boundary}, "
+            f"velocity_representation={velocity_representation}, "
+            f"hypercollision_model={hypercollision_model}"
+        ),
+    )
+
+
 def load_gx_growth_rate_reference(
     path,
     *,
@@ -2888,6 +3349,55 @@ def load_gx_growth_rate_reference(
         source=str(path),
         ikx=ikx,
         average_fraction=average_fraction,
+    )
+
+
+def calibrate_gx_growth_rate_reference_to_target(
+    reference: GxGrowthRateReference,
+    *,
+    target: BenchmarkTarget | None = None,
+    target_ky: float | None = None,
+    target_growth: float | None = None,
+    scale_frequency: bool = False,
+) -> GxGrowthRateReference:
+    """Scale a GX scan reference so one anchor ``ky`` matches a target growth.
+
+    GX's linear benchmark files report growth in GX's native
+    ``a/v_t``-style normalization.  The GKW/Gyaradax Cyclone scalar target used
+    by this project is in the solver's GKW-compatible normalization.  This
+    helper makes that conversion explicit by anchoring the GX curve at a
+    selected ``ky`` instead of baking an implicit scale factor into the scan
+    gate.
+    """
+
+    target = target or cyclone_base_case_growth_target()
+    metadata = dict(target.metadata)
+    if target_ky is None:
+        target_ky = float(metadata.get("k_theta_rhos", np.asarray(reference.ky)[0]))
+    if target_growth is None:
+        target_growth = float(np.asarray(target.reference_value))
+    ky = np.asarray(reference.ky, dtype=float)
+    growth = np.asarray(reference.growth_rate, dtype=float)
+    if ky.ndim != 1 or ky.size == 0:
+        raise ValueError("reference ky grid must be nonempty")
+    index = int(np.argmin(np.abs(ky - float(target_ky))))
+    anchor_growth = float(growth[index])
+    if not np.isfinite(anchor_growth) or abs(anchor_growth) <= 1.0e-14:
+        raise ValueError("reference anchor growth must be finite and nonzero")
+    if not np.isfinite(target_growth):
+        raise ValueError("target_growth must be finite")
+    growth_scale = float(target_growth) / anchor_growth
+    frequency_scale = growth_scale if scale_frequency else 1.0
+    return replace(
+        reference,
+        growth_rate=reference.growth_rate * growth_scale,
+        frequency=reference.frequency * frequency_scale,
+        source=(
+            f"{reference.source}; growth calibrated at ky={float(ky[index]):.8g} "
+            f"to {float(target_growth):.8g} with scale={growth_scale:.8g}"
+        ),
+        growth_scale=reference.growth_scale * growth_scale,
+        frequency_scale=reference.frequency_scale * frequency_scale,
     )
 
 
@@ -2940,11 +3450,11 @@ def evaluate_cyclone_ky_scan_gate(
 ) -> CycloneKyScanGateReport:
     """Evaluate a multi-``ky`` Cyclone/ITG scan gate.
 
-    Growth and frequency are first-class scan metrics.  ``profile_error`` is an
-    optional per-``ky`` mode-structure/profile metric, used when independent
-    profile references are available.  If profile data are absent and
-    ``require_profile=False``, the report records ``NaN`` profile errors and
-    does not fail the scan on that slot.
+    Growth and required frequency are first-class scan metrics.
+    ``profile_error`` is an optional per-``ky`` mode-structure/profile metric,
+    used when independent profile references are available.  If frequency or
+    profile checks are not required, their errors are recorded but do not fail
+    the scan.
     """
 
     if growth_tolerance <= 0.0:
@@ -2996,16 +3506,24 @@ def evaluate_cyclone_ky_scan_gate(
     ky_passed = jnp.abs(ky_values - matched_reference_ky) <= ky_tolerance
     growth_passed = jnp.abs(growth_error) <= growth_tolerance
     frequency_finite = jnp.isfinite(observed_frequency) & jnp.isfinite(reference_frequency)
-    frequency_passed = jnp.where(
-        frequency_finite,
-        jnp.abs(frequency_error) <= frequency_tolerance,
-        jnp.logical_not(require_frequency),
+    frequency_passed = (
+        jnp.where(
+            frequency_finite,
+            jnp.abs(frequency_error) <= frequency_tolerance,
+            False,
+        )
+        if require_frequency
+        else jnp.ones_like(ky_values, dtype=bool)
     )
     profile_finite = jnp.isfinite(profile_error)
-    profile_passed = jnp.where(
-        profile_finite,
-        profile_error <= profile_tolerance,
-        jnp.logical_not(require_profile),
+    profile_passed = (
+        jnp.where(
+            profile_finite,
+            profile_error <= profile_tolerance,
+            False,
+        )
+        if require_profile
+        else jnp.ones_like(ky_values, dtype=bool)
     )
     finite_frequency_error = jnp.where(frequency_finite, jnp.abs(frequency_error), 0.0)
     finite_profile_error = jnp.where(profile_finite, jnp.abs(profile_error), 0.0)
@@ -3057,8 +3575,9 @@ def evaluate_cyclone_ky_scan_convention_audit(
     """Rank candidate scan normalization/convention reports.
 
     The combined score is a tolerance-normalized Euclidean norm of the maximum
-    growth, frequency, and finite profile errors.  Lower is better; a candidate
-    with all scan gate masks passing has ``candidate_passed=True``.
+    growth error, required frequency error, and required finite profile errors.
+    Lower is better; a candidate with all scan gate masks passing has
+    ``candidate_passed=True``.
     """
 
     reports = tuple(reports)
@@ -3113,6 +3632,10 @@ def evaluate_cyclone_ky_scan_convention_audit(
     reference_growth = jnp.asarray(first.reference_growth, dtype=jnp.float64)
     reference_frequency = jnp.asarray(first.reference_frequency, dtype=jnp.float64)
     for report in reports[1:]:
+        if report.require_frequency != first.require_frequency:
+            raise ValueError("all reports must use the same require_frequency flag")
+        if report.require_profile != first.require_profile:
+            raise ValueError("all reports must use the same require_profile flag")
         if tuple(report.ky.shape) != tuple(ky.shape):
             raise ValueError("all reports must use the same ky shape")
         if not np.allclose(np.asarray(report.ky), np.asarray(ky), rtol=0.0, atol=1.0e-12):
@@ -3159,13 +3682,18 @@ def evaluate_cyclone_ky_scan_convention_audit(
     )
     profile_finite = jnp.any(jnp.isfinite(profile_error), axis=1)
     profile_term = jnp.where(
-        profile_finite,
+        first.require_profile & profile_finite,
         max_profile_errors / first.profile_tolerance,
         0.0,
     )
+    frequency_term = (
+        max_frequency_errors / first.frequency_tolerance
+        if first.require_frequency
+        else jnp.zeros_like(max_frequency_errors)
+    )
     combined_errors = jnp.sqrt(
         (max_growth_errors / first.growth_tolerance) ** 2
-        + (max_frequency_errors / first.frequency_tolerance) ** 2
+        + frequency_term**2
         + profile_term**2
     )
     candidate_passed = jnp.asarray([report.passed for report in reports], dtype=bool)
@@ -3199,6 +3727,90 @@ def evaluate_cyclone_ky_scan_convention_audit(
         profile_tolerance=first.profile_tolerance,
         notes=notes,
     )
+
+
+def write_cyclone_ky_scan_convention_audit_csv(
+    path,
+    audit: CycloneKyScanConventionAudit,
+) -> None:
+    """Write a flat candidate-by-``ky`` convention-audit table."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    best_index = int(np.asarray(audit.best_index))
+    ky = np.asarray(audit.ky, dtype=float)
+    matched_ky = np.asarray(audit.matched_reference_ky, dtype=float)
+    reference_growth = np.asarray(audit.reference_growth, dtype=float)
+    reference_frequency = np.asarray(audit.reference_frequency, dtype=float)
+    solver_ky = np.asarray(audit.solver_ky, dtype=float)
+    observed_growth = np.asarray(audit.observed_growth, dtype=float)
+    growth_error = np.asarray(audit.growth_error, dtype=float)
+    observed_frequency = np.asarray(audit.observed_frequency, dtype=float)
+    frequency_error = np.asarray(audit.frequency_error, dtype=float)
+    profile_error = np.asarray(audit.profile_error, dtype=float)
+    max_growth_errors = np.asarray(audit.max_growth_errors, dtype=float)
+    max_frequency_errors = np.asarray(audit.max_frequency_errors, dtype=float)
+    max_profile_errors = np.asarray(audit.max_profile_errors, dtype=float)
+    combined_errors = np.asarray(audit.combined_errors, dtype=float)
+    candidate_passed = np.asarray(audit.candidate_passed, dtype=bool)
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(
+            (
+                "candidate_index",
+                "candidate_name",
+                "best_candidate",
+                "candidate_passed",
+                "ky_input_convention",
+                "growth_diagnostic",
+                "normalization_model",
+                "observed_frequency_sign",
+                "observed_frequency_scale",
+                "requested_ky",
+                "matched_reference_ky",
+                "solver_ky",
+                "observed_growth",
+                "reference_growth",
+                "growth_error",
+                "observed_frequency",
+                "reference_frequency",
+                "frequency_error",
+                "profile_error",
+                "max_growth_error",
+                "max_frequency_error",
+                "max_profile_error",
+                "combined_error",
+            )
+        )
+        for candidate_index, candidate_name in enumerate(audit.candidate_names):
+            for ky_index, requested_ky in enumerate(ky):
+                writer.writerow(
+                    (
+                        candidate_index,
+                        candidate_name,
+                        candidate_index == best_index,
+                        bool(candidate_passed[candidate_index]),
+                        audit.ky_input_conventions[candidate_index],
+                        audit.growth_diagnostics[candidate_index],
+                        audit.normalization_models[candidate_index],
+                        audit.observed_frequency_signs[candidate_index],
+                        audit.observed_frequency_scales[candidate_index],
+                        requested_ky,
+                        matched_ky[ky_index],
+                        solver_ky[candidate_index, ky_index],
+                        observed_growth[candidate_index, ky_index],
+                        reference_growth[ky_index],
+                        growth_error[candidate_index, ky_index],
+                        observed_frequency[candidate_index, ky_index],
+                        reference_frequency[ky_index],
+                        frequency_error[candidate_index, ky_index],
+                        profile_error[candidate_index, ky_index],
+                        max_growth_errors[candidate_index],
+                        max_frequency_errors[candidate_index],
+                        max_profile_errors[candidate_index],
+                        combined_errors[candidate_index],
+                    )
+                )
 
 
 def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
@@ -4143,6 +4755,10 @@ def run_cyclone_base_case_ky_scan_gate(
     normalization_model: str = "weighted",
     initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
+    calibrate_reference_growth: bool = False,
+    reference_calibration_ky: float | None = None,
+    reference_calibration_growth: float | None = None,
+    scale_reference_frequency_with_growth: bool = False,
 ) -> CycloneKyScanGateReport:
     """Run conservative single-mode Cyclone cases over a ``ky`` scan.
 
@@ -4164,6 +4780,14 @@ def run_cyclone_base_case_ky_scan_gate(
         )
         reference = load_gx_growth_rate_reference(gx_reference_path)
     target = target or cyclone_base_case_growth_target()
+    if calibrate_reference_growth:
+        reference = calibrate_gx_growth_rate_reference_to_target(
+            reference,
+            target=target,
+            target_ky=reference_calibration_ky,
+            target_growth=reference_calibration_growth,
+            scale_frequency=scale_reference_frequency_with_growth,
+        )
     reference_ky = np.asarray(reference.ky, dtype=float)
     reference_growth = np.asarray(reference.growth_rate, dtype=float)
     reference_frequency = np.asarray(reference.frequency, dtype=float)
@@ -4255,6 +4879,9 @@ def run_cyclone_base_case_ky_scan_gate(
             f"observed_frequency_sign={observed_frequency_sign:g}, "
             f"observed_frequency_scale={observed_frequency_scale:g}, "
             f"normalization_model={normalization_model}, "
+            f"calibrate_reference_growth={calibrate_reference_growth}, "
+            f"reference_growth_scale={reference.growth_scale:g}, "
+            f"reference_frequency_scale={reference.frequency_scale:g}, "
             f"require_frequency={require_frequency}, "
             f"require_profile={require_profile}"
         ),
@@ -4299,6 +4926,10 @@ def run_cyclone_base_case_ky_scan_convention_audit(
     normalization_models: tuple[str, ...] | None = None,
     initial_profile: str | None = None,
     target: BenchmarkTarget | None = None,
+    calibrate_reference_growth: bool = False,
+    reference_calibration_ky: float | None = None,
+    reference_calibration_growth: float | None = None,
+    scale_reference_frequency_with_growth: bool = False,
 ) -> CycloneKyScanConventionAudit:
     """Run and rank candidate ``ky``/frequency conventions for the scan gate."""
 
@@ -4374,6 +5005,12 @@ def run_cyclone_base_case_ky_scan_convention_audit(
                         normalization_model=norm_name,
                         initial_profile=initial_profile,
                         target=target,
+                        calibrate_reference_growth=calibrate_reference_growth,
+                        reference_calibration_ky=reference_calibration_ky,
+                        reference_calibration_growth=reference_calibration_growth,
+                        scale_reference_frequency_with_growth=(
+                            scale_reference_frequency_with_growth
+                        ),
                     )
                 )
 
@@ -4436,7 +5073,114 @@ def run_cyclone_base_case_ky_scan_convention_audit(
             "multi-ky Cyclone/ITG scan convention audit; "
             f"growth_diagnostics={growth_diagnostics}, "
             f"growth_window_fraction={growth_window_fraction:g}, "
-            f"normalization_models={normalization_models}"
+            f"normalization_models={normalization_models}, "
+            f"calibrate_reference_growth={calibrate_reference_growth}, "
+            f"scale_reference_frequency_with_growth={scale_reference_frequency_with_growth}"
+        ),
+    )
+
+
+def run_production_control_cyclone_ky_scan_convention_audit(
+    *,
+    reference: GxGrowthRateReference | None = None,
+    gx_reference_path=None,
+    ky_values=(0.3, 0.5),
+    ky_input_conventions: tuple[str, ...] = ("k_theta_rhos",),
+    growth_diagnostics: tuple[str, ...] = ("late_fit", "late_mean_window"),
+    normalization_models: tuple[str, ...] = ("gkw_unweighted",),
+    observed_frequency_signs: tuple[float, ...] = (1.0, -1.0),
+    observed_frequency_scales: tuple[float, ...] = (1.0,),
+    n_z: int = 48,
+    n_vpar: int = 32,
+    n_mu: int = 8,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int = 5,
+    steps_per_window: int = 20,
+    n_windows: int = 80,
+    growth_window_fraction: float = 0.5,
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    profile_error=None,
+    require_frequency: bool = True,
+    require_profile: bool = False,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str = "gkw_igh",
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    initial_profile: str = "cosine2",
+    target: BenchmarkTarget | None = None,
+    calibrate_reference_growth: bool = False,
+    reference_calibration_ky: float | None = None,
+    reference_calibration_growth: float | None = None,
+    scale_reference_frequency_with_growth: bool = False,
+) -> CycloneKyScanConventionAudit:
+    """Run the multi-``ky`` scan audit with selected-``ky`` production controls.
+
+    The defaults match the memory-light production-control regression used for
+    the passing selected Cyclone gate: GKW cell-centered ``s`` grid,
+    ``nperiod=5``, ``48/32/8`` resolution, 20 RK4 steps per diagnostic window,
+    80 windows, the matrix-free ``gkw_igh`` RHS backend, ``cosine2``
+    initialization, and GKW-unweighted field normalization.  ``ky_values`` is a
+    small two-point scan by default; pass ``ky_values=None`` to use every point
+    in the external reference.
+    """
+
+    audit = run_cyclone_base_case_ky_scan_convention_audit(
+        reference=reference,
+        gx_reference_path=gx_reference_path,
+        ky_values=ky_values,
+        ky_input_conventions=ky_input_conventions,
+        observed_frequency_signs=observed_frequency_signs,
+        observed_frequency_scales=observed_frequency_scales,
+        n_z=n_z,
+        n_vpar=n_vpar,
+        n_mu=n_mu,
+        vpar_max=vpar_max,
+        mu_max=mu_max,
+        dt=dt,
+        nperiod=nperiod,
+        steps_per_window=steps_per_window,
+        n_windows=n_windows,
+        growth_window_fraction=growth_window_fraction,
+        growth_diagnostics=growth_diagnostics,
+        growth_tolerance=growth_tolerance,
+        frequency_tolerance=frequency_tolerance,
+        profile_tolerance=profile_tolerance,
+        ky_tolerance=ky_tolerance,
+        profile_error=profile_error,
+        require_frequency=require_frequency,
+        require_profile=require_profile,
+        parallel_recurrence_rate=parallel_recurrence_rate,
+        velocity_recurrence_rate=velocity_recurrence_rate,
+        parallel_backend=parallel_backend,
+        parallel_boundary=parallel_boundary,
+        parallel_derivative_model=parallel_derivative_model,
+        velocity_backend=velocity_backend,
+        normalize_each_window=normalize_each_window,
+        normalization_models=normalization_models,
+        initial_profile=initial_profile,
+        target=target,
+        calibrate_reference_growth=calibrate_reference_growth,
+        reference_calibration_ky=reference_calibration_ky,
+        reference_calibration_growth=reference_calibration_growth,
+        scale_reference_frequency_with_growth=scale_reference_frequency_with_growth,
+    )
+    return replace(
+        audit,
+        notes=(
+            "production-control multi-ky Cyclone/ITG scan convention audit; "
+            f"n_z={n_z}, n_vpar={n_vpar}, n_mu={n_mu}, nperiod={nperiod}, "
+            f"steps_per_window={steps_per_window}, n_windows={n_windows}, "
+            f"parallel_derivative_model={parallel_derivative_model}, "
+            f"initial_profile={initial_profile}, "
+            f"calibrate_reference_growth={calibrate_reference_growth}; {audit.notes}"
         ),
     )
 
@@ -11867,6 +12611,16 @@ def _numeric_rows(path: Path) -> list[list[float]]:
         except ValueError:
             continue
     return rows
+
+
+def _first_species_value(species: dict[str, object], name: str):
+    try:
+        values = species[name]
+    except KeyError as exc:
+        raise ValueError(f"GX species block is missing {name!r}") from exc
+    if not isinstance(values, (list, tuple)) or len(values) < 1:
+        raise ValueError(f"GX species {name!r} must be a nonempty array")
+    return values[0]
 
 
 def _selected_state_dump_files(paths) -> tuple[Path, ...]:

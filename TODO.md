@@ -711,11 +711,43 @@ state-history and benchmark-scan inconsistencies:
   across those two labels at the tiny two-window resolution: max growth error
   `2.23`, max frequency error `29.76`, and best reported candidate
   `late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1`.
-- [ ] Calibrate the multi-`ky` Cyclone/ITG scan gate with production-control
-  resolution and matched reference normalization. The next target is to run
-  the expanded candidate grid on production-control windows, then reduce the
-  scan-level growth/frequency gaps and add per-`ky` mode-structure fixtures
-  where external `parallel_phi.dat`/eigenfunction data are available.
+- [x] Add a production-control scan-calibration wrapper and flat CSV exporter.
+  `run_production_control_cyclone_ky_scan_convention_audit` fixes the matched
+  selected-`ky` control settings (`48/32/8`, `nperiod=5`, 20 by 80 windows,
+  `gkw_igh`, `cosine2`, and `gkw_unweighted` normalization) while still
+  allowing reduced overrides for tests. `write_cyclone_ky_scan_convention_audit_csv`
+  and `examples/run_cyclone_ky_scan_calibration.py` write every
+  candidate-by-`ky` row for external inspection.
+- [x] Separate the GX reference-normalization mismatch from the real
+  multi-`ky` curve-shape gap. `calibrate_gx_growth_rate_reference_to_target`
+  scales the GX growth curve to the GKW/Gyaradax selected Cyclone target at
+  `ky=0.5`; with frequency ignored, the production-control scan wrapper now
+  passes the calibrated `ky=0.5` anchor with growth error `1.00e-3`. The
+  calibrated two-point scan remains OPEN because the low-`ky` point is still
+  too weak: at GX-style `nperiod=2`, the best `internal_krho` convention gives
+  `gamma(0.3)=0.138` versus calibrated reference `0.308`.
+- [x] Add a GX s-alpha input-convention audit for the multi-`ky` scan. The GX
+  fixture uses `ntheta=32` per \(2\pi\) segment and `nperiod=2`, so the full
+  stored field-line grid has `n_z_total=96`, not 32. The new
+  `GxCycloneInputReference`/`GxCycloneConventionReport` path records this
+  domain convention, the exact `ky=0:0.05:0.55` grid, GX's linked boundary,
+  Hermite-Laguerre moment resolution `48/16`, and the default `k_z`
+  hypercollision model (`nu_hyper_m=1`, `p_hyper_m=20`). It also records that
+  the distributed GX output has scalar/power diagnostics but no per-`ky`
+  complex eigenfunction fixture.
+- [x] Rerun the calibrated two-point scan with the exact GX input-control grid
+  (`--profile gx-salpha-input --target-convention gx-salpha --nperiod 2
+  --ky-input-conventions internal_krho`) and compare with the memory-light GKW
+  production-control result. The exact-grid scan remains OPEN:
+  `gamma(0.3)=0.14325556436195153` versus calibrated reference
+  `0.3080402563529299`, and `gamma(0.5)=0.14759624156710394` versus `0.179`.
+  The corrected GX domain changes the low-`ky` value only modestly, so the
+  remaining gap is not just the previous `ntheta`/`n_z_total` bookkeeping error.
+- [ ] Implement the next physics discriminator for multi-`ky` parity: either
+  add a GX-style Hermite-Laguerre moment RHS with linked-boundary `k_z`
+  hypercollision for the linear electrostatic s-alpha case, or obtain/export
+  an external per-`ky` complex mode-structure fixture so the collocation RHS can
+  be compared mode-shape-by-mode-shape before changing physics.
 - [ ] After the CBC scan gates are stable, extend the
   benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
   compatible geometry arrays and keep DESC optimization examples labeled
