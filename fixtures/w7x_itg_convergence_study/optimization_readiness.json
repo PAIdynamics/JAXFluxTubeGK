@@ -1,0 +1,9 @@
+{
+  "benchmark_name": "w7x_itg_optimization_readiness",
+  "desc_optimization_status": "keep_reduced_until_w7x_external_parity_and_production_timing_pass",
+  "external_w7x_parity_ready": false,
+  "next_required_artifact": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "production_cpu_timing_ready": false,
+  "reduced_convergence_study_ready": true,
+  "reduced_fixture_ready": true
+}

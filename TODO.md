@@ -806,10 +806,18 @@ Use these guardrails throughout the round:
 
 ### 5. Convergence, timing, and optimization readiness
 
-- [ ] Run convergence studies for the W7-X stellarator case in `n_z`,
-  velocity resolution, `kx/ky` grid, field-line length, time step, and
-  growth-window choice. Record the tolerance ladder in `STATUS.md` and
-  `main.tex`.
+- [x] Run the first reduced W7-X convergence/timing study in `n_z`, velocity
+  resolution, `kx/ky` grid, field-line length, time step, and growth-window
+  choice. `scripts/run_w7x_reduced_convergence_study.py` writes
+  `fixtures/w7x_itg_convergence_study/` with `convergence_summary.csv`,
+  `timing_summary.json`, `optimization_readiness.json`, `study_metadata.json`,
+  and a README. This study is a reduced solver-regression ladder, not an
+  external physics-parity claim.
+- [ ] Promote the W7-X convergence ladder to production controls after the
+  external mode-structure/growth target exists. The reduced study already shows
+  that the short-window baseline is not grid-converged in all directions:
+  `dt_half` and `late_mean_window` agree with baseline, while `n_z=49`,
+  velocity, and `kx` variants change the growth branch substantially.
 - [ ] Obtain or generate a production W7-X external parity target at the GX
   input controls (`ntheta=256`, `nky=28`, `nkx=1`, `nhermite=16`,
   `nlaguerre=8`, VMEC `npol=6.0`, `torflux=0.64`) and compare growth,
@@ -817,13 +825,20 @@ Use these guardrails throughout the round:
   the solver's eik-source run. The prepared GX path is now
   `fixtures/gx_w7x_mode_structure_run/README.md`; this item remains open until
   an actual external `.big.nc`/`.out.nc` pair is generated and exported.
-- [ ] Re-run CPU memory and timing estimates at the validated production
-  controls and record whether the `task.tex` target, roughly minutes on
-  \(\mathcal{O}(100)\) CPUs, is credible.
-- [ ] Upgrade the reduced DESC optimization demo only after the above gates
-  pass: use the validated stellarator fixture, fixed topology, documented
-  geometry sensitivities, and finite-difference checks of AD gradients with
-  respect to profile and continuous geometry inputs.
+- [x] Add CPU timing/memory readiness artifacts for the reduced W7-X ladder.
+  The committed timing JSON records wall-clock reduced scan timings and a
+  production-control memory estimate for the GX W7-X dimensions; it explicitly
+  does not claim the `task.tex` production runtime target yet.
+- [ ] Re-run true production CPU timing after the W7-X external parity and
+  convergence gates pass, then record whether the `task.tex` target, roughly
+  minutes on \(\mathcal{O}(100)\) CPUs, is credible.
+- [x] Add an optimization-readiness guard. The committed
+  `optimization_readiness.json` keeps DESC-driven optimization labeled reduced
+  until W7-X external parity and production timing pass.
+- [ ] Upgrade the reduced DESC optimization demo only after the above gates pass:
+  use the validated stellarator fixture, fixed topology, documented geometry
+  sensitivities, and finite-difference checks of AD gradients with respect to
+  profile and continuous geometry inputs.
 
 Deferred beyond the first trusted stellarator run:
 

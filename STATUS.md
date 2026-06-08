@@ -40,7 +40,12 @@ reduced `stellarator_gk` regression diagnostics pending a matched external
 W7-X time-history fixture. The external GX replacement workflow is also
 prepared in `fixtures/gx_w7x_mode_structure_run/`, with a patched W7-X input
 and repo-relative commands to copy VMEC data, run GX, export `.big.nc` mode
-structures, and compare the result against the committed reduced fixture. The current
+structures, and compare the result against the committed reduced fixture. A
+first reduced W7-X convergence/timing study is now committed in
+`fixtures/w7x_itg_convergence_study/`; it shows finite outputs and excellent
+time-step/growth-window self-consistency, but also shows that the short-window
+reduced baseline is not converged across parallel, velocity, and `kx`
+variations. The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
@@ -530,6 +535,9 @@ The repository currently contains:
   the reduced W7-X ITG fixture from a GX/GIST eik table.
 - `scripts/prepare_gx_w7x_mode_structure_run.py`: reproducible external GX
   run-prep generator for the W7-X complex mode-structure reference.
+- `scripts/run_w7x_reduced_convergence_study.py`: reduced W7-X convergence,
+  timing, production-memory-estimate, and optimization-readiness artifact
+  generator.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
 - `fixtures/w7x_itg_reduced_benchmark/`: first real stellarator benchmark
@@ -540,6 +548,9 @@ The repository currently contains:
 - `fixtures/gx_w7x_mode_structure_run/`: patched GX W7-X input plus
   copy/run/export/compare metadata for producing the future external W7-X
   `.big.nc` complex mode-structure parity fixture.
+- `fixtures/w7x_itg_convergence_study/`: reduced W7-X convergence/timing
+  artifact directory with `convergence_summary.csv`, `timing_summary.json`,
+  `optimization_readiness.json`, `study_metadata.json`, and README.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -662,6 +673,51 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-08: Added Reduced W7-X Convergence, Timing, and Readiness Study
+
+- Added `scripts/run_w7x_reduced_convergence_study.py`, which reuses the
+  eik-source stellarator scan runner to execute a reduced W7-X convergence
+  matrix over parallel resolution, velocity resolution, `kx` grid, time-step,
+  field-line length, and growth-window diagnostics.
+- Generated `fixtures/w7x_itg_convergence_study/` with:
+  `convergence_summary.csv`, `timing_summary.json`,
+  `optimization_readiness.json`, `study_metadata.json`, and `README.md`.
+- The reduced baseline remains the committed real-geometry W7-X setup:
+  \(N_z=33\), one field-line period, \(N_{v_\parallel}=N_\mu=4\),
+  \(N_{k_x}=3\), \(k_y=(0,0.1,0.2,0.3)\), six one-step RK4 windows, and
+  \(\Delta t=0.002\).
+- Key reduced convergence observations:
+  - `dt_half` matches the baseline at \(k_y=0.3\) with growth delta
+    \(-4.49\times10^{-11}\),
+  - `late_mean_window` changes the \(k_y=0.3\) growth by only
+    \(-2.98\times10^{-6}\),
+  - the two-period field-line case remains damped but shifts the \(k_y=0.3\)
+    growth by \(-1.11\times10^{-1}\),
+  - the `n_z=49`, velocity, and `kx` variations move to positive growth in
+    this short reduced setup, so this is not yet a converged W7-X physics
+    benchmark.
+- Added a production-control memory estimate for the GX W7-X dimensions
+  \(N_z=256,N_{k_x}=1,N_{k_y}=28,N_{v_\parallel}=16,N_\mu=8\):
+  estimated state shape `(16, 8, 256, 1, 28)` and total reduced linear storage
+  `51.14 MiB` with two-state no-history storage. This is a memory estimate,
+  not a production runtime claim.
+- Added `tests/test_w7x_convergence_study.py` covering the case matrix,
+  baseline-delta construction, and committed reduced-convergence artifacts.
+- Updated `TODO.md` so reduced convergence/timing/readiness are complete, while
+  external W7-X parity, production convergence, and production CPU timing
+  remain open.
+- Commands run:
+  - `uv run python scripts/run_w7x_reduced_convergence_study.py`
+  - `uv run ruff check scripts/run_w7x_reduced_convergence_study.py tests/test_w7x_convergence_study.py scripts/generate_w7x_itg_reduced_benchmark.py scripts/prepare_gx_w7x_mode_structure_run.py examples/run_stellarator_linear_scan.py examples/compare_mode_structure_fixtures.py tests/test_w7x_stellarator_benchmark_fixture.py tests/test_w7x_external_reference_prep.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_convergence_study.py tests/test_w7x_stellarator_benchmark_fixture.py tests/test_w7x_external_reference_prep.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification so far:
+  - convergence study completed all 9 reduced cases and wrote the artifact
+    directory,
+  - focused ruff check passed,
+  - focused W7-X pytest suite passed with `8 passed`,
+  - `main.pdf` built successfully with 33 pages.
 
 ### 2026-06-08: Added Real W7-X Reduced Stellarator Benchmark Fixture
 

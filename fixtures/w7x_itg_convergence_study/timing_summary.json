@@ -1,0 +1,172 @@
+{
+  "benchmark_name": "w7x_itg_reduced_convergence_timing",
+  "external_parity_ready": false,
+  "production_gx_control_memory_estimate": {
+    "coefficient_bytes": 9474504,
+    "dimensions": {
+      "n_kx": 1,
+      "n_ky": 28,
+      "n_mu": 8,
+      "n_species": 1,
+      "n_vpar": 16,
+      "n_z": 256
+    },
+    "field_bytes": 114688,
+    "field_shape": [
+      256,
+      1,
+      28
+    ],
+    "history_bytes": 29360128,
+    "state_bytes": 14680064,
+    "state_shape": [
+      16,
+      8,
+      256,
+      1,
+      28
+    ],
+    "store_history": false,
+    "total_bytes": 53629384,
+    "total_bytes_human": "51.14 MiB"
+  },
+  "production_timing_claim": "not_claimed_pending_external_parity_and_production_run",
+  "run_summaries": [
+    {
+      "axis": "reference",
+      "case": "baseline",
+      "estimated_cfl_dt": 0.041744421570905736,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.15756361452338533,
+      "wall_seconds": 20.286100500030443
+    },
+    {
+      "axis": "parallel_resolution",
+      "case": "nz_17",
+      "estimated_cfl_dt": 0.08616395877657601,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.026943610717200528,
+      "wall_seconds": 13.648879957851022
+    },
+    {
+      "axis": "parallel_resolution",
+      "case": "nz_49",
+      "estimated_cfl_dt": 0.0263902808852181,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 3.438914430311229,
+      "wall_seconds": 12.336223082849756
+    },
+    {
+      "axis": "velocity_resolution",
+      "case": "velocity_3x3",
+      "estimated_cfl_dt": 0.04386145493832466,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.13560378794926403,
+      "wall_seconds": 11.045677666086704
+    },
+    {
+      "axis": "velocity_resolution",
+      "case": "velocity_5x5",
+      "estimated_cfl_dt": 0.03910217341979894,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.1697247833125637,
+      "wall_seconds": 10.328037249855697
+    },
+    {
+      "axis": "kx_grid",
+      "case": "kx5",
+      "estimated_cfl_dt": 0.041741869547969115,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.4919408338949586,
+      "wall_seconds": 11.157360000070184
+    },
+    {
+      "axis": "time_step",
+      "case": "dt_half",
+      "estimated_cfl_dt": 0.041744421570905736,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.15756361462034482,
+      "wall_seconds": 2.5761570420581847
+    },
+    {
+      "axis": "field_line_length",
+      "case": "two_periods",
+      "estimated_cfl_dt": 0.035895157166947946,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.11199927436803905,
+      "wall_seconds": 18.055373874958605
+    },
+    {
+      "axis": "growth_window",
+      "case": "late_mean_window",
+      "estimated_cfl_dt": 0.041744421570905736,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "late_window_growth_delta": 0.15756361452338533,
+      "wall_seconds": 2.2810358330607414
+    }
+  ],
+  "status": "reduced_solver_regression_not_external_parity"
+}
