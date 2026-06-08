@@ -6,13 +6,18 @@ from scipy import special
 from stellarator_gk import (
     VelocityBasisKind,
     VelocityBasisSpec,
+    apply_gx_kz_hypercollision,
     apply_hypercollision,
+    apply_linked_abs_kz,
     build_velocity_basis,
     density_moment,
     fluid_moments,
     free_energy_spectrum,
     gamma0,
     gamma0_limit_error,
+    gx_kz_hypercollision_hermite_rates,
+    gx_kz_hypercollision_prefactor,
+    gx_linked_kz_wavenumbers,
     gyroaverage_laguerre_coefficients,
     hypercollision_damping_rates,
     parallel_heat_flux_moment,
@@ -241,6 +246,119 @@ def test_hypercollision_closure_hook_damps_only_selected_moments():
     np.testing.assert_allclose(rates[:, :3], 0.0)
     assert jnp.all(rates[:, 3:] > 0.0)
     np.testing.assert_allclose(rhs, -rates[:, :, None] * coeffs)
+
+
+def test_gx_linked_kz_wavenumbers_follow_cuda_ordering_and_dealiasing():
+    kz = gx_linked_kz_wavenumbers(4, n_links=2, z_periods=3.0)
+    expected = jnp.asarray([0.0, 1.0, 2.0, 3.0, 4.0, -3.0, -2.0, -1.0]) / 6.0
+    np.testing.assert_allclose(kz, expected, rtol=0.0, atol=0.0)
+
+    dealias = gx_linked_kz_wavenumbers(4, n_links=2, z_periods=3.0, dealias=True)
+    expected_dealias = jnp.asarray([0.0, 1.0, 2.0, 0.0, 0.0, 0.0, -2.0, -1.0]) / 6.0
+    np.testing.assert_allclose(dealias, expected_dealias, rtol=0.0, atol=0.0)
+
+
+def test_linked_abs_kz_operator_matches_discrete_fourier_mode():
+    n_total = 12
+    mode = 3
+    z_periods = 4.0
+    grid = jnp.arange(n_total, dtype=jnp.float64)
+    values = jnp.exp(2j * jnp.pi * mode * grid / n_total)
+
+    out = apply_linked_abs_kz(values, z_periods=z_periods)
+
+    np.testing.assert_allclose(out, abs(mode / z_periods) * values, rtol=3e-14, atol=3e-14)
+
+
+def test_gx_kz_hypercollision_prefactor_and_rates_match_source_formula():
+    prefactor = gx_kz_hypercollision_prefactor(
+        6,
+        nu_hyper_m=0.7,
+        p_hyper_m=2,
+        vt=1.5,
+        gradpar_abs=0.25,
+    )
+    expected_prefactor = 0.7 * 2.5 / (5.0**2.5) * 2.3 * 1.5 * 0.25
+    np.testing.assert_allclose(prefactor, expected_prefactor, rtol=2e-15, atol=2e-15)
+
+    rates = gx_kz_hypercollision_hermite_rates(
+        6,
+        nu_hyper_m=0.7,
+        p_hyper_m=2,
+        vt=1.5,
+        gradpar_abs=0.25,
+    )
+    expected = expected_prefactor * jnp.arange(6, dtype=jnp.float64) ** 2
+    expected = expected.at[:3].set(0.0)
+    np.testing.assert_allclose(rates, expected, rtol=2e-15, atol=2e-15)
+
+
+def test_gx_kz_hypercollision_damps_only_high_hermite_modes_then_abs_kz():
+    n_total = 8
+    mode = 2
+    grid = jnp.arange(n_total, dtype=jnp.float64)
+    wave = jnp.exp(2j * jnp.pi * mode * grid / n_total)
+    coeffs = jnp.zeros((2, 6, n_total), dtype=jnp.complex128)
+    coeffs = coeffs.at[:, :, :].set(wave[None, None, :])
+
+    rhs = apply_gx_kz_hypercollision(
+        coeffs,
+        nu_hyper_m=0.7,
+        p_hyper_m=2,
+        vt=1.5,
+        gradpar_abs=0.25,
+        n_links=2,
+        z_periods=3.0,
+    )
+    rates = gx_kz_hypercollision_hermite_rates(
+        6,
+        nu_hyper_m=0.7,
+        p_hyper_m=2,
+        vt=1.5,
+        gradpar_abs=0.25,
+    )
+    expected = -rates[None, :, None] * abs(mode / (3.0 * 2.0)) * coeffs
+
+    np.testing.assert_allclose(rhs, expected, rtol=3e-14, atol=3e-14)
+    np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
+
+    constant = jnp.ones_like(coeffs)
+    constant_rhs = apply_gx_kz_hypercollision(
+        constant,
+        nu_hyper_m=0.7,
+        p_hyper_m=2,
+        vt=1.5,
+        gradpar_abs=0.25,
+        n_links=2,
+        z_periods=3.0,
+    )
+    np.testing.assert_allclose(constant_rhs, 0.0, rtol=0.0, atol=3e-14)
+
+
+def test_gx_kz_hypercollision_is_jittable_and_differentiable():
+    n_total = 6
+    grid = jnp.arange(n_total, dtype=jnp.float64)
+    wave = jnp.cos(2.0 * jnp.pi * grid / n_total)
+    base = jnp.zeros((1, 5, n_total), dtype=jnp.float64)
+    base = base.at[0, 3].set(wave)
+    base = base.at[0, 4].set(0.25 * wave)
+
+    @jax.jit
+    def objective(scale):
+        rhs = apply_gx_kz_hypercollision(
+            scale * base,
+            nu_hyper_m=0.4,
+            p_hyper_m=2,
+            vt=1.2,
+            gradpar_abs=0.7,
+        )
+        return jnp.real(jnp.sum(jnp.abs(rhs) ** 2))
+
+    value = objective(1.3)
+    grad = jax.grad(objective)(1.3)
+
+    assert jnp.isfinite(value)
+    np.testing.assert_allclose(grad, 2.0 * value / 1.3, rtol=4e-14, atol=4e-14)
 
 
 def test_free_energy_spectrum_and_jit_gradient_smoke():

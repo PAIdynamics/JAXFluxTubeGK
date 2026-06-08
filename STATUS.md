@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-06-05
+Last updated: 2026-06-06
 
 ## Current State
 
@@ -427,12 +427,24 @@ row. The GX reference-normalization mismatch is now separated from the real
 multi-`ky` curve-shape gap: calibrating the GX growth curve to the
 GKW/Gyaradax selected Cyclone target at `ky=0.5` makes the production-control
 scan wrapper pass that anchor with growth error `1.00094374e-03` when
-frequency is not required. The calibrated two-point production scan remains
-OPEN because the low-`ky` point is too weak: with GX-style `nperiod=2` and the
-better `internal_krho` convention, `gamma(0.3)=0.138382805661334` versus
-calibrated reference `0.3080402563529299`, while `gamma(0.5)=0.1639246539370428`
-versus `0.179`. The next narrowed target is therefore low-`ky` branch/domain,
-GX hypercollision/moment, and per-`ky` mode-structure fixture coverage.
+frequency is not required. The calibrated two-point scan remains OPEN because
+the low-`ky` point is too weak. On the exact GX input-control grid
+(`n_z_total=96`, Hermite/Laguerre control resolution `48/16`,
+`nperiod=2`, internal-`krho` convention), `gamma(0.3)=0.14325556436195153`
+versus calibrated reference `0.3080402563529299`, while
+`gamma(0.5)=0.14759624156710394` versus `0.179`. The next narrowed target is
+therefore low-`ky` branch/domain, GX hypercollision/moment, and per-`ky`
+mode-structure fixture coverage.
+The first GX moment-space discriminator is now implemented in the
+Hermite-Laguerre backend as a source-matched linked-boundary `k_z`
+hypercollision RHS contribution. It reproduces GX's `init_kzLinked` wavenumber
+ordering and dealias mask, the linked `abs_dz` FFT normalization, the
+`hypercollisions_kz` conservation of Hermite modes `m<=2`, and the
+`linear.cu` coefficient
+`nu_hyper_m*(p+0.5)/(M**(p+0.5))*2.3*vt*abs(gradpar)*m**p`. This operator is
+tested for exact Fourier-mode action, JIT compatibility, and differentiability
+with respect to moment amplitudes. It is not yet a full GX moment-space linear
+RHS and is not wired into the collocation/GKW-parity scan path.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -571,53 +583,100 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: use the new multi-`ky` scan gate to calibrate production-control
-Cyclone/ITG scan parity instead of another selected-point scalar comparison.
-The next narrowed target is scan normalization and reference matching:
+Goal: close the next multi-`ky` physics discriminator without disturbing the
+passing GKW/Gyaradax selected-`ky` parity path. The narrowed target is now the
+GX moment/eigenfunction fork:
 
-- run the scan gate at production-control resolution for a small set of
-  available GX/GKW/Gyaradax/GS2 `ky` points and record whether the growth and
-  real-frequency errors remain normalization/convention gaps or resolution
-  gaps,
-- align frequency sign, time-window, `k_theta rho_s` versus internal `krho`,
-  and GKW/GX normalization conventions across the scan,
-- add per-`ky` mode-structure/profile references where external
-  `parallel_phi.dat`, eigenfunction, or equivalent GX/GKW outputs are
-  available, reusing the direct `parallel_phi.dat` profile gate for selected
-  points,
+- assemble a minimal GX-style Hermite-Laguerre linear moment RHS for the
+  s-alpha adiabatic-electron ITG case, reusing the new linked `k_z`
+  hypercollision contribution and keeping its axis/layout conventions explicit;
+- or, before changing collocation physics, obtain/export an external per-`ky`
+  complex mode-structure fixture so the current collocation RHS can be compared
+  mode-shape-by-mode-shape against GX/GKW/Gyaradax output;
+- keep the calibrated exact-grid GX scan (`n_z_total=96`, `48/16`,
+  `nperiod=2`) as the scalar branch-shape symptom:
+  `gamma(0.3)=0.14325556436195153` versus `0.3080402563529299`;
 - keep the passing full RHS/action trace (`6.22e-12`), same-state replay
   (`2.35e-12`), mid-run same-state replay (`2.36e-12`), matrix trace
   (`5.77e-15`), input trace (`5.33e-15`), early one-window replay
-  (`1.12e-9`), mid-run one-window replay (`2.03e-10`), and first-window replay
-  (`1.17e-9`) as guardrails,
-- after the scan gate is stable, extend the benchmark ladder to a
-  stellarator/TEM-style DESC/GX/GIST geometry fixture.
+  (`1.12e-9`), mid-run one-window replay (`2.03e-10`), first-window replay
+  (`1.17e-9`), and row-normalized `parallel_phi.dat` profile gate
+  (`3.97e-7`) as guardrails;
+- after the multi-`ky` branch-shape gate is stable, extend the benchmark ladder
+  to a stellarator/TEM-style DESC/GX/GIST geometry fixture.
 
 Expected file changes:
 
-- production-control scan examples/CSV writers if external references are
-  available,
-- optional mode-structure/profile fixture loaders for per-`ky` scan points,
-- no new operator/RHS source patch unless the scan gate localizes a new
-  source-term, matrix-format, or geometry convention gap,
+- `src/stellarator_gk/physics/velocity_moments.py` or a new moment-RHS module
+  if the GX-style moment path is pursued,
+- `src/stellarator_gk/benchmarks.py` and fixtures/examples if an external
+  per-`ky` complex mode-structure reference is exported,
+- optional mode-structure/profile fixture loaders for scan points,
 - any future independently generated DESC/GX-specific eik fixture if an
   external runner becomes available,
-- `src/stellarator_gk/benchmarks.py`,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
+- retained Hermite-Laguerre moment/hypercollision tests,
+- new moment-RHS unit tests or external mode-structure fixture-loader tests,
 - retained one-window replay tests for steps 20→40, 780→800/800→820, and
   0→20,
 - retained focused multi-`ky` scan report/gate tests,
-- new production-control or smoke scan calibration tests once tolerances are
-  justified,
 - retained `tests/test_gkw_cosine2_patch.py` RHS/action parity gates,
 - retained selected Cyclone scalar growth, RH plateau, DESC/GX/eik geometry,
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-06: GX Linked `k_z` Hypercollision Discriminator
+
+- Committed the previous GX scan-convention audit first:
+  `c96d43b Add GX scan convention audit`.
+- Implemented the first GX moment-space discriminator in
+  `src/stellarator_gk/physics/velocity_moments.py`:
+  - `gx_linked_kz_wavenumbers`, matching GX
+    `device_funcs.cu::init_kzLinked` ordering and optional one-third dealias
+    mask;
+  - `apply_linked_abs_kz`, matching GX linked `abs_dz` FFT normalization via
+    JAX `fft`/`ifft`;
+  - `gx_kz_hypercollision_prefactor` and
+    `gx_kz_hypercollision_hermite_rates`, matching the GX `linear.cu`
+    coefficient and `hypercollisions_kz` rule that damps only `m>2`;
+  - `apply_gx_kz_hypercollision`, a differentiable Hermite-Laguerre RHS
+    contribution that forms `-nu_m G` and applies linked `|k_z|` along the
+    parallel chain.
+- Exported the new utilities from `stellarator_gk.physics` and the top-level
+  `stellarator_gk` namespace.
+- Added tests covering:
+  - GX linked `k_z` ordering and dealiasing,
+  - exact action of linked `|k_z|` on a discrete Fourier mode,
+  - GX hypercollision prefactor/rate formula,
+  - conservation of Hermite modes `m<=2` and zero action on constant parallel
+    structure,
+  - JIT compatibility and differentiability with respect to moment amplitudes.
+- Updated `TODO.md` and `main.tex` so the implemented discriminator is
+  separated from the still-open full GX moment RHS or external per-`ky`
+  complex mode-structure fixture.
+- Files changed:
+  - `src/stellarator_gk/physics/velocity_moments.py`,
+  - `src/stellarator_gk/physics/__init__.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_hermite_laguerre_basis.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/physics/velocity_moments.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py tests/test_hermite_laguerre_basis.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_hermite_laguerre_basis.py -q`
+- Test results:
+  - ruff passed,
+  - focused Hermite-Laguerre tests passed: `15 passed in 3.56s`.
+- Next action: assemble a minimal GX-style Hermite-Laguerre linear moment RHS
+  around this linked `k_z` hypercollision contribution, or obtain/export an
+  external per-`ky` complex mode-structure fixture before changing the
+  collocation scan physics.
 
 ### 2026-06-05: GX s-alpha Input-Convention Audit for Multi-`ky`
 

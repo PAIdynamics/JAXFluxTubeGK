@@ -1861,8 +1861,31 @@ was run with the calibrated GX curve and internal-\(k_\rho\) convention; it
 remains open with
 \(\gamma(k_y=0.3)=0.1433\) versus \(0.3080\) and
 \(\gamma(k_y=0.5)=0.1476\) versus \(0.179\).  Thus the corrected domain is not
-the sole explanation.  The next discriminator is either a GX-style
-Hermite--Laguerre moment RHS with linked-boundary \(k_z\) hypercollision, or an
+the sole explanation.  The first GX moment-space discriminator has now been
+implemented as a source-matched linked-boundary \(k_z\) hypercollision
+contribution for Hermite--Laguerre coefficients \(G_{\ell m}\):
+\begin{equation}
+  R_{\ell m}^{(k_z{\rm hyp})}
+  =
+  \left|\partial_z\right|_{\rm link}
+  \left[-\nu_m G_{\ell m}\right],
+  \qquad
+  \nu_m =
+  \begin{cases}
+  \nu_{\rm hyp}
+  \dfrac{p+1/2}{M^{p+1/2}}\,
+  2.3\,v_t\,|\nabla_\parallel|\,m^p, & m>2,\\[0.9em]
+  0, & m\le 2,
+  \end{cases}
+\end{equation}
+with \(M=N_m-1\).  The linked operator uses GX's chain ordering
+\(k_z=i/(Z_p n_{\rm link})\) up to the Nyquist branch and
+\((i-N_z n_{\rm link})/(Z_p n_{\rm link})\) on the negative branch, with the
+same optional one-third dealias mask.  This contribution is tested, JIT
+compatible, and differentiable with respect to the moment amplitudes, but it is
+not yet the full GX moment-space linear RHS and is not active in the
+collocation/GKW-parity scan.  The remaining discriminator is therefore either a
+minimal GX-style Hermite--Laguerre linear moment RHS around this term, or an
 external per-\(k_y\) complex mode-structure fixture before changing the
 collocation RHS.
 

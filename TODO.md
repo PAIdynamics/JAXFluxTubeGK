@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-06-05
+Last planned: 2026-06-06
 
 ## Project Goal
 
@@ -743,11 +743,18 @@ state-history and benchmark-scan inconsistencies:
   `0.3080402563529299`, and `gamma(0.5)=0.14759624156710394` versus `0.179`.
   The corrected GX domain changes the low-`ky` value only modestly, so the
   remaining gap is not just the previous `ntheta`/`n_z_total` bookkeeping error.
-- [ ] Implement the next physics discriminator for multi-`ky` parity: either
-  add a GX-style Hermite-Laguerre moment RHS with linked-boundary `k_z`
-  hypercollision for the linear electrostatic s-alpha case, or obtain/export
-  an external per-`ky` complex mode-structure fixture so the collocation RHS can
-  be compared mode-shape-by-mode-shape before changing physics.
+- [x] Implement the first GX moment-space physics discriminator: a
+  source-matched Hermite-Laguerre `k_z` hypercollision RHS contribution. The
+  new utility follows GX's linked-chain wavenumber ordering, dealias mask,
+  inverse-FFT normalization, `m>2` Hermite conservation rule, and
+  `nu_hyper_m (p+1/2) M^{-(p+1/2)} 2.3 v_t |gradpar| m^p` coefficient before
+  applying the linked `|k_z|` operator. This is tested and differentiable, but
+  it is not yet wired into the collocation scan path.
+- [ ] Complete the next discriminator for multi-`ky` parity: either assemble a
+  minimal GX-style Hermite-Laguerre linear moment RHS for the s-alpha ITG case
+  around the new linked `k_z` hypercollision term, or obtain/export an external
+  per-`ky` complex mode-structure fixture so the collocation RHS can be
+  compared mode-shape-by-mode-shape before changing physics.
 - [ ] After the CBC scan gates are stable, extend the
   benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
   compatible geometry arrays and keep DESC optimization examples labeled

@@ -339,7 +339,6 @@ def fluid_moments(coefficients, gyroaverage_coefficients=None) -> dict[str, obje
     }
 
 
-
 def free_energy_spectrum(coefficients, axis: int | tuple[int, ...] | None = None):
     """Return ``|G_lm|^2`` or a summed spectrum over selected axes."""
 
@@ -384,6 +383,194 @@ def apply_hypercollision(coefficients, damping_rates):
     return -rates.reshape(rates.shape + (1,) * (coefficients.ndim - rates.ndim)) * coefficients
 
 
+def gx_linked_kz_wavenumbers(
+    n_z: int,
+    *,
+    n_links: int = 1,
+    z_periods: float = 1.0,
+    dealias: bool = False,
+    dtype: str = "float64",
+):
+    """Return GX linked-chain ``k_z`` values in source-code ordering.
+
+    GX builds a linked chain of length ``n_z * n_links`` and stores modes as
+    ``0, 1, ..., floor(N/2), floor(N/2)-N, ..., -1`` divided by
+    ``z_periods * n_links``.  The optional dealias mask follows
+    ``device_funcs.cu::init_kzLinked``.
+    """
+
+    if n_z < 2:
+        raise ValueError("n_z must be at least 2")
+    if n_links < 1:
+        raise ValueError("n_links must be at least 1")
+    if z_periods <= 0:
+        raise ValueError("z_periods must be positive")
+
+    real_dtype = jnp.dtype(dtype)
+    n_total = int(n_z) * int(n_links)
+    indices = jnp.arange(n_total, dtype=real_dtype)
+    signed = jnp.where(indices < (n_total // 2 + 1), indices, indices - n_total)
+    kz = signed / (jnp.asarray(z_periods, dtype=real_dtype) * n_links)
+    if dealias:
+        cutoff = (n_total - 1.0) / 3.0
+        active = (indices <= cutoff) | (indices >= n_total - cutoff)
+        kz = jnp.where(active, kz, jnp.zeros_like(kz))
+    return kz
+
+
+def apply_linked_abs_kz(
+    values,
+    *,
+    n_links: int = 1,
+    z_periods: float = 1.0,
+    axis: int = -1,
+    dealias: bool = False,
+):
+    """Apply GX's linked-chain ``|k_z|`` pseudo-differential operator.
+
+    The selected axis is treated as the full linked chain.  JAX's inverse FFT
+    already includes the ``1/N`` normalization that GX applies between the
+    forward and inverse CUFFT calls.
+    """
+
+    values = jnp.asarray(values)
+    axis = _normalize_axis(axis, values.ndim)
+    if n_links < 1:
+        raise ValueError("n_links must be at least 1")
+    n_total = values.shape[axis]
+    if n_total % n_links != 0:
+        raise ValueError("the selected axis length must be divisible by n_links")
+
+    n_z = n_total // n_links
+    real_dtype = jnp.asarray(values.real).dtype
+    kz = gx_linked_kz_wavenumbers(
+        n_z,
+        n_links=n_links,
+        z_periods=z_periods,
+        dealias=dealias,
+        dtype=str(real_dtype),
+    )
+    multiplier_shape = [1] * values.ndim
+    multiplier_shape[axis] = n_total
+    multiplier = jnp.abs(kz).reshape(multiplier_shape)
+    return jnp.fft.ifft(multiplier * jnp.fft.fft(values, axis=axis), axis=axis)
+
+
+def gx_kz_hypercollision_prefactor(
+    n_hermite: int,
+    *,
+    nu_hyper_m: float = 1.0,
+    p_hyper_m: int | None = None,
+    vt: float = 1.0,
+    gradpar_abs: float = 1.0,
+    dtype: str = "float64",
+):
+    """Return GX's prefactor for ``hypercollisions_kz``.
+
+    This implements the coefficient used in ``linear.cu`` before multiplying by
+    ``m**p`` and applying the linked ``|k_z|`` operator.
+    """
+
+    if n_hermite < 1:
+        raise ValueError("n_hermite must be at least 1")
+    if vt < 0:
+        raise ValueError("vt must be non-negative")
+    if gradpar_abs < 0:
+        raise ValueError("gradpar_abs must be non-negative")
+
+    real_dtype = jnp.dtype(dtype)
+    p = max(1, min(20, n_hermite // 2)) if p_hyper_m is None else int(p_hyper_m)
+    if p < 1:
+        raise ValueError("p_hyper_m must be positive")
+    if n_hermite <= 3:
+        return jnp.asarray(0.0, dtype=real_dtype)
+
+    m_max = jnp.asarray(n_hermite - 1, dtype=real_dtype)
+    p_value = jnp.asarray(p, dtype=real_dtype)
+    return (
+        jnp.asarray(nu_hyper_m, dtype=real_dtype)
+        * (p_value + 0.5)
+        / (m_max ** (p_value + 0.5))
+        * jnp.asarray(2.3 * vt * gradpar_abs, dtype=real_dtype)
+    )
+
+
+def gx_kz_hypercollision_hermite_rates(
+    n_hermite: int,
+    *,
+    nu_hyper_m: float = 1.0,
+    p_hyper_m: int | None = None,
+    vt: float = 1.0,
+    gradpar_abs: float = 1.0,
+    dtype: str = "float64",
+):
+    """Return GX Hermite damping rates for the linked ``k_z`` hypercollision."""
+
+    if n_hermite < 1:
+        raise ValueError("n_hermite must be at least 1")
+    real_dtype = jnp.dtype(dtype)
+    p = max(1, min(20, n_hermite // 2)) if p_hyper_m is None else int(p_hyper_m)
+    prefactor = gx_kz_hypercollision_prefactor(
+        n_hermite,
+        nu_hyper_m=nu_hyper_m,
+        p_hyper_m=p,
+        vt=vt,
+        gradpar_abs=gradpar_abs,
+        dtype=dtype,
+    )
+    m = jnp.arange(n_hermite, dtype=real_dtype)
+    rates = prefactor * m**jnp.asarray(p, dtype=real_dtype)
+    return jnp.where(m > 2.0, rates, jnp.zeros_like(rates))
+
+
+def apply_gx_kz_hypercollision(
+    coefficients,
+    *,
+    nu_hyper_m: float = 1.0,
+    p_hyper_m: int | None = None,
+    vt: float = 1.0,
+    gradpar_abs: float = 1.0,
+    n_links: int = 1,
+    z_periods: float = 1.0,
+    hermite_axis: int = 1,
+    parallel_axis: int = -1,
+    dealias: bool = False,
+):
+    """Return GX's linked ``k_z`` hypercollision RHS contribution.
+
+    ``coefficients`` may use any axis order, but the default is the existing
+    moment convention ``(laguerre, hermite, ..., z)``.  The operator first forms
+    ``-nu_m G`` for Hermite modes ``m>2`` and then applies the linked
+    pseudo-differential ``|k_z|`` operator along the parallel chain.
+    """
+
+    coefficients = jnp.asarray(coefficients)
+    hermite_axis = _normalize_axis(hermite_axis, coefficients.ndim)
+    parallel_axis = _normalize_axis(parallel_axis, coefficients.ndim)
+    if hermite_axis == parallel_axis:
+        raise ValueError("hermite_axis and parallel_axis must be different")
+
+    n_hermite = coefficients.shape[hermite_axis]
+    rates = gx_kz_hypercollision_hermite_rates(
+        n_hermite,
+        nu_hyper_m=nu_hyper_m,
+        p_hyper_m=p_hyper_m,
+        vt=vt,
+        gradpar_abs=gradpar_abs,
+        dtype=str(jnp.asarray(coefficients.real).dtype),
+    )
+    rate_shape = [1] * coefficients.ndim
+    rate_shape[hermite_axis] = n_hermite
+    damped = -rates.reshape(rate_shape) * coefficients
+    return apply_linked_abs_kz(
+        damped,
+        n_links=n_links,
+        z_periods=z_periods,
+        axis=parallel_axis,
+        dealias=dealias,
+    )
+
+
 def _hermite_derivative_matrix(n_hermite: int):
     matrix = np.zeros((n_hermite, n_hermite), dtype=float)
     for m in range(1, n_hermite):
@@ -419,6 +606,17 @@ def _shift_laguerre_coefficients(coefficients, offset: int):
     if offset < 0:
         return jnp.concatenate([coefficients[-offset:], zeros[offset:]], axis=0)
     return coefficients
+
+
+def _normalize_axis(axis: int, ndim: int) -> int:
+    if ndim < 1:
+        raise ValueError("expected at least one array dimension")
+    axis = int(axis)
+    if axis < 0:
+        axis += ndim
+    if axis < 0 or axis >= ndim:
+        raise ValueError("axis out of bounds")
+    return axis
 
 
 def gamma0_limit_error(b, n_laguerre: int):
