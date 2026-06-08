@@ -13467,6 +13467,11 @@ def run_stellarator_geometry_preflight(
         ),
         dtype=bool,
     )
+    mirror_note = (
+        "independent finite-difference mirror-force consistency"
+        if include_mirror_fd_check
+        else "finite-difference mirror-force consistency skipped for imported eik drift proxy"
+    )
     return StellaratorGeometryPreflightReport(
         check_passed=check_passed,
         field_min=field_min,
@@ -13483,8 +13488,7 @@ def run_stellarator_geometry_preflight(
         source=getattr(geometry, "source", "solver"),
         notes=(
             "standard imported-stellarator geometry preflight: finite fields, "
-            "positive B/metric, kperp2, GX/GS2 eik export, and independent "
-            "finite-difference mirror-force consistency"
+            f"positive B/metric, kperp2, GX/GS2 eik export, and {mirror_note}"
         ),
     )
 

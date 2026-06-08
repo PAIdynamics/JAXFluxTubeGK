@@ -1,0 +1,41 @@
+{
+  "adiabatic_electrons": {
+    "density": 1.0,
+    "temperature": 1.0,
+    "zonal_correction": false
+  },
+  "geometry": {
+    "alpha": 0.0,
+    "eik_reference": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "field_line_periods": 1,
+    "geometry_source": "eik",
+    "n_z": 33,
+    "radial_coordinate": "external_eik_table",
+    "rho": null,
+    "source": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "theta_endpoint": "excluded",
+    "theta_max": 2.951193098826775,
+    "theta_min": -3.141592653589793
+  },
+  "ikxspace": 2,
+  "kx_max": 0.3,
+  "ky_values": [
+    0.0,
+    0.1,
+    0.2,
+    0.3
+  ],
+  "n_kx": 3,
+  "n_mu": 4,
+  "n_vpar": 4,
+  "parallel_derivative_model": "matrix",
+  "species": {
+    "charge": 1.0,
+    "density": 1.0,
+    "density_gradient": 1.0,
+    "mass": 1.0,
+    "temperature": 1.0,
+    "temperature_gradient": 3.0
+  },
+  "velocity_backend": "chebyshev"
+}

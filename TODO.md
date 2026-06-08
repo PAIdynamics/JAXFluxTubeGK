@@ -776,25 +776,43 @@ Use these guardrails throughout the round:
 
 ### 4. Add a real stellarator benchmark fixture
 
-- [ ] Select one small stellarator ITG or TEM-style benchmark from the local
-  DESC/GX/GIST/GS2-compatible materials or generate one with an external code.
-  The first fixture can be linear electrostatic and adiabatic-electron if it
-  has reliable growth/frequency/mode-structure references.
-- [ ] Store the benchmark metadata with the fixture: equilibrium source,
+- [x] Select one small stellarator ITG benchmark from the local
+  GX/GIST/GS2-compatible materials. The first fixture is the GX W7-X
+  adiabatic-electron ITG input deck
+  `relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in`
+  together with the real W7-X GX/GIST eik geometry table
+  `relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000`.
+- [x] Add a reproducible generator and committed artifact directory:
+  `scripts/generate_w7x_itg_reduced_benchmark.py` writes
+  `fixtures/w7x_itg_reduced_benchmark/` with geometry audit JSON/CSV,
+  `ky_growth.csv`, `mode_structures.csv`, convergence history/metadata,
+  quasilinear proxy, run config, benchmark metadata, and a fixture README.
+- [x] Store the benchmark metadata with the fixture: equilibrium/input source,
   geometry producer, field-line label, radial coordinate, normalization,
-  species/profile parameters, resolution, boundary condition, and reference
-  diagnostic windows.
-- [ ] Add tests that run a reduced version of the benchmark and verify finite
-  outputs plus tolerance-gated geometry and mode-structure diagnostics. Keep
-  production-resolution checks as examples or opt-in tests if they are too
-  expensive for the default suite.
+  species/profile parameters, reduced resolution, boundary/connectivity
+  controls, diagnostic windows, and SHA-256 hashes of the external local
+  geometry/input references when available.
+- [x] Add tests that verify the committed W7-X fixture contract, finite
+  growth/frequency/mode-structure outputs, passing eik geometry preflight, and
+  the `run_stellarator_linear_scan.py --geometry-source eik` CLI path on a
+  reduced smoke grid.
+- [ ] Replace the current internal reduced W7-X growth/frequency/mode-structure
+  regression diagnostics with a matched external-code fixture once GX, GKW,
+  GS2, stella, or another trusted run exports a compatible W7-X time history or
+  complex mode structure. Until then, the fixture is a real-geometry benchmark
+  artifact and regression gate, not an external physics-parity claim.
 
 ### 5. Convergence, timing, and optimization readiness
 
-- [ ] Run convergence studies for the trusted stellarator case in `n_z`,
+- [ ] Run convergence studies for the W7-X stellarator case in `n_z`,
   velocity resolution, `kx/ky` grid, field-line length, time step, and
   growth-window choice. Record the tolerance ladder in `STATUS.md` and
   `main.tex`.
+- [ ] Obtain or generate a production W7-X external parity target at the GX
+  input controls (`ntheta=256`, `nky=28`, `nkx=1`, `nhermite=16`,
+  `nlaguerre=8`, VMEC `npol=6.0`, `torflux=0.64`) and compare growth,
+  real frequency, and phase-aligned complex `phi(z)` mode structure against
+  the solver's eik-source run.
 - [ ] Re-run CPU memory and timing estimates at the validated production
   controls and record whether the `task.tex` target, roughly minutes on
   \(\mathcal{O}(100)\) CPUs, is credible.

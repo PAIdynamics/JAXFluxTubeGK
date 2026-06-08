@@ -1,0 +1,104 @@
+{
+  "checks": {
+    "finite_difference_mirror_force": true,
+    "finite_geometry_fields": true,
+    "finite_kperp2": true,
+    "gx_eik_export_contract": true,
+    "nonnegative_representative_kperp2": true,
+    "positive_B": true,
+    "positive_metric_diagonal": true
+  },
+  "eik_export_gate": {
+    "name": "stellarator_geometry_preflight_eik_export",
+    "notes": "standard imported-stellarator geometry preflight: finite fields, positive B/metric, kperp2, GX/GS2 eik export, and finite-difference mirror-force consistency skipped for imported eik drift proxy",
+    "observed_value": 0.0,
+    "passed": true,
+    "quantity": "max_abs_eik_export_error",
+    "reference_value": 0.0,
+    "tolerance": 1e-12
+  },
+  "external_eik_gate": null,
+  "field_stats": {
+    "B": {
+      "finite": true,
+      "max": 1.128800948396985,
+      "mean": 1.0507747865757946,
+      "min": 0.9946133709233435
+    },
+    "D_x": {
+      "finite": true,
+      "max": 0.009008316882817337,
+      "mean": -0.00014283120731185364,
+      "min": -0.00900831688281734
+    },
+    "D_y": {
+      "finite": true,
+      "max": 0.42765095802666353,
+      "mean": -0.028616837948903424,
+      "min": -0.5281345590766837
+    },
+    "E_y": {
+      "finite": true,
+      "max": 0.0,
+      "mean": 0.0,
+      "min": 0.0
+    },
+    "F": {
+      "finite": true,
+      "max": 0.08594839594277043,
+      "mean": 0.0800073808694424,
+      "min": 0.07573117646455206
+    },
+    "G": {
+      "finite": true,
+      "max": 0.5281345590766837,
+      "mean": 0.028616837948903424,
+      "min": -0.42765095802666353
+    },
+    "g_xx": {
+      "finite": true,
+      "max": 0.001454842413261702,
+      "mean": 0.0005792508016256554,
+      "min": 0.00019962577575311137
+    },
+    "g_xy": {
+      "finite": true,
+      "max": 0.031903115938108705,
+      "mean": 0.0006835185925614679,
+      "min": -0.031903115938108725
+    },
+    "g_yy": {
+      "finite": true,
+      "max": 3.3249902866001713,
+      "mean": 1.7008702722349702,
+      "min": 0.3345900852583461
+    }
+  },
+  "geometry": {
+    "alpha": 0.0,
+    "eik_reference": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "field_line_periods": 1,
+    "geometry_source": "eik",
+    "n_z": 33,
+    "radial_coordinate": "external_eik_table",
+    "rho": null,
+    "source": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "theta_endpoint": "excluded",
+    "theta_max": 2.951193098826775,
+    "theta_min": -3.141592653589793
+  },
+  "kperp2": {
+    "max": 0.30496862795682433,
+    "mean": 0.05956521457632154,
+    "min": 0.0
+  },
+  "mirror_fd_check_enabled": false,
+  "mirror_fd_error": 0.6212895210784929,
+  "passed": true,
+  "z": {
+    "max": 0.4696969696969697,
+    "min": -0.5,
+    "n_z": 33,
+    "weight_sum": 1.0
+  }
+}

@@ -31,7 +31,13 @@ script now evaluate those arrays from a DESC equilibrium/example object onto
 canonical DSHAPE `.npz` fixture generated through the DESC HDF5/path loader now
 loads through the solver geometry contract. The standard stellarator preflight
 is now public through `run_stellarator_geometry_preflight`, with a companion
-`run_mode_boundary_contract` for linked-mode topology. The current
+`run_mode_boundary_contract` for linked-mode topology. The first real W7-X
+stellarator fixture is now committed in
+`fixtures/w7x_itg_reduced_benchmark/`: it uses the local GX/GIST W7-X eik
+geometry table and GX W7-X ITG adiabatic-electron input deck as provenance,
+while the current growth/frequency/mode-structure outputs are explicitly
+reduced `stellarator_gk` regression diagnostics pending a matched external
+W7-X time-history fixture. The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
@@ -517,8 +523,15 @@ The repository currently contains:
 - `fixtures/gkw_cyclone_selected_ky_cosin2_distr1.dat` through `fixtures/gkw_cyclone_selected_ky_cosin2_distr4.dat`: patched GKW final-output velocity-space slices for the selected-`ky` `cosin2` run.
 - `fixtures/gkw_cyclone_selected_ky_cosin2_multitime_distr/`: compact patched GKW multi-time velocity-space slices at steps 20, 800, and 1600, plus selected `time.dat` rows.
 - `scripts/extract_desc_geometry_fixture.py`: optional DESC example-equilibrium geometry fixture extractor.
+- `scripts/generate_w7x_itg_reduced_benchmark.py`: reproducible generator for
+  the reduced W7-X ITG fixture from a GX/GIST eik table.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
+- `fixtures/w7x_itg_reduced_benchmark/`: first real stellarator benchmark
+  artifact directory, generated from the W7-X GX/GIST eik geometry reference
+  and GX W7-X ITG input metadata. Its committed scalar/mode-structure outputs
+  are reduced solver regression artifacts until external W7-X growth/frequency
+  parity data is available.
 - `pyproject.toml`: root Python package metadata for the `stellarator_gk` package.
 - `uv.lock`: resolved project dependency lock file.
 - `src/stellarator_gk/`: Phase 2 core types/grids, Phase 3 analytic geometry, Phase 4 flux-tube geometry adapters, the public linear residual wrapper, Phase 8 fixed-step time advancement, and Phase 9 objective/operator interfaces.
@@ -598,44 +611,41 @@ For implementation work, use the GKW source modules as the authoritative source 
 
 ## Next Implementation Round
 
-Goal: close the next multi-`ky` physics discriminator without disturbing the
-passing GKW/Gyaradax selected-`ky` parity path. The narrowed target is now the
-GX moment/eigenfunction fork:
+Goal: upgrade the new W7-X real-geometry fixture from a reduced regression
+artifact into an externally validated stellarator benchmark without disturbing
+the passing GKW/Gyaradax selected-`ky` parity path.
 
-- assemble a minimal GX-style Hermite-Laguerre linear moment RHS for the
-  s-alpha adiabatic-electron ITG case, reusing the new linked `k_z`
-  hypercollision contribution and keeping its axis/layout conventions explicit;
-- or, before changing collocation physics, obtain/export an external per-`ky`
-  complex mode-structure fixture so the current collocation RHS can be compared
-  mode-shape-by-mode-shape against GX/GKW/Gyaradax output;
-- keep the calibrated exact-grid GX scan (`n_z_total=96`, `48/16`,
-  `nperiod=2`) as the scalar branch-shape symptom:
+- obtain or generate a matched external W7-X time-history or complex
+  mode-structure reference from GX, GKW, GS2, stella, or another trusted code
+  using the local GX `ITG_w7x` controls;
+- compare solver-produced W7-X growth, real frequency, and phase-aligned
+  complex `phi(z)` against that external reference through the existing
+  per-`ky` mode-structure gate;
+- run convergence studies for the W7-X fixture in `n_z`, velocity resolution,
+  `kx/ky` grid, field-line length, time step, and growth-window choice;
+- keep the calibrated exact-grid GX Cyclone scan (`n_z_total=96`, `48/16`,
+  `nperiod=2`) as the remaining scalar branch-shape guardrail:
   `gamma(0.3)=0.14325556436195153` versus `0.3080402563529299`;
-- keep the passing full RHS/action trace (`6.22e-12`), same-state replay
-  (`2.35e-12`), mid-run same-state replay (`2.36e-12`), matrix trace
-  (`5.77e-15`), input trace (`5.33e-15`), early one-window replay
-  (`1.12e-9`), mid-run one-window replay (`2.03e-10`), first-window replay
-  (`1.17e-9`), and row-normalized `parallel_phi.dat` profile gate
-  (`3.97e-7`) as guardrails;
-- after the multi-`ky` branch-shape gate is stable, extend the benchmark ladder
-  to a stellarator/TEM-style DESC/GX/GIST geometry fixture.
+- keep the passing RH plateau, selected-`ky` scalar, full RHS/action trace,
+  same-state replay, matrix trace, input trace, one-window replay,
+  row-normalized `parallel_phi.dat`, DESC/GX/eik, W7-X eik-source, and reduced
+  W7-X fixture-contract tests as regression guardrails.
 
 Expected file changes:
 
-- `src/stellarator_gk/physics/velocity_moments.py` or a new moment-RHS module
-  if the GX-style moment path is pursued,
-- `src/stellarator_gk/benchmarks.py` and fixtures/examples if an external
-  per-`ky` complex mode-structure reference is exported,
-- optional mode-structure/profile fixture loaders for scan points,
-- any future independently generated DESC/GX-specific eik fixture if an
-  external runner becomes available,
+- `src/stellarator_gk/benchmarks.py` and fixtures/examples when an external
+  W7-X per-`ky` complex mode-structure reference is exported,
+- optional W7-X convergence/timing example scripts,
+- optional external-run helper scripts for GX/GKW/GS2/stella W7-X artifacts,
 - `TODO.md`,
 - `STATUS.md`
 
 Expected tests:
 
 - retained Hermite-Laguerre moment/hypercollision tests,
-- new moment-RHS unit tests or external mode-structure fixture-loader tests,
+- new external W7-X mode-structure fixture-loader/gate tests when a matching
+  external artifact is added,
+- retained W7-X fixture contract and eik-source CLI tests,
 - retained one-window replay tests for steps 20→40, 780→800/800→820, and
   0→20,
 - retained focused multi-`ky` scan report/gate tests,
@@ -644,6 +654,51 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-08: Added Real W7-X Reduced Stellarator Benchmark Fixture
+
+- Extended `examples/run_stellarator_linear_scan.py` with
+  `--geometry-source eik --eik-reference ...`, sampling GX/GIST/GS2 eik
+  geometry tables directly onto the solver parallel grid before running the
+  standard stellarator preflight and reduced linear scan.
+- Added `scripts/generate_w7x_itg_reduced_benchmark.py`, a reproducible
+  one-command generator for `fixtures/w7x_itg_reduced_benchmark/`.
+- Generated and committed the W7-X fixture artifact directory with:
+  `geometry_audit.json`, `geometry_audit.csv`, `ky_growth.csv`,
+  `mode_structures.csv`, `convergence_history.csv`,
+  `convergence_metadata.json`, `quasilinear_proxy.json`, `run_config.json`,
+  `benchmark_metadata.json`, and `README.md`.
+- The fixture uses the real GX/GIST W7-X eik table and the GX W7-X
+  adiabatic-electron ITG input deck as provenance. The current diagnostic
+  outputs are explicitly reduced `stellarator_gk` regression artifacts, not
+  an external growth/frequency/mode-structure parity claim.
+- Reduced fixture controls:
+  \(N_z=33\), one field-line period, \(k_y=(0,0.1,0.2,0.3)\),
+  \(N_{k_x}=3\), \(N_{v_\parallel}=N_\mu=4\), Chebyshev velocity collocation,
+  six one-step RK4 diagnostic windows, and \(\Delta t=0.002\).
+- The generated run reports finite damped late-fit growth rates:
+  \(\gamma=( -0.1818276819573139, -0.18176071518367642,
+  -0.18106533750030795, -0.18023889682916572 )\) for
+  \(k_y=(0,0.1,0.2,0.3)\). Real frequencies are
+  \((0.03527107966813568, 0.03053194205813468,
+  0.02089400897333108, 0.009369120707514729)\).
+- Added `tests/test_w7x_stellarator_benchmark_fixture.py` covering the
+  committed fixture contract, finite scalar/mode-structure outputs, passing
+  eik geometry audit, and the eik-source CLI smoke path.
+- Updated `TODO.md` so the immediate next open stellarator target is external
+  W7-X parity and convergence/timing, not fixture bootstrapping.
+- Updated `main.tex` with a concise W7-X fixture result section and caveat.
+- Commands run:
+  - `uv run python scripts/generate_w7x_itg_reduced_benchmark.py`
+  - `uv run ruff check examples/run_stellarator_linear_scan.py scripts/generate_w7x_itg_reduced_benchmark.py tests/test_w7x_stellarator_benchmark_fixture.py tests/test_stellarator_linear_scan_example.py tests/test_stellarator_geometry_contracts.py src/stellarator_gk/benchmarks.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stellarator_benchmark_fixture.py tests/test_stellarator_linear_scan_example.py tests/test_stellarator_geometry_contracts.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+- Verification:
+  - W7-X fixture generator passed with `n_ky=4`,
+    `max_growth=-1.80238897e-01`, and `ql_proxy=0.0`,
+  - focused ruff check passed,
+  - focused pytest suite passed with `8 passed`,
+  - `main.pdf` built successfully with 32 pages.
 
 ### 2026-06-08: Hardened Stellarator Geometry and Boundary Contracts
 

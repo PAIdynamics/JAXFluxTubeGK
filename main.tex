@@ -1840,9 +1840,46 @@ For the default reduced DSHAPE smoke run, the finite late-fit growth rates are
 with corresponding real frequencies \(0.0280675\) and \(0.303845\).  The
 nonzonal quasilinear proxy is zero because the only nonzonal mode is damped in
 this short reduced setup.  These numbers are an executable integration and
-artifact-contract check, not a stellarator benchmark claim; the next validation
-step is to attach an external stellarator growth/frequency/mode-structure
-fixture.
+artifact-contract check, not a stellarator benchmark claim.
+
+A first real-geometry W7-X fixture is now stored in
+\path{fixtures/w7x_itg_reduced_benchmark/} and can be regenerated with
+\begin{verbatim}
+uv run python scripts/generate_w7x_itg_reduced_benchmark.py
+\end{verbatim}
+It uses the GX W7-X adiabatic-electron ITG input
+\path{relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in}
+as the physics-control provenance and samples the real GX/GIST W7-X eik table
+recorded in the fixture metadata.  The file
+\path{fixtures/w7x_itg_reduced_benchmark/benchmark_metadata.json} stores the
+exact local path and hash for this GX VMEC high-resolution GIST source.
+The GX input specifies \(s=\texttt{torflux}=0.64\), \(\alpha=0\),
+\(N_\theta=256\), \(N_{k_y}=28\), \(N_{k_x}=1\), \(N_H=16\),
+\(N_L=8\), ion gradients \(a/L_n=1\) and \(a/L_T=3\), and adiabatic
+electrons.  The committed reduced solver fixture uses \(N_z=33\), one
+field-line period, \(k_y=(0,0.1,0.2,0.3)\), \(N_{k_x}=3\),
+\(N_{v_\parallel}=N_\mu=4\), Chebyshev velocity collocation, and six
+one-step RK4 diagnostic windows with \(\Delta t=0.002\).  Its geometry
+preflight passes the GX/GS2 eik export contract with zero residual; the
+finite-difference mirror-force check is disabled for this imported eik path
+because the eik drift column is used as a GX-style drift proxy rather than as
+an independently sampled \(-F\,\partial_zB/B\) field.
+
+The reduced W7-X output is finite and damped on this short-window setup:
+\[
+\begin{array}{c|cccc}
+k_y & 0 & 0.1 & 0.2 & 0.3\\ \hline
+\gamma &
+-0.181828 & -0.181761 & -0.181065 & -0.180239\\
+\omega_r &
+0.035271 & 0.030532 & 0.020894 & 0.009369
+\end{array}
+\]
+These scalar and complex \(\phi(z)\) mode-structure files are therefore
+regression artifacts for the current solver implementation.  They should be
+replaced by, or compared against, a matched GX/GKW/GS2/stella W7-X
+time-history or mode-structure fixture before claiming stellarator
+growth-rate parity.
 
 \subsection{Validation-gate example}
 

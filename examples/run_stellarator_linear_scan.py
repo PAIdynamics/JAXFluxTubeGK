@@ -1,4 +1,4 @@
-"""Run a reduced linear stellarator ``ky`` scan from DESC-style geometry.
+"""Run a reduced linear stellarator ``ky`` scan from DESC-style/eik geometry.
 
 Example from the repository root:
 
@@ -7,6 +7,8 @@ Example from the repository root:
 
 The default path uses the bundled DESC DSHAPE fixture.  A real DESC
 equilibrium can be used with ``--geometry-source desc-path --desc-path ...``.
+GX/GIST/GS2 eik geometry tables can be used with
+``--geometry-source eik --eik-reference ...``.
 """
 
 # ruff: noqa: E402
@@ -40,6 +42,7 @@ from stellarator_gk import (
     build_desc_geometry_from_arrays,
     build_desc_geometry_from_path,
     build_fourier_grid,
+    build_flux_tube_geometry_from_gx_eik_reference,
     build_linear_residual_precompute,
     build_mode_connectivity,
     build_parallel_grid,
@@ -49,9 +52,11 @@ from stellarator_gk import (
     k_perp_squared,
     kperp2_weighted_average,
     linear_residual,
+    load_gx_eik_geometry_reference,
     mode_chain_amplitude,
     normalize_by_ky_amplitude,
     real_frequency,
+    resample_gx_eik_geometry_reference,
     run_desc_gx_eik_external_geometry_gate,
     run_stellarator_geometry_preflight,
     solve_field_from_state,
@@ -88,8 +93,8 @@ GEOMETRY_FIELDS = (
 )
 
 
-def main() -> int:
-    args = _parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
     if args.desc_root is not None:
         sys.path.insert(0, str(args.desc_root.resolve()))
 
@@ -139,14 +144,14 @@ def main() -> int:
     return 0
 
 
-def _parse_args():
+def _parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=Path("runs/dshape_linear_scan"))
     parser.add_argument(
         "--geometry-source",
-        choices=("fixture", "desc-path"),
+        choices=("fixture", "desc-path", "eik"),
         default="fixture",
-        help="use the bundled .npz fixture or evaluate a DESC equilibrium file",
+        help="use the bundled .npz fixture, evaluate DESC, or sample a GX/GIST/GS2 eik table",
     )
     parser.add_argument(
         "--fixture",
@@ -155,15 +160,26 @@ def _parse_args():
         help="DESC-sampled .npz fixture for --geometry-source fixture",
     )
     parser.add_argument("--desc-path", type=Path, help="DESC HDF5/pickle equilibrium path")
-    parser.add_argument("--desc-root", type=Path, help="optional DESC checkout to prepend to sys.path")
+    parser.add_argument(
+        "--desc-root",
+        type=Path,
+        help="optional DESC checkout to prepend to sys.path",
+    )
     parser.add_argument("--file-format", choices=("hdf5", "pickle"), help="DESC file format")
     parser.add_argument("--family-index", type=int, default=-1)
+    parser.add_argument("--eik-reference", type=Path, help="GX/GIST/GS2 eik geometry table")
     parser.add_argument("--external-eik-reference", type=Path)
     parser.add_argument("--rho", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.0)
     parser.add_argument("--iota", type=float)
     parser.add_argument("--n-z", type=int)
-    parser.add_argument("--field-line-periods", "--n-turns", dest="field_line_periods", type=int, default=1)
+    parser.add_argument(
+        "--field-line-periods",
+        "--n-turns",
+        dest="field_line_periods",
+        type=int,
+        default=1,
+    )
     parser.add_argument("--zeta-center", type=float, default=0.0)
     parser.add_argument("--n-vpar", type=int, default=3)
     parser.add_argument("--n-mu", type=int, default=3)
@@ -208,7 +224,7 @@ def _parse_args():
     parser.add_argument("--initial-amplitude", type=float, default=1.0e-2)
     parser.add_argument("--softplus-temperature", type=float)
     parser.add_argument("--kperp-epsilon", type=float, default=1.0e-12)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def _load_geometry(args):
@@ -221,7 +237,7 @@ def _load_geometry(args):
         fixture_n_z = int(data["z"].shape[0])
         if args.n_z is not None and args.n_z != fixture_n_z:
             raise ValueError(
-                f"fixture n_z is fixed at {fixture_n_z}; use --geometry-source desc-path "
+                f"fixture n_z is fixed at {fixture_n_z}; use --geometry-source desc-path or eik "
                 "to evaluate another parallel resolution"
             )
         parallel = _parallel_grid_from_z(data["z"])
@@ -237,6 +253,34 @@ def _load_geometry(args):
             "alpha": float(np.ravel(data["alpha"])[0]),
             "n_z": fixture_n_z,
             "field_line_periods": 1,
+        }
+
+    if args.geometry_source == "eik":
+        if args.eik_reference is None:
+            raise ValueError("--eik-reference is required for --geometry-source eik")
+        n_z = 33 if args.n_z is None else args.n_z
+        theta = np.linspace(
+            -np.pi * args.field_line_periods,
+            np.pi * args.field_line_periods,
+            n_z,
+            endpoint=False,
+        )
+        reference = load_gx_eik_geometry_reference(args.eik_reference)
+        sampled = resample_gx_eik_geometry_reference(reference, theta)
+        parallel = _parallel_grid_from_theta(theta)
+        geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+        return geometry, parallel, {
+            "geometry_source": "eik",
+            "eik_reference": str(args.eik_reference),
+            "source": sampled.source,
+            "rho": None,
+            "radial_coordinate": "external_eik_table",
+            "alpha": args.alpha,
+            "n_z": n_z,
+            "field_line_periods": args.field_line_periods,
+            "theta_min": float(theta[0]),
+            "theta_max": float(theta[-1]),
+            "theta_endpoint": "excluded",
         }
 
     if args.desc_path is None:
@@ -269,7 +313,12 @@ def _load_geometry(args):
 
 
 def _geometry_audit(geometry, fourier, args, geometry_metadata):
-    report = run_stellarator_geometry_preflight(geometry, fourier)
+    include_mirror_fd_check = args.geometry_source != "eik"
+    report = run_stellarator_geometry_preflight(
+        geometry,
+        fourier,
+        include_mirror_fd_check=include_mirror_fd_check,
+    )
     fields = {name: np.asarray(getattr(geometry, name)) for name in GEOMETRY_FIELDS}
     field_stats_from_report = {
         name: {
@@ -294,7 +343,7 @@ def _geometry_audit(geometry, fourier, args, geometry_metadata):
         if args.geometry_source != "desc-path":
             raise ValueError(
                 "--external-eik-reference is supported for --geometry-source desc-path; "
-                "the bundled fixture path uses the internal export contract"
+                "the fixture and imported-eik paths use the internal export contract"
             )
         external_gate = run_desc_gx_eik_external_geometry_gate(
             args.desc_path,
@@ -335,8 +384,20 @@ def _geometry_audit(geometry, fourier, args, geometry_metadata):
             "notes": report.notes,
         },
         "mirror_fd_error": float(report.mirror_fd_error),
+        "mirror_fd_check_enabled": include_mirror_fd_check,
         "external_eik_gate": external_eik_gate,
     }
+
+
+def _parallel_grid_from_theta(theta):
+    theta = np.asarray(theta, dtype=float)
+    if theta.ndim != 1 or theta.shape[0] < 2:
+        raise ValueError("theta must be a one-dimensional grid with at least two points")
+    z = theta / (2.0 * np.pi)
+    dz = z[1] - z[0]
+    return build_parallel_grid(
+        ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
+    )
 
 
 def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
@@ -553,10 +614,24 @@ def _write_scan_outputs(output_dir: Path, scan, geometry, fourier, args, geometr
 
     with (output_dir / "convergence_history.csv").open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(("sample_index", "time", "ky_index", "ky", "log_amplitude", "raw_amplitude", "window_growth"))
+        writer.writerow(
+            (
+                "sample_index",
+                "time",
+                "ky_index",
+                "ky",
+                "log_amplitude",
+                "raw_amplitude",
+                "window_growth",
+            )
+        )
         for sample_index, time_value in enumerate(scan["times"]):
             for ky_index, ky_value in enumerate(ky):
-                window_growth = "" if sample_index == 0 else scan["window_growth"][sample_index - 1, ky_index]
+                window_growth = (
+                    ""
+                    if sample_index == 0
+                    else scan["window_growth"][sample_index - 1, ky_index]
+                )
                 writer.writerow(
                     (
                         sample_index,

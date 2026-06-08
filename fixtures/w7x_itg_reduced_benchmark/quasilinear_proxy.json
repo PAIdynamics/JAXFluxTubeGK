@@ -1,0 +1,31 @@
+{
+  "kperp_epsilon": 1e-12,
+  "per_ky": [
+    {
+      "contribution": 0.0,
+      "growth_rate": -0.1818276819573139,
+      "kperp2_average": 0.0,
+      "ky": 0.0
+    },
+    {
+      "contribution": 0.0,
+      "growth_rate": -0.18176071518367642,
+      "kperp2_average": 0.017053659493654824,
+      "ky": 0.1
+    },
+    {
+      "contribution": 0.0,
+      "growth_rate": -0.18106533750030795,
+      "kperp2_average": 0.06646226796577746,
+      "ky": 0.2
+    },
+    {
+      "contribution": 0.0,
+      "growth_rate": -0.18023889682916572,
+      "kperp2_average": 0.1435409293467103,
+      "ky": 0.3
+    }
+  ],
+  "softplus_temperature": null,
+  "total": 0.0
+}
