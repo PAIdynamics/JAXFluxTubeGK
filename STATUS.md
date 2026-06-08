@@ -45,7 +45,10 @@ first reduced W7-X convergence/timing study is now committed in
 `fixtures/w7x_itg_convergence_study/`; it shows finite outputs and excellent
 time-step/growth-window self-consistency, but also shows that the short-window
 reduced baseline is not converged across parallel, velocity, and `kx`
-variations. The current
+variations. The W7-X external mode-structure parity runner is now implemented
+as `examples/run_w7x_mode_structure_gate.py`; it reports a machine-readable
+`PENDING` state until the external fixture exists and then compares growth,
+real frequency, and phase-aligned complex \(\phi(z)\). The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
@@ -538,6 +541,10 @@ The repository currently contains:
 - `scripts/run_w7x_reduced_convergence_study.py`: reduced W7-X convergence,
   timing, production-memory-estimate, and optimization-readiness artifact
   generator.
+- `examples/run_w7x_mode_structure_gate.py`: W7-X external mode-structure
+  parity gate runner; it emits a pending report until the external fixture is
+  exported, or compares selected-`ky` growth, frequency, and complex
+  \(\phi(z)\) profiles when the fixture exists.
 - `fixtures/desc_geometry_dshape_rho05_alpha0.npz`: small sampled DESC DSHAPE flux-tube geometry fixture.
 - `fixtures/gx_desc_dshape_rho05_alpha0.eik.out`: matched GX DESC-convention block eik fixture for DSHAPE geometry parity.
 - `fixtures/w7x_itg_reduced_benchmark/`: first real stellarator benchmark
@@ -673,6 +680,27 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-08: Added W7-X External Mode-Structure Parity Gate Runner
+
+- Added `examples/run_w7x_mode_structure_gate.py`, a one-command W7-X parity
+  runner for the external mode-structure fixture expected at
+  `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
+- If the external fixture is absent, the runner writes
+  `gate_status.json` with `status="pending_external_reference"` plus the GX
+  run/export commands from `fixtures/gx_w7x_mode_structure_run/`.
+- Once the external fixture exists, the runner compares selected `ky` values
+  for growth, real frequency, and phase-aligned complex \(\phi(z)\), with
+  optional z-grid resampling and optional fresh solver runs using either
+  reduced or GX-production-shape controls.
+- Added `tests/test_w7x_mode_structure_gate.py` covering the pending-reference
+  path and a committed-fixture self-check that passes exactly.
+- Commands run:
+  - `uv run ruff check examples/run_w7x_mode_structure_gate.py tests/test_w7x_mode_structure_gate.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_mode_structure_gate.py -q`
+- Verification:
+  - focused ruff check passed,
+  - W7-X gate tests passed with `2 passed`.
 
 ### 2026-06-08: Added Reduced W7-X Convergence, Timing, and Readiness Study
 

@@ -825,6 +825,13 @@ Use these guardrails throughout the round:
   the solver's eik-source run. The prepared GX path is now
   `fixtures/gx_w7x_mode_structure_run/README.md`; this item remains open until
   an actual external `.big.nc`/`.out.nc` pair is generated and exported.
+- [x] Add the executable W7-X external parity gate.
+  `examples/run_w7x_mode_structure_gate.py` writes a machine-readable
+  `PENDING` report while `fixtures/w7x_itg_external_mode_structure_fixture.csv`
+  is absent, and compares growth, real frequency, and phase-aligned complex
+  `phi(z)` once that fixture exists. It can use the committed reduced solver
+  fixture or launch a fresh eik-source solver run with reduced or
+  GX-production-shape controls.
 - [x] Add CPU timing/memory readiness artifacts for the reduced W7-X ladder.
   The committed timing JSON records wall-clock reduced scan timings and a
   production-control memory estimate for the GX W7-X dimensions; it explicitly
