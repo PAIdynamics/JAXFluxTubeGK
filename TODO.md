@@ -836,9 +836,18 @@ Use these guardrails throughout the round:
   The committed timing JSON records wall-clock reduced scan timings and a
   production-control memory estimate for the GX W7-X dimensions; it explicitly
   does not claim the `task.tex` production runtime target yet.
+- [x] Add a single-command W7-X production-readiness gate.
+  `scripts/run_w7x_production_readiness_gate.py` audits the committed reduced
+  convergence/timing artifacts, runs the external mode-structure gate, writes
+  `fixtures/w7x_itg_convergence_study/production_readiness_gate.json`, and
+  keeps DESC optimization labeled reduced. The current committed ledger passes
+  the reduced convergence regression but remains `blocked_external_reference`
+  until the matched external W7-X fixture exists.
 - [ ] Re-run true production CPU timing after the W7-X external parity and
   convergence gates pass, then record whether the `task.tex` target, roughly
-  minutes on \(\mathcal{O}(100)\) CPUs, is credible.
+  minutes on \(\mathcal{O}(100)\) CPUs, is credible. The readiness gate expects
+  that future result at
+  `fixtures/w7x_itg_convergence_study/production_cpu_timing.json`.
 - [x] Add an optimization-readiness guard. The committed
   `optimization_readiness.json` keeps DESC-driven optimization labeled reduced
   until W7-X external parity and production timing pass.

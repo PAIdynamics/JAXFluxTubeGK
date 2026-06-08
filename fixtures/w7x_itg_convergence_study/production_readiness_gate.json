@@ -1,0 +1,95 @@
+{
+  "benchmark_name": "w7x_itg_production_readiness_gate",
+  "desc_optimization_status": "keep_reduced_until_w7x_external_parity_and_production_timing_pass",
+  "external_mode_structure_gate": {
+    "gate_status_json": "fixtures/w7x_itg_convergence_study/external_mode_structure_gate/gate_status.json",
+    "ky_values": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "max_frequency_error": null,
+    "max_growth_error": null,
+    "max_profile_error": null,
+    "observed_fixture": "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv",
+    "passed": false,
+    "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+    "status": "pending_external_reference"
+  },
+  "passed": false,
+  "production_cpu_timing": {
+    "artifact": "fixtures/w7x_itg_convergence_study/production_cpu_timing.json",
+    "passed": false,
+    "status": "blocked_until_external_parity_passes"
+  },
+  "reduced_convergence_regression": {
+    "case_count": 9,
+    "checks": {
+      "case_count": true,
+      "dt_half_growth_delta": true,
+      "finite_frequency": true,
+      "finite_growth": true,
+      "ky_count": true,
+      "late_mean_growth_delta": true,
+      "reduced_readiness_status": true,
+      "reduced_timing_status": true,
+      "row_count": true
+    },
+    "ky_values": [
+      0.0,
+      0.1,
+      0.2,
+      0.3
+    ],
+    "max_abs_dt_half_growth_delta": 4.523048602322888e-11,
+    "max_abs_late_mean_growth_delta": 3.071024856637905e-06,
+    "metadata_case_count": 9,
+    "metadata_json": "fixtures/w7x_itg_convergence_study/study_metadata.json",
+    "passed": true,
+    "production_memory_estimate": {
+      "coefficient_bytes": 9474504,
+      "dimensions": {
+        "n_kx": 1,
+        "n_ky": 28,
+        "n_mu": 8,
+        "n_species": 1,
+        "n_vpar": 16,
+        "n_z": 256
+      },
+      "field_bytes": 114688,
+      "field_shape": [
+        256,
+        1,
+        28
+      ],
+      "history_bytes": 29360128,
+      "state_bytes": 14680064,
+      "state_shape": [
+        16,
+        8,
+        256,
+        1,
+        28
+      ],
+      "store_history": false,
+      "total_bytes": 53629384,
+      "total_bytes_human": "51.14 MiB"
+    },
+    "readiness_json": "fixtures/w7x_itg_convergence_study/optimization_readiness.json",
+    "row_count": 36,
+    "status": "pass",
+    "summary_csv": "fixtures/w7x_itg_convergence_study/convergence_summary.csv",
+    "thresholds": {
+      "dt_growth_tolerance": 1e-08,
+      "late_mean_growth_tolerance": 0.0001,
+      "required_case_count": 9,
+      "required_ky_count": 4
+    },
+    "timing_json": "fixtures/w7x_itg_convergence_study/timing_summary.json"
+  },
+  "required_actions": [
+    "export a matched external W7-X mode-structure fixture at fixtures/w7x_itg_external_mode_structure_fixture.csv",
+    "run true production-control CPU timing and store fixtures/w7x_itg_convergence_study/production_cpu_timing.json"
+  ],
+  "status": "blocked_external_reference"
+}
