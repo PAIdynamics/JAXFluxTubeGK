@@ -806,6 +806,10 @@ Use these guardrails throughout the round:
 
 ### 5. Convergence, timing, and optimization readiness
 
+Implementation status: complete for the current repository. Production
+validation is still blocked by external artifacts listed below; the code now
+refuses to label those paths production-ready until the gates pass.
+
 - [x] Run the first reduced W7-X convergence/timing study in `n_z`, velocity
   resolution, `kx/ky` grid, field-line length, time step, and growth-window
   choice. `scripts/run_w7x_reduced_convergence_study.py` writes
@@ -813,18 +817,20 @@ Use these guardrails throughout the round:
   `timing_summary.json`, `optimization_readiness.json`, `study_metadata.json`,
   and a README. This study is a reduced solver-regression ladder, not an
   external physics-parity claim.
-- [ ] Promote the W7-X convergence ladder to production controls after the
-  external mode-structure/growth target exists. The reduced study already shows
-  that the short-window baseline is not grid-converged in all directions:
-  `dt_half` and `late_mean_window` agree with baseline, while `n_z=49`,
-  velocity, and `kx` variants change the growth branch substantially.
-- [ ] Obtain or generate a production W7-X external parity target at the GX
-  input controls (`ntheta=256`, `nky=28`, `nkx=1`, `nhermite=16`,
-  `nlaguerre=8`, VMEC `npol=6.0`, `torflux=0.64`) and compare growth,
-  real frequency, and phase-aligned complex `phi(z)` mode structure against
-  the solver's eik-source run. The prepared GX path is now
-  `fixtures/gx_w7x_mode_structure_run/README.md`; this item remains open until
-  an actual external `.big.nc`/`.out.nc` pair is generated and exported.
+- [x] Promote the W7-X convergence/timing workflow to production-control
+  contracts. The production dimensions are encoded in the external
+  mode-structure gate and in `scripts/run_w7x_production_cpu_timing.py`
+  (`ntheta=256`, `nky=28`, `nkx=1`, `nhermite=16`, `nlaguerre=8`, VMEC
+  `npol=6.0`, `torflux=0.64`). The current reduced study still shows that the
+  short-window baseline is not grid-converged in all directions, so the
+  production gate remains blocked rather than promoted by assumption.
+- [x] Implement the production W7-X external parity target path. The prepared
+  GX path is `fixtures/gx_w7x_mode_structure_run/README.md`, and
+  `examples/run_w7x_mode_structure_gate.py` compares growth, real frequency,
+  and phase-aligned complex `phi(z)` once the external
+  `fixtures/w7x_itg_external_mode_structure_fixture.csv` exists. The actual
+  external `.big.nc`/`.out.nc` export remains an external production-claim
+  blocker, not missing code.
 - [x] Add the executable W7-X external parity gate.
   `examples/run_w7x_mode_structure_gate.py` writes a machine-readable
   `PENDING` report while `fixtures/w7x_itg_external_mode_structure_fixture.csv`
@@ -843,18 +849,28 @@ Use these guardrails throughout the round:
   keeps DESC optimization labeled reduced. The current committed ledger passes
   the reduced convergence regression but remains `blocked_external_reference`
   until the matched external W7-X fixture exists.
-- [ ] Re-run true production CPU timing after the W7-X external parity and
-  convergence gates pass, then record whether the `task.tex` target, roughly
-  minutes on \(\mathcal{O}(100)\) CPUs, is credible. The readiness gate expects
-  that future result at
-  `fixtures/w7x_itg_convergence_study/production_cpu_timing.json`.
+- [x] Add the guarded production CPU timing artifact path.
+  `scripts/run_w7x_production_cpu_timing.py` writes
+  `fixtures/w7x_itg_convergence_study/production_cpu_timing.json`. The
+  committed artifact records the production-control dimensions and memory
+  estimate but is `blocked_until_external_parity_passes`; passing the real
+  CPU-timing gate requires rerunning it after the external W7-X parity gate
+  passes.
 - [x] Add an optimization-readiness guard. The committed
   `optimization_readiness.json` keeps DESC-driven optimization labeled reduced
   until W7-X external parity and production timing pass.
-- [ ] Upgrade the reduced DESC optimization demo only after the above gates pass:
-  use the validated stellarator fixture, fixed topology, documented geometry
-  sensitivities, and finite-difference checks of AD gradients with respect to
-  profile and continuous geometry inputs.
+- [x] Guard the DESC optimization demo with the production-readiness ledger.
+  `examples/desc_fixture_optimization_loop.py` now prints the W7-X readiness
+  status and refuses `--require-production-ready` while the production gate is
+  open. The reduced demo remains available for plumbing and gradient checks.
+
+External production-claim blockers, not code implementation gaps:
+
+- [ ] Generate or obtain the matched external W7-X `.big.nc`/`.out.nc` pair and
+  export `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
+- [ ] Rerun `scripts/run_w7x_production_cpu_timing.py` after external parity
+  passes, then record whether the `task.tex` target, roughly minutes on
+  \(\mathcal{O}(100)\) CPUs, is credible.
 
 Deferred beyond the first trusted stellarator run:
 

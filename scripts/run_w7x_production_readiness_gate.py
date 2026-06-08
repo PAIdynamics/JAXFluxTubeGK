@@ -218,10 +218,13 @@ def evaluate_production_timing_artifact(
     """Check a future true production CPU timing artifact."""
 
     if not external_parity_ready:
+        payload = _load_json(production_timing_path) if production_timing_path.exists() else None
         return {
             "passed": False,
             "status": "blocked_until_external_parity_passes",
             "artifact": _display_path(production_timing_path),
+            "artifact_exists": production_timing_path.exists(),
+            "artifact_status": payload.get("status") if payload else None,
         }
     if not production_timing_path.exists():
         return {
@@ -260,10 +263,16 @@ def required_actions(
             f"{_display_path(reference_fixture)}"
         )
     if not production_timing["passed"]:
-        actions.append(
-            "run true production-control CPU timing and store "
-            f"{_display_path(production_timing_path)}"
-        )
+        if production_timing.get("artifact_exists"):
+            actions.append(
+                "rerun true production-control CPU timing after external parity "
+                f"passes and replace {_display_path(production_timing_path)}"
+            )
+        else:
+            actions.append(
+                "run true production-control CPU timing and store "
+                f"{_display_path(production_timing_path)}"
+            )
     return actions
 
 

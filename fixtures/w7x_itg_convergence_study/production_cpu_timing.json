@@ -1,0 +1,71 @@
+{
+  "benchmark_name": "w7x_itg_cpu_timing",
+  "controls": {
+    "field_line_periods": 6,
+    "ikxspace": 1,
+    "kx_max": 0.0,
+    "ky_values": [
+      0.0,
+      0.1,
+      0.2,
+      0.30000000000000004,
+      0.4,
+      0.5,
+      0.6000000000000001,
+      0.7000000000000001,
+      0.8,
+      0.9,
+      1.0,
+      1.1,
+      1.2000000000000002,
+      1.3,
+      1.4000000000000001,
+      1.5,
+      1.6,
+      1.7000000000000002,
+      1.8,
+      1.9000000000000001,
+      2.0,
+      2.1,
+      2.2,
+      2.3000000000000003,
+      2.4000000000000004,
+      2.5,
+      2.6,
+      2.7
+    ],
+    "mu_max": 1.5,
+    "n_kx": 1,
+    "n_mu": 8,
+    "n_vpar": 16,
+    "n_z": 256,
+    "vpar_max": 2.0
+  },
+  "external_parity_ready": false,
+  "memory_estimate": {
+    "coefficient_bytes": 9474504,
+    "field_bytes": 114688,
+    "field_shape": [
+      256,
+      1,
+      28
+    ],
+    "history_bytes": 29360128,
+    "state_bytes": 14680064,
+    "state_shape": [
+      16,
+      8,
+      256,
+      1,
+      28
+    ],
+    "store_history": false,
+    "total_bytes": 53629384,
+    "total_bytes_human": "51.14 MiB"
+  },
+  "next_required_artifact": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "passed": false,
+  "production_claim": false,
+  "status": "blocked_until_external_parity_passes",
+  "timing": null
+}

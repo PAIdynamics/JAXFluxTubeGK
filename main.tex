@@ -1929,6 +1929,15 @@ because
 \path{fixtures/w7x_itg_external_mode_structure_fixture.csv} and a true
 production CPU timing artifact are not yet present.  Therefore DESC-driven
 optimization remains labeled reduced rather than production-validated.
+The timing contract itself is executable through
+\begin{verbatim}
+uv run python scripts/run_w7x_production_cpu_timing.py
+\end{verbatim}
+which currently writes the production-control dimensions and memory estimate
+with status \(\texttt{blocked\_until\_external\_parity\_passes}\).  This avoids
+turning a local development timing run into a production claim.  The reduced
+DESC optimization example reads the same ledger and exits if invoked with
+\(\texttt{--require-production-ready}\) while the W7-X gate is still open.
 
 \subsection{Validation-gate example}
 

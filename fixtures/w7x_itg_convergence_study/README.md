@@ -21,3 +21,13 @@ uv run python scripts/run_w7x_production_readiness_gate.py
 It audits these reduced convergence/timing artifacts, runs the W7-X external
 mode-structure gate, and keeps DESC optimization labeled reduced until the
 external parity target and true production CPU timing artifact exist.
+
+The guarded CPU timing contract can be regenerated with:
+
+```bash
+uv run python scripts/run_w7x_production_cpu_timing.py
+```
+
+Until the external W7-X parity gate passes, this writes the production-control
+dimensions and memory estimate with a blocked status rather than making a
+production runtime claim.

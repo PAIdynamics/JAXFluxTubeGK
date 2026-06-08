@@ -179,6 +179,10 @@ def run_w7x_reduced_convergence_study(
         "reduced_fixture_ready": True,
         "reduced_convergence_study_ready": True,
         "external_w7x_parity_ready": False,
+        "production_cpu_timing_contract_ready": True,
+        "production_cpu_timing_artifact": (
+            "fixtures/w7x_itg_convergence_study/production_cpu_timing.json"
+        ),
         "production_cpu_timing_ready": False,
         "desc_optimization_status": (
             "keep_reduced_until_w7x_external_parity_and_production_timing_pass"
@@ -413,6 +417,16 @@ def _write_readme(output_dir: Path) -> None:
                 "W7-X external mode-structure gate, and keeps DESC optimization",
                 "labeled reduced until the external parity target and true",
                 "production CPU timing artifact exist.",
+                "",
+                "The guarded CPU timing contract can be regenerated with:",
+                "",
+                "```bash",
+                "uv run python scripts/run_w7x_production_cpu_timing.py",
+                "```",
+                "",
+                "Until the external W7-X parity gate passes, this writes the",
+                "production-control dimensions and memory estimate with a",
+                "blocked status rather than making a production runtime claim.",
                 "",
             )
         )

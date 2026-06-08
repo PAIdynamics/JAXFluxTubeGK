@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import jax
@@ -39,6 +40,12 @@ from stellarator_gk import (
 
 def main() -> None:
     args = _parse_args()
+    readiness = _load_readiness_status(args.readiness_gate)
+    if args.require_production_ready and not readiness["passed"]:
+        raise SystemExit(
+            "production DESC optimization is blocked: "
+            f"{readiness['status']} in {args.readiness_gate}"
+        )
     fixture = np.load(args.fixture)
     parallel = _parallel_grid_from_fixture_z(fixture["z"])
     geometry = _geometry_from_fixture(fixture, parallel)
@@ -89,6 +96,10 @@ def main() -> None:
     print("# reduced DESC DSHAPE benchmark-target optimization loop")
     print(f"# fixture={args.fixture}")
     print(
+        "# production_readiness="
+        f"{readiness['status']} desc_optimization_status={readiness['desc_optimization_status']}"
+    )
+    print(
         f"# iterations={args.iterations} learning_rate={args.learning_rate:g} "
         f"target_growth={args.target_growth:g}"
     )
@@ -113,7 +124,31 @@ def _parse_args():
     parser.add_argument("--steps", type=int, default=1)
     parser.add_argument("--dt", type=float, default=0.005)
     parser.add_argument("--ky-index", type=int, default=1)
+    parser.add_argument(
+        "--readiness-gate",
+        type=Path,
+        default=Path("fixtures/w7x_itg_convergence_study/production_readiness_gate.json"),
+    )
+    parser.add_argument("--require-production-ready", action="store_true")
     return parser.parse_args()
+
+
+def _load_readiness_status(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {
+            "status": "missing_production_readiness_gate",
+            "passed": False,
+            "desc_optimization_status": "keep_reduced_until_readiness_gate_exists",
+        }
+    payload = json.loads(path.read_text())
+    return {
+        "status": payload.get("status", "missing_status"),
+        "passed": bool(payload.get("passed")),
+        "desc_optimization_status": payload.get(
+            "desc_optimization_status",
+            "keep_reduced_until_w7x_external_parity_and_production_timing_pass",
+        ),
+    }
 
 
 def _parallel_grid_from_fixture_z(z):

@@ -83,6 +83,8 @@ def test_committed_w7x_convergence_study_artifacts_record_reduced_status():
     assert readiness["reduced_fixture_ready"]
     assert readiness["reduced_convergence_study_ready"]
     assert not readiness["external_w7x_parity_ready"]
+    assert readiness["production_cpu_timing_contract_ready"]
+    assert readiness["production_cpu_timing_artifact"].endswith("production_cpu_timing.json")
     assert not readiness["production_cpu_timing_ready"]
     assert len(rows) == 9 * 4
 
