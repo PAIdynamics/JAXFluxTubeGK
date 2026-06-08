@@ -1,0 +1,28 @@
+{
+  "benchmark_name": "w7x_itg_external_gx_mode_structure_reference",
+  "comparison_command": "JAX_ENABLE_X64=1 uv run python examples/compare_mode_structure_fixtures.py --observed fixtures/w7x_itg_reduced_benchmark/mode_structures.csv --reference fixtures/w7x_itg_external_mode_structure_fixture.csv --ky-values 0.1,0.2,0.3 --require-profile --output figures/w7x_itg_external_mode_structure_comparison.csv",
+  "comparison_output": "figures/w7x_itg_external_mode_structure_comparison.csv",
+  "copy_vmec_command": "cp relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc fixtures/gx_w7x_mode_structure_run/wout_w7x.nc",
+  "diagnostics": {
+    "fields": true,
+    "moments": true,
+    "omega": true
+  },
+  "export_command": "uv run python examples/export_gx_mode_structure_fixture.py --gx-big-output fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.big.nc --gx-growth-output fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.out.nc --ky-values 0.1,0.2,0.3 --gx-z-coordinate theta_over_2pi --output fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "external_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "gx_big_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.big.nc",
+  "gx_executable": "path/to/gx",
+  "gx_growth_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.out.nc",
+  "gx_z_coordinate": "theta_over_2pi",
+  "ky_values": "0.1,0.2,0.3",
+  "notes": "The committed W7-X fixture is real-geometry/reduced-solver. Run these commands externally to replace or compare it against a retained GX W7-X complex mode-structure reference.",
+  "nwrite_big": 100,
+  "observed_fixture": "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv",
+  "prepared_input": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.in",
+  "run_command": "cd fixtures/gx_w7x_mode_structure_run && path/to/gx itg_w7x_adiabatic_electrons.in",
+  "source_input": "relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in",
+  "status": "pending_external_gx_run",
+  "vmec_copied": false,
+  "vmec_destination": "fixtures/gx_w7x_mode_structure_run/wout_w7x.nc",
+  "vmec_source": "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
+}

@@ -796,11 +796,13 @@ Use these guardrails throughout the round:
   growth/frequency/mode-structure outputs, passing eik geometry preflight, and
   the `run_stellarator_linear_scan.py --geometry-source eik` CLI path on a
   reduced smoke grid.
-- [ ] Replace the current internal reduced W7-X growth/frequency/mode-structure
-  regression diagnostics with a matched external-code fixture once GX, GKW,
-  GS2, stella, or another trusted run exports a compatible W7-X time history or
-  complex mode structure. Until then, the fixture is a real-geometry benchmark
-  artifact and regression gate, not an external physics-parity claim.
+- [x] Add the external-reference preparation contract for replacing the current
+  reduced W7-X growth/frequency/mode-structure regression diagnostics.
+  `scripts/prepare_gx_w7x_mode_structure_run.py` writes
+  `fixtures/gx_w7x_mode_structure_run/` with a patched GX W7-X input,
+  repo-relative copy/run/export/compare commands, and metadata pointing from
+  the committed reduced fixture to the future external
+  `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
 
 ### 5. Convergence, timing, and optimization readiness
 
@@ -812,7 +814,9 @@ Use these guardrails throughout the round:
   input controls (`ntheta=256`, `nky=28`, `nkx=1`, `nhermite=16`,
   `nlaguerre=8`, VMEC `npol=6.0`, `torflux=0.64`) and compare growth,
   real frequency, and phase-aligned complex `phi(z)` mode structure against
-  the solver's eik-source run.
+  the solver's eik-source run. The prepared GX path is now
+  `fixtures/gx_w7x_mode_structure_run/README.md`; this item remains open until
+  an actual external `.big.nc`/`.out.nc` pair is generated and exported.
 - [ ] Re-run CPU memory and timing estimates at the validated production
   controls and record whether the `task.tex` target, roughly minutes on
   \(\mathcal{O}(100)\) CPUs, is credible.

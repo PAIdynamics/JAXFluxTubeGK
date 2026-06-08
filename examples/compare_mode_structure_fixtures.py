@@ -24,6 +24,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 from stellarator_gk import (
+    PerKyModeStructureFixture,
     compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,
     load_per_ky_mode_structure_fixture_csv,
@@ -34,6 +35,10 @@ def main() -> None:
     args = _parse_args()
     observed = load_per_ky_mode_structure_fixture_csv(args.observed)
     reference = load_per_ky_mode_structure_fixture_csv(args.reference)
+    if args.ky_values:
+        ky_values = _parse_float_tuple(args.ky_values)
+        observed = _select_ky_values(observed, ky_values, args.ky_tolerance)
+        reference = _select_ky_values(reference, ky_values, args.ky_tolerance)
     comparison = compare_per_ky_mode_structure_fixtures(
         observed,
         reference,
@@ -64,6 +69,38 @@ def main() -> None:
         f"max_profile_error={float(gate.max_profile_error):.8e}"
     )
     print(args.output)
+
+
+def _select_ky_values(
+    fixture: PerKyModeStructureFixture,
+    ky_values: tuple[float, ...],
+    tolerance: float,
+) -> PerKyModeStructureFixture:
+    ky = np.asarray(fixture.ky, dtype=float)
+    selected_indices = []
+    for value in ky_values:
+        index = int(np.argmin(np.abs(ky - value)))
+        if abs(ky[index] - value) > tolerance:
+            raise ValueError(
+                f"requested ky={value} is not present in {fixture.source}; "
+                f"nearest ky={ky[index]}"
+            )
+        selected_indices.append(index)
+    indices = np.asarray(selected_indices, dtype=int)
+    return PerKyModeStructureFixture(
+        ky=np.asarray(fixture.ky)[indices],
+        z=np.asarray(fixture.z),
+        phi=np.asarray(fixture.phi)[indices],
+        growth_rate=np.asarray(fixture.growth_rate)[indices],
+        frequency=np.asarray(fixture.frequency)[indices],
+        source=fixture.source,
+        normalization=fixture.normalization,
+        metadata=fixture.metadata
+        + (
+            ("ky_filter", ",".join(str(value) for value in ky_values)),
+            ("ky_filter_tolerance", tolerance),
+        ),
+    )
 
 
 def _write_csv(path: Path, comparison, gate) -> None:
@@ -141,9 +178,17 @@ def _parse_args():
     parser.add_argument("--profile-tolerance", type=float, default=2.0e-2)
     parser.add_argument("--ky-tolerance", type=float, default=1.0e-6)
     parser.add_argument("--z-tolerance", type=float, default=1.0e-6)
+    parser.add_argument("--ky-values", help="optional comma-separated ky subset to compare")
     parser.add_argument("--ignore-frequency", action="store_true")
     parser.add_argument("--require-profile", action="store_true")
     return parser.parse_args()
+
+
+def _parse_float_tuple(value: str) -> tuple[float, ...]:
+    values = tuple(float(item.strip()) for item in value.split(",") if item.strip())
+    if not values:
+        raise argparse.ArgumentTypeError("expected at least one comma-separated value")
+    return values
 
 
 if __name__ == "__main__":

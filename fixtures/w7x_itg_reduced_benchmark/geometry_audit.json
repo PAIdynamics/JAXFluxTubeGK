@@ -76,13 +76,13 @@
   },
   "geometry": {
     "alpha": 0.0,
-    "eik_reference": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "eik_reference": "relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
     "field_line_periods": 1,
     "geometry_source": "eik",
     "n_z": 33,
     "radial_coordinate": "external_eik_table",
     "rho": null,
-    "source": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "source": "relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
     "theta_endpoint": "excluded",
     "theta_max": 2.951193098826775,
     "theta_min": -3.141592653589793

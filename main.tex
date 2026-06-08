@@ -1879,7 +1879,14 @@ These scalar and complex \(\phi(z)\) mode-structure files are therefore
 regression artifacts for the current solver implementation.  They should be
 replaced by, or compared against, a matched GX/GKW/GS2/stella W7-X
 time-history or mode-structure fixture before claiming stellarator
-growth-rate parity.
+growth-rate parity.  The GX route is prepared in
+\path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
+GX W7-X input, a command to copy the local VMEC file into the run directory, a
+GX run command that should produce the matching \(\texttt{.out.nc}\) and
+\(\texttt{.big.nc}\) files, an export command for
+\path{fixtures/w7x_itg_external_mode_structure_fixture.csv}, and a selected
+\(k_y=(0.1,0.2,0.3)\) phase-aligned comparison command against the committed
+solver fixture.
 
 \subsection{Validation-gate example}
 

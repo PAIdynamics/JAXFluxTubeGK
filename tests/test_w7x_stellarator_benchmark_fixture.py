@@ -26,8 +26,16 @@ def test_committed_w7x_reduced_benchmark_fixture_contract():
 
     assert expected_files.issubset({path.name for path in W7X_FIXTURE.iterdir()})
     assert metadata["benchmark_name"] == "w7x_itg_adiabatic_electrons_reduced"
-    assert metadata["validation_status"] == "real_external_geometry_internal_reduced_solver_regression"
+    assert metadata["validation_status"] == (
+        "real_external_geometry_internal_reduced_solver_regression"
+    )
     assert metadata["external_growth_frequency_mode_structure_reference"] is None
+    assert metadata["external_reference_workflow"]["status"] == (
+        "prepared_gx_run_pending_external_execution"
+    )
+    assert metadata["external_reference_workflow"]["run_prep_dir"] == (
+        "fixtures/gx_w7x_mode_structure_run"
+    )
     assert metadata["gx_input_reference"]["vmec_file"] == "wout_w7x.nc"
     assert metadata["gx_input_reference"]["torflux"] == pytest.approx(0.64)
     assert metadata["gx_input_reference"]["ion_temperature_gradient"] == pytest.approx(3.0)

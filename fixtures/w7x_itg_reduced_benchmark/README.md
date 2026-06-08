@@ -17,3 +17,8 @@ real frequencies, and complex mode structures are reduced `stellarator_gk`
 regression artifacts, not an external-code parity claim. Replace those
 diagnostics once a matching GX, GKW, GS2, or stella W7-X time-history or
 mode-structure fixture is available.
+
+The GX path for producing that external fixture is prepared in
+`fixtures/gx_w7x_mode_structure_run/`. Its metadata gives the VMEC copy
+command, GX run command, `.big.nc` export command, and selected-`ky`
+comparison command.
