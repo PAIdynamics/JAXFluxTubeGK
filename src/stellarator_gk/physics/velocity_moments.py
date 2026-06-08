@@ -103,6 +103,74 @@ class HermiteLaguerreBasis(_PyTreeDataclass):
     )
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class GxMomentRHSParams(_PyTreeDataclass):
+    """Controls for the reduced GX-style Hermite-Laguerre linear RHS.
+
+    This is a compact discriminator model for s-alpha, adiabatic-electron ITG
+    mode-structure checks.  It keeps the GX moment layout, Hermite/Laguerre
+    source projections, linked parallel chains, and linked ``k_z``
+    hypercollision explicit, but it is intentionally not a full GX replacement.
+    """
+
+    density_gradient: float = 0.8
+    temperature_gradient: float = 2.49
+    tau: float = 1.0
+    streaming_scale: float = 1.0
+    drive_scale: float = 1.0
+    drift_scale: float = 0.18
+    magnetic_shear: float = 0.8
+    nu_hyper_m: float = 1.0
+    vt: float = 1.0
+    gradpar_abs: float = 1.0
+    denominator_floor: float = 1.0e-12
+    include_curvature_drift: bool = True
+    include_hypercollision: bool = True
+    p_hyper_m: int | None = None
+    n_links: int = 1
+    z_periods: float = 1.0
+    dealias: bool = False
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "density_gradient",
+        "temperature_gradient",
+        "tau",
+        "streaming_scale",
+        "drive_scale",
+        "drift_scale",
+        "magnetic_shear",
+        "nu_hyper_m",
+        "vt",
+        "gradpar_abs",
+        "denominator_floor",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "include_curvature_drift",
+        "include_hypercollision",
+        "p_hyper_m",
+        "n_links",
+        "z_periods",
+        "dealias",
+    )
+
+    def __post_init__(self):
+        if self.tau <= 0.0:
+            raise ValueError("tau must be positive")
+        if self.vt < 0.0:
+            raise ValueError("vt must be non-negative")
+        if self.gradpar_abs < 0.0:
+            raise ValueError("gradpar_abs must be non-negative")
+        if self.denominator_floor <= 0.0:
+            raise ValueError("denominator_floor must be positive")
+        if self.n_links < 1:
+            raise ValueError("n_links must be at least 1")
+        if self.z_periods <= 0.0:
+            raise ValueError("z_periods must be positive")
+        if self.p_hyper_m is not None and self.p_hyper_m < 1:
+            raise ValueError("p_hyper_m must be positive when supplied")
+
+
 def build_velocity_basis(spec: VelocityBasisSpec) -> HermiteLaguerreBasis:
     """Build the configured velocity basis.
 
@@ -456,6 +524,213 @@ def apply_linked_abs_kz(
     return jnp.fft.ifft(multiplier * jnp.fft.fft(values, axis=axis), axis=axis)
 
 
+def apply_linked_grad_z(
+    values,
+    *,
+    n_links: int = 1,
+    z_periods: float = 1.0,
+    axis: int = -1,
+    dealias: bool = False,
+):
+    """Apply GX's linked-chain first parallel derivative.
+
+    The wavenumber ordering and normalization match
+    :func:`gx_linked_kz_wavenumbers`, which follows the GX linked-chain
+    convention used by the existing ``|k_z|`` hypercollision helper.
+    """
+
+    values = jnp.asarray(values)
+    axis = _normalize_axis(axis, values.ndim)
+    if n_links < 1:
+        raise ValueError("n_links must be at least 1")
+    n_total = values.shape[axis]
+    if n_total % n_links != 0:
+        raise ValueError("the selected axis length must be divisible by n_links")
+
+    n_z = n_total // n_links
+    real_dtype = jnp.asarray(values.real).dtype
+    kz = gx_linked_kz_wavenumbers(
+        n_z,
+        n_links=n_links,
+        z_periods=z_periods,
+        dealias=dealias,
+        dtype=str(real_dtype),
+    )
+    multiplier_shape = [1] * values.ndim
+    multiplier_shape[axis] = n_total
+    multiplier = (1j * kz).reshape(multiplier_shape)
+    return jnp.fft.ifft(multiplier * jnp.fft.fft(values, axis=axis), axis=axis)
+
+
+def gx_moment_adiabatic_phi(coefficients, b, params: GxMomentRHSParams | None = None):
+    """Solve the reduced adiabatic-electron field equation in moment variables.
+
+    ``coefficients`` must use GX-style project layout
+    ``(laguerre, hermite, ky, z)``.  The numerator is the gyroaveraged density
+    ``sum_l J_l(b) G_{l0}``; the denominator is the truncated
+    adiabatic-electron polarization ``tau + 1 - Gamma_0``.
+    """
+
+    params = GxMomentRHSParams() if params is None else params
+    coefficients = jnp.asarray(coefficients)
+    if coefficients.ndim != 4:
+        raise ValueError("coefficients must have shape (n_laguerre,n_hermite,n_ky,n_z)")
+    b = _broadcast_b_to_ky_z(b, coefficients.shape[2], coefficients.shape[3])
+    gyro = gyroaverage_laguerre_coefficients(b, coefficients.shape[0])
+    density = density_moment(coefficients, gyro)
+    gamma = truncated_gamma0_from_laguerre(b, coefficients.shape[0])
+    denominator = _safe_signed_denominator(
+        jnp.asarray(params.tau, dtype=density.real.dtype) + 1.0 - gamma,
+        params.denominator_floor,
+    )
+    return density / denominator
+
+
+def gx_moment_energy_multiply(coefficients, basis: HermiteLaguerreBasis):
+    """Return ``(v_parallel^2/2 + mu B) G`` in Hermite-Laguerre moments."""
+
+    coefficients = jnp.asarray(coefficients)
+    if coefficients.ndim < 2:
+        raise ValueError("coefficients must include laguerre and hermite axes")
+    v2_part = 0.5 * jnp.einsum("mn,ln...->lm...", basis.hermite_v2, coefficients)
+    mu_part = jnp.einsum("ln,nm...->lm...", basis.laguerre_x, coefficients)
+    return v2_part + mu_part
+
+
+def gx_salpha_curvature_drift_profile(z, params: GxMomentRHSParams | None = None):
+    """Return a compact s-alpha curvature profile for the moment discriminator."""
+
+    params = GxMomentRHSParams() if params is None else params
+    z = jnp.asarray(z)
+    theta = 2.0 * jnp.pi * z
+    return jnp.cos(theta) + jnp.asarray(params.magnetic_shear, dtype=z.dtype) * theta * jnp.sin(
+        theta
+    )
+
+
+def gx_moment_itg_drive_source(
+    phi,
+    b,
+    ky,
+    basis: HermiteLaguerreBasis,
+    params: GxMomentRHSParams | None = None,
+):
+    """Project the adiabatic-electron ITG density/temperature drive to moments."""
+
+    params = GxMomentRHSParams() if params is None else params
+    phi = jnp.asarray(phi)
+    if phi.ndim != 2:
+        raise ValueError("phi must have shape (n_ky,n_z)")
+    ky = _validate_ky(ky, phi.shape[0], phi.real.dtype)
+    b = _broadcast_b_to_ky_z(b, phi.shape[0], phi.shape[1])
+    gyro = gyroaverage_laguerre_coefficients(b, basis.n_laguerre)
+    source = jnp.zeros(
+        (basis.n_laguerre, basis.n_hermite, phi.shape[0], phi.shape[1]),
+        dtype=jnp.result_type(phi, 1j),
+    )
+
+    density_projection = jnp.asarray(params.density_gradient, dtype=phi.real.dtype) * gyro
+    perpendicular_temperature = jnp.einsum(
+        "ln,nkz->lkz",
+        basis.laguerre_x - jnp.eye(basis.n_laguerre, dtype=basis.laguerre_x.dtype),
+        gyro,
+    )
+    source = source.at[:, 0].add(
+        (density_projection + params.temperature_gradient * perpendicular_temperature) * phi
+    )
+    if basis.n_hermite > 2:
+        parallel_temperature = (jnp.sqrt(jnp.asarray(2.0, dtype=phi.real.dtype)) / 2.0) * gyro
+        source = source.at[:, 2].add(
+            params.temperature_gradient * parallel_temperature * phi
+        )
+
+    ky_factor = ky.reshape(1, 1, phi.shape[0], 1)
+    return 1j * jnp.asarray(params.drive_scale, dtype=phi.real.dtype) * ky_factor * source
+
+
+def gx_moment_linear_rhs(
+    coefficients,
+    basis: HermiteLaguerreBasis,
+    ky,
+    z,
+    b,
+    params: GxMomentRHSParams | None = None,
+    *,
+    phi=None,
+    drift_profile=None,
+):
+    """Return the reduced GX-style Hermite-Laguerre linear RHS.
+
+    The RHS is intended for the multi-``ky`` physics discriminator: it combines
+    linked-chain Hermite streaming, an ITG field drive, a simple s-alpha
+    curvature-drift surrogate, and the source-matched GX linked ``k_z``
+    hypercollision.  The state layout is ``(laguerre, hermite, ky, z)``.
+    """
+
+    params = GxMomentRHSParams() if params is None else params
+    coefficients = jnp.asarray(coefficients)
+    if coefficients.shape[:2] != (basis.n_laguerre, basis.n_hermite):
+        raise ValueError("coefficient leading axes must match the Hermite-Laguerre basis")
+    if coefficients.ndim != 4:
+        raise ValueError("coefficients must have shape (n_laguerre,n_hermite,n_ky,n_z)")
+    ky = _validate_ky(ky, coefficients.shape[2], coefficients.real.dtype)
+    z = jnp.asarray(z, dtype=coefficients.real.dtype)
+    if z.shape != (coefficients.shape[3],):
+        raise ValueError("z must have shape (n_z,)")
+    b = _broadcast_b_to_ky_z(b, coefficients.shape[2], coefficients.shape[3])
+    phi = gx_moment_adiabatic_phi(coefficients, b, params) if phi is None else jnp.asarray(phi)
+    if phi.shape != (coefficients.shape[2], coefficients.shape[3]):
+        raise ValueError("phi must have shape (n_ky,n_z)")
+
+    d_dz = apply_linked_grad_z(
+        coefficients,
+        n_links=params.n_links,
+        z_periods=params.z_periods,
+        axis=-1,
+        dealias=params.dealias,
+    )
+    rhs = -jnp.asarray(params.streaming_scale, dtype=coefficients.real.dtype) * jnp.einsum(
+        "mn,lnkz->lmkz",
+        basis.hermite_v,
+        d_dz,
+    )
+    rhs = rhs + gx_moment_itg_drive_source(phi, b, ky, basis, params)
+
+    if params.include_curvature_drift:
+        drift = (
+            gx_salpha_curvature_drift_profile(z, params)
+            if drift_profile is None
+            else jnp.asarray(drift_profile, dtype=coefficients.real.dtype)
+        )
+        if drift.shape == (coefficients.shape[3],):
+            drift = jnp.broadcast_to(drift[None, :], (coefficients.shape[2], coefficients.shape[3]))
+        elif drift.shape != (coefficients.shape[2], coefficients.shape[3]):
+            raise ValueError("drift_profile must have shape (n_z,) or (n_ky,n_z)")
+        energy = gx_moment_energy_multiply(coefficients, basis)
+        drift_factor = (
+            -1j
+            * jnp.asarray(params.drift_scale, dtype=coefficients.real.dtype)
+            * ky.reshape(1, 1, coefficients.shape[2], 1)
+            * drift.reshape(1, 1, coefficients.shape[2], coefficients.shape[3])
+        )
+        rhs = rhs + drift_factor * energy
+
+    if params.include_hypercollision:
+        rhs = rhs + apply_gx_kz_hypercollision(
+            coefficients,
+            nu_hyper_m=params.nu_hyper_m,
+            p_hyper_m=params.p_hyper_m,
+            vt=params.vt,
+            gradpar_abs=params.gradpar_abs,
+            n_links=params.n_links,
+            z_periods=params.z_periods,
+            hermite_axis=1,
+            parallel_axis=-1,
+            dealias=params.dealias,
+        )
+    return rhs
+
+
 def gx_kz_hypercollision_prefactor(
     n_hermite: int,
     *,
@@ -617,6 +892,37 @@ def _normalize_axis(axis: int, ndim: int) -> int:
     if axis < 0 or axis >= ndim:
         raise ValueError("axis out of bounds")
     return axis
+
+
+def _broadcast_b_to_ky_z(b, n_ky: int, n_z: int):
+    b = jnp.asarray(b)
+    if b.ndim == 0:
+        return jnp.broadcast_to(b, (n_ky, n_z))
+    if b.shape == (n_ky,):
+        return jnp.broadcast_to(b[:, None], (n_ky, n_z))
+    if b.shape == (n_z,):
+        return jnp.broadcast_to(b[None, :], (n_ky, n_z))
+    if b.shape == (n_ky, 1):
+        return jnp.broadcast_to(b, (n_ky, n_z))
+    if b.shape == (1, n_z):
+        return jnp.broadcast_to(b, (n_ky, n_z))
+    if b.shape != (n_ky, n_z):
+        raise ValueError("b must be scalar or have shape (n_ky,), (n_z,), or (n_ky,n_z)")
+    return b
+
+
+def _validate_ky(ky, n_ky: int, dtype):
+    ky = jnp.asarray(ky, dtype=dtype)
+    if ky.shape != (n_ky,):
+        raise ValueError("ky must have shape (n_ky,)")
+    return ky
+
+
+def _safe_signed_denominator(denominator, floor):
+    denominator = jnp.asarray(denominator)
+    floor = jnp.asarray(floor, dtype=denominator.dtype)
+    sign = jnp.where(denominator.real < 0.0, -1.0, 1.0)
+    return jnp.where(jnp.abs(denominator) < floor, sign * floor, denominator)
 
 
 def gamma0_limit_error(b, n_laguerre: int):

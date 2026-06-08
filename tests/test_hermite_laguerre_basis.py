@@ -4,17 +4,22 @@ import numpy as np
 from scipy import special
 
 from stellarator_gk import (
+    GxMomentRHSParams,
     VelocityBasisKind,
     VelocityBasisSpec,
     apply_gx_kz_hypercollision,
     apply_hypercollision,
     apply_linked_abs_kz,
+    apply_linked_grad_z,
     build_velocity_basis,
     density_moment,
     fluid_moments,
     free_energy_spectrum,
     gamma0,
     gamma0_limit_error,
+    gx_moment_adiabatic_phi,
+    gx_moment_itg_drive_source,
+    gx_moment_linear_rhs,
     gx_kz_hypercollision_hermite_rates,
     gx_kz_hypercollision_prefactor,
     gx_linked_kz_wavenumbers,
@@ -270,6 +275,18 @@ def test_linked_abs_kz_operator_matches_discrete_fourier_mode():
     np.testing.assert_allclose(out, abs(mode / z_periods) * values, rtol=3e-14, atol=3e-14)
 
 
+def test_linked_grad_z_operator_matches_discrete_fourier_mode():
+    n_total = 12
+    mode = 3
+    z_periods = 4.0
+    grid = jnp.arange(n_total, dtype=jnp.float64)
+    values = jnp.exp(2j * jnp.pi * mode * grid / n_total)
+
+    out = apply_linked_grad_z(values, z_periods=z_periods)
+
+    np.testing.assert_allclose(out, 1j * mode / z_periods * values, rtol=3e-14, atol=3e-14)
+
+
 def test_gx_kz_hypercollision_prefactor_and_rates_match_source_formula():
     prefactor = gx_kz_hypercollision_prefactor(
         6,
@@ -359,6 +376,87 @@ def test_gx_kz_hypercollision_is_jittable_and_differentiable():
 
     assert jnp.isfinite(value)
     np.testing.assert_allclose(grad, 2.0 * value / 1.3, rtol=4e-14, atol=4e-14)
+
+
+def test_gx_moment_field_solve_and_drive_projection_are_consistent():
+    basis = build_velocity_basis(VelocityBasisSpec(n_hermite=5, n_laguerre=4))
+    params = GxMomentRHSParams(density_gradient=0.8, temperature_gradient=2.49)
+    ky = jnp.asarray([0.3, 0.5], dtype=jnp.float64)
+    z = jnp.linspace(-1.0, 1.0, 6)
+    b = 0.5 * ky[:, None] ** 2 * jnp.ones((ky.shape[0], z.shape[0]))
+    phi_target = jnp.stack(
+        (
+            jnp.cos(jnp.pi * z),
+            jnp.sin(jnp.pi * (z + 0.25)),
+        )
+    ).astype(jnp.complex128)
+    gyro = gyroaverage_laguerre_coefficients(b, basis.n_laguerre)
+    gamma = truncated_gamma0_from_laguerre(b, basis.n_laguerre)
+    density = (params.tau + 1.0 - gamma) * phi_target
+    coeffs = jnp.zeros(
+        (basis.n_laguerre, basis.n_hermite, ky.shape[0], z.shape[0]),
+        dtype=jnp.complex128,
+    )
+    coeffs = coeffs.at[:, 0].set(gyro * density / gamma)
+
+    solved = gx_moment_adiabatic_phi(coeffs, b, params)
+    drive = gx_moment_itg_drive_source(solved, b, ky, basis, params)
+
+    np.testing.assert_allclose(solved, phi_target, rtol=3e-13, atol=3e-13)
+    assert drive.shape == coeffs.shape
+    assert jnp.max(jnp.abs(drive[:, 0])) > 0.0
+    assert jnp.max(jnp.abs(drive[:, 2])) > 0.0
+    np.testing.assert_allclose(drive[:, 1], 0.0, rtol=0.0, atol=0.0)
+
+
+def test_gx_moment_rhs_hypercollision_only_preserves_low_hermite_modes():
+    basis = build_velocity_basis(VelocityBasisSpec(n_hermite=6, n_laguerre=3))
+    z = jnp.linspace(-1.0, 1.0, 8, endpoint=False)
+    ky = jnp.asarray([0.4], dtype=jnp.float64)
+    coeffs = jnp.ones((basis.n_laguerre, basis.n_hermite, 1, z.shape[0]), dtype=jnp.complex128)
+    params = GxMomentRHSParams(
+        density_gradient=0.0,
+        temperature_gradient=0.0,
+        streaming_scale=0.0,
+        drive_scale=0.0,
+        include_curvature_drift=False,
+        include_hypercollision=True,
+        p_hyper_m=2,
+        z_periods=2.0,
+    )
+
+    rhs = gx_moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
+
+    np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
+    np.testing.assert_allclose(rhs[:, 3:], 0.0, rtol=0.0, atol=3e-14)
+
+    wave = jnp.exp(2j * jnp.pi * jnp.arange(z.shape[0]) / z.shape[0])
+    coeffs = coeffs.at[:, 3:].set(wave[None, None, None, :])
+    rhs = gx_moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
+
+    np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
+    assert jnp.max(jnp.abs(rhs[:, 3:])) > 0.0
+
+
+def test_gx_moment_rhs_is_jittable_and_differentiable():
+    basis = build_velocity_basis(VelocityBasisSpec(n_hermite=5, n_laguerre=4))
+    z = jnp.linspace(-1.0, 1.0, 8, endpoint=False)
+    ky = jnp.asarray([0.3, 0.5], dtype=jnp.float64)
+    b = 0.5 * ky[:, None] ** 2 * jnp.ones((ky.shape[0], z.shape[0]))
+    base = jnp.zeros((basis.n_laguerre, basis.n_hermite, ky.shape[0], z.shape[0]))
+    base = base.at[0, 0].set(jnp.cos(jnp.pi * z)[None, :])
+    params = GxMomentRHSParams(z_periods=2.0)
+
+    @jax.jit
+    def objective(scale):
+        rhs = gx_moment_linear_rhs(scale * base, basis, ky, z, b, params)
+        return jnp.real(jnp.sum(jnp.abs(rhs) ** 2))
+
+    value = objective(0.7)
+    grad = jax.grad(objective)(0.7)
+
+    assert jnp.isfinite(value)
+    assert jnp.isfinite(grad)
 
 
 def test_free_energy_spectrum_and_jit_gradient_smoke():

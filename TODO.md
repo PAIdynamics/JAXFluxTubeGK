@@ -663,47 +663,100 @@ Use these guardrails throughout the round:
   complex `phi(z)` error with phase alignment, optional state/moment error,
   and separate pass/fail masks. Its phase-aligned `phi(z)` error can feed the
   existing multi-`ky` scan gate `profile_error` field.
-- [ ] Prefer first obtaining/exporting an external per-`ky` complex
-  mode-structure fixture if available from GX, GKW, Gyaradax, GS2, stella, or a
-  local diagnostic patch. The fixture should store at least `ky`, `z`,
-  complex `phi(z)`, growth rate, real frequency, normalization convention, and
-  enough metadata to identify geometry, resolution, field-line length, and
-  time/growth window. The generic fixture contract is implemented; what remains
-  is exporting or obtaining a true multi-`ky` external reference for the
-  problematic branch, especially `ky=0.3`.
-- [ ] If no reliable external mode-structure fixture is available, assemble a
+- [x] Wire the fixture comparison directly into the public multi-`ky` scan
+  gate with `evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures`, and
+  add `run_cyclone_base_case_mode_structure_fixture` so the current solver can
+  emit a per-`ky` complex `phi(z)` fixture from the same single-mode scan path
+  used for scalar growth/frequency diagnostics.
+- [x] Add a GX external fixture reader/export path. `load_gx_mode_structure_fixture`
+  reads GX `.big.nc` `Diagnostics/Phi(time,ky,kx,z,ri)` complex fields and can
+  attach compact `.out.nc` `omega_kxkyt` growth/frequency references; the
+  `examples/export_gx_mode_structure_fixture.py` command writes the standard
+  CSV fixture for `ky=(0.3,0.5)` or any requested scan subset. The repository's
+  shipped GX Cyclone files include compact `.out.nc` spectra but not the
+  corresponding `.big.nc` full-field diagnostics, so a fresh GX run or external
+  artifact is still needed to populate the real low-`ky` reference.
+- [x] Add the one-command external-vs-solver discriminator runner
+  `examples/run_cyclone_mode_structure_gate.py`. It generates the solver
+  fixture, loads either a generic per-`ky` mode-structure CSV fixture, directly
+  generates the reduced GX-style moment-RHS fixture, or loads a GX `.big.nc`
+  reference fixture. It explicitly converts GX `theta` to either raw `theta` or
+  `theta/(2*pi)`, optionally resamples the reference fixture to the solver grid
+  with a declared periodic policy, and writes solver/reference fixtures plus a
+  per-`ky` gate report. The runner now requires exactly one reference source:
+  self-check, generic CSV fixture, reduced moment RHS, or GX `.big.nc`.
+- [x] Add a reproducible GX artifact-production path for the missing full-field
+  reference. `scripts/prepare_gx_mode_structure_run.py` copies and patches the
+  bundled GX s-alpha Cyclone input, forces `[Diagnostics]` `omega=true`,
+  `fields=true`, `moments=true`, and `nwrite_big=1000`, and writes
+  `fixtures/gx_cyclone_mode_structure_run/` with the prepared input, metadata,
+  and exact external GX/export/gate command sequence.
+- [ ] Obtain/export a true external per-`ky` complex mode-structure fixture for
+  the problematic branch, especially `ky=0.3`, using GX `.big.nc`, GKW,
+  Gyaradax, GS2, stella, or a local diagnostic patch. The fixture should store
+  at least `ky`, `z`, complex `phi(z)`, growth rate, real frequency,
+  normalization convention, and enough metadata to identify geometry,
+  resolution, field-line length, and time/growth window. For the GX route, the
+  remaining action is to run the prepared external GX command and feed the
+  resulting `.big.nc` through the exporter/gate.
+- [x] If no reliable external mode-structure fixture is available, assemble a
   minimal GX-style Hermite-Laguerre linear moment RHS for the s-alpha
   adiabatic-electron ITG case. Reuse the source-matched linked `k_z`
   hypercollision contribution and keep moment layout, linked-boundary chains,
-  normalization, and field solve conventions explicit.
-- [ ] Add a mode-structure comparison gate that reports scalar growth error,
+  normalization, and field solve conventions explicit. This is now implemented
+  through `GxMomentRHSParams`, `gx_moment_adiabatic_phi`,
+  `gx_moment_linear_rhs`, `run_gx_salpha_moment_rhs_mode_structure_fixture`,
+  and `examples/export_gx_moment_rhs_fixture.py`. The reduced RHS includes
+  linked Hermite streaming, an adiabatic-electron moment field solve, projected
+  density/temperature-gradient drive, a simple s-alpha curvature-drift
+  surrogate, and GX linked `k_z` hypercollision. It is a discriminator fixture
+  producer, not a full GX replacement. The same path is now available directly
+  from `examples/run_cyclone_mode_structure_gate.py --reference-moment-rhs`.
+- [x] Add a mode-structure comparison gate that reports scalar growth error,
   real-frequency error, row-normalized complex `phi(z)` error, phase-aligned
   state/moment error if available, and pass/fail status separately. The generic
-  gate is implemented; what remains is wiring it to the exact external
-  multi-`ky` fixture or a new moment-RHS scan output.
-- [ ] Re-run the exact GX input-control scan after the discriminator is closed:
-  `n_z_total=96`, Hermite/Laguerre control resolution `48/16` where relevant,
-  `nperiod=2`, `ky=(0.3,0.5)`, and the calibrated GX reference curve.
+  gate is implemented and wired to the scan-gate `profile_error` metric; what
+  remains is feeding it with an exact external multi-`ky` fixture or a new
+  moment-RHS scan output.
+- [ ] Re-run the exact GX input-control scan after the external artifact exists:
+  `n_z_total=96`, Hermite/Laguerre control resolution `48/16`, `nperiod=2`,
+  `ky=(0.3,0.5)`, and the calibrated GX reference curve. The implementation
+  path is closed; this remaining checkbox is a reference-data/validation run
+  against the real GX `.big.nc`, not missing solver infrastructure.
 
 ### 2. Build the first single-command stellarator run
 
-- [ ] Add or harden an example script that runs a linear stellarator scan from
+- [x] Add or harden an example script that runs a linear stellarator scan from
   either a DESC equilibrium/path or the existing DSHAPE fixture. Inputs should
   include `rho`, `alpha`, field-line length/periods, `ky` grid, resolution,
   species/profile gradients, derivative backend, time-step/window controls,
-  and output directory.
-- [ ] The example should write machine-readable outputs:
+  and output directory. This is implemented as
+  `examples/run_stellarator_linear_scan.py`. The default path uses the bundled
+  DESC DSHAPE `.npz` fixture; `--geometry-source desc-path --desc-path ...`
+  evaluates a real DESC equilibrium on a chosen Boozer field-line grid.
+- [x] The example should write machine-readable outputs:
   geometry audit JSON/CSV, `ky` growth/frequency table, selected complex
-  `phi(z)` mode structures, convergence metadata, and a quasilinear proxy.
-- [ ] The script should fail early if the imported geometry does not pass the
-  internal geometry-contract checks or the available eik parity checks.
+  `phi(z)` mode structures, convergence metadata, and a quasilinear proxy. The
+  current artifact set is `geometry_audit.json`, `geometry_audit.csv`,
+  `ky_growth.csv`, `mode_structures.csv`, `convergence_history.csv`,
+  `convergence_metadata.json`, `quasilinear_proxy.json`, and
+  `run_config.json`.
+- [x] The script should fail early if the imported geometry does not pass the
+  internal geometry-contract checks or the available eik parity checks. The
+  default preflight checks finite fields, positive \(B\), positive metric
+  diagonals, representative nonnegative \(k_\perp^2\), and the solver-to-GX/eik
+  export contract; a DESC-path run can additionally require a matched external
+  `eik.out` fixture with `--external-eik-reference`.
 
 ### 3. Harden stellarator geometry and boundary contracts
 
 - [ ] Promote the DESC/eik geometry preflight to the standard path for
   stellarator simulations: compare \(B\), \(\nabla_\parallel\), metric
   elements, magnetic-drift coefficients, Jacobian/weights where available, and
-  representative \(k_\perp^2\) values before solving.
+  representative \(k_\perp^2\) values before solving. The new
+  `run_stellarator_linear_scan.py` command already does this for its reduced
+  scan path; the remaining work is to make the same preflight a shared library
+  entry point for future production runners and benchmark fixtures.
 - [ ] Add the still-open finite-difference check against DESC/SIMSOPT geometry
   quantities for a small fixture, or document why the present DESC API makes a
   different independent check preferable.

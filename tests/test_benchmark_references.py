@@ -72,6 +72,7 @@ from stellarator_gk import (
     compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_convention_audit,
     evaluate_cyclone_ky_scan_gate,
+    evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,
     evaluate_parallel_phi_profile_gate,
     geometry_to_gx_eik_reference,
     gx_growth_rate_target,
@@ -85,8 +86,10 @@ from stellarator_gk import (
     load_gx_cyclone_input_reference,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
+    load_gx_mode_structure_fixture,
     load_per_ky_mode_structure_fixture_csv,
     mode_structure_fixture_from_selected_state_trace,
+    resample_per_ky_mode_structure_fixture,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
     run_cyclone_base_case_coefficient_source_audit,
@@ -104,6 +107,7 @@ from stellarator_gk import (
     run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
     run_desc_gx_eik_external_geometry_gate,
     run_gx_gist_external_eik_suite_gate,
+    run_gx_salpha_moment_rhs_mode_structure_fixture,
     run_independent_external_eik_producer_gate,
     run_independent_external_eik_producer_report,
     run_cyclone_base_case_profile_operator_audit,
@@ -115,6 +119,7 @@ from stellarator_gk import (
     run_cyclone_base_case_selected_state_trace,
     run_cyclone_base_case_ky_scan_convention_audit,
     run_cyclone_base_case_ky_scan_gate,
+    run_cyclone_base_case_mode_structure_fixture,
     run_cyclone_base_case_parallel_phi_profile_gate,
     run_cyclone_base_case_parallel_phi_trace,
     run_cyclone_base_case_trace,
@@ -298,6 +303,129 @@ def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
     np.testing.assert_allclose(target.reference_value, 0.054058794, rtol=2e-6)
     assert target.quantity == "selected_growth_rate"
     assert dict(target.metadata)["matched_ky"] == pytest.approx(0.5)
+
+
+def test_gx_big_nc_mode_structure_fixture_loader(tmp_path):
+    netcdf = pytest.importorskip("netCDF4")
+    big_path = tmp_path / "synthetic_gx.big.nc"
+    out_path = tmp_path / "synthetic_gx.out.nc"
+    ky = np.asarray([0.0, 0.1, 0.3, 0.5], dtype=float)
+    kx = np.asarray([0.0], dtype=float)
+    z = np.linspace(-np.pi, np.pi, 5)
+    times = np.asarray([0.0, 1.0, 2.0], dtype=float)
+
+    with netcdf.Dataset(big_path, "w") as data:
+        data.createDimension("time", None)
+        data.createDimension("ky", ky.shape[0])
+        data.createDimension("kx", kx.shape[0])
+        data.createDimension("theta", z.shape[0])
+        data.createDimension("ri", 2)
+        grids = data.createGroup("Grids")
+        diagnostics = data.createGroup("Diagnostics")
+        grids.createVariable("time", "f8", ("time",))[:] = times
+        grids.createVariable("ky", "f8", ("ky",))[:] = ky
+        grids.createVariable("kx", "f8", ("kx",))[:] = kx
+        grids.createVariable("theta", "f8", ("theta",))[:] = z
+        phi = diagnostics.createVariable(
+            "Phi",
+            "f8",
+            ("time", "ky", "kx", "theta", "ri"),
+        )
+        values = np.zeros((times.shape[0], ky.shape[0], kx.shape[0], z.shape[0], 2))
+        for time_index, _time in enumerate(times):
+            for ky_index, _ky in enumerate(ky):
+                complex_row = (time_index + 1.0) * (ky_index + 1.0) * np.exp(
+                    1j * (ky_index + 1.0) * z
+                )
+                values[time_index, ky_index, 0, :, 0] = complex_row.real
+                values[time_index, ky_index, 0, :, 1] = complex_row.imag
+        phi[:] = values
+
+    with netcdf.Dataset(out_path, "w") as data:
+        data.createDimension("time", None)
+        data.createDimension("ky", ky.shape[0])
+        data.createDimension("kx", kx.shape[0])
+        data.createDimension("ri", 2)
+        grids = data.createGroup("Grids")
+        diagnostics = data.createGroup("Diagnostics")
+        grids.createVariable("time", "f8", ("time",))[:] = times
+        grids.createVariable("ky", "f8", ("ky",))[:] = ky
+        omega = diagnostics.createVariable(
+            "omega_kxkyt",
+            "f8",
+            ("time", "ky", "kx", "ri"),
+        )
+        omega_values = np.zeros((times.shape[0], ky.shape[0], kx.shape[0], 2))
+        omega_values[:, :, 0, 0] = -ky[None, :]
+        omega_values[:, :, 0, 1] = 2.0 * ky[None, :]
+        omega[:] = omega_values
+
+    fixture = load_gx_mode_structure_fixture(
+        big_path,
+        growth_reference_path=out_path,
+        ky_values=(0.3, 0.5),
+        time_index=-1,
+        z_scale=1.0 / (2.0 * np.pi),
+    )
+    observed = replace(
+        fixture,
+        phi=3.0 * jnp.exp(-0.2j) * fixture.phi,
+        source="phase-scaled GX fixture",
+    )
+    gate = evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures(
+        observed,
+        fixture,
+        growth_tolerance=1.0e-14,
+        frequency_tolerance=1.0e-14,
+        profile_tolerance=1.0e-12,
+        require_profile=True,
+    )
+
+    assert isinstance(fixture, PerKyModeStructureFixture)
+    np.testing.assert_allclose(fixture.ky, [0.3, 0.5])
+    np.testing.assert_allclose(fixture.z, z / (2.0 * np.pi))
+    np.testing.assert_allclose(fixture.growth_rate, [0.6, 1.0])
+    np.testing.assert_allclose(fixture.frequency, [-0.3, -0.5])
+    np.testing.assert_allclose(
+        fixture.phi[0],
+        values[-1, 2, 0, :, 0] + 1j * values[-1, 2, 0, :, 1],
+    )
+    assert dict(fixture.metadata)["format"] == "GX Diagnostics/Phi(time,ky,kx,z,ri)"
+    assert bool(gate.passed)
+
+    with pytest.raises(ValueError, match="Diagnostics/Phi"):
+        load_gx_mode_structure_fixture(out_path)
+
+
+def test_mode_structure_fixture_resampler_handles_periodic_edge_to_center_grid():
+    source_z = jnp.asarray([0.0, 0.25, 0.5, 0.75])
+    target_z = jnp.asarray([0.125, 0.375, 0.625, 0.875])
+    phi = jnp.asarray([[1.0, 1.0j, -1.0, -1.0j]], dtype=jnp.complex128)
+    fixture = PerKyModeStructureFixture(
+        ky=jnp.asarray([0.3]),
+        z=source_z,
+        phi=phi,
+        growth_rate=jnp.asarray([0.2]),
+        frequency=jnp.asarray([-0.1]),
+        source="synthetic periodic edge grid",
+    )
+
+    with pytest.raises(ValueError, match="outside fixture.z"):
+        resample_per_ky_mode_structure_fixture(fixture, target_z)
+
+    resampled = resample_per_ky_mode_structure_fixture(
+        fixture,
+        target_z,
+        periodic=True,
+        period=1.0,
+    )
+
+    np.testing.assert_allclose(resampled.z, target_z)
+    np.testing.assert_allclose(
+        resampled.phi,
+        jnp.asarray([[0.5 + 0.5j, -0.5 + 0.5j, -0.5 - 0.5j, 0.5 - 0.5j]]),
+    )
+    assert dict(resampled.metadata)["resampled_periodic"]
 
 
 def test_cyclone_ky_scan_gate_evaluator_separates_scan_metrics():
@@ -1146,19 +1274,91 @@ def test_per_ky_mode_structure_fixture_csv_roundtrip_and_phase_gate(tmp_path):
     assert jnp.max(report.phi_direct_error) > 1.0e-1
     assert float(report.max_phi_phase_aligned_error) < 2.0e-13
 
-    scan_gate = evaluate_cyclone_ky_scan_gate(
-        observed.ky,
-        report.observed_growth,
-        report.reference_growth,
-        observed_frequency=report.observed_frequency,
-        reference_frequency=report.reference_frequency,
-        profile_error=report.phi_phase_aligned_error,
+    scan_gate = evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures(
+        observed,
+        loaded,
         growth_tolerance=2.0e-3,
         frequency_tolerance=2.0e-3,
         profile_tolerance=2.0e-13,
         require_profile=True,
     )
     assert bool(scan_gate.passed)
+
+
+def test_solver_mode_structure_fixture_feeds_scan_gate():
+    fixture = run_cyclone_base_case_mode_structure_fixture(
+        ky_values=(0.3, 0.5),
+        n_z=8,
+        n_vpar=6,
+        n_mu=4,
+        steps_per_window=1,
+        n_windows=2,
+        growth_window_fraction=0.0,
+        parallel_derivative_model="gkw_igh",
+        normalization_model="gkw_unweighted",
+        initial_profile="cosine2",
+    )
+    observed = replace(
+        fixture,
+        phi=1.7 * jnp.exp(0.31j) * fixture.phi,
+        source="phase-scaled solver fixture",
+    )
+
+    assert isinstance(fixture, PerKyModeStructureFixture)
+    assert fixture.phi.shape == (2, 8)
+    assert fixture.growth_rate.shape == fixture.ky.shape
+    assert jnp.all(jnp.isfinite(fixture.phi.real))
+    assert dict(fixture.metadata)["solver_ky"][0] != pytest.approx(0.3)
+
+    gate = evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures(
+        observed,
+        fixture,
+        growth_tolerance=1.0e-14,
+        frequency_tolerance=1.0e-14,
+        profile_tolerance=1.0e-12,
+        require_profile=True,
+    )
+    assert bool(gate.passed)
+    np.testing.assert_allclose(gate.profile_error, 0.0, atol=1.0e-12)
+
+
+def test_gx_salpha_moment_rhs_mode_structure_fixture_runs_reduced_gate():
+    fixture = run_gx_salpha_moment_rhs_mode_structure_fixture(
+        ky_values=(0.3, 0.5),
+        n_z=8,
+        n_hermite=5,
+        n_laguerre=4,
+        nperiod=1,
+        dt=0.01,
+        steps_per_window=1,
+        n_windows=3,
+        growth_window_fraction=1.0,
+        p_hyper_m=2,
+    )
+    observed = replace(
+        fixture,
+        phi=0.4 * jnp.exp(-0.2j) * fixture.phi,
+        source="phase-scaled moment fixture",
+    )
+
+    assert isinstance(fixture, PerKyModeStructureFixture)
+    assert fixture.phi.shape == (2, 8)
+    assert fixture.normalization == "complex_phi_gx_moment_rhs"
+    assert dict(fixture.metadata)["model"] == "reduced_gx_salpha_moment_rhs"
+    assert jnp.all(jnp.isfinite(fixture.phi.real))
+    assert jnp.all(jnp.isfinite(fixture.growth_rate))
+    assert jnp.all(jnp.isfinite(fixture.frequency))
+
+    gate = evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures(
+        observed,
+        fixture,
+        growth_tolerance=1.0e-14,
+        frequency_tolerance=1.0e-14,
+        profile_tolerance=1.0e-12,
+        require_profile=True,
+    )
+    assert bool(gate.passed)
+    np.testing.assert_allclose(gate.profile_error, 0.0, atol=1.0e-12)
 
 
 def test_mode_structure_fixture_from_gkw_selected_state_trace_uses_complex_phi():

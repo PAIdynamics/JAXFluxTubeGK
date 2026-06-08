@@ -1,0 +1,19 @@
+{
+  "diagnostics": {
+    "fields": true,
+    "moments": true,
+    "omega": true
+  },
+  "export_command": "uv run python examples/export_gx_mode_structure_fixture.py --gx-big-output fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.big.nc --gx-growth-output fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.out.nc --ky-values 0.3,0.5 --gx-z-coordinate theta_over_2pi --output fixtures/gx_cyclone_mode_structure_fixture.csv",
+  "fixture_output": "fixtures/gx_cyclone_mode_structure_fixture.csv",
+  "gate_command": "JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --reference-fixture fixtures/gx_cyclone_mode_structure_fixture.csv --profile gx-salpha-input --target-convention gx-salpha --ky-input-convention internal_krho --require-profile --resample-reference-to-solver-z --periodic-z",
+  "gx_big_output": "fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.big.nc",
+  "gx_executable": "path/to/gx",
+  "gx_growth_output": "fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.out.nc",
+  "gx_z_coordinate": "theta_over_2pi",
+  "ky_values": "0.3,0.5",
+  "nwrite_big": 1000,
+  "prepared_input": "fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.in",
+  "run_command": "cd fixtures/gx_cyclone_mode_structure_run && path/to/gx itg_salpha_adiabatic_electrons.in",
+  "source_input": "relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
+}

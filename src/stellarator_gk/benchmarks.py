@@ -3526,6 +3526,133 @@ def load_gx_growth_rate_reference(
     )
 
 
+def load_gx_mode_structure_fixture(
+    path,
+    *,
+    growth_reference_path=None,
+    ikx: int = 0,
+    time_index: int = -1,
+    ky_values=None,
+    average_fraction: float = 0.5,
+    drop_zonal: bool = True,
+    z_scale: float = 1.0,
+    z_offset: float = 0.0,
+) -> PerKyModeStructureFixture:
+    """Load a GX ``.big.nc`` complex-field diagnostic as a per-``ky`` fixture.
+
+    GX writes full complex fields to ``Diagnostics/Phi(time,ky,kx,z,ri)`` in
+    the less frequent ``.big.nc`` stream when ``fields = true``.  The compact
+    ``.out.nc`` stream only contains spectra and ``omega_kxkyt``; pass it as
+    ``growth_reference_path`` to attach growth rates and real frequencies.
+    """
+
+    if not 0.0 <= average_fraction < 1.0:
+        raise ValueError("average_fraction must lie in [0, 1)")
+    if not np.isfinite(z_scale) or not np.isfinite(z_offset):
+        raise ValueError("z_scale and z_offset must be finite")
+    dataset_cls = _import_netcdf_dataset()
+    path = Path(path)
+    with dataset_cls(path, mode="r") as data:
+        grids = data.groups.get("Grids")
+        diagnostics = data.groups.get("Diagnostics")
+        if grids is None or diagnostics is None:
+            raise ValueError("GX mode-structure file must contain Grids and Diagnostics groups")
+        if "Phi" not in diagnostics.variables:
+            raise ValueError(
+                "GX mode-structure fixture requires Diagnostics/Phi; pass a .big.nc "
+                "file written with fields=true, not the compact .out.nc spectra file"
+            )
+        time = np.asarray(grids.variables["time"][:], dtype=float)
+        ky_all = np.asarray(grids.variables["ky"][:], dtype=float)
+        kx_all = np.asarray(grids.variables["kx"][:], dtype=float)
+        if "theta" in grids.variables:
+            z = np.asarray(grids.variables["theta"][:], dtype=float)
+        elif "z" in grids.variables:
+            z = np.asarray(grids.variables["z"][:], dtype=float)
+        else:
+            z = np.arange(diagnostics.variables["Phi"].shape[3], dtype=float)
+        z = z_scale * z + z_offset
+        if ky_all.ndim != 1 or ky_all.shape[0] == 0:
+            raise ValueError("GX mode-structure file has an empty ky grid")
+        if kx_all.ndim != 1 or kx_all.shape[0] == 0:
+            raise ValueError("GX mode-structure file has an empty kx grid")
+        if ikx < 0 or ikx >= kx_all.shape[0]:
+            raise ValueError("ikx is out of bounds for GX mode-structure file")
+        selected_time_index = int(time_index)
+        if selected_time_index < 0:
+            selected_time_index += time.shape[0]
+        if selected_time_index < 0 or selected_time_index >= time.shape[0]:
+            raise ValueError("time_index is out of bounds for GX mode-structure file")
+        phi_raw = np.asarray(
+            diagnostics.variables["Phi"][selected_time_index, :, ikx, :, :],
+            dtype=float,
+        )
+    if phi_raw.ndim != 3 or phi_raw.shape[-1] != 2:
+        raise ValueError("GX Diagnostics/Phi must have shape (time,ky,kx,z,ri)")
+    phi_all = phi_raw[..., 0] + 1j * phi_raw[..., 1]
+    if phi_all.shape != (ky_all.shape[0], z.shape[0]):
+        raise ValueError("GX Phi ky/z dimensions do not match Grids/ky and Grids/theta")
+
+    field_ky = ky_all
+    field_phi = phi_all
+    if drop_zonal:
+        field_ky = field_ky[1:]
+        field_phi = field_phi[1:]
+    if ky_values is None:
+        match_indices = np.arange(field_ky.shape[0], dtype=int)
+    else:
+        requested = np.asarray(ky_values, dtype=float)
+        if requested.ndim != 1 or requested.shape[0] == 0:
+            raise ValueError("ky_values must be a nonempty one-dimensional sequence")
+        if np.any(~np.isfinite(requested)) or np.any(requested < 0.0):
+            raise ValueError("ky_values must be finite and nonnegative")
+        match_indices = np.asarray(
+            [int(np.argmin(np.abs(field_ky - value))) for value in requested],
+            dtype=int,
+        )
+    selected_ky = field_ky[match_indices]
+    selected_phi = field_phi[match_indices]
+
+    growth = np.full_like(selected_ky, np.nan, dtype=float)
+    frequency = np.full_like(selected_ky, np.nan, dtype=float)
+    if growth_reference_path is not None:
+        growth_reference = load_gx_growth_rate_reference(
+            growth_reference_path,
+            ikx=ikx,
+            average_fraction=average_fraction,
+            drop_zonal=drop_zonal,
+        )
+        growth_ky = np.asarray(growth_reference.ky, dtype=float)
+        growth_match = np.asarray(
+            [int(np.argmin(np.abs(growth_ky - value))) for value in selected_ky],
+            dtype=int,
+        )
+        growth = np.asarray(growth_reference.growth_rate, dtype=float)[growth_match]
+        frequency = np.asarray(growth_reference.frequency, dtype=float)[growth_match]
+
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray(selected_ky, dtype=jnp.float64),
+        z=jnp.asarray(z, dtype=jnp.float64),
+        phi=jnp.asarray(selected_phi, dtype=jnp.complex128),
+        growth_rate=jnp.asarray(growth, dtype=jnp.float64),
+        frequency=jnp.asarray(frequency, dtype=jnp.float64),
+        source=str(path),
+        normalization="gx_big_nc_complex_phi",
+        metadata=(
+            ("format", "GX Diagnostics/Phi(time,ky,kx,z,ri)"),
+            ("growth_reference_path", "" if growth_reference_path is None else str(growth_reference_path)),
+            ("ikx", int(ikx)),
+            ("kx", float(kx_all[int(ikx)])),
+            ("time_index", int(time_index)),
+            ("time", float(time[selected_time_index])),
+            ("drop_zonal", bool(drop_zonal)),
+            ("average_fraction", float(average_fraction)),
+            ("z_scale", float(z_scale)),
+            ("z_offset", float(z_offset)),
+        ),
+    )
+
+
 def calibrate_gx_growth_rate_reference_to_target(
     reference: GxGrowthRateReference,
     *,
@@ -3789,6 +3916,73 @@ def mode_structure_fixture_from_selected_state_trace(
     )
 
 
+def resample_per_ky_mode_structure_fixture(
+    fixture: PerKyModeStructureFixture,
+    z,
+    *,
+    periodic: bool = False,
+    period: float | None = None,
+) -> PerKyModeStructureFixture:
+    """Linearly resample complex ``phi(z)`` rows onto a target parallel grid."""
+
+    source_z = np.asarray(fixture.z, dtype=float)
+    target_z = np.asarray(z, dtype=float)
+    if source_z.ndim != 1 or source_z.shape[0] < 2:
+        raise ValueError("fixture.z must contain at least two points")
+    if target_z.ndim != 1 or target_z.shape[0] == 0:
+        raise ValueError("target z must be a nonempty one-dimensional array")
+    if not np.all(np.isfinite(source_z)) or not np.all(np.isfinite(target_z)):
+        raise ValueError("source and target z grids must be finite")
+    if not np.all(np.diff(source_z) > 0.0):
+        raise ValueError("fixture.z must be strictly increasing for resampling")
+    phi = np.asarray(fixture.phi, dtype=np.complex128)
+    if phi.shape != (np.asarray(fixture.ky).shape[0], source_z.shape[0]):
+        raise ValueError("fixture phi shape is inconsistent with ky/z grids")
+
+    interp_z = source_z
+    interp_phi = phi
+    target_eval = target_z
+    if periodic:
+        if period is None:
+            spacing = float(np.median(np.diff(source_z)))
+            period = float(source_z[-1] - source_z[0] + spacing)
+        period = float(period)
+        if not np.isfinite(period) or period <= 0.0:
+            raise ValueError("period must be positive and finite")
+        target_eval = ((target_z - source_z[0]) % period) + source_z[0]
+        interp_z = np.concatenate([source_z, [source_z[0] + period]])
+        interp_phi = np.concatenate([phi, phi[:, :1]], axis=1)
+    elif target_z[0] < source_z[0] or target_z[-1] > source_z[-1]:
+        raise ValueError(
+            "target z lies outside fixture.z; pass periodic=True with a period "
+            "or provide a fixture already sampled on the target grid"
+        )
+
+    out = np.empty((phi.shape[0], target_z.shape[0]), dtype=np.complex128)
+    for index, row in enumerate(interp_phi):
+        out[index] = np.interp(target_eval, interp_z, row.real) + 1j * np.interp(
+            target_eval,
+            interp_z,
+            row.imag,
+        )
+    return PerKyModeStructureFixture(
+        ky=fixture.ky,
+        z=jnp.asarray(target_z, dtype=jnp.float64),
+        phi=jnp.asarray(out, dtype=jnp.complex128),
+        growth_rate=fixture.growth_rate,
+        frequency=fixture.frequency,
+        source=fixture.source,
+        normalization=f"{fixture.normalization}; resampled_linear",
+        metadata=(
+            *tuple(fixture.metadata),
+            ("resampled_from_z_min", float(source_z[0])),
+            ("resampled_from_z_max", float(source_z[-1])),
+            ("resampled_periodic", bool(periodic)),
+            ("resampled_period", "" if period is None else float(period)),
+        ),
+    )
+
+
 def write_per_ky_mode_structure_fixture_csv(path, fixture: PerKyModeStructureFixture) -> None:
     """Write a portable CSV per-``ky`` complex mode-structure fixture."""
 
@@ -4033,6 +4227,60 @@ def compare_per_ky_mode_structure_fixtures(
             f"observed_normalization={observed.normalization}; "
             f"reference_normalization={reference.normalization}; "
             f"z_max_abs_error={float(z_error):.8e}"
+        ),
+    )
+
+
+def evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures(
+    observed: PerKyModeStructureFixture,
+    reference: PerKyModeStructureFixture,
+    *,
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    profile_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    z_tolerance: float = 1.0e-6,
+    require_frequency: bool = True,
+    require_profile: bool = True,
+    notes: str = "",
+) -> CycloneKyScanGateReport:
+    """Evaluate the scan gate using a complex per-``ky`` fixture comparison.
+
+    This is the bridge between the code-independent mode-structure contract
+    and :func:`evaluate_cyclone_ky_scan_gate`: the phase-aligned complex
+    ``phi(z)`` error becomes the scan gate's required ``profile_error`` metric.
+    """
+
+    comparison = compare_per_ky_mode_structure_fixtures(
+        observed,
+        reference,
+        growth_tolerance=growth_tolerance,
+        frequency_tolerance=frequency_tolerance,
+        phi_tolerance=profile_tolerance,
+        ky_tolerance=ky_tolerance,
+        z_tolerance=z_tolerance,
+        require_frequency=require_frequency,
+        require_phi=require_profile,
+        notes=notes,
+    )
+    return evaluate_cyclone_ky_scan_gate(
+        comparison.ky,
+        comparison.observed_growth,
+        comparison.reference_growth,
+        matched_reference_ky=comparison.matched_reference_ky,
+        observed_frequency=comparison.observed_frequency,
+        reference_frequency=comparison.reference_frequency,
+        profile_error=comparison.phi_phase_aligned_error,
+        growth_tolerance=growth_tolerance,
+        frequency_tolerance=frequency_tolerance,
+        profile_tolerance=profile_tolerance,
+        ky_tolerance=ky_tolerance,
+        require_frequency=require_frequency,
+        require_profile=require_profile,
+        source=comparison.source,
+        notes=(
+            notes
+            or "multi-ky scan gate driven by per-ky complex mode-structure fixtures"
         ),
     )
 
@@ -4287,6 +4535,407 @@ def write_cyclone_ky_scan_convention_audit_csv(
                         combined_errors[candidate_index],
                     )
                 )
+
+
+def run_cyclone_base_case_mode_structure_fixture(
+    *,
+    reference: GxGrowthRateReference | None = None,
+    gx_reference_path=None,
+    ky_values=None,
+    n_z: int | None = None,
+    n_vpar: int | None = None,
+    n_mu: int | None = None,
+    vpar_max: float | None = None,
+    mu_max: float | None = None,
+    dt: float | None = None,
+    nperiod: int | None = None,
+    steps_per_window: int | None = None,
+    n_windows: int | None = None,
+    growth_window_fraction: float = 0.5,
+    growth_diagnostic: str = "late_fit",
+    ky_input_convention: str = "k_theta_rhos",
+    observed_frequency_sign: float = 1.0,
+    observed_frequency_scale: float = 1.0,
+    growth_tolerance: float = 2.0e-2,
+    parallel_recurrence_rate: float | None = None,
+    velocity_recurrence_rate: float | None = None,
+    parallel_backend: str | None = None,
+    parallel_boundary: str | None = None,
+    parallel_derivative_model: str | None = None,
+    velocity_backend: str | None = None,
+    normalize_each_window: bool = True,
+    normalization_model: str = "weighted",
+    initial_profile: str | None = None,
+    target: BenchmarkTarget | None = None,
+    calibrate_reference_growth: bool = False,
+    reference_calibration_ky: float | None = None,
+    reference_calibration_growth: float | None = None,
+    scale_reference_frequency_with_growth: bool = False,
+) -> PerKyModeStructureFixture:
+    """Run the Cyclone single-mode scan path and keep complex ``phi(z)`` rows.
+
+    The returned fixture is a solver-produced counterpart to an external
+    GKW/Gyaradax/GX/GS2/stella mode-structure fixture.  Its ``ky`` coordinates
+    are the requested scan coordinates; the actual solver ``ky`` values after
+    convention conversion are recorded in metadata.
+    """
+
+    if reference is not None and gx_reference_path is not None:
+        raise ValueError("supply either reference or gx_reference_path, not both")
+    if reference is None and gx_reference_path is not None:
+        reference = load_gx_growth_rate_reference(gx_reference_path)
+    target = target or cyclone_base_case_growth_target()
+    if calibrate_reference_growth:
+        if reference is None:
+            reference = load_gx_growth_rate_reference(
+                Path(
+                    "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+                    "itg_salpha_adiabatic_electrons_correct.out.nc"
+                )
+            )
+        reference = calibrate_gx_growth_rate_reference_to_target(
+            reference,
+            target=target,
+            target_ky=reference_calibration_ky,
+            target_growth=reference_calibration_growth,
+            scale_frequency=scale_reference_frequency_with_growth,
+        )
+    if ky_input_convention not in ("k_theta_rhos", "internal_krho"):
+        raise ValueError("ky_input_convention must be 'k_theta_rhos' or 'internal_krho'")
+    if observed_frequency_sign not in (-1.0, 1.0):
+        raise ValueError("observed_frequency_sign must be -1.0 or 1.0")
+    if observed_frequency_scale <= 0.0:
+        raise ValueError("observed_frequency_scale must be positive")
+
+    metadata = dict(target.metadata)
+    if ky_values is None:
+        if reference is not None:
+            requested_ky = np.asarray(reference.ky, dtype=float)
+        else:
+            requested_ky = np.asarray(
+                (float(metadata.get("k_theta_rhos", 0.5)),),
+                dtype=float,
+            )
+    else:
+        requested_ky = np.asarray(ky_values, dtype=float)
+    if requested_ky.ndim != 1 or requested_ky.size == 0:
+        raise ValueError("ky_values must be a nonempty one-dimensional array")
+    if np.any(~np.isfinite(requested_ky)) or np.any(requested_ky < 0.0):
+        raise ValueError("ky_values must be finite and nonnegative")
+
+    if reference is not None:
+        reference_ky = np.asarray(reference.ky, dtype=float)
+        reference_growth = np.asarray(reference.growth_rate, dtype=float)
+        matched_indices = np.asarray(
+            [int(np.argmin(np.abs(reference_ky - value))) for value in requested_ky],
+            dtype=int,
+        )
+        matched_growth = reference_growth[matched_indices]
+        source = reference.source
+    else:
+        matched_growth = np.full(
+            requested_ky.shape,
+            float(np.asarray(target.reference_value)),
+            dtype=float,
+        )
+        source = target.source
+
+    phi_rows = []
+    growth_rows = []
+    frequency_rows = []
+    solver_ky_rows = []
+    z_values = None
+    for ky_value, growth_ref in zip(requested_ky, matched_growth, strict=True):
+        point_target = _cyclone_target_with_ky(
+            target,
+            target_ky=float(ky_value),
+            ky_input_convention=ky_input_convention,
+            reference_value=float(growth_ref),
+            tolerance=growth_tolerance,
+            source=source,
+        )
+        point = _run_cyclone_single_ky_scan_point(
+            point_target,
+            n_z=n_z,
+            n_vpar=n_vpar,
+            n_mu=n_mu,
+            vpar_max=vpar_max,
+            mu_max=mu_max,
+            dt=dt,
+            nperiod=nperiod,
+            steps_per_window=steps_per_window,
+            n_windows=n_windows,
+            growth_window_fraction=growth_window_fraction,
+            growth_diagnostic=growth_diagnostic,
+            parallel_recurrence_rate=parallel_recurrence_rate,
+            velocity_recurrence_rate=velocity_recurrence_rate,
+            parallel_backend=parallel_backend,
+            parallel_boundary=parallel_boundary,
+            parallel_derivative_model=parallel_derivative_model,
+            velocity_backend=velocity_backend,
+            normalize_each_window=normalize_each_window,
+            normalization_model=normalization_model,
+            initial_profile=initial_profile,
+        )
+        if z_values is None:
+            z_values = point["z"]
+        elif not np.allclose(np.asarray(z_values), np.asarray(point["z"])):
+            raise ValueError("all scan points must share the same parallel grid")
+        phi_rows.append(point["phi"])
+        growth_rows.append(point["growth"])
+        frequency_rows.append(
+            observed_frequency_sign * observed_frequency_scale * point["frequency"]
+        )
+        solver_ky_rows.append(point["solver_ky"])
+
+    if z_values is None:
+        raise RuntimeError("internal error: mode-structure scan produced no rows")
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray(requested_ky, dtype=jnp.float64),
+        z=jnp.asarray(z_values, dtype=jnp.float64),
+        phi=jnp.stack(phi_rows),
+        growth_rate=jnp.asarray(growth_rows, dtype=jnp.float64),
+        frequency=jnp.asarray(frequency_rows, dtype=jnp.float64),
+        source=f"stellarator_gk mode-structure scan against {source}",
+        normalization=f"complex_phi_{normalization_model}",
+        metadata=(
+            ("ky_input_convention", ky_input_convention),
+            ("solver_ky", tuple(float(np.asarray(value)) for value in solver_ky_rows)),
+            ("growth_diagnostic", growth_diagnostic),
+            ("growth_window_fraction", float(growth_window_fraction)),
+            ("observed_frequency_sign", float(observed_frequency_sign)),
+            ("observed_frequency_scale", float(observed_frequency_scale)),
+            ("normalize_each_window", bool(normalize_each_window)),
+            ("normalization_model", normalization_model),
+            ("calibrate_reference_growth", bool(calibrate_reference_growth)),
+        ),
+    )
+
+
+def run_gx_salpha_moment_rhs_mode_structure_fixture(
+    *,
+    ky_values=(0.3, 0.5),
+    n_z: int = 96,
+    n_hermite: int = 48,
+    n_laguerre: int = 16,
+    nperiod: int = 2,
+    dt: float = 0.02,
+    steps_per_window: int = 5,
+    n_windows: int = 40,
+    growth_window_fraction: float = 0.5,
+    density_gradient: float = 0.8,
+    temperature_gradient: float = 2.49,
+    tau: float = 1.0,
+    magnetic_shear: float = 0.8,
+    drift_scale: float = 0.18,
+    drive_scale: float = 1.0,
+    streaming_scale: float = 1.0,
+    nu_hyper_m: float = 1.0,
+    p_hyper_m: int | None = None,
+    normalize_each_window: bool = True,
+    initial_profile: str = "gaussian",
+    initial_width: float = 0.35,
+) -> PerKyModeStructureFixture:
+    """Run the reduced GX-style moment RHS and return a fixture.
+
+    This implementation-side fallback evolves GX-layout Hermite-Laguerre
+    moments when no retained external `.big.nc`/eigenfunction artifact is
+    available.  It emits the same portable complex mode-structure fixture used
+    by the external-code gate.
+    """
+
+    from .physics import (
+        GxMomentRHSParams,
+        VelocityBasisSpec,
+        build_velocity_basis,
+        gx_moment_adiabatic_phi,
+        gx_moment_linear_rhs,
+        gyroaverage_laguerre_coefficients,
+        truncated_gamma0_from_laguerre,
+    )
+
+    if n_z < 4:
+        raise ValueError("n_z must be at least 4")
+    if n_hermite < 3:
+        raise ValueError("n_hermite must be at least 3")
+    if n_laguerre < 1:
+        raise ValueError("n_laguerre must be at least 1")
+    if nperiod < 1:
+        raise ValueError("nperiod must be at least 1")
+    if dt <= 0.0:
+        raise ValueError("dt must be positive")
+    if steps_per_window < 1 or n_windows < 1:
+        raise ValueError("steps_per_window and n_windows must be positive")
+    if not (0.0 < growth_window_fraction <= 1.0):
+        raise ValueError("growth_window_fraction must lie in (0,1]")
+    if initial_width <= 0.0:
+        raise ValueError("initial_width must be positive")
+
+    ky = np.asarray(ky_values, dtype=float)
+    if ky.ndim != 1 or ky.size == 0:
+        raise ValueError("ky_values must be a nonempty one-dimensional array")
+    if np.any(~np.isfinite(ky)) or np.any(ky < 0.0):
+        raise ValueError("ky_values must be finite and nonnegative")
+
+    z_periods = float(2 * nperiod - 1)
+    z = jnp.linspace(-0.5 * z_periods, 0.5 * z_periods, int(n_z), endpoint=False)
+    ky_j = jnp.asarray(ky, dtype=jnp.float64)
+    basis = build_velocity_basis(
+        VelocityBasisSpec(n_hermite=int(n_hermite), n_laguerre=int(n_laguerre))
+    )
+    params = GxMomentRHSParams(
+        density_gradient=float(density_gradient),
+        temperature_gradient=float(temperature_gradient),
+        tau=float(tau),
+        streaming_scale=float(streaming_scale),
+        drive_scale=float(drive_scale),
+        drift_scale=float(drift_scale),
+        magnetic_shear=float(magnetic_shear),
+        nu_hyper_m=float(nu_hyper_m),
+        p_hyper_m=p_hyper_m,
+        z_periods=z_periods,
+    )
+    b = _gx_salpha_moment_b(ky_j, z, magnetic_shear=magnetic_shear)
+    phi0 = _gx_moment_initial_phi(ky_j, z, profile=initial_profile, width=initial_width)
+    state = _gx_moment_state_from_phi(
+        phi0,
+        b,
+        basis,
+        params,
+        gyroaverage_laguerre_coefficients,
+        truncated_gamma0_from_laguerre,
+    )
+
+    rhs = jax.jit(lambda value: gx_moment_linear_rhs(value, basis, ky_j, z, b, params))
+    solve_phi = jax.jit(lambda value: gx_moment_adiabatic_phi(value, b, params))
+
+    log_normalization = np.zeros(ky.shape, dtype=float)
+    times = []
+    log_amplitudes = []
+    phases = []
+    reference_shape = np.asarray(phi0)
+    phi = solve_phi(state)
+    for window in range(int(n_windows)):
+        for _ in range(int(steps_per_window)):
+            state = _rk4_step_jax(state, rhs, dt)
+        phi = solve_phi(state)
+        phi_np = np.asarray(phi)
+        amplitude = np.sqrt(np.mean(np.abs(phi_np) ** 2, axis=1))
+        amplitude = np.maximum(amplitude, 1.0e-300)
+        complex_amplitude = np.sum(np.conj(reference_shape) * phi_np, axis=1)
+        times.append((window + 1) * int(steps_per_window) * float(dt))
+        log_amplitudes.append(log_normalization + np.log(amplitude))
+        phases.append(np.angle(complex_amplitude))
+        if normalize_each_window:
+            scale = jnp.asarray(amplitude, dtype=state.real.dtype).reshape(1, 1, ky.size, 1)
+            state = state / scale
+            log_normalization = log_normalization + np.log(amplitude)
+
+    time_array = np.asarray(times, dtype=float)
+    log_array = np.asarray(log_amplitudes, dtype=float)
+    phase_array = np.unwrap(np.asarray(phases, dtype=float), axis=0)
+    growth = _fit_last_window_slope(time_array, log_array, growth_window_fraction)
+    frequency = _fit_last_window_slope(time_array, phase_array, growth_window_fraction)
+    phi = solve_phi(state)
+
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray(ky, dtype=jnp.float64),
+        z=z,
+        phi=phi,
+        growth_rate=jnp.asarray(growth, dtype=jnp.float64),
+        frequency=jnp.asarray(frequency, dtype=jnp.float64),
+        source="stellarator_gk reduced GX-style Hermite-Laguerre moment RHS",
+        normalization="complex_phi_gx_moment_rhs",
+        metadata=(
+            ("model", "reduced_gx_salpha_moment_rhs"),
+            ("n_z", int(n_z)),
+            ("n_hermite", int(n_hermite)),
+            ("n_laguerre", int(n_laguerre)),
+            ("nperiod", int(nperiod)),
+            ("z_coordinate", "theta_over_2pi"),
+            ("z_periods", z_periods),
+            ("dt", float(dt)),
+            ("steps_per_window", int(steps_per_window)),
+            ("n_windows", int(n_windows)),
+            ("growth_window_fraction", float(growth_window_fraction)),
+            ("density_gradient", float(density_gradient)),
+            ("temperature_gradient", float(temperature_gradient)),
+            ("tau", float(tau)),
+            ("magnetic_shear", float(magnetic_shear)),
+            ("drift_scale", float(drift_scale)),
+            ("drive_scale", float(drive_scale)),
+            ("streaming_scale", float(streaming_scale)),
+            ("nu_hyper_m", float(nu_hyper_m)),
+            ("p_hyper_m", "" if p_hyper_m is None else int(p_hyper_m)),
+            ("normalize_each_window", bool(normalize_each_window)),
+            ("initial_profile", initial_profile),
+            ("initial_width", float(initial_width)),
+        ),
+    )
+
+
+def _gx_salpha_moment_b(ky, z, *, magnetic_shear: float):
+    theta = 2.0 * jnp.pi * jnp.asarray(z)
+    shear = jnp.asarray(magnetic_shear, dtype=theta.dtype)
+    kperp2_over_ky2 = 1.0 + (shear * theta) ** 2
+    return 0.5 * jnp.asarray(ky)[:, None] ** 2 * kperp2_over_ky2[None, :]
+
+
+def _gx_moment_initial_phi(ky, z, *, profile: str, width: float):
+    z = jnp.asarray(z)
+    if profile == "gaussian":
+        base = jnp.exp(-0.5 * (z / width) ** 2)
+    elif profile == "cosine":
+        period = jnp.max(z) - jnp.min(z) + (z[1] - z[0])
+        base = 0.5 + 0.5 * jnp.cos(2.0 * jnp.pi * z / period)
+    elif profile == "cosine2":
+        angle = jnp.pi * z / (jnp.max(jnp.abs(z)) + 0.5 * (z[1] - z[0]))
+        base = jnp.cos(angle) ** 2
+    else:
+        raise ValueError("initial_profile must be 'gaussian', 'cosine', or 'cosine2'")
+    phase = jnp.exp(0.05j * z)
+    return jnp.broadcast_to((base * phase)[None, :], (jnp.asarray(ky).shape[0], z.shape[0]))
+
+
+def _gx_moment_state_from_phi(
+    phi,
+    b,
+    basis,
+    params,
+    gyroaverage_laguerre_coefficients,
+    truncated_gamma0_from_laguerre,
+):
+    phi = jnp.asarray(phi)
+    gyro = gyroaverage_laguerre_coefficients(b, basis.n_laguerre)
+    gamma = truncated_gamma0_from_laguerre(b, basis.n_laguerre)
+    density = (params.tau + 1.0 - gamma) * phi
+    safe_gamma = jnp.where(gamma > params.denominator_floor, gamma, params.denominator_floor)
+    state = jnp.zeros(
+        (basis.n_laguerre, basis.n_hermite, phi.shape[0], phi.shape[1]),
+        dtype=jnp.complex128,
+    )
+    return state.at[:, 0].set(gyro * density / safe_gamma)
+
+
+def _rk4_step_jax(state, rhs, dt: float):
+    dt_value = jnp.asarray(dt, dtype=state.real.dtype)
+    k1 = rhs(state)
+    k2 = rhs(state + 0.5 * dt_value * k1)
+    k3 = rhs(state + 0.5 * dt_value * k2)
+    k4 = rhs(state + dt_value * k3)
+    return state + (dt_value / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+def _fit_last_window_slope(time_array, values, fraction: float):
+    if time_array.size == 1:
+        return np.zeros(values.shape[1], dtype=float)
+    n_fit = max(2, int(np.ceil(time_array.size * fraction)))
+    fit_t = time_array[-n_fit:]
+    fit_v = values[-n_fit:]
+    return np.asarray(
+        [float(np.polyfit(fit_t, fit_v[:, index], deg=1)[0]) for index in range(fit_v.shape[1])],
+        dtype=float,
+    )
 
 
 def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
@@ -14270,6 +14919,8 @@ def _run_cyclone_single_ky_scan_point(
         "growth": growth,
         "frequency": frequency,
         "profile": profile,
+        "phi": final_phi[:, setup["fourier"].ixzero, selected],
+        "z": setup["parallel"].z,
         "solver_ky": setup["fourier"].ky[selected],
     }
 

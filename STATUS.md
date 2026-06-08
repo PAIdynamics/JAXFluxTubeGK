@@ -642,6 +642,49 @@ Expected tests:
 
 ## Round Log
 
+### 2026-06-08: First Single-Command Stellarator Linear Scan
+
+- Added `examples/run_stellarator_linear_scan.py`, a one-command reduced
+  stellarator linear scan runner. The default path runs from the bundled DESC
+  DSHAPE fixture; `--geometry-source desc-path --desc-path ...` evaluates a
+  real DESC equilibrium onto a chosen Boozer field-line grid.
+- Exposed CLI controls for `rho`, `alpha`, field-line periods, `ky` values,
+  perpendicular/velocity resolution, profile gradients, velocity backend,
+  residual parallel-derivative model, recurrence/damping knobs, timestep,
+  steps per window, number of windows, growth diagnostic, and output directory.
+- Added geometry preflight before solving: finite internal fields, positive
+  \(B\), positive metric diagonals, representative nonnegative \(k_\perp^2\),
+  and the solver-to-GX/eik export gate. DESC-path runs can additionally require
+  a matched external `eik.out` parity check.
+- The command writes `geometry_audit.json`, `geometry_audit.csv`,
+  `ky_growth.csv`, `mode_structures.csv`, `convergence_history.csv`,
+  `convergence_metadata.json`, `quasilinear_proxy.json`, and `run_config.json`.
+  The quasilinear proxy excludes zonal \(k_y=0\) transport contribution.
+- Added `tests/test_stellarator_linear_scan_example.py` to run the command as
+  an actual subprocess and verify the machine-readable artifact contract.
+- Commands run:
+  - `JAX_ENABLE_X64=1 uv run python examples/run_stellarator_linear_scan.py --output-dir /tmp/stellarator_gk_single_command_smoke --steps-per-window 1 --n-windows 1 --dt 0.002`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_stellarator_linear_scan.py --output-dir /tmp/stellarator_gk_single_command_default`
+  - `uv run ruff check examples/run_stellarator_linear_scan.py tests/test_stellarator_linear_scan_example.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_linear_scan_example.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_linear_scan_example.py tests/test_import.py tests/test_desc_adapter.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Verification:
+  - one-command DSHAPE fixture smoke run passed and wrote all expected
+    artifacts,
+  - default DSHAPE fixture run passed with finite late-fit growth/frequency and
+    zero eik-export residual,
+  - ruff passed,
+  - focused pytest passed (`1 passed`), then the import/DESC-adapter focused
+    set passed (`9 passed`),
+  - `main.pdf` built successfully,
+  - `git diff --check` passed.
+- Remaining caveat: this is still a reduced fixed-topology linear scan. It is
+  the first operational stellarator run command, not yet a validated
+  stellarator benchmark with external growth/frequency/mode-structure
+  tolerances.
+
 ### 2026-06-08: Per-`ky` Complex Mode-Structure Fixture Gate
 
 - Implemented the first half of the multi-`ky` physics discriminator without
@@ -687,6 +730,346 @@ Expected tests:
   for the exact GX input-control multi-`ky` branch, especially `ky=0.3`, or
   assemble the minimal GX Hermite-Laguerre moment RHS and compare its mode
   structures with this new gate.
+
+### 2026-06-08: Fixture-Driven Multi-`ky` Scan Discriminator
+
+- Extended the per-`ky` fixture path into a complete public scan discriminator:
+  - `evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures` compares two
+    complex fixture tables and feeds the phase-aligned complex `phi(z)` error
+    into `CycloneKyScanGateReport.profile_error`;
+  - `run_cyclone_base_case_mode_structure_fixture` runs the existing
+    single-mode Cyclone scan path over requested `ky` values and preserves the
+    final complex `phi(z)`, growth rate, real frequency, requested `ky`, and
+    solver-converted `ky` metadata in a `PerKyModeStructureFixture`;
+  - `examples/compare_mode_structure_fixtures.py` compares observed/reference
+    fixture CSVs and writes a row-wise diagnostic table ready for an external
+    GX/GKW/Gyaradax/GS2/stella eigenfunction export.
+- The discriminator interface is now closed: once an external multi-`ky`
+  complex mode-structure CSV exists, the scan gate can require growth,
+  frequency, and profile agreement in one report. The physics branch remains
+  open until that external fixture is obtained/exported or a minimal GX
+  Hermite-Laguerre moment RHS produces an independently comparable fixture.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/compare_mode_structure_fixtures.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/compare_mode_structure_fixtures.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "mode_structure_fixture or cyclone_ky_scan"`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - focused benchmark-reference tests passed: `10 passed, 62 deselected in 29.90s`,
+  - import smoke passed: `1 passed in 0.13s`,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: fill the discriminator with a true external multi-`ky`
+  eigenfunction fixture, prioritizing the weak low-`ky` branch at `ky=0.3`, or
+  generate the same fixture from a minimal GX-style Hermite-Laguerre moment RHS.
+
+### 2026-06-08: GX `.big.nc` Mode-Structure Fixture Export Path
+
+- Added the first concrete external multi-`ky` eigenfunction import path:
+  `load_gx_mode_structure_fixture` reads GX full-field `.big.nc`
+  `Diagnostics/Phi(time,ky,kx,z,ri)` arrays into `PerKyModeStructureFixture`
+  rows and can attach growth/frequency from the compact `.out.nc`
+  `omega_kxkyt` file.
+- Added `examples/export_gx_mode_structure_fixture.py` so a retained GX
+  `.big.nc` run can be converted directly to the project CSV fixture contract,
+  and can then be compared with `examples/compare_mode_structure_fixtures.py`
+  or the public fixture-driven scan gate.
+- Confirmed from the local GX source that `fields=true` writes complex
+  `Phi(time,ky,kx,z,ri)` through `FieldsDiagnostic` into the `.big.nc` stream.
+  The shipped Cyclone benchmark artifacts in `relevant-codes/gx` are compact
+  `.out.nc` files only; they contain growth/frequency spectra but not
+  `Diagnostics/Phi`, and no local GX executable or retained `.big.nc` artifact
+  was found in the source tree. The real `ky=0.3` mode-structure discriminator
+  still needs a fresh GX run or an external `.big.nc` artifact.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/export_gx_mode_structure_fixture.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/compare_mode_structure_fixtures.py examples/export_gx_mode_structure_fixture.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "gx_big_nc_mode_structure or mode_structure_fixture or cyclone_ky_scan"`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - focused benchmark-reference tests passed: `11 passed, 62 deselected in 26.24s`,
+  - import smoke passed: `1 passed in 0.13s`,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: produce or obtain the actual GX Cyclone `.big.nc` for
+  `n_z_total=96`, `nhermite/nlaguerre=48/16`, `nperiod=2`, `ky=(0.3,0.5)`, and
+  run the fixture-driven scan gate against the current solver fixture.
+
+### 2026-06-08: One-Command Multi-`ky` Mode-Structure Gate Runner
+
+- Added `resample_per_ky_mode_structure_fixture`, an explicit complex
+  interpolation helper for moving external fixture profiles onto a target
+  parallel grid. It refuses out-of-range interpolation unless `periodic=True`
+  and a period is provided or inferred.
+- Added `examples/run_cyclone_mode_structure_gate.py`, which:
+  - generates the current solver's per-`ky` complex mode-structure fixture,
+  - loads a GX `.big.nc` reference fixture and optional compact `.out.nc`
+    growth/frequency reference,
+  - explicitly converts GX `theta` either as raw `theta` or `theta/(2*pi)`,
+  - optionally resamples the external reference to the solver grid with a
+    declared periodic policy,
+  - writes solver/reference fixture CSVs plus a per-`ky` gate report.
+- Verified the coordinate mismatch that motivated the explicit resampling
+  policy: the local GX compact Cyclone reference stores
+  `theta/(2*pi) = -1.5, -1.46875, ..., 1.46875`, while the solver's
+  GKW-compatible cell-centered `nperiod=2`, `n_z=96` grid is
+  `-1.484375, ..., 1.484375`. The runner therefore does not silently compare
+  these grids.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/run_cyclone_mode_structure_gate.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py examples/compare_mode_structure_fixtures.py examples/export_gx_mode_structure_fixture.py examples/run_cyclone_mode_structure_gate.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "gx_big_nc_mode_structure or mode_structure_fixture or cyclone_ky_scan"`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --self-check --profile reduced-smoke --require-profile`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - focused benchmark-reference tests passed: `12 passed, 62 deselected in 33.14s`,
+  - import smoke passed: `1 passed in 0.21s`,
+  - reduced self-check gate passed with zero growth/frequency/profile error and
+    wrote `/tmp/stellarator_gk_mode_structure_self_check/mode_structure_gate.csv`,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: run the new gate with the actual GX `.big.nc` artifact once it
+  is produced or supplied; absent that artifact, the alternate route remains a
+  minimal GX-style Hermite-Laguerre moment RHS fixture producer.
+
+### 2026-06-08: Generic Fixture Reference Source for Multi-`ky` Gate
+
+- Extended `examples/run_cyclone_mode_structure_gate.py` so the one-command
+  discriminator can compare the current solver fixture against either:
+  - a self-check copy of the solver fixture,
+  - a generic portable per-`ky` mode-structure CSV fixture,
+  - or a native GX `.big.nc` full-field diagnostic.
+- The runner now rejects ambiguous mixed-reference invocations and requires
+  exactly one reference source: `--self-check`, `--reference-fixture`, or
+  `--gx-big-output`.
+- Generic fixture CSV references use the same optional explicit resampling
+  path as GX references, so external GKW, Gyaradax, GS2, stella, or local patch
+  outputs can be compared once exported onto the fixture contract.
+- Updated `TODO.md` and `main.tex` to make the remaining gap precise: the
+  ingestion and scan-gate machinery is present, while the project still needs
+  the true external low-`ky` fixture or a minimal GX-style
+  Hermite-Laguerre moment-RHS fixture producer.
+- Files changed:
+  - `examples/run_cyclone_mode_structure_gate.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check examples/run_cyclone_mode_structure_gate.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --self-check --profile reduced-smoke --require-profile --output-dir /tmp/stellarator_gk_mode_structure_self_check_csv_source`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --reference-fixture /tmp/stellarator_gk_mode_structure_self_check_csv_source/solver_mode_structure_fixture.csv --profile reduced-smoke --require-profile --output-dir /tmp/stellarator_gk_mode_structure_generic_csv_gate`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - import smoke passed: `1 passed in 0.20s`,
+  - reduced self-check gate passed with zero growth/frequency/profile error,
+  - generic CSV-reference gate passed with zero growth/frequency/profile error,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: use the generic fixture runner with the first available
+  external low-`ky` mode-structure artifact; absent that artifact, implement
+  the minimal GX-style Hermite-Laguerre moment-RHS fixture producer.
+
+### 2026-06-08: Reproducible GX `.big.nc` Artifact-Production Bundle
+
+- Added `scripts/prepare_gx_mode_structure_run.py`, which copies a GX input
+  file and patches `[Diagnostics]` so the full-field stream needed by the
+  mode-structure discriminator is retained:
+  - `omega = true`,
+  - `fields = true`,
+  - `moments = true`,
+  - `nwrite_big = 1000` by default.
+- Ran the prep script on the bundled GX s-alpha Cyclone input and wrote
+  `fixtures/gx_cyclone_mode_structure_run/` with:
+  - `itg_salpha_adiabatic_electrons.in`, the prepared GX input,
+  - `mode_structure_run_metadata.json`, the source/output paths and commands,
+  - `README.md`, the external GX run command, fixture-export command, and
+    solver-vs-fixture gate command.
+- Extended `examples/export_gx_mode_structure_fixture.py` with
+  `--gx-z-coordinate {theta,theta_over_2pi}` so exported portable CSV fixtures
+  can carry the intended parallel-coordinate convention immediately.
+- Added tests for the GX diagnostics patcher and generated metadata/README
+  contract.
+- Updated `TODO.md` and `main.tex` so the remaining multi-`ky` discriminator
+  gap is no longer an undefined artifact-production problem: the repository now
+  knows exactly how to produce and ingest the missing GX `.big.nc`; the external
+  GX execution still has to be run with a real GX binary or replaced by an
+  independent moment-RHS fixture producer.
+- Files changed:
+  - `scripts/prepare_gx_mode_structure_run.py`,
+  - `tests/test_gx_mode_structure_run_prep.py`,
+  - `examples/export_gx_mode_structure_fixture.py`,
+  - `fixtures/gx_cyclone_mode_structure_run/README.md`,
+  - `fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.in`,
+  - `fixtures/gx_cyclone_mode_structure_run/mode_structure_run_metadata.json`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check scripts/prepare_gx_mode_structure_run.py tests/test_gx_mode_structure_run_prep.py examples/export_gx_mode_structure_fixture.py examples/run_cyclone_mode_structure_gate.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_gx_mode_structure_run_prep.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/export_gx_mode_structure_fixture.py --help`
+  - `JAX_ENABLE_X64=1 uv run python scripts/prepare_gx_mode_structure_run.py --overwrite`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - GX run-prep tests passed: `2 passed in 0.01s`,
+  - import smoke passed: `1 passed in 0.10s`,
+  - export CLI help includes `--gx-z-coordinate {theta,theta_over_2pi}`,
+  - prepared run bundle wrote
+    `fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.in`.
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: run GX externally with the prepared input to generate
+  `fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.big.nc`,
+  then export and gate the real \(k_y=(0.3,0.5)\) fixture.
+
+### 2026-06-08: Reduced GX-Style Moment RHS Multi-`ky` Discriminator
+
+- Finished the implementation-side fallback for Immediate Next Round item 1 by
+  adding a reduced GX-style Hermite-Laguerre linear moment RHS:
+  - `GxMomentRHSParams`, a PyTree control object for the reduced s-alpha
+    adiabatic-electron ITG moment model;
+  - `apply_linked_grad_z`, using the same GX linked-chain wavenumber ordering
+    as the existing `|k_z|` hypercollision;
+  - `gx_moment_adiabatic_phi`, solving
+    `phi = sum_l J_l G_l0 / (tau + 1 - sum_l J_l^2)`;
+  - `gx_moment_itg_drive_source`, projecting density and temperature-gradient
+    drive into the Hermite-Laguerre basis;
+  - `gx_moment_linear_rhs`, combining linked Hermite streaming, the drive
+    source, a simple s-alpha curvature-drift surrogate, and the source-matched
+    GX linked `k_z` hypercollision.
+- Added `run_gx_salpha_moment_rhs_mode_structure_fixture`, which evolves the
+  reduced moment RHS, extracts growth/frequency from normalized windowed
+  amplitudes, and returns a standard `PerKyModeStructureFixture`.
+- Added `examples/export_gx_moment_rhs_fixture.py`, which writes this
+  independent moment-RHS fixture to CSV for use with
+  `examples/run_cyclone_mode_structure_gate.py --reference-fixture`.
+- Added tests for:
+  - linked first-derivative Fourier-mode normalization,
+  - adiabatic moment field-solve consistency,
+  - ITG drive projection into density and temperature moments,
+  - hypercollision-only conservation of low Hermite modes,
+  - JIT/gradient behavior of the reduced moment RHS,
+  - reduced fixture generation and self-gating through the existing
+    multi-`ky` mode-structure gate.
+- Updated `TODO.md` and `main.tex` so the multi-`ky` discriminator is now
+  closed from an implementation perspective: external GX `.big.nc` parity is
+  still needed for reference validation, but the repository now has both the
+  external-artifact path and an independent reduced moment-RHS fixture path.
+- Files changed:
+  - `src/stellarator_gk/physics/velocity_moments.py`,
+  - `src/stellarator_gk/physics/__init__.py`,
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_hermite_laguerre_basis.py`,
+  - `tests/test_benchmark_references.py`,
+  - `examples/export_gx_moment_rhs_fixture.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/physics/velocity_moments.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py src/stellarator_gk/benchmarks.py tests/test_hermite_laguerre_basis.py tests/test_benchmark_references.py examples/export_gx_moment_rhs_fixture.py examples/export_gx_mode_structure_fixture.py examples/run_cyclone_mode_structure_gate.py scripts/prepare_gx_mode_structure_run.py tests/test_gx_mode_structure_run_prep.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_hermite_laguerre_basis.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "moment_rhs_mode_structure or mode_structure_fixture"`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_import.py tests/test_gx_mode_structure_run_prep.py -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/export_gx_moment_rhs_fixture.py --n-z 8 --n-hermite 5 --n-laguerre 4 --nperiod 1 --steps-per-window 1 --n-windows 3 --dt 0.01 --p-hyper-m 2 --output /tmp/stellarator_gk_gx_moment_fixture.csv`
+  - `JAX_ENABLE_X64=1 uv run python examples/export_gx_moment_rhs_fixture.py --help`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --reference-fixture /tmp/stellarator_gk_gx_moment_fixture.csv --profile reduced-smoke --nperiod 1 --require-profile --resample-reference-to-solver-z --periodic-z --z-period 1.0 --growth-tolerance 1.0e9 --frequency-tolerance 1.0e9 --profile-tolerance 1.0e9 --output-dir /tmp/stellarator_gk_gx_moment_gate_smoke`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - Hermite-Laguerre tests passed: `19 passed in 6.52s`,
+  - focused benchmark mode-structure tests passed:
+    `6 passed, 69 deselected in 10.16s`,
+  - import and GX run-prep tests passed: `3 passed in 0.15s`,
+  - reduced moment fixture CLI help exposes the resolution, profile, and
+    hypercollision controls,
+  - reduced moment fixture export wrote
+    `/tmp/stellarator_gk_gx_moment_fixture.csv`,
+  - reduced moment-vs-collocation gate smoke passed with loose tolerances and
+    finite errors: growth `2.83531831e-02`, frequency `2.67543044e+00`,
+    profile `1.96234240e-01`,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: run the exact external GX `.big.nc` command from
+  `fixtures/gx_cyclone_mode_structure_run/README.md` when a GX binary is
+  available, then use the same gate at physical tolerances.
+
+### 2026-06-08: Direct Moment-RHS Reference in the Multi-`ky` Gate Runner
+
+- Finished the final executable integration for Immediate Next Round item 1 by
+  extending `examples/run_cyclone_mode_structure_gate.py` with
+  `--reference-moment-rhs`.
+- The one-command discriminator now supports exactly one of four reference
+  sources:
+  - `--self-check`,
+  - `--reference-fixture`,
+  - `--reference-moment-rhs`,
+  - `--gx-big-output`.
+- Added moment-reference CLI controls for Hermite/Laguerre/z resolution,
+  moment timestep/windowing, s-alpha gradients, shear, drive/drift/streaming
+  scales, hypercollision power, normalization, and initial profile.
+- Updated `TODO.md` and `main.tex` so the reduced moment-RHS fixture path is
+  documented as both an exportable CSV producer and an in-place reference
+  source for the gate runner.
+- Files changed:
+  - `examples/run_cyclone_mode_structure_gate.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check examples/run_cyclone_mode_structure_gate.py`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --reference-moment-rhs --profile reduced-smoke --nperiod 1 --require-profile --resample-reference-to-solver-z --periodic-z --z-period 1.0 --growth-tolerance 1.0e9 --frequency-tolerance 1.0e9 --profile-tolerance 1.0e9 --output-dir /tmp/stellarator_gk_direct_moment_gate_smoke`
+  - `uv run ruff check src/stellarator_gk/physics/velocity_moments.py src/stellarator_gk/physics/__init__.py src/stellarator_gk/__init__.py src/stellarator_gk/benchmarks.py tests/test_hermite_laguerre_basis.py tests/test_benchmark_references.py examples/export_gx_moment_rhs_fixture.py examples/export_gx_mode_structure_fixture.py examples/run_cyclone_mode_structure_gate.py scripts/prepare_gx_mode_structure_run.py tests/test_gx_mode_structure_run_prep.py`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_cyclone_mode_structure_gate.py --help`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `git diff --check`
+- Test results:
+  - ruff passed,
+  - direct reduced moment-RHS gate smoke passed with finite errors: growth
+    `2.86321465e-02`, frequency `2.67529151e+00`, profile `1.96214424e-01`.
+  - gate CLI help exposes `--reference-moment-rhs` and the moment-RHS controls,
+  - `main.tex` rebuilt to `main.pdf` with only existing underfull-box warnings,
+  - `git diff --check` passed.
+- Next action: only the external reference-data validation remains for item 1:
+  run GX to produce the prepared `.big.nc`, then gate the true
+  `ky=(0.3,0.5)` mode structures at physical tolerances.
 
 ### 2026-06-06: GX Linked `k_z` Hypercollision Discriminator
 
