@@ -3107,6 +3107,106 @@ class GxEikGeometryParityReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class StellaratorGeometryPreflightReport(_PyTreeDataclass):
+    """Reusable pre-solve contract for imported stellarator geometry."""
+
+    check_passed: object
+    field_min: object
+    field_max: object
+    field_mean: object
+    kperp2_min: object
+    kperp2_max: object
+    kperp2_mean: object
+    mirror_fd_error: object
+    eik_export_error: object
+    passed: object
+    check_names: tuple[str, ...]
+    field_names: tuple[str, ...]
+    source: str
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "check_passed",
+        "field_min",
+        "field_max",
+        "field_mean",
+        "kperp2_min",
+        "kperp2_max",
+        "kperp2_mean",
+        "mirror_fd_error",
+        "eik_export_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "check_names",
+        "field_names",
+        "source",
+        "notes",
+    )
+
+    def __post_init__(self):
+        checks = jnp.asarray(self.check_passed, dtype=bool)
+        if checks.ndim != 1:
+            raise ValueError("check_passed must be one-dimensional")
+        if len(self.check_names) != checks.shape[0]:
+            raise ValueError("check_names must match check_passed length")
+        object.__setattr__(self, "check_passed", checks)
+        for name in ("field_min", "field_max", "field_mean"):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.ndim != 1:
+                raise ValueError(f"{name} must be one-dimensional")
+            if len(self.field_names) != values.shape[0]:
+                raise ValueError(f"field_names must match {name} length")
+            object.__setattr__(self, name, values)
+        for name in (
+            "kperp2_min",
+            "kperp2_max",
+            "kperp2_mean",
+            "mirror_fd_error",
+            "eik_export_error",
+        ):
+            object.__setattr__(
+                self,
+                name,
+                jnp.asarray(getattr(self, name), dtype=jnp.float64),
+            )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ModeBoundaryContractReport(_PyTreeDataclass):
+    """Static mode-chain boundary contract for twist-and-shift connectivity."""
+
+    check_passed: object
+    open_end_count: object
+    linked_edge_count: object
+    passed: object
+    check_names: tuple[str, ...]
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "check_passed",
+        "open_end_count",
+        "linked_edge_count",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("check_names", "notes")
+
+    def __post_init__(self):
+        checks = jnp.asarray(self.check_passed, dtype=bool)
+        if checks.ndim != 1:
+            raise ValueError("check_passed must be one-dimensional")
+        if len(self.check_names) != checks.shape[0]:
+            raise ValueError("check_names must match check_passed length")
+        object.__setattr__(self, "check_passed", checks)
+        for name in ("open_end_count", "linked_edge_count"):
+            object.__setattr__(self, name, jnp.asarray(getattr(self, name), dtype=jnp.int32))
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class ExternalEikProducerReport(_PyTreeDataclass):
     """Per-source report for independently produced eik geometry fixtures."""
 
@@ -13284,6 +13384,201 @@ def run_solver_geometry_to_gx_eik_gate(
     )
 
 
+def run_stellarator_geometry_preflight(
+    geometry,
+    fourier_grid,
+    *,
+    require_eik_export: bool = True,
+    kperp2_tolerance: float = 1.0e-12,
+    eik_tolerance: float = 1.0e-12,
+    mirror_fd_tolerance: float = 1.0e-2,
+    include_mirror_fd_check: bool = True,
+) -> StellaratorGeometryPreflightReport:
+    """Run the standard imported-stellarator geometry pre-solve contract.
+
+    This is a production-facing preflight for DESC/GX/GIST/SIMSOPT-style
+    sampled geometry before a linear solve.  It checks finite internal fields,
+    positive magnetic field and metric diagonals, representative
+    nonnegative ``k_perp^2``, the GX/GS2 eik export contract, and an optional
+    finite-difference mirror-force consistency check
+    ``G = -F d_z B / B``.  The finite-difference check is intentionally looser
+    than the eik export gate because it compares the spectral derivative used
+    by the solver with an independent fourth-order sampled-grid derivative.
+    """
+
+    if kperp2_tolerance < 0.0:
+        raise ValueError("kperp2_tolerance must be nonnegative")
+    if eik_tolerance <= 0.0:
+        raise ValueError("eik_tolerance must be positive")
+    if mirror_fd_tolerance <= 0.0:
+        raise ValueError("mirror_fd_tolerance must be positive")
+
+    from .geometry import k_perp_squared
+
+    field_names = ("B", "F", "G", "E_y", "D_x", "D_y", "g_xx", "g_xy", "g_yy")
+    fields = tuple(jnp.asarray(getattr(geometry, name), dtype=jnp.float64) for name in field_names)
+    field_min = jnp.asarray([jnp.min(values) for values in fields], dtype=jnp.float64)
+    field_max = jnp.asarray([jnp.max(values) for values in fields], dtype=jnp.float64)
+    field_mean = jnp.asarray([jnp.mean(values) for values in fields], dtype=jnp.float64)
+    finite_fields = jnp.asarray(all(bool(jnp.all(jnp.isfinite(values))) for values in fields))
+    positive_b = jnp.min(fields[0]) > 0.0
+    positive_metric = (jnp.min(fields[6]) > 0.0) & (jnp.min(fields[8]) > 0.0)
+
+    kperp2 = k_perp_squared(geometry, fourier_grid)
+    finite_kperp2 = jnp.all(jnp.isfinite(kperp2))
+    kperp2_min = jnp.min(kperp2)
+    kperp2_max = jnp.max(kperp2)
+    kperp2_mean = jnp.mean(kperp2)
+    nonnegative_kperp2 = kperp2_min >= -float(kperp2_tolerance)
+
+    eik_report = compare_geometry_to_gx_eik_reference(
+        geometry,
+        geometry_to_gx_eik_reference(geometry),
+        fourier_grid,
+        include_mirror_proxy=False,
+    )
+    eik_export_error = eik_report.max_abs_error
+    eik_export_passed = eik_export_error <= float(eik_tolerance)
+
+    mirror_fd_error = _finite_difference_mirror_force_error(geometry)
+    mirror_fd_passed = (
+        (mirror_fd_error <= float(mirror_fd_tolerance))
+        if include_mirror_fd_check
+        else jnp.asarray(True)
+    )
+    check_names = (
+        "finite_geometry_fields",
+        "positive_B",
+        "positive_metric_diagonal",
+        "finite_kperp2",
+        "nonnegative_representative_kperp2",
+        "gx_eik_export_contract",
+        "finite_difference_mirror_force",
+    )
+    check_passed = jnp.asarray(
+        (
+            finite_fields,
+            positive_b,
+            positive_metric,
+            finite_kperp2,
+            nonnegative_kperp2,
+            eik_export_passed if require_eik_export else True,
+            mirror_fd_passed,
+        ),
+        dtype=bool,
+    )
+    return StellaratorGeometryPreflightReport(
+        check_passed=check_passed,
+        field_min=field_min,
+        field_max=field_max,
+        field_mean=field_mean,
+        kperp2_min=kperp2_min,
+        kperp2_max=kperp2_max,
+        kperp2_mean=kperp2_mean,
+        mirror_fd_error=mirror_fd_error,
+        eik_export_error=eik_export_error,
+        passed=jnp.all(check_passed),
+        check_names=check_names,
+        field_names=field_names,
+        source=getattr(geometry, "source", "solver"),
+        notes=(
+            "standard imported-stellarator geometry preflight: finite fields, "
+            "positive B/metric, kperp2, GX/GS2 eik export, and independent "
+            "finite-difference mirror-force consistency"
+        ),
+    )
+
+
+def run_mode_boundary_contract(
+    fourier_grid,
+    connectivity=None,
+) -> ModeBoundaryContractReport:
+    """Validate static flux-tube ``kx`` chain boundary connectivity."""
+
+    if connectivity is None:
+        from .grids import build_mode_connectivity
+
+        connectivity = build_mode_connectivity(fourier_grid)
+
+    labels = np.asarray(connectivity.mode_label, dtype=np.int32)
+    ixplus = np.asarray(connectivity.ixplus, dtype=np.int32)
+    ixminus = np.asarray(connectivity.ixminus, dtype=np.int32)
+    valid_shift = np.asarray(connectivity.valid_shift, dtype=bool)
+    nkx, nky = labels.shape
+    ixzero = int(connectivity.ixzero)
+    iyzero = int(connectivity.iyzero)
+    spacing = int(fourier_grid.ikxspace)
+
+    shape_passed = (
+        ixplus.shape == (nkx, nky)
+        and ixminus.shape == (nkx, nky)
+        and valid_shift.shape[1:] == (nkx, nky)
+        and 0 <= ixzero < nkx
+    )
+    zonal_passed = True
+    if iyzero >= 0:
+        zonal_indices = np.arange(nkx, dtype=np.int32)
+        zonal_passed = (
+            np.array_equal(ixplus[:, iyzero], zonal_indices)
+            and np.array_equal(ixminus[:, iyzero], zonal_indices)
+            and np.all(valid_shift[:, :, iyzero])
+        )
+
+    reciprocal_passed = True
+    spacing_passed = True
+    open_end_passed = True
+    open_end_count = 0
+    linked_edge_count = 0
+    for iy in range(nky):
+        if iy == iyzero:
+            continue
+        for label in np.unique(labels[:, iy]):
+            chain = np.where(labels[:, iy] == label)[0]
+            chain.sort()
+            if chain.size == 0:
+                continue
+            first = int(chain[0])
+            last = int(chain[-1])
+            open_end_count += int(ixminus[first, iy] < 0)
+            open_end_count += int(ixplus[last, iy] < 0)
+            open_end_passed &= ixminus[first, iy] < 0
+            open_end_passed &= ixplus[last, iy] < 0
+            for left, right in zip(chain[:-1], chain[1:], strict=False):
+                linked_edge_count += 1
+                reciprocal_passed &= ixplus[left, iy] == right
+                reciprocal_passed &= ixminus[right, iy] == left
+                spacing_passed &= (right - left) == spacing
+
+    check_names = (
+        "shape",
+        "zonal_identity",
+        "open_chain_ends",
+        "reciprocal_links",
+        "ikxspace_spacing",
+    )
+    check_passed = jnp.asarray(
+        (
+            shape_passed,
+            zonal_passed,
+            open_end_passed,
+            reciprocal_passed,
+            spacing_passed,
+        ),
+        dtype=bool,
+    )
+    return ModeBoundaryContractReport(
+        check_passed=check_passed,
+        open_end_count=jnp.asarray(open_end_count, dtype=jnp.int32),
+        linked_edge_count=jnp.asarray(linked_edge_count, dtype=jnp.int32),
+        passed=jnp.all(check_passed),
+        check_names=check_names,
+        notes=(
+            "static twist-and-shift mode-chain contract: zonal identity maps, "
+            "open nonzonal chain ends, reciprocal links, and ikxspace spacing"
+        ),
+    )
+
+
 def run_geometry_to_gx_eik_export_gate(
     geometry,
     fourier_grid,
@@ -16003,6 +16298,31 @@ def _build_gkw_cell_centered_parallel_grid(
 
 def _max_abs_error(left, right):
     return jnp.max(jnp.abs(jnp.asarray(left) - jnp.asarray(right)))
+
+
+def _finite_difference_mirror_force_error(geometry):
+    z = np.asarray(geometry.z, dtype=float)
+    B = np.asarray(geometry.B, dtype=float)
+    F = np.asarray(geometry.F, dtype=float)
+    G = np.asarray(geometry.G, dtype=float)
+    if z.ndim != 1 or z.shape[0] < 3:
+        return jnp.asarray(np.inf, dtype=jnp.float64)
+    spacing = np.diff(z)
+    if not np.allclose(spacing, spacing[0], rtol=1.0e-10, atol=1.0e-12):
+        dB_dz = np.gradient(B, z, edge_order=2)
+    else:
+        dz = float(spacing[0])
+        if z.shape[0] < 5:
+            dB_dz = (np.roll(B, -1) - np.roll(B, 1)) / (2.0 * dz)
+        else:
+            dB_dz = (
+                -np.roll(B, -2)
+                + 8.0 * np.roll(B, -1)
+                - 8.0 * np.roll(B, 1)
+                + np.roll(B, 2)
+            ) / (12.0 * dz)
+    finite_difference_G = -F * dB_dz / B
+    return jnp.asarray(np.max(np.abs(G - finite_difference_G)), dtype=jnp.float64)
 
 
 def _phase_aligned_max_abs_error(left, right):

@@ -53,7 +53,7 @@ from stellarator_gk import (
     normalize_by_ky_amplitude,
     real_frequency,
     run_desc_gx_eik_external_geometry_gate,
-    run_geometry_to_gx_eik_export_gate,
+    run_stellarator_geometry_preflight,
     solve_field_from_state,
     weighted_quasilinear_proxy,
     write_per_ky_mode_structure_fixture_csv,
@@ -269,28 +269,25 @@ def _load_geometry(args):
 
 
 def _geometry_audit(geometry, fourier, args, geometry_metadata):
+    report = run_stellarator_geometry_preflight(geometry, fourier)
     fields = {name: np.asarray(getattr(geometry, name)) for name in GEOMETRY_FIELDS}
-    kperp2 = np.asarray(k_perp_squared(geometry, fourier), dtype=float)
-    field_stats = {
+    field_stats_from_report = {
         name: {
-            "min": float(np.min(values)),
-            "max": float(np.max(values)),
-            "mean": float(np.mean(values)),
+            "min": float(report.field_min[index]),
+            "max": float(report.field_max[index]),
+            "mean": float(report.field_mean[index]),
             "finite": bool(np.all(np.isfinite(values))),
         }
-        for name, values in fields.items()
+        for index, (name, values) in enumerate(fields.items())
     }
     checks = {
-        "finite_geometry_fields": all(item["finite"] for item in field_stats.values()),
-        "positive_B": bool(field_stats["B"]["min"] > 0.0),
-        "positive_metric_diagonal": bool(
-            field_stats["g_xx"]["min"] > 0.0 and field_stats["g_yy"]["min"] > 0.0
-        ),
-        "finite_kperp2": bool(np.all(np.isfinite(kperp2))),
-        "nonnegative_representative_kperp2": bool(float(np.min(kperp2)) >= -1.0e-12),
+        name: bool(value)
+        for name, value in zip(
+            report.check_names,
+            np.asarray(report.check_passed, dtype=bool),
+            strict=True,
+        )
     }
-    export_gate = run_geometry_to_gx_eik_export_gate(geometry, fourier)
-    checks["gx_eik_export_gate"] = bool(export_gate.passed)
 
     external_eik_gate = None
     if args.external_eik_reference is not None:
@@ -322,13 +319,22 @@ def _geometry_audit(geometry, fourier, args, geometry_metadata):
             "max": float(np.max(np.asarray(geometry.z))),
             "weight_sum": float(np.sum(np.asarray(geometry.w_z))),
         },
-        "field_stats": field_stats,
+        "field_stats": field_stats_from_report,
         "kperp2": {
-            "min": float(np.min(kperp2)),
-            "max": float(np.max(kperp2)),
-            "mean": float(np.mean(kperp2)),
+            "min": float(report.kperp2_min),
+            "max": float(report.kperp2_max),
+            "mean": float(report.kperp2_mean),
         },
-        "eik_export_gate": _gate_summary(export_gate),
+        "eik_export_gate": {
+            "name": "stellarator_geometry_preflight_eik_export",
+            "quantity": "max_abs_eik_export_error",
+            "observed_value": float(report.eik_export_error),
+            "reference_value": 0.0,
+            "tolerance": 1.0e-12,
+            "passed": bool(checks["gx_eik_export_contract"]),
+            "notes": report.notes,
+        },
+        "mirror_fd_error": float(report.mirror_fd_error),
         "external_eik_gate": external_eik_gate,
     }
 

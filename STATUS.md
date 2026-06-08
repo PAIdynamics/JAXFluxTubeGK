@@ -29,7 +29,10 @@ the fixed-topology objective. A direct optional DESC extraction adapter and CLI
 script now evaluate those arrays from a DESC equilibrium/example object onto
 `parallel_grid.z`. DESC dependencies are installed in the project `.venv`, and a
 canonical DSHAPE `.npz` fixture generated through the DESC HDF5/path loader now
-loads through the solver geometry contract. The current benchmark-informed
+loads through the solver geometry contract. The standard stellarator preflight
+is now public through `run_stellarator_geometry_preflight`, with a companion
+`run_mode_boundary_contract` for linked-mode topology. The current
+benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
 and a reduced DESC DSHAPE fixture optimization example. The immediate
@@ -641,6 +644,45 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-08: Hardened Stellarator Geometry and Boundary Contracts
+
+- Promoted the example-local stellarator geometry preflight into the public
+  benchmark/validation API as `run_stellarator_geometry_preflight`, returning
+  `StellaratorGeometryPreflightReport`.
+- The shared preflight checks finite geometry fields, \(B>0\), positive metric
+  diagonals, finite and representative nonnegative \(k_\perp^2\), the
+  solver-to-GX/eik export contract, and an independent fourth-order
+  finite-difference mirror-force consistency check for
+  \(G=-F\,\partial_z B/B\).
+- Added `run_mode_boundary_contract` and `ModeBoundaryContractReport` for
+  static twist-and-shift topology checks: zonal identity maps, nonzonal
+  open-chain ends, reciprocal links, and `ikxspace` spacing.
+- Refactored `examples/run_stellarator_linear_scan.py` to call the shared
+  preflight API, keeping the same machine-readable output contract while
+  removing duplicate local geometry checks.
+- Added `tests/test_stellarator_geometry_contracts.py` covering the DESC DSHAPE
+  preflight, bad imported geometry rejection, mode-boundary failures, topology
+  independence from `kx_max`, and W7X GX/GIST eik preflight over one- and
+  two-period field-line samples.
+- Commands run so far:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py examples/run_stellarator_linear_scan.py tests/test_stellarator_geometry_contracts.py tests/test_stellarator_linear_scan_example.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_geometry_contracts.py tests/test_stellarator_linear_scan_example.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_geometry_contracts.py tests/test_stellarator_linear_scan_example.py tests/test_import.py -q`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "eik or desc_fixture_geometry_exports or solver_geometry_to_eik"`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_stellarator_linear_scan.py --output-dir /tmp/stellarator_gk_single_command_preflight_refactor`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `uv run ruff check src/stellarator_gk/benchmarks.py tests/test_stellarator_geometry_contracts.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_geometry_contracts.py -q`
+- Verification so far:
+  - ruff passed,
+  - focused geometry/scan tests passed (`6 passed`),
+  - focused geometry/scan/import tests passed (`7 passed`),
+  - existing eik/DESC benchmark subset passed (`8 passed, 67 deselected`),
+  - the default one-command DSHAPE scan passed after the preflight refactor,
+  - `main.pdf` built successfully,
+  - the final geometry-contract rerun passed after the small-grid
+    finite-difference fallback patch (`5 passed`).
 
 ### 2026-06-08: First Single-Command Stellarator Linear Scan
 

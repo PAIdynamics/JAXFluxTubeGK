@@ -1807,8 +1807,21 @@ positive, the representative \(k_\perp^2\) grid must be nonnegative, and the
 solver-produced geometry must pass the GX/GS2 eik-export contract.  A run from
 a real DESC file can additionally require a matched external
 \path{eik.out} parity check through
-\texttt{--external-eik-reference}.  The default DSHAPE fixture run passes the
-internal preflight with zero eik-export residual.
+\texttt{--external-eik-reference}.  This preflight is now a public solver
+contract, \texttt{run\_stellarator\_geometry\_preflight}, which also performs
+an independent fourth-order finite-difference check of
+\(G=-F\,\partial_zB/B\) on the sampled grid.  The default DSHAPE fixture run
+passes the internal preflight with zero eik-export residual and
+finite-difference mirror-force error below \(10^{-2}\).
+
+The static flux-tube boundary contract is separated into
+\texttt{run\_mode\_boundary\_contract}.  It checks that zonal modes have
+identity boundary maps, nonzonal chains have open ends, linked shifts are
+reciprocal, and neighboring links are spaced by \(\texttt{ikxspace}\).  The
+same geometry preflight has also been exercised on the non-axisymmetric W7X
+GX/GIST eik fixture over one- and two-period field-line samples, so the current
+stellarator entry point tests both geometry values and linked-mode topology
+before a benchmark-specific growth-rate tolerance is attached.
 
 The command writes a reusable artifact directory:
 \begin{center}

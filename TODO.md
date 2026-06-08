@@ -750,20 +750,29 @@ Use these guardrails throughout the round:
 
 ### 3. Harden stellarator geometry and boundary contracts
 
-- [ ] Promote the DESC/eik geometry preflight to the standard path for
+- [x] Promote the DESC/eik geometry preflight to the standard path for
   stellarator simulations: compare \(B\), \(\nabla_\parallel\), metric
   elements, magnetic-drift coefficients, Jacobian/weights where available, and
   representative \(k_\perp^2\) values before solving. The new
   `run_stellarator_linear_scan.py` command already does this for its reduced
   scan path; the remaining work is to make the same preflight a shared library
-  entry point for future production runners and benchmark fixtures.
-- [ ] Add the still-open finite-difference check against DESC/SIMSOPT geometry
+  entry point for future production runners and benchmark fixtures. This is now
+  implemented as `run_stellarator_geometry_preflight`, returning a public
+  `StellaratorGeometryPreflightReport` with finite-field, positive-\(B\),
+  positive-metric, \(k_\perp^2\), GX/eik-export, and mirror-force checks.
+- [x] Add the still-open finite-difference check against DESC/SIMSOPT geometry
   quantities for a small fixture, or document why the present DESC API makes a
-  different independent check preferable.
-- [ ] Validate stellarator field-line boundary behavior and mode-chain
+  different independent check preferable. The shared preflight now includes an
+  independent fourth-order finite-difference check of
+  \(G=-F\,\partial_z B/B\) on the sampled grid; the DSHAPE DESC fixture passes
+  this at \(<10^{-2}\) while the exact solver derivative remains spectral.
+- [x] Validate stellarator field-line boundary behavior and mode-chain
   connectivity on a non-axisymmetric fixture: linked/twist-and-shift shifts,
   open-chain ends, zonal handling, and reproducibility under field-line-length
-  changes.
+  changes. `run_mode_boundary_contract` now checks zonal identity maps,
+  nonzonal open-chain ends, reciprocal linked shifts, and `ikxspace` spacing.
+  Tests also run the shared geometry preflight on the W7X GX/GIST eik fixture
+  over one- and two-period field-line samples.
 
 ### 4. Add a real stellarator benchmark fixture
 
