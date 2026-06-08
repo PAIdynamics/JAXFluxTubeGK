@@ -373,6 +373,180 @@ class CycloneKyScanGateReport(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class PerKyModeStructureFixture(_PyTreeDataclass):
+    """External per-``ky`` complex mode-structure fixture.
+
+    The fixture stores one complex parallel field structure per ``ky``.  It is
+    intentionally independent of a specific code so GKW/Gyaradax/GX/GS2/stella
+    references can all be converted to the same contract.
+    """
+
+    ky: object
+    z: object
+    phi: object
+    growth_rate: object
+    frequency: object
+    source: str
+    normalization: str = "raw_complex_phi"
+    metadata: tuple[tuple[str, object], ...] = ()
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "ky",
+        "z",
+        "phi",
+        "growth_rate",
+        "frequency",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("source", "normalization", "metadata")
+
+    def __post_init__(self):
+        ky = jnp.asarray(self.ky, dtype=jnp.float64)
+        z = jnp.asarray(self.z, dtype=jnp.float64)
+        phi = jnp.asarray(self.phi, dtype=jnp.complex128)
+        growth = jnp.asarray(self.growth_rate, dtype=jnp.float64)
+        frequency = jnp.asarray(self.frequency, dtype=jnp.float64)
+        if ky.ndim != 1 or ky.shape[0] == 0:
+            raise ValueError("ky must be a nonempty one-dimensional array")
+        if z.ndim != 1 or z.shape[0] == 0:
+            raise ValueError("z must be a nonempty one-dimensional array")
+        if phi.shape != (ky.shape[0], z.shape[0]):
+            raise ValueError("phi must have shape (n_ky,n_z)")
+        if growth.shape != ky.shape or frequency.shape != ky.shape:
+            raise ValueError("growth_rate and frequency must match ky shape")
+        object.__setattr__(self, "ky", ky)
+        object.__setattr__(self, "z", z)
+        object.__setattr__(self, "phi", phi)
+        object.__setattr__(self, "growth_rate", growth)
+        object.__setattr__(self, "frequency", frequency)
+        object.__setattr__(self, "source", str(self.source))
+        object.__setattr__(self, "normalization", str(self.normalization))
+        object.__setattr__(self, "metadata", tuple(self.metadata))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class PerKyModeStructureComparisonReport(_PyTreeDataclass):
+    """Complex mode-structure comparison report for a multi-``ky`` scan."""
+
+    ky: object
+    matched_reference_ky: object
+    observed_growth: object
+    reference_growth: object
+    growth_error: object
+    observed_frequency: object
+    reference_frequency: object
+    frequency_error: object
+    phi_direct_error: object
+    phi_phase_aligned_error: object
+    state_or_moment_error: object
+    growth_passed: object
+    frequency_passed: object
+    phi_passed: object
+    state_or_moment_passed: object
+    max_growth_error: object
+    max_frequency_error: object
+    max_phi_phase_aligned_error: object
+    max_state_or_moment_error: object
+    passed: object
+    growth_tolerance: float
+    frequency_tolerance: float
+    phi_tolerance: float
+    state_or_moment_tolerance: float
+    require_frequency: bool = True
+    require_phi: bool = True
+    require_state_or_moment: bool = False
+    source: str = ""
+    notes: str = ""
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "ky",
+        "matched_reference_ky",
+        "observed_growth",
+        "reference_growth",
+        "growth_error",
+        "observed_frequency",
+        "reference_frequency",
+        "frequency_error",
+        "phi_direct_error",
+        "phi_phase_aligned_error",
+        "state_or_moment_error",
+        "growth_passed",
+        "frequency_passed",
+        "phi_passed",
+        "state_or_moment_passed",
+        "max_growth_error",
+        "max_frequency_error",
+        "max_phi_phase_aligned_error",
+        "max_state_or_moment_error",
+        "passed",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "growth_tolerance",
+        "frequency_tolerance",
+        "phi_tolerance",
+        "state_or_moment_tolerance",
+        "require_frequency",
+        "require_phi",
+        "require_state_or_moment",
+        "source",
+        "notes",
+    )
+
+    def __post_init__(self):
+        for name in (
+            "growth_tolerance",
+            "frequency_tolerance",
+            "phi_tolerance",
+            "state_or_moment_tolerance",
+        ):
+            if float(getattr(self, name)) <= 0.0:
+                raise ValueError(f"{name} must be positive")
+        ky = jnp.asarray(self.ky, dtype=jnp.float64)
+        if ky.ndim != 1 or ky.shape[0] == 0:
+            raise ValueError("ky must be a nonempty one-dimensional array")
+        object.__setattr__(self, "ky", ky)
+        for name in (
+            "matched_reference_ky",
+            "observed_growth",
+            "reference_growth",
+            "growth_error",
+            "observed_frequency",
+            "reference_frequency",
+            "frequency_error",
+            "phi_direct_error",
+            "phi_phase_aligned_error",
+            "state_or_moment_error",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=jnp.float64)
+            if values.shape != ky.shape:
+                raise ValueError(f"{name} must match ky shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "growth_passed",
+            "frequency_passed",
+            "phi_passed",
+            "state_or_moment_passed",
+        ):
+            values = jnp.asarray(getattr(self, name), dtype=bool)
+            if values.shape != ky.shape:
+                raise ValueError(f"{name} must match ky shape")
+            object.__setattr__(self, name, values)
+        for name in (
+            "max_growth_error",
+            "max_frequency_error",
+            "max_phi_phase_aligned_error",
+            "max_state_or_moment_error",
+        ):
+            object.__setattr__(
+                self,
+                name,
+                jnp.asarray(getattr(self, name), dtype=jnp.float64),
+            )
+        object.__setattr__(self, "passed", jnp.asarray(self.passed, dtype=bool))
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class CycloneKyScanConventionAudit(_PyTreeDataclass):
     """Audit candidate normalization/convention choices for a ``ky`` scan."""
 
@@ -3558,6 +3732,308 @@ def evaluate_cyclone_ky_scan_gate(
         require_profile=bool(require_profile),
         source=source,
         notes=notes,
+    )
+
+
+def mode_structure_fixture_from_selected_state_trace(
+    trace: SelectedModeStateTrace,
+    *,
+    ky: float,
+    z=None,
+    growth_rate: float | None = None,
+    frequency: float | None = None,
+    time_index: int = -1,
+    source: str | None = None,
+    normalization: str = "raw_complex_phi",
+    metadata: tuple[tuple[str, object], ...] = (),
+) -> PerKyModeStructureFixture:
+    """Build a one-``ky`` complex mode-structure fixture from a state trace."""
+
+    phi = jnp.asarray(trace.phi, dtype=jnp.complex128)
+    times = jnp.asarray(trace.times, dtype=jnp.float64)
+    steps = jnp.asarray(trace.steps, dtype=jnp.int32)
+    if phi.ndim != 2:
+        raise ValueError("trace phi must have shape (n_time,n_z)")
+    index = int(time_index)
+    if index < 0:
+        index += phi.shape[0]
+    if index < 0 or index >= phi.shape[0]:
+        raise ValueError("time_index out of bounds")
+    n_z = phi.shape[1]
+    if z is None:
+        z = jnp.arange(n_z, dtype=jnp.float64)
+    z = jnp.asarray(z, dtype=jnp.float64)
+    if z.shape != (n_z,):
+        raise ValueError("z must match the selected trace parallel dimension")
+    fixture_metadata = (
+        ("trace_source", trace.source),
+        ("trace_step", int(np.asarray(steps[index]))),
+        ("trace_time", float(np.asarray(times[index]))),
+        *tuple(metadata),
+    )
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray([ky], dtype=jnp.float64),
+        z=z,
+        phi=phi[index : index + 1],
+        growth_rate=jnp.asarray(
+            [jnp.nan if growth_rate is None else growth_rate],
+            dtype=jnp.float64,
+        ),
+        frequency=jnp.asarray(
+            [jnp.nan if frequency is None else frequency],
+            dtype=jnp.float64,
+        ),
+        source=source or trace.source,
+        normalization=normalization,
+        metadata=fixture_metadata,
+    )
+
+
+def write_per_ky_mode_structure_fixture_csv(path, fixture: PerKyModeStructureFixture) -> None:
+    """Write a portable CSV per-``ky`` complex mode-structure fixture."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ky = np.asarray(fixture.ky, dtype=float)
+    z = np.asarray(fixture.z, dtype=float)
+    phi = np.asarray(fixture.phi, dtype=np.complex128)
+    growth = np.asarray(fixture.growth_rate, dtype=float)
+    frequency = np.asarray(fixture.frequency, dtype=float)
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(
+            (
+                "ky",
+                "z_index",
+                "z",
+                "phi_real",
+                "phi_imag",
+                "growth_rate",
+                "frequency",
+                "normalization",
+                "source",
+            )
+        )
+        for ky_index, ky_value in enumerate(ky):
+            for z_index, z_value in enumerate(z):
+                value = phi[ky_index, z_index]
+                writer.writerow(
+                    (
+                        ky_value,
+                        z_index,
+                        z_value,
+                        value.real,
+                        value.imag,
+                        growth[ky_index],
+                        frequency[ky_index],
+                        fixture.normalization,
+                        fixture.source,
+                    )
+                )
+
+
+def load_per_ky_mode_structure_fixture_csv(
+    path,
+    *,
+    source: str | None = None,
+    normalization: str | None = None,
+    metadata: tuple[tuple[str, object], ...] = (),
+) -> PerKyModeStructureFixture:
+    """Load a CSV written by :func:`write_per_ky_mode_structure_fixture_csv`."""
+
+    path = Path(path)
+    with path.open(newline="") as handle:
+        rows = tuple(csv.DictReader(handle))
+    if not rows:
+        raise ValueError("mode-structure fixture CSV contains no rows")
+    required = {
+        "ky",
+        "z_index",
+        "z",
+        "phi_real",
+        "phi_imag",
+        "growth_rate",
+        "frequency",
+    }
+    missing = required.difference(rows[0])
+    if missing:
+        raise ValueError(f"mode-structure fixture CSV missing columns: {sorted(missing)}")
+
+    ky_values = tuple(dict.fromkeys(float(row["ky"]) for row in rows))
+    z_values_by_ky = []
+    phi_rows = []
+    growth_values = []
+    frequency_values = []
+    for ky_value in ky_values:
+        ky_rows = sorted(
+            (row for row in rows if float(row["ky"]) == ky_value),
+            key=lambda row: int(row["z_index"]),
+        )
+        z_values = np.asarray([float(row["z"]) for row in ky_rows], dtype=float)
+        phi_values = np.asarray(
+            [float(row["phi_real"]) + 1j * float(row["phi_imag"]) for row in ky_rows],
+            dtype=np.complex128,
+        )
+        if z_values.shape[0] == 0:
+            raise ValueError("each ky in mode-structure fixture must have z rows")
+        z_values_by_ky.append(z_values)
+        phi_rows.append(phi_values)
+        growth_values.append(float(ky_rows[0]["growth_rate"]))
+        frequency_values.append(float(ky_rows[0]["frequency"]))
+    z = z_values_by_ky[0]
+    if any(values.shape != z.shape or not np.allclose(values, z) for values in z_values_by_ky):
+        raise ValueError("all ky rows in mode-structure fixture must share the same z grid")
+    csv_source = rows[0].get("source", "") if rows else ""
+    csv_normalization = rows[0].get("normalization", "") if rows else ""
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray(ky_values, dtype=jnp.float64),
+        z=jnp.asarray(z, dtype=jnp.float64),
+        phi=jnp.asarray(np.stack(phi_rows), dtype=jnp.complex128),
+        growth_rate=jnp.asarray(growth_values, dtype=jnp.float64),
+        frequency=jnp.asarray(frequency_values, dtype=jnp.float64),
+        source=source or csv_source or str(path),
+        normalization=normalization or csv_normalization or "raw_complex_phi",
+        metadata=metadata,
+    )
+
+
+def compare_per_ky_mode_structure_fixtures(
+    observed: PerKyModeStructureFixture,
+    reference: PerKyModeStructureFixture,
+    *,
+    growth_tolerance: float = 2.0e-2,
+    frequency_tolerance: float = 2.0e-2,
+    phi_tolerance: float = 2.0e-2,
+    state_or_moment_tolerance: float = 2.0e-2,
+    ky_tolerance: float = 1.0e-6,
+    z_tolerance: float = 1.0e-6,
+    state_or_moment_error=None,
+    require_frequency: bool = True,
+    require_phi: bool = True,
+    require_state_or_moment: bool = False,
+    notes: str = "",
+) -> PerKyModeStructureComparisonReport:
+    """Compare complex per-``ky`` mode structures with phase alignment.
+
+    The returned ``phi_phase_aligned_error`` is suitable for the
+    ``profile_error`` field in :func:`evaluate_cyclone_ky_scan_gate`.
+    """
+
+    if growth_tolerance <= 0.0:
+        raise ValueError("growth_tolerance must be positive")
+    if frequency_tolerance <= 0.0:
+        raise ValueError("frequency_tolerance must be positive")
+    if phi_tolerance <= 0.0:
+        raise ValueError("phi_tolerance must be positive")
+    if state_or_moment_tolerance <= 0.0:
+        raise ValueError("state_or_moment_tolerance must be positive")
+    if ky_tolerance < 0.0:
+        raise ValueError("ky_tolerance must be nonnegative")
+    if z_tolerance < 0.0:
+        raise ValueError("z_tolerance must be nonnegative")
+
+    observed_ky = np.asarray(observed.ky, dtype=float)
+    reference_ky = np.asarray(reference.ky, dtype=float)
+    match_indices = np.asarray(
+        [int(np.argmin(np.abs(reference_ky - ky_value))) for ky_value in observed_ky],
+        dtype=np.int32,
+    )
+    matched_reference_ky = jnp.asarray(reference_ky[match_indices], dtype=jnp.float64)
+    if observed.z.shape != reference.z.shape:
+        raise ValueError("observed and reference fixtures must share z-grid shape")
+    z_error = _max_abs_error(observed.z, reference.z)
+
+    reference_phi = reference.phi[match_indices]
+    observed_phi = observed.phi
+    normalized_observed = _row_l2_normalize_complex(observed_phi)
+    normalized_reference = _row_l2_normalize_complex(reference_phi)
+    phi_direct_error = jnp.max(
+        jnp.abs(normalized_observed - normalized_reference),
+        axis=1,
+    )
+    phi_phase_error = _row_phase_aligned_max_abs_errors(
+        normalized_observed,
+        normalized_reference,
+    )
+
+    observed_growth = observed.growth_rate
+    reference_growth = reference.growth_rate[match_indices]
+    growth_error = observed_growth - reference_growth
+    observed_frequency = observed.frequency
+    reference_frequency = reference.frequency[match_indices]
+    frequency_error = observed_frequency - reference_frequency
+    ky_passed = jnp.abs(observed.ky - matched_reference_ky) <= ky_tolerance
+    z_passed = z_error <= z_tolerance
+    growth_passed = jnp.abs(growth_error) <= growth_tolerance
+    frequency_finite = jnp.isfinite(observed_frequency) & jnp.isfinite(reference_frequency)
+    frequency_passed = (
+        jnp.where(frequency_finite, jnp.abs(frequency_error) <= frequency_tolerance, False)
+        if require_frequency
+        else jnp.ones_like(observed.ky, dtype=bool)
+    )
+    phi_finite = jnp.isfinite(phi_phase_error)
+    phi_passed = (
+        jnp.where(phi_finite, phi_phase_error <= phi_tolerance, False)
+        if require_phi
+        else jnp.ones_like(observed.ky, dtype=bool)
+    )
+    if state_or_moment_error is None:
+        state_or_moment_error = jnp.full_like(observed.ky, jnp.nan)
+    state_or_moment_error = jnp.asarray(state_or_moment_error, dtype=jnp.float64)
+    if state_or_moment_error.shape != observed.ky.shape:
+        raise ValueError("state_or_moment_error must match observed ky shape")
+    state_finite = jnp.isfinite(state_or_moment_error)
+    state_passed = (
+        jnp.where(state_finite, state_or_moment_error <= state_or_moment_tolerance, False)
+        if require_state_or_moment
+        else jnp.ones_like(observed.ky, dtype=bool)
+    )
+    finite_frequency_error = jnp.where(frequency_finite, jnp.abs(frequency_error), 0.0)
+    finite_state_error = jnp.where(state_finite, state_or_moment_error, 0.0)
+    passed = (
+        jnp.all(ky_passed)
+        & z_passed
+        & jnp.all(growth_passed)
+        & jnp.all(frequency_passed)
+        & jnp.all(phi_passed)
+        & jnp.all(state_passed)
+    )
+    return PerKyModeStructureComparisonReport(
+        ky=observed.ky,
+        matched_reference_ky=matched_reference_ky,
+        observed_growth=observed_growth,
+        reference_growth=reference_growth,
+        growth_error=growth_error,
+        observed_frequency=observed_frequency,
+        reference_frequency=reference_frequency,
+        frequency_error=frequency_error,
+        phi_direct_error=phi_direct_error,
+        phi_phase_aligned_error=phi_phase_error,
+        state_or_moment_error=state_or_moment_error,
+        growth_passed=growth_passed & ky_passed,
+        frequency_passed=frequency_passed & ky_passed,
+        phi_passed=phi_passed & ky_passed & z_passed,
+        state_or_moment_passed=state_passed & ky_passed,
+        max_growth_error=jnp.max(jnp.abs(growth_error)),
+        max_frequency_error=jnp.max(finite_frequency_error),
+        max_phi_phase_aligned_error=jnp.max(phi_phase_error),
+        max_state_or_moment_error=jnp.max(finite_state_error),
+        passed=passed,
+        growth_tolerance=float(growth_tolerance),
+        frequency_tolerance=float(frequency_tolerance),
+        phi_tolerance=float(phi_tolerance),
+        state_or_moment_tolerance=float(state_or_moment_tolerance),
+        require_frequency=bool(require_frequency),
+        require_phi=bool(require_phi),
+        require_state_or_moment=bool(require_state_or_moment),
+        source=f"observed={observed.source}; reference={reference.source}",
+        notes=notes
+        or (
+            "per-ky complex mode-structure comparison; "
+            f"observed_normalization={observed.normalization}; "
+            f"reference_normalization={reference.normalization}; "
+            f"z_max_abs_error={float(z_error):.8e}"
+        ),
     )
 
 
@@ -14889,6 +15365,27 @@ def _phase_aligned_max_abs_error(left, right):
     denominator = jnp.vdot(right, right)
     scale = jnp.where(jnp.abs(denominator) > 0.0, numerator / denominator, 0.0)
     return jnp.max(jnp.abs(left - scale * right))
+
+
+def _row_l2_normalize_complex(values):
+    values = jnp.asarray(values, dtype=jnp.complex128)
+    if values.ndim != 2:
+        raise ValueError("values must have shape (n_row,n_z)")
+    norms = jnp.sqrt(jnp.sum(jnp.abs(values) ** 2, axis=1))
+    safe_norms = jnp.where(norms > 0.0, norms, 1.0)
+    return jnp.where(norms[:, None] > 0.0, values / safe_norms[:, None], values)
+
+
+def _row_phase_aligned_max_abs_errors(left, right):
+    left = jnp.asarray(left, dtype=jnp.complex128)
+    right = jnp.asarray(right, dtype=jnp.complex128)
+    if left.shape != right.shape or left.ndim != 2:
+        raise ValueError("left and right must have matching shape (n_row,n_z)")
+    numerator = jnp.einsum("ij,ij->i", jnp.conjugate(right), left)
+    denominator = jnp.einsum("ij,ij->i", jnp.conjugate(right), right)
+    safe_denominator = jnp.where(jnp.abs(denominator) > 0.0, denominator, 1.0 + 0.0j)
+    scale = jnp.where(jnp.abs(denominator) > 0.0, numerator / safe_denominator, 0.0)
+    return jnp.max(jnp.abs(left - scale[:, None] * right), axis=1)
 
 
 def _snapshot_phase_aligned_reference(left, right):

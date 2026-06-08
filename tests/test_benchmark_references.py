@@ -43,6 +43,8 @@ from stellarator_gk import (
     GxGrowthRateReference,
     ParallelPhiProfileGateReport,
     ParallelPhiTrace,
+    PerKyModeStructureComparisonReport,
+    PerKyModeStructureFixture,
     VelocitySliceConventionAudit,
     VelocitySlicePhaseAudit,
     audit_cyclone_selected_ky_gap,
@@ -67,6 +69,7 @@ from stellarator_gk import (
     compare_gx_cyclone_input_to_solver_controls,
     compare_geometry_to_gx_eik_reference,
     compare_parallel_phi_traces,
+    compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_convention_audit,
     evaluate_cyclone_ky_scan_gate,
     evaluate_parallel_phi_profile_gate,
@@ -75,12 +78,15 @@ from stellarator_gk import (
     gx_salpha_cyclone_growth_target,
     load_cyclone_trace_csv,
     load_gkw_parallel_phi_trace,
+    load_gkw_selected_mode_state_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice,
     load_gkw_velocity_space_slice_series,
     load_gx_cyclone_input_reference,
     load_gx_eik_geometry_reference,
     load_gx_growth_rate_reference,
+    load_per_ky_mode_structure_fixture_csv,
+    mode_structure_fixture_from_selected_state_trace,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
     run_cyclone_base_case_coefficient_source_audit,
@@ -126,6 +132,7 @@ from stellarator_gk import (
     single_surface_benchmark_objective,
     write_cyclone_source_term_trace_csv,
     write_cyclone_ky_scan_convention_audit_csv,
+    write_per_ky_mode_structure_fixture_csv,
     write_cyclone_trace_csv,
 )
 
@@ -1090,6 +1097,96 @@ def test_cyclone_selected_state_trace_records_post_normalization_snapshots():
     assert jnp.all(jnp.isfinite(trace.state.real))
     assert jnp.all(jnp.isfinite(trace.phi.real))
     assert "snapshot_timing=post_normalization" in trace.notes
+
+
+def test_per_ky_mode_structure_fixture_csv_roundtrip_and_phase_gate(tmp_path):
+    z = jnp.linspace(-1.0, 1.0, 5)
+    phi = jnp.asarray(
+        [
+            jnp.exp(1j * jnp.pi * z),
+            (1.0 + 0.25j) * jnp.cos(jnp.pi * z),
+        ],
+        dtype=jnp.complex128,
+    )
+    reference = PerKyModeStructureFixture(
+        ky=jnp.asarray([0.3, 0.5]),
+        z=z,
+        phi=phi,
+        growth_rate=jnp.asarray([0.11, 0.18]),
+        frequency=jnp.asarray([-0.02, -0.03]),
+        source="synthetic-reference",
+    )
+    observed = PerKyModeStructureFixture(
+        ky=jnp.asarray([0.3, 0.5]),
+        z=z,
+        phi=2.5 * jnp.exp(0.7j) * phi,
+        growth_rate=jnp.asarray([0.111, 0.179]),
+        frequency=jnp.asarray([-0.021, -0.029]),
+        source="synthetic-observed",
+        normalization="scaled_global_phase",
+    )
+
+    path = tmp_path / "mode_structure.csv"
+    write_per_ky_mode_structure_fixture_csv(path, reference)
+    loaded = load_per_ky_mode_structure_fixture_csv(path)
+    report = compare_per_ky_mode_structure_fixtures(
+        observed,
+        loaded,
+        growth_tolerance=2.0e-3,
+        frequency_tolerance=2.0e-3,
+        phi_tolerance=2.0e-13,
+    )
+
+    assert isinstance(loaded, PerKyModeStructureFixture)
+    assert isinstance(report, PerKyModeStructureComparisonReport)
+    np.testing.assert_allclose(loaded.ky, reference.ky)
+    np.testing.assert_allclose(loaded.z, reference.z)
+    np.testing.assert_allclose(loaded.phi, reference.phi)
+    assert bool(report.passed)
+    assert jnp.max(report.phi_direct_error) > 1.0e-1
+    assert float(report.max_phi_phase_aligned_error) < 2.0e-13
+
+    scan_gate = evaluate_cyclone_ky_scan_gate(
+        observed.ky,
+        report.observed_growth,
+        report.reference_growth,
+        observed_frequency=report.observed_frequency,
+        reference_frequency=report.reference_frequency,
+        profile_error=report.phi_phase_aligned_error,
+        growth_tolerance=2.0e-3,
+        frequency_tolerance=2.0e-3,
+        profile_tolerance=2.0e-13,
+        require_profile=True,
+    )
+    assert bool(scan_gate.passed)
+
+
+def test_mode_structure_fixture_from_gkw_selected_state_trace_uses_complex_phi():
+    trace = load_gkw_selected_mode_state_trace(
+        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state",
+    )
+    fixture = mode_structure_fixture_from_selected_state_trace(
+        trace,
+        ky=0.5,
+        z=jnp.linspace(-1.0, 1.0, trace.phi.shape[-1]),
+        growth_rate=0.179,
+        frequency=0.0,
+        time_index=-1,
+        source="gkw-cosin2-selected-state-mode-structure",
+    )
+    report = compare_per_ky_mode_structure_fixtures(
+        fixture,
+        fixture,
+        growth_tolerance=1.0e-12,
+        frequency_tolerance=1.0e-12,
+        phi_tolerance=1.0e-12,
+    )
+
+    assert fixture.phi.shape == (1, trace.phi.shape[-1])
+    assert fixture.metadata[0][0] == "trace_source"
+    assert fixture.metadata[1][0] == "trace_step"
+    assert bool(report.passed)
+    np.testing.assert_allclose(report.phi_phase_aligned_error, 0.0, atol=1.0e-14)
 
 
 def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):

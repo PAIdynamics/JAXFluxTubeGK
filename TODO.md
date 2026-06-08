@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-06-06
+Last planned: 2026-06-08
 
 ## Project Goal
 
@@ -633,132 +633,117 @@ ready are:
   target-size runs, and a simplified but real DESC-driven optimization campaign;
   the current DESC examples remain reduced fixed-topology demonstrations.
 
-## Immediate Next Round
+## Immediate Next Round: Toward a Trusted Stellarator Simulation
 
-Use the now-passing RHS/action gates as guardrails and attack the remaining
-state-history and benchmark-scan inconsistencies:
+Goal: move from reduced stellarator-geometry demos to a credible linear
+stellarator flux-tube simulation, without weakening the already-passing
+GKW/Gyaradax selected-`ky` parity gates. A "trusted" first stellarator run means:
+DESC or eik-compatible geometry is audited before solving, the selected
+multi-`ky` physics path has a mode-structure check, growth/frequency extraction
+is converged, and the output can be reproduced by a single example script.
 
-- [x] Add same-state selected RHS/action replay, field-source replay, trace
-  timing, internal `calculate_rhs` row-application, and source-level fused
-  `igh_or_term_i` audits. These established that the old residual was
-  operator-level, not a post-normalization or trace-write-site artifact.
-- [x] Dump and compare the compressed selected-row `igh_or_term_i` matrix.
-  The first strict matrix gate exposed a coefficient mismatch with
-  `coefficient_max_abs_error=0.023664443600822316` but no sparse-pattern,
-  invalid-column, or entry-count error.
-- [x] Resolve the source-stencil coefficient mismatch exposed by
-  `GkwIghMatrixTrace`. The new `stellarator_gk_igh_inputs.dat` patch and
-  `GkwIghInputTrace` loader showed that `dum`, `dum2`, spacings, `HH`,
-  boundary position class, and recurrence speeds matched GKW, while
-  `gfun`/`disp_v_dum` did not. The fix is to use GKW's discrete
-  `geom.F90::logbderiv` fourth-order periodic derivative for `gfun` in the
-  `gkw_igh` Cyclone parity setup. Current x64 gates:
-  input trace max \(5.33\times10^{-15}\),
-  matrix trace max \(5.77\times10^{-15}\),
-  full solver-vs-GKW RHS/action trace max \(6.22\times10^{-12}\),
-  same-state replay max \(2.35\times10^{-12}\),
-  mid-run same-state replay max \(2.36\times10^{-12}\), and fused
-  source-level `igh` max \(1.81\times10^{-18}\).
-- [x] Generate adjacent GKW selected-state/RHS fixtures around the worst
-  mid-run region, steps 780, 800, and 820. After the discrete-`gfun` fix the
-  mid-run same-state replay also passes at roundoff, so those fixtures are now
-  ready for one-window evolution replay rather than operator debugging.
-- [x] Add a one-window replay test: initialize the solver from a GKW selected
-  state immediately after diagnostic normalization, advance one GKW diagnostic
-  window with the same RK4 and normalization cadence, and compare to the next
-  GKW selected-state dump. This closes the early 20-to-40 window at
-  \(1.12\times10^{-9}\) and the mid-run 780-to-800-to-820 windows at
-  \(2.03\times10^{-10}\), so RK4/window normalization from an imported GKW
-  state is not the remaining state-history cause.
-- [x] Add a GKW initial/first-window selected-state contract: dump or load the
-  state before and after the initial `normalize(2)` call, compare solver and
-  GKW initialization at step 0, and replay 0-to-20. The GKW pre/post initial
-  states are identical, the initialized distribution matches at
-  \(4.88\times10^{-19}\), and first-window replay closes at
-  \(1.17\times10^{-9}\). GKW stores zero selected \(\phi\) at step 0, while
-  the solver's self-consistent initial field is nonzero; that is now recorded
-  as a diagnostic convention rather than a failed evolution gate.
-- [x] Promote the row-normalized `parallel_phi.dat` profile-shape comparison
-  into an explicit validation gate with a recorded tolerance ladder. The
-  current production-control `cosin2` gate passes with maximum direct
-  row-normalized error \(3.97\times10^{-7}\) and passes all recorded ladder
-  tolerances \(5\times10^{-2}\), \(3\times10^{-2}\), \(2\times10^{-2}\), and
-  \(1\times10^{-2}\), separating the mode-structure contract from scalar
-  growth.
-- [x] Add a multi-`ky` Cyclone/ITG scan gate against available GX/GKW/Gyaradax
-  references. The new `CycloneKyScanGateReport` separates growth, real
-  frequency, and optional mode-structure/profile tolerances, and the runner
-  executes conservative GKW-compatible single-mode cases for each requested
-  `ky`. A reduced two-point GX smoke scan at `ky=(0.3,0.5)` is finite but
-  OPEN, with max growth error `2.23` and max frequency error `29.76`, so this
-  is a contract/scaffold closure rather than a production parity closure.
-- [x] Add explicit scan-convention controls for `k_theta rho_s` versus
-  internal `krho`, observed frequency sign/scale, and report the actual
-  solver-space `ky` used at each scan point. On the reduced two-point GX smoke
-  case, the GKW `k_theta_rhos` convention gives solver `ky=(0.2558,0.4264)`
-  and remains less bad than treating GX `ky` as internal `krho`, but both
-  conventions are still OPEN.
-- [x] Promote the scan-convention smoke checks into a repeatable
-  `CycloneKyScanConventionAudit` that ranks candidate `ky` and frequency
-  conventions by tolerance-normalized growth/frequency/profile errors. On the
-  reduced GX two-point smoke audit, the best candidate is
-  `k_theta_rhos:freq_sign=1:freq_scale=1`, but it remains OPEN with max growth
-  error `2.23` and max frequency error `29.76`.
-- [x] Extend `CycloneKyScanConventionAudit` so scan candidates also carry
-  growth-window diagnostics (`late_fit` versus `late_mean_window`) and field
-  normalization labels (`weighted` versus `gkw_unweighted`). A reduced
-  two-point smoke run with the expanded candidate grid remains OPEN and ties
-  across those two labels at the tiny two-window resolution: max growth error
-  `2.23`, max frequency error `29.76`, and best reported candidate
-  `late_fit:gkw_unweighted:k_theta_rhos:freq_sign=1:freq_scale=1`.
-- [x] Add a production-control scan-calibration wrapper and flat CSV exporter.
-  `run_production_control_cyclone_ky_scan_convention_audit` fixes the matched
-  selected-`ky` control settings (`48/32/8`, `nperiod=5`, 20 by 80 windows,
-  `gkw_igh`, `cosine2`, and `gkw_unweighted` normalization) while still
-  allowing reduced overrides for tests. `write_cyclone_ky_scan_convention_audit_csv`
-  and `examples/run_cyclone_ky_scan_calibration.py` write every
-  candidate-by-`ky` row for external inspection.
-- [x] Separate the GX reference-normalization mismatch from the real
-  multi-`ky` curve-shape gap. `calibrate_gx_growth_rate_reference_to_target`
-  scales the GX growth curve to the GKW/Gyaradax selected Cyclone target at
-  `ky=0.5`; with frequency ignored, the production-control scan wrapper now
-  passes the calibrated `ky=0.5` anchor with growth error `1.00e-3`. The
-  calibrated two-point scan remains OPEN because the low-`ky` point is still
-  too weak: at GX-style `nperiod=2`, the best `internal_krho` convention gives
-  `gamma(0.3)=0.138` versus calibrated reference `0.308`.
-- [x] Add a GX s-alpha input-convention audit for the multi-`ky` scan. The GX
-  fixture uses `ntheta=32` per \(2\pi\) segment and `nperiod=2`, so the full
-  stored field-line grid has `n_z_total=96`, not 32. The new
-  `GxCycloneInputReference`/`GxCycloneConventionReport` path records this
-  domain convention, the exact `ky=0:0.05:0.55` grid, GX's linked boundary,
-  Hermite-Laguerre moment resolution `48/16`, and the default `k_z`
-  hypercollision model (`nu_hyper_m=1`, `p_hyper_m=20`). It also records that
-  the distributed GX output has scalar/power diagnostics but no per-`ky`
-  complex eigenfunction fixture.
-- [x] Rerun the calibrated two-point scan with the exact GX input-control grid
-  (`--profile gx-salpha-input --target-convention gx-salpha --nperiod 2
-  --ky-input-conventions internal_krho`) and compare with the memory-light GKW
-  production-control result. The exact-grid scan remains OPEN:
+Use these guardrails throughout the round:
+
+- keep the passing RH plateau, CBC selected-`ky` scalar gate, GKW RHS/action
+  trace, imported-state one-window replay gates, initial-state contract,
+  row-normalized `parallel_phi.dat` profile gate, DESC/GX/eik geometry gate,
+  and independent GX/VMEC GIST eik-producer gate as regression tests;
+- keep the current exact-grid GX scan gap visible:
   `gamma(0.3)=0.14325556436195153` versus calibrated reference
-  `0.3080402563529299`, and `gamma(0.5)=0.14759624156710394` versus `0.179`.
-  The corrected GX domain changes the low-`ky` value only modestly, so the
-  remaining gap is not just the previous `ntheta`/`n_z_total` bookkeeping error.
-- [x] Implement the first GX moment-space physics discriminator: a
-  source-matched Hermite-Laguerre `k_z` hypercollision RHS contribution. The
-  new utility follows GX's linked-chain wavenumber ordering, dealias mask,
-  inverse-FFT normalization, `m>2` Hermite conservation rule, and
-  `nu_hyper_m (p+1/2) M^{-(p+1/2)} 2.3 v_t |gradpar| m^p` coefficient before
-  applying the linked `|k_z|` operator. This is tested and differentiable, but
-  it is not yet wired into the collocation scan path.
-- [ ] Complete the next discriminator for multi-`ky` parity: either assemble a
-  minimal GX-style Hermite-Laguerre linear moment RHS for the s-alpha ITG case
-  around the new linked `k_z` hypercollision term, or obtain/export an external
-  per-`ky` complex mode-structure fixture so the collocation RHS can be
-  compared mode-shape-by-mode-shape before changing physics.
-- [ ] After the CBC scan gates are stable, extend the
-  benchmark plan to a stellarator/TEM-style fixture using DESC/GX/GIST-
-  compatible geometry arrays and keep DESC optimization examples labeled
-  reduced until those production validation gates pass.
-- [ ] Rerun CPU timing and memory estimates on the validated production
-  controls and record whether the target from `task.tex`, roughly minutes on
-  \(\mathcal{O}(100)\) CPUs, is credible for the intended design loop.
+  `0.3080402563529299`, while the `ky=0.5` anchor is much closer;
+- keep DESC-driven optimization examples labeled reduced until the
+  multi-`ky`, mode-structure, geometry, convergence, and timing gates below
+  pass together.
+
+### 1. Close the multi-`ky` physics discriminator
+
+- [x] Add a code-independent per-`ky` complex mode-structure fixture contract,
+  CSV loader/writer, GKW selected-state-to-fixture adapter, and comparison gate.
+  The gate reports scalar growth error, real-frequency error, row-normalized
+  complex `phi(z)` error with phase alignment, optional state/moment error,
+  and separate pass/fail masks. Its phase-aligned `phi(z)` error can feed the
+  existing multi-`ky` scan gate `profile_error` field.
+- [ ] Prefer first obtaining/exporting an external per-`ky` complex
+  mode-structure fixture if available from GX, GKW, Gyaradax, GS2, stella, or a
+  local diagnostic patch. The fixture should store at least `ky`, `z`,
+  complex `phi(z)`, growth rate, real frequency, normalization convention, and
+  enough metadata to identify geometry, resolution, field-line length, and
+  time/growth window. The generic fixture contract is implemented; what remains
+  is exporting or obtaining a true multi-`ky` external reference for the
+  problematic branch, especially `ky=0.3`.
+- [ ] If no reliable external mode-structure fixture is available, assemble a
+  minimal GX-style Hermite-Laguerre linear moment RHS for the s-alpha
+  adiabatic-electron ITG case. Reuse the source-matched linked `k_z`
+  hypercollision contribution and keep moment layout, linked-boundary chains,
+  normalization, and field solve conventions explicit.
+- [ ] Add a mode-structure comparison gate that reports scalar growth error,
+  real-frequency error, row-normalized complex `phi(z)` error, phase-aligned
+  state/moment error if available, and pass/fail status separately. The generic
+  gate is implemented; what remains is wiring it to the exact external
+  multi-`ky` fixture or a new moment-RHS scan output.
+- [ ] Re-run the exact GX input-control scan after the discriminator is closed:
+  `n_z_total=96`, Hermite/Laguerre control resolution `48/16` where relevant,
+  `nperiod=2`, `ky=(0.3,0.5)`, and the calibrated GX reference curve.
+
+### 2. Build the first single-command stellarator run
+
+- [ ] Add or harden an example script that runs a linear stellarator scan from
+  either a DESC equilibrium/path or the existing DSHAPE fixture. Inputs should
+  include `rho`, `alpha`, field-line length/periods, `ky` grid, resolution,
+  species/profile gradients, derivative backend, time-step/window controls,
+  and output directory.
+- [ ] The example should write machine-readable outputs:
+  geometry audit JSON/CSV, `ky` growth/frequency table, selected complex
+  `phi(z)` mode structures, convergence metadata, and a quasilinear proxy.
+- [ ] The script should fail early if the imported geometry does not pass the
+  internal geometry-contract checks or the available eik parity checks.
+
+### 3. Harden stellarator geometry and boundary contracts
+
+- [ ] Promote the DESC/eik geometry preflight to the standard path for
+  stellarator simulations: compare \(B\), \(\nabla_\parallel\), metric
+  elements, magnetic-drift coefficients, Jacobian/weights where available, and
+  representative \(k_\perp^2\) values before solving.
+- [ ] Add the still-open finite-difference check against DESC/SIMSOPT geometry
+  quantities for a small fixture, or document why the present DESC API makes a
+  different independent check preferable.
+- [ ] Validate stellarator field-line boundary behavior and mode-chain
+  connectivity on a non-axisymmetric fixture: linked/twist-and-shift shifts,
+  open-chain ends, zonal handling, and reproducibility under field-line-length
+  changes.
+
+### 4. Add a real stellarator benchmark fixture
+
+- [ ] Select one small stellarator ITG or TEM-style benchmark from the local
+  DESC/GX/GIST/GS2-compatible materials or generate one with an external code.
+  The first fixture can be linear electrostatic and adiabatic-electron if it
+  has reliable growth/frequency/mode-structure references.
+- [ ] Store the benchmark metadata with the fixture: equilibrium source,
+  geometry producer, field-line label, radial coordinate, normalization,
+  species/profile parameters, resolution, boundary condition, and reference
+  diagnostic windows.
+- [ ] Add tests that run a reduced version of the benchmark and verify finite
+  outputs plus tolerance-gated geometry and mode-structure diagnostics. Keep
+  production-resolution checks as examples or opt-in tests if they are too
+  expensive for the default suite.
+
+### 5. Convergence, timing, and optimization readiness
+
+- [ ] Run convergence studies for the trusted stellarator case in `n_z`,
+  velocity resolution, `kx/ky` grid, field-line length, time step, and
+  growth-window choice. Record the tolerance ladder in `STATUS.md` and
+  `main.tex`.
+- [ ] Re-run CPU memory and timing estimates at the validated production
+  controls and record whether the `task.tex` target, roughly minutes on
+  \(\mathcal{O}(100)\) CPUs, is credible.
+- [ ] Upgrade the reduced DESC optimization demo only after the above gates
+  pass: use the validated stellarator fixture, fixed topology, documented
+  geometry sensitivities, and finite-difference checks of AD gradients with
+  respect to profile and continuous geometry inputs.
+
+Deferred beyond the first trusted stellarator run:
+
+- [ ] kinetic-electron TEM production validation,
+- [ ] collisions and electromagnetic perturbations,
+- [ ] nonlinear ExB turbulence and nonlinear dealiasing,
+- [ ] full DESC shape-optimization campaigns with topology/remeshing changes.

@@ -1889,6 +1889,36 @@ minimal GX-style Hermite--Laguerre linear moment RHS around this term, or an
 external per-\(k_y\) complex mode-structure fixture before changing the
 collocation RHS.
 
+The mode-structure side of this discriminator now has an explicit fixture and
+gate contract.  A per-\(k_y\) fixture stores \(k_y\), the parallel grid \(z_j\),
+complex \(\phi_{k_y}(z_j)\), growth rate, real frequency, normalization label,
+source, and metadata.  The comparison gate matches \(k_y\), verifies the
+parallel grid, row-normalizes each complex profile, removes a single complex
+phase/amplitude per \(k_y\), and reports
+\[
+  \epsilon_\phi(k_y)
+  =
+  \max_j
+  \left|
+  \widehat{\phi}^{\rm obs}_{k_y}(z_j)
+  -
+  c_{k_y}\widehat{\phi}^{\rm ref}_{k_y}(z_j)
+  \right|,
+  \qquad
+  c_{k_y}
+  =
+  \frac{\langle \widehat{\phi}^{\rm ref}_{k_y},
+  \widehat{\phi}^{\rm obs}_{k_y}\rangle}
+  {\langle \widehat{\phi}^{\rm ref}_{k_y},
+  \widehat{\phi}^{\rm ref}_{k_y}\rangle}.
+\]
+This \(\epsilon_\phi\) is the complex-profile error used by the multi-\(k_y\)
+scan gate when an external eigenfunction or selected-state fixture is
+available.  Existing patched-GKW selected-state dumps can already be converted
+into this format.  What remains is a true external multi-\(k_y\) fixture for
+the weak low-\(k_y\) branch, especially \(k_y=0.3\), or a GX-style moment-RHS
+scan to generate an internally comparable mode structure.
+
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.92\textwidth]{figures/validation_gate_status.pdf}

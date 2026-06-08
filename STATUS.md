@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-06-06
+Last updated: 2026-06-08
 
 ## Current State
 
@@ -445,6 +445,18 @@ ordering and dealias mask, the linked `abs_dz` FFT normalization, the
 tested for exact Fourier-mode action, JIT compatibility, and differentiability
 with respect to moment amplitudes. It is not yet a full GX moment-space linear
 RHS and is not wired into the collocation/GKW-parity scan path.
+The first per-`ky` complex mode-structure discriminator infrastructure is now
+implemented without changing RHS physics. `PerKyModeStructureFixture` stores
+`ky`, `z`, complex `phi(z)`, growth, frequency, normalization, source, and
+metadata; CSV load/write helpers make the fixture portable; a GKW
+selected-state trace can be converted directly into a one-`ky` fixture; and
+`compare_per_ky_mode_structure_fixtures` reports growth, frequency,
+row-normalized phase-aligned complex `phi(z)`, optional state/moment errors,
+and independent pass/fail masks. The resulting phase-aligned `phi(z)` error can
+be passed into the existing `CycloneKyScanGateReport.profile_error` slot. What
+remains open is obtaining or exporting a true external multi-`ky` complex
+mode-structure reference for the weak low-`ky` branch, or implementing the
+minimal GX Hermite-Laguerre moment RHS and comparing its mode structures.
 A reduced validation-gate example now writes CSV summaries and a paper figure
 that show the current RH, Cyclone, CBC-term, GX/eik, DESC/eik, DESC/GX eik, and
 GX/GIST gate status in `main.tex`, plus a reduced CBC trace CSV for the current
@@ -629,6 +641,52 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-08: Per-`ky` Complex Mode-Structure Fixture Gate
+
+- Implemented the first half of the multi-`ky` physics discriminator without
+  changing collocation RHS physics:
+  - `PerKyModeStructureFixture`, a code-independent fixture for `ky`, `z`,
+    complex `phi(z)`, growth rate, real frequency, normalization, source, and
+    metadata;
+  - `PerKyModeStructureComparisonReport`, with separate growth, frequency,
+    complex-mode-structure, and optional state/moment pass masks;
+  - `mode_structure_fixture_from_selected_state_trace`, which converts an
+    existing GKW or solver selected-state trace into a complex `phi(z)` fixture;
+  - `write_per_ky_mode_structure_fixture_csv` and
+    `load_per_ky_mode_structure_fixture_csv`;
+  - `compare_per_ky_mode_structure_fixtures`, which compares matched `ky`
+    rows, checks the `z` grid, row-normalizes complex `phi(z)`, phase-aligns
+    each mode structure, and reports a `phi_phase_aligned_error` suitable for
+    `CycloneKyScanGateReport.profile_error`.
+- Exported the new fixture and comparison helpers through the top-level
+  `stellarator_gk` namespace.
+- Added tests for:
+  - CSV round-trip of a synthetic two-`ky` complex mode-structure fixture;
+  - invariance of the phase-aligned profile error to a global complex scale;
+  - feeding the complex profile error into the existing multi-`ky` scan gate;
+  - converting the existing patched-GKW selected-state fixture into a one-`ky`
+    complex mode-structure fixture.
+- Updated `TODO.md` so the generic fixture contract/gate is complete while the
+  true external multi-`ky` fixture export and exact GX-input scan rerun remain
+  open.
+- Files changed:
+  - `src/stellarator_gk/benchmarks.py`,
+  - `src/stellarator_gk/__init__.py`,
+  - `tests/test_benchmark_references.py`,
+  - `TODO.md`,
+  - `STATUS.md`,
+  - `main.tex`.
+- Commands run:
+  - `uv run ruff check src/stellarator_gk/benchmarks.py src/stellarator_gk/__init__.py tests/test_benchmark_references.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_benchmark_references.py -q -k "mode_structure_fixture or gx_cyclone_input or cyclone_ky_scan"`
+- Test results:
+  - ruff passed,
+  - focused benchmark-reference tests passed: `11 passed, 60 deselected in 29.92s`.
+- Next action: export or obtain a true external complex mode-structure fixture
+  for the exact GX input-control multi-`ky` branch, especially `ky=0.3`, or
+  assemble the minimal GX Hermite-Laguerre moment RHS and compare its mode
+  structures with this new gate.
 
 ### 2026-06-06: GX Linked `k_z` Hypercollision Discriminator
 
