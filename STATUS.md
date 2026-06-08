@@ -58,7 +58,11 @@ the production-control timing contract and records the current
 `blocked_until_external_parity_passes` status without running an unvalidated
 production benchmark. The DESC optimization example now reads the production
 readiness ledger and refuses `--require-production-ready` while the gate is
-open. The current
+open. The W7-X external GX-reference workflow is now executable through
+`scripts/run_w7x_external_reference_workflow.py`; its committed status artifact
+reports `blocked_missing_gx_executable`, because the W7-X VMEC source and
+prepared input exist but no local CUDA/NVIDIA-capable GX executable or retained
+W7-X `.big.nc`/`.out.nc` outputs are present. The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
 loading, GX/GS2 eik-table loading, least-squares benchmark objective wrappers,
@@ -559,6 +563,10 @@ The repository currently contains:
   CPU-timing artifact writer; it refuses a production timing claim until the
   external W7-X parity gate passes, while still recording the production
   dimensions and memory estimate.
+- `scripts/run_w7x_external_reference_workflow.py`: external GX W7-X
+  reference workflow driver/status writer; it copies VMEC on request, runs GX
+  when a real executable is supplied, exports `.big.nc`/`.out.nc` diagnostics,
+  and otherwise records the missing external-run blocker.
 - `examples/run_w7x_mode_structure_gate.py`: W7-X external mode-structure
   parity gate runner; it emits a pending report until the external fixture is
   exported, or compares selected-`ky` growth, frequency, and complex
@@ -575,7 +583,9 @@ The repository currently contains:
   parity data is available.
 - `fixtures/gx_w7x_mode_structure_run/`: patched GX W7-X input plus
   copy/run/export/compare metadata for producing the future external W7-X
-  `.big.nc` complex mode-structure parity fixture.
+  `.big.nc` complex mode-structure parity fixture, plus
+  `external_reference_status.json` recording the current missing-GX-executable
+  blocker.
 - `fixtures/w7x_itg_convergence_study/`: reduced W7-X convergence/timing
   artifact directory with `convergence_summary.csv`, `timing_summary.json`,
   `optimization_readiness.json`, `study_metadata.json`,
@@ -697,6 +707,7 @@ Expected tests:
 - W7-X production-readiness gate tests whenever the convergence/timing ledger
   changes,
 - guarded W7-X production CPU-timing and DESC optimization-readiness tests,
+- external W7-X GX-reference workflow status tests,
 - retained W7-X fixture contract and eik-source CLI tests,
 - retained one-window replay tests for steps 20→40, 780→800/800→820, and
   0→20,
@@ -706,6 +717,33 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-09: Added W7-X External GX Reference Workflow Gate
+
+- Added `scripts/run_w7x_external_reference_workflow.py`, an executable driver
+  for the first external production-claim blocker. It reads
+  `fixtures/gx_w7x_mode_structure_run/mode_structure_run_metadata.json`, checks
+  the prepared input, VMEC source/destination, GX executable, retained
+  `.big.nc`/`.out.nc` outputs, and exported external fixture.
+- The workflow can copy VMEC with `--copy-vmec`, run GX with `--run-gx
+  --gx-executable /path/to/gx`, and export the external CSV when retained GX
+  outputs exist. Without a runnable GX executable, it writes an open status
+  rather than making a production claim.
+- Generated
+  `fixtures/gx_w7x_mode_structure_run/external_reference_status.json`. Current
+  status is `blocked_missing_gx_executable`: the W7-X VMEC source and prepared
+  input are available, but no local CUDA/NVIDIA-capable GX executable or W7-X
+  `.big.nc`/`.out.nc` outputs are present.
+- Added `tests/test_w7x_external_reference_workflow.py` covering missing-GX,
+  VMEC-copy, and already-exported-fixture states.
+- Commands run:
+  - `uv run python scripts/run_w7x_external_reference_workflow.py`
+  - `uv run ruff check scripts/run_w7x_external_reference_workflow.py tests/test_w7x_external_reference_workflow.py`
+  - `uv run pytest tests/test_w7x_external_reference_workflow.py -q`
+- Verification:
+  - external workflow status generated with `passed=false`,
+  - focused ruff check passed,
+  - external workflow tests passed with `3 passed`.
 
 ### 2026-06-08: Completed Item 5 Implementation Layer
 

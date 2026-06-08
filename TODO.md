@@ -868,6 +868,13 @@ External production-claim blockers, not code implementation gaps:
 
 - [ ] Generate or obtain the matched external W7-X `.big.nc`/`.out.nc` pair and
   export `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
+  `scripts/run_w7x_external_reference_workflow.py` now audits and drives this
+  workflow. The current status file
+  `fixtures/gx_w7x_mode_structure_run/external_reference_status.json` reports
+  `blocked_missing_gx_executable`: the W7-X VMEC source and prepared input are
+  present, but no local CUDA/NVIDIA-capable GX executable or retained W7-X
+  `.big.nc`/`.out.nc` outputs exist yet. On a GX-capable machine, run it with
+  `--copy-vmec --run-gx --gx-executable /path/to/gx`.
 - [ ] Rerun `scripts/run_w7x_production_cpu_timing.py` after external parity
   passes, then record whether the `task.tex` target, roughly minutes on
   \(\mathcal{O}(100)\) CPUs, is credible.

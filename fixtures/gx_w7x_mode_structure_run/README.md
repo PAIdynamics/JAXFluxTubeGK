@@ -22,3 +22,16 @@ to upgrade the reduced W7-X fixture into a full code-to-code gate.
 
 The compact `.out.nc` file alone is not enough for profile parity;
 the complex profiles are read from `Diagnostics/Phi` in `.big.nc`.
+
+The workflow can be audited or run through:
+
+```bash
+uv run python scripts/run_w7x_external_reference_workflow.py
+```
+
+The current committed status is written to
+`fixtures/gx_w7x_mode_structure_run/external_reference_status.json` and is
+`blocked_missing_gx_executable`: the prepared input and source VMEC file are
+available, but no local CUDA/NVIDIA-capable GX executable or retained W7-X
+`.big.nc`/`.out.nc` outputs are present. On a GX-capable machine, rerun with
+`--copy-vmec --run-gx --gx-executable /path/to/gx`.
