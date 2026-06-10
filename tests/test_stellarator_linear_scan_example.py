@@ -1,4 +1,5 @@
 import csv
+import importlib.util
 import json
 import os
 import subprocess
@@ -9,6 +10,17 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_scan_module():
+    path = ROOT / "examples/run_stellarator_linear_scan.py"
+    spec = importlib.util.spec_from_file_location("run_stellarator_linear_scan", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_stellarator_linear_scan_example_writes_machine_readable_outputs(tmp_path):
@@ -77,3 +89,35 @@ def test_stellarator_linear_scan_example_writes_machine_readable_outputs(tmp_pat
     assert metadata["finite_growth"]
     assert metadata["finite_frequency"]
     assert metadata["steps_per_window"] == 1
+
+
+def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():
+    module = _load_scan_module()
+
+    args = module._parse_args(
+        [
+            "--geometry-source",
+            "stella-geometry",
+            "--n-kx",
+            "1",
+            "--kx-max",
+            "0.0",
+            "--ky-values",
+            "0.1,0.2,0.3",
+        ]
+    )
+    geometry, parallel, metadata = module._load_geometry(args)
+
+    z = np.asarray(geometry.z, dtype=float)
+    assert metadata["geometry_source"] == "stella-geometry"
+    assert metadata["dropped_periodic_endpoint"]
+    assert metadata["n_z"] == 256
+    assert parallel.z.shape[0] == 256
+    assert z[0] == -0.5
+    assert np.isclose(z[-1], 0.5 - 1.0 / 256.0)
+    assert metadata["field_line_periods"] > 6.9
+    assert metadata["b_dot_grad_z_scaling"] == "F = stella b.Gz / (2*pi)"
+    assert geometry.source == "stella-geometry"
+    assert np.all(np.isfinite(np.asarray(geometry.B)))
+    assert np.all(np.isfinite(np.asarray(geometry.F)))
+    assert np.all(np.isfinite(np.asarray(geometry.G)))

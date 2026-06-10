@@ -67,7 +67,10 @@ def run_w7x_stella_solver_parity_audit(
     stella_geom = _load_stella_geometry_summary(stella_geometry)
 
     solver_geometry = config.get("geometry", {})
-    solver_benchmark_controls = solver_metadata_payload.get("reduced_solver_controls", {})
+    solver_benchmark_controls = solver_metadata_payload.get(
+        "reduced_solver_controls",
+        solver_metadata_payload,
+    )
     solver_controls = {
         "n_z": solver_geometry.get("n_z"),
         "field_line_periods": solver_geometry.get("field_line_periods"),

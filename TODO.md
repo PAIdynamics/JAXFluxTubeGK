@@ -958,12 +958,31 @@ External production-claim blockers, not code implementation gaps:
   while stella uses `nakx=1`, and the reduced solver trace covers only
   `0.012` time units versus stella's `tend=200`.
 
-- [ ] Build the first stella-matched observed solver fixture. Do this before
-  changing velocity-space or RHS terms: consume the stella-exported
-  `.geometry` arrays or an eik table sampled on the same field-line length,
-  use `n_kx=1`, `kx_max=0`, `ky=(0.1,0.2,0.3)`, normalized
-  `z=zed/(2*pi)`, and a stella-comparable late-time growth window. Then rerun
-  `examples/run_w7x_mode_structure_gate.py` and the ordered parity audit.
+- [x] Build the first stella-matched observed solver fixture. The scan example
+  now accepts `--geometry-source stella-geometry` and imports stella
+  `.geometry` tables directly. It drops stella's duplicate periodic endpoint,
+  reconstructs exact normalized `z in [-0.5,0.5)`, maps `b.Gz` to the solver
+  streaming coefficient with `F = b.Gz/(2*pi)`, carries the stella zeta
+  field-line span into `field_line_periods`, and writes the usual geometry,
+  convergence, growth, and mode-structure artifacts. The first matched
+  observed fixture is committed under
+  `fixtures/w7x_itg_stella_matched_observed/` with `n_kx=1`, `kx_max=0`,
+  `ikxspace=1`, `ky=(0.1,0.2,0.3)`, `n_z=256`, and the stella-exported W7-X
+  geometry. Its ordered audit now passes normalized z, field-line length,
+  selected `ky`, and kx/linking. The external mode-structure gate remains
+  open with maximum growth, real-frequency, and profile errors
+  `6.57936105e-01`, `1.07769929e-01`, and `1.10702057e-01`; the first ordered
+  failed check is now `growth_window_time_normalization`, because this fixture
+  is still a short smoke trace (`dt=0.001`, `n_windows=6`, total time
+  `0.006`) rather than a stella-comparable late-time trace.
+
+- [ ] Run the stella-matched observed solver trace to a comparable late-time
+  window. Use the same imported stella geometry and `n_kx=1`/`kx=0` controls,
+  but extend the solver total time toward stella's `tend=200` with the same
+  late-half growth fit. Start with a staged CPU ladder (for example
+  `t_end=1, 5, 20, 100, 200`) and require finite amplitudes, stable late-fit
+  growth, and unchanged coordinate/length/kx audit passes before interpreting
+  growth/profile errors as RHS or velocity-space discrepancies.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

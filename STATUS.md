@@ -824,6 +824,39 @@ Expected tests:
 
 ## Round Log
 
+### 2026-06-11: Built stella-Matched Observed W7-X Solver Fixture
+
+- Committed the previous ordered stella parity audit work as
+  `a2dc3cb Add stella W7-X reference parity audit`.
+- Extended `examples/run_stellarator_linear_scan.py` with
+  `--geometry-source stella-geometry`. The importer reads stella
+  `.geometry` tables, parses the commented global header, drops the duplicate
+  periodic endpoint by default, reconstructs exact normalized
+  `z in [-0.5,0.5)`, maps stella `b.Gz` to the solver coefficient with
+  `F = b.Gz/(2*pi)`, and records both the full stella zeta field-line span and
+  the sampled no-endpoint span in `run_config.json`.
+- Generated the first stella-matched observed solver fixture at
+  `fixtures/w7x_itg_stella_matched_observed/` using the stella W7-X geometry,
+  `n_z=256`, `n_kx=1`, `kx_max=0`, `ikxspace=1`,
+  `ky=(0.1,0.2,0.3)`, Chebyshev `n_vpar=n_mu=4`, and a short smoke trace
+  with `dt=0.001`, `n_windows=6`, `growth_window_fraction=0.5`.
+- The matched fixture's ordered audit now passes normalized z, field-line
+  length, selected `ky`, and kx/linking. The first failed check is
+  `growth_window_time_normalization`: the solver total time is `0.006`
+  versus stella `tend=200`. The refreshed mode-structure gate remains open
+  with `max_growth_error=6.57936105e-01`,
+  `max_frequency_error=1.07769929e-01`, and
+  `max_profile_error=1.10702057e-01`.
+- Added regression coverage so the default reduced audit still stops at
+  `field_line_length`, while the new stella-matched observed fixture stops at
+  `growth_window_time_normalization`.
+- Commands run:
+  - `uv run ruff check examples/run_stellarator_linear_scan.py scripts/audit_w7x_stella_solver_parity.py tests/test_stellarator_linear_scan_example.py tests/test_w7x_stella_solver_parity_audit.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_linear_scan_example.py tests/test_w7x_stella_solver_parity_audit.py -q`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_stellarator_linear_scan.py --geometry-source stella-geometry --stella-geometry fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry --output-dir fixtures/w7x_itg_stella_matched_observed --n-kx 1 --kx-max 0.0 --ikxspace 1 --ky-values 0.1,0.2,0.3 --n-vpar 4 --n-mu 4 --vpar-max 2.0 --mu-max 1.5 --density 1.0 --temperature 1.0 --density-gradient 1.0 --temperature-gradient 3.0 --electron-density 1.0 --electron-temperature 1.0 --dt 0.001 --steps-per-window 1 --n-windows 6 --growth-diagnostic late_fit --growth-window-fraction 0.5`
+  - `JAX_ENABLE_X64=1 uv run python examples/run_w7x_mode_structure_gate.py --observed-fixture fixtures/w7x_itg_stella_matched_observed/mode_structures.csv --reference-fixture fixtures/w7x_itg_external_mode_structure_fixture.csv --ky-values 0.1,0.2,0.3 --resample-reference-to-observed-z --output-dir fixtures/w7x_itg_stella_matched_observed/mode_structure_gate`
+  - `JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_stella_solver_parity.py --solver-config fixtures/w7x_itg_stella_matched_observed/run_config.json --solver-metadata fixtures/w7x_itg_stella_matched_observed/convergence_metadata.json --solver-fixture fixtures/w7x_itg_stella_matched_observed/mode_structures.csv --gate-status fixtures/w7x_itg_stella_matched_observed/mode_structure_gate/gate_status.json --output fixtures/w7x_itg_stella_matched_observed/stella_solver_parity_audit.json`
+
 ### 2026-06-11: Ordered stella/Solver W7-X Parity Audit
 
 - Fixed the stella fixture export convention: `examples/export_stella_mode_structure_fixture.py`

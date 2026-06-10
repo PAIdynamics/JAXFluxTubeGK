@@ -8,7 +8,8 @@ Example from the repository root:
 The default path uses the bundled DESC DSHAPE fixture.  A real DESC
 equilibrium can be used with ``--geometry-source desc-path --desc-path ...``.
 GX/GIST/GS2 eik geometry tables can be used with
-``--geometry-source eik --eik-reference ...``.
+``--geometry-source eik --eik-reference ...``.  A stella ``.geometry`` file
+can be used with ``--geometry-source stella-geometry --stella-geometry ...``.
 """
 
 # ruff: noqa: E402
@@ -34,6 +35,7 @@ import numpy as np
 from stellarator_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
+    FluxTubeGeometry,
     PerKyModeStructureFixture,
     ParallelGridSpec,
     SpeciesParams,
@@ -90,6 +92,34 @@ GEOMETRY_FIELDS = (
     "g_xx",
     "g_xy",
     "g_yy",
+)
+
+STELLA_GEOMETRY_COLUMNS = (
+    "alpha",
+    "zed",
+    "zeta",
+    "bmag",
+    "b_dot_grad_zed",
+    "g_yy",
+    "g_xy",
+    "g_xx",
+    "B_cross_gradB_dot_grad_alpha",
+    "b_cross_kappa_dot_grad_alpha",
+    "B_cross_gradB_dot_grad_psi",
+    "bmag_psi0",
+)
+STELLA_GLOBAL_COLUMNS = (
+    "rhoc",
+    "qinp",
+    "shat",
+    "rhotor",
+    "aref",
+    "bref",
+    "dxdpsi",
+    "dydalpha",
+    "exb_nonlin",
+    "flux_fac",
+    "one_over_Grho",
 )
 
 
@@ -149,9 +179,12 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--output-dir", type=Path, default=Path("runs/dshape_linear_scan"))
     parser.add_argument(
         "--geometry-source",
-        choices=("fixture", "desc-path", "eik"),
+        choices=("fixture", "desc-path", "eik", "stella-geometry"),
         default="fixture",
-        help="use the bundled .npz fixture, evaluate DESC, or sample a GX/GIST/GS2 eik table",
+        help=(
+            "use the bundled .npz fixture, evaluate DESC, sample a GX/GIST/GS2 eik "
+            "table, or import a stella .geometry table"
+        ),
     )
     parser.add_argument(
         "--fixture",
@@ -168,6 +201,17 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--file-format", choices=("hdf5", "pickle"), help="DESC file format")
     parser.add_argument("--family-index", type=int, default=-1)
     parser.add_argument("--eik-reference", type=Path, help="GX/GIST/GS2 eik geometry table")
+    parser.add_argument(
+        "--stella-geometry",
+        type=Path,
+        default=Path("fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"),
+        help="stella .geometry table for --geometry-source stella-geometry",
+    )
+    parser.add_argument(
+        "--keep-stella-endpoint",
+        action="store_true",
+        help="keep the duplicate +pi endpoint in stella .geometry instead of dropping it",
+    )
     parser.add_argument("--external-eik-reference", type=Path)
     parser.add_argument("--rho", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.0)
@@ -282,6 +326,9 @@ def _load_geometry(args):
             "theta_max": float(theta[-1]),
             "theta_endpoint": "excluded",
         }
+
+    if args.geometry_source == "stella-geometry":
+        return _load_stella_geometry(args)
 
     if args.desc_path is None:
         raise ValueError("--desc-path is required for --geometry-source desc-path")
@@ -398,6 +445,161 @@ def _parallel_grid_from_theta(theta):
     return build_parallel_grid(
         ParallelGridSpec(n_z=len(z), z_min=float(z[0]), z_max=float(z[-1] + dz))
     )
+
+
+def _load_stella_geometry(args):
+    rows, global_header = _read_stella_geometry_file(args.stella_geometry)
+    original_n_z = int(rows.shape[0])
+    zed = rows[:, STELLA_GEOMETRY_COLUMNS.index("zed")]
+    zeta = rows[:, STELLA_GEOMETRY_COLUMNS.index("zeta")]
+    full_zeta = np.asarray(zeta, dtype=float)
+    dropped_endpoint = False
+    if not args.keep_stella_endpoint and _has_duplicate_stella_endpoint(rows):
+        rows = rows[:-1]
+        zed = zed[:-1]
+        zeta = zeta[:-1]
+        dropped_endpoint = True
+    n_z = int(rows.shape[0])
+    if args.n_z is not None and args.n_z != n_z:
+        raise ValueError(
+            f"stella geometry provides n_z={n_z} after endpoint handling; "
+            "rerun stella/export an eik table for a different resolution"
+        )
+
+    z = (
+        np.linspace(-0.5, 0.5, n_z, endpoint=False, dtype=float)
+        if dropped_endpoint
+        else zed / (2.0 * np.pi)
+    )
+    parallel = _parallel_grid_from_z(z)
+    solver_z = np.asarray(parallel.z, dtype=float)
+    theta = 2.0 * np.pi * solver_z
+    phi = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("zeta")], dtype=float)
+    rho_value = _stella_rho_from_header(global_header)
+    B = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("bmag")], dtype=float)
+    # stella's b.Gz multiplies d/dzed.  The solver grid below differentiates
+    # with respect to zed/(2*pi), so F must be scaled by 1/(2*pi).
+    F = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("b_dot_grad_zed")], dtype=float) / (
+        2.0 * np.pi
+    )
+    D_z = np.asarray(parallel.D_z, dtype=float)
+    G = -F * (D_z @ B) / B
+    bxgb_gy = np.asarray(
+        rows[:, STELLA_GEOMETRY_COLUMNS.index("B_cross_gradB_dot_grad_alpha")],
+        dtype=float,
+    )
+    bxkappa_gy = np.asarray(
+        rows[:, STELLA_GEOMETRY_COLUMNS.index("b_cross_kappa_dot_grad_alpha")],
+        dtype=float,
+    )
+    geometry = FluxTubeGeometry(
+        z=parallel.z,
+        w_z=parallel.w_z,
+        theta=jnp.asarray(theta, dtype=jnp.float64),
+        phi=jnp.asarray(phi, dtype=jnp.float64),
+        rho=jnp.full_like(parallel.z, rho_value),
+        B=jnp.asarray(B, dtype=jnp.float64),
+        F=jnp.asarray(F, dtype=jnp.float64),
+        G=jnp.asarray(G, dtype=jnp.float64),
+        E_y=jnp.asarray(bxgb_gy, dtype=jnp.float64),
+        D_x=jnp.asarray(
+            rows[:, STELLA_GEOMETRY_COLUMNS.index("B_cross_gradB_dot_grad_psi")],
+            dtype=jnp.float64,
+        ),
+        D_y=jnp.asarray(bxgb_gy + bxkappa_gy, dtype=jnp.float64),
+        g_xx=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_xx")], dtype=jnp.float64),
+        g_xy=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_xy")], dtype=jnp.float64),
+        g_yy=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_yy")], dtype=jnp.float64),
+        radial_coordinate="rho",
+        source="stella-geometry",
+    )
+    field_line_turns = (float(np.max(full_zeta)) - float(np.min(full_zeta))) / (2.0 * np.pi)
+    sampled_zeta_turns = (float(np.max(zeta)) - float(np.min(zeta))) / (2.0 * np.pi)
+    metadata = {
+        "geometry_source": "stella-geometry",
+        "stella_geometry": str(args.stella_geometry),
+        "source": str(args.stella_geometry),
+        "rho": rho_value,
+        "alpha": float(rows[0, STELLA_GEOMETRY_COLUMNS.index("alpha")]),
+        "n_z": n_z,
+        "original_n_z": original_n_z,
+        "dropped_periodic_endpoint": dropped_endpoint,
+        "z_coordinate": "zed_over_2pi",
+        "z_min": float(solver_z[0]),
+        "z_max": float(solver_z[-1]),
+        "theta_min": float(np.min(theta)),
+        "theta_max": float(np.max(theta)),
+        "zeta_min": float(np.min(phi)),
+        "zeta_max": float(np.max(phi)),
+        "zeta_turns": field_line_turns,
+        "sampled_zeta_turns": sampled_zeta_turns,
+        "field_line_periods": field_line_turns,
+        "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
+        "global_header": {
+            name: float(value)
+            for name, value in zip(STELLA_GLOBAL_COLUMNS, global_header, strict=True)
+        },
+    }
+    return geometry, parallel, metadata
+
+
+def _read_stella_geometry_file(path: Path):
+    global_header = None
+    rows = []
+    with Path(path).open() as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                stripped = stripped[1:].strip()
+                if not stripped:
+                    continue
+            try:
+                values = [float(item) for item in stripped.split()]
+            except ValueError:
+                continue
+            if len(values) == len(STELLA_GLOBAL_COLUMNS) and global_header is None:
+                global_header = tuple(values)
+            elif len(values) >= len(STELLA_GEOMETRY_COLUMNS):
+                rows.append(values[: len(STELLA_GEOMETRY_COLUMNS)])
+    if global_header is None:
+        raise ValueError(f"{path} is missing the stella global geometry header")
+    if not rows:
+        raise ValueError(f"{path} contains no stella geometry rows")
+    return np.asarray(rows, dtype=float), global_header
+
+
+def _has_duplicate_stella_endpoint(rows) -> bool:
+    if rows.shape[0] < 3:
+        return False
+    first = rows[0]
+    last = rows[-1]
+    zed_span = abs((last[STELLA_GEOMETRY_COLUMNS.index("zed")] - first[STELLA_GEOMETRY_COLUMNS.index("zed")]) - 2.0 * np.pi)
+    periodic_columns = (
+        "bmag",
+        "b_dot_grad_zed",
+        "g_yy",
+        "g_xx",
+        "B_cross_gradB_dot_grad_alpha",
+        "b_cross_kappa_dot_grad_alpha",
+        "bmag_psi0",
+    )
+    periodic_match = all(
+        np.isclose(
+            first[STELLA_GEOMETRY_COLUMNS.index(name)],
+            last[STELLA_GEOMETRY_COLUMNS.index(name)],
+            rtol=1.0e-8,
+            atol=1.0e-10,
+        )
+        for name in periodic_columns
+    )
+    return bool(zed_span <= 1.0e-3 and periodic_match)
+
+
+def _stella_rho_from_header(global_header: tuple[float, ...]) -> float:
+    values = dict(zip(STELLA_GLOBAL_COLUMNS, global_header, strict=True))
+    return float(values["rhoc"])
 
 
 def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):

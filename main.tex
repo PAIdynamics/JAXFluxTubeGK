@@ -1953,6 +1953,40 @@ and the reduced solver trace covers only \(0.012\) time units versus stella's
 solver-side convention/control mismatch against stella, not the absence of an
 external reference and not yet evidence for a velocity-space or RHS-term
 physics error.
+
+The first solver fixture matched to the stella geometry and mode controls is
+now generated with
+\begin{verbatim}
+uv run python examples/run_stellarator_linear_scan.py \
+  --geometry-source stella-geometry \
+  --stella-geometry fixtures/stella_w7x_mode_structure_run/\
+stella_w7x_adiabatic_electrons.geometry \
+  --output-dir fixtures/w7x_itg_stella_matched_observed \
+  --n-kx 1 --kx-max 0.0 --ikxspace 1 \
+  --ky-values 0.1,0.2,0.3 \
+  --n-vpar 4 --n-mu 4 --vpar-max 2.0 --mu-max 1.5 \
+  --density 1.0 --temperature 1.0 \
+  --density-gradient 1.0 --temperature-gradient 3.0 \
+  --electron-density 1.0 --electron-temperature 1.0 \
+  --dt 0.001 --steps-per-window 1 --n-windows 6 \
+  --growth-diagnostic late_fit --growth-window-fraction 0.5
+\end{verbatim}
+This path imports the stella \(\texttt{.geometry}\) table directly, drops the
+duplicate periodic endpoint, reconstructs exact normalized
+\(z\in[-0.5,0.5)\), and scales the stella streaming coefficient as
+\(F=\texttt{b.Gz}/(2\pi)\) because the solver differentiates with respect to
+\(\texttt{zed}/(2\pi)\).  The ordered audit for this matched observed fixture
+passes normalized \(z\), field-line length, selected \(k_y\), and
+\(N_{k_x}=1\) linking.  The first remaining failed check is now
+growth-window/time normalization: the current observed fixture is only a
+short smoke trace with total time \(0.006\), whereas the stella reference uses
+\(\texttt{tend}=200\) and a late-half growth window.  Its current
+mode-structure comparison is therefore still open, with maximum growth,
+real-frequency, and phase-aligned profile errors
+\(6.57936105\times10^{-1}\), \(1.07769929\times10^{-1}\), and
+\(1.10702057\times10^{-1}\), respectively.  The next validation step is a
+staged long-time run using the same imported geometry and mode controls before
+changing velocity-space or RHS terms.
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a

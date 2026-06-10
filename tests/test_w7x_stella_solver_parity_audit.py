@@ -45,3 +45,32 @@ def test_committed_w7x_stella_solver_parity_audit_stops_at_field_line_length(
     assert checks["growth_window_time_normalization"]["solver_total_time"] == 0.012
     assert checks["growth_window_time_normalization"]["stella_total_time"] == 200.0
     assert "stella-exported geometry" in report["next_action"]
+
+
+def test_stella_matched_observed_fixture_stops_at_growth_window_time(
+    tmp_path,
+):
+    module = _load_module()
+    observed_dir = ROOT / "fixtures/w7x_itg_stella_matched_observed"
+
+    report = module.run_w7x_stella_solver_parity_audit(
+        solver_config=observed_dir / "run_config.json",
+        solver_metadata=observed_dir / "convergence_metadata.json",
+        solver_fixture=observed_dir / "mode_structures.csv",
+        gate_status=observed_dir / "mode_structure_gate/gate_status.json",
+        output=tmp_path / "audit.json",
+    )
+
+    assert report["status"] == "open"
+    assert report["first_failed_check"] == "growth_window_time_normalization"
+    checks = {item["name"]: item for item in report["ordered_checks"]}
+    assert checks["eik_z_coordinate_convention"]["passed"]
+    assert checks["field_line_length"]["passed"]
+    assert checks["field_line_length"]["absolute_turn_error"] == 0.0
+    assert checks["ky_normalization"]["passed"]
+    assert checks["twist_and_shift_linking"]["passed"]
+    assert checks["twist_and_shift_linking"]["solver_n_kx"] == 1
+    assert not checks["growth_window_time_normalization"]["passed"]
+    assert checks["growth_window_time_normalization"]["solver_total_time"] == 0.006
+    assert report["gate"]["max_growth_error"] > 0.6
+    assert "late-time window" in report["next_action"]
