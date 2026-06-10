@@ -28,6 +28,7 @@ from stellarator_gk import (
     compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,
     load_per_ky_mode_structure_fixture_csv,
+    resample_per_ky_mode_structure_fixture,
 )
 
 
@@ -39,6 +40,7 @@ def main() -> None:
         ky_values = _parse_float_tuple(args.ky_values)
         observed = _select_ky_values(observed, ky_values, args.ky_tolerance)
         reference = _select_ky_values(reference, ky_values, args.ky_tolerance)
+    observed, reference = _apply_z_resampling(observed, reference, args)
     comparison = compare_per_ky_mode_structure_fixtures(
         observed,
         reference,
@@ -101,6 +103,32 @@ def _select_ky_values(
             ("ky_filter_tolerance", tolerance),
         ),
     )
+
+
+def _apply_z_resampling(
+    observed: PerKyModeStructureFixture,
+    reference: PerKyModeStructureFixture,
+    args,
+) -> tuple[PerKyModeStructureFixture, PerKyModeStructureFixture]:
+    """Optionally interpolate one fixture onto the other's parallel grid."""
+
+    if args.resample_reference_to_observed_z and args.resample_observed_to_reference_z:
+        raise ValueError("choose at most one z-resampling direction")
+    if args.resample_reference_to_observed_z:
+        reference = resample_per_ky_mode_structure_fixture(
+            reference,
+            observed.z,
+            periodic=args.periodic_z,
+            period=args.z_period,
+        )
+    if args.resample_observed_to_reference_z:
+        observed = resample_per_ky_mode_structure_fixture(
+            observed,
+            reference.z,
+            periodic=args.periodic_z,
+            period=args.z_period,
+        )
+    return observed, reference
 
 
 def _write_csv(path: Path, comparison, gate) -> None:
@@ -181,6 +209,10 @@ def _parse_args():
     parser.add_argument("--ky-values", help="optional comma-separated ky subset to compare")
     parser.add_argument("--ignore-frequency", action="store_true")
     parser.add_argument("--require-profile", action="store_true")
+    parser.add_argument("--resample-reference-to-observed-z", action="store_true")
+    parser.add_argument("--resample-observed-to-reference-z", action="store_true")
+    parser.add_argument("--periodic-z", action="store_true")
+    parser.add_argument("--z-period", type=float)
     return parser.parse_args()
 
 

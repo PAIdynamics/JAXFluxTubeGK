@@ -1,0 +1,27 @@
+{
+  "benchmark_name": "w7x_itg_external_reference_ingest",
+  "copy_outputs": true,
+  "external_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "external_fixture_exists": false,
+  "external_gate_dir": "fixtures/w7x_itg_convergence_study/external_mode_structure_gate",
+  "gx_big_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.big.nc",
+  "gx_big_output_exists": false,
+  "gx_growth_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.out.nc",
+  "gx_growth_output_exists": false,
+  "ky_values": "0.1,0.2,0.3",
+  "metadata": "fixtures/gx_w7x_mode_structure_run/mode_structure_run_metadata.json",
+  "metadata_ky_values": "0.1,0.2,0.3",
+  "missing_outputs": [
+    "gx_big_output",
+    "gx_growth_output"
+  ],
+  "observed_fixture": "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv",
+  "passed": false,
+  "required_actions": [
+    "copy the returned GX .big.nc/.out.nc files into the prepared run directory or pass --gx-big-output/--gx-growth-output"
+  ],
+  "resample_reference_to_observed_z": true,
+  "status": "blocked_missing_external_outputs",
+  "target_gx_big_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.big.nc",
+  "target_gx_growth_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.out.nc"
+}

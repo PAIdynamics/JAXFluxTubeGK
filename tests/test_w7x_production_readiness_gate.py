@@ -22,6 +22,19 @@ def _load_module():
     return module
 
 
+def _write_single_ky_fixture(path: Path, *, growth_rate: float) -> None:
+    path.write_text(
+        "\n".join(
+            (
+                "ky,z_index,z,phi_real,phi_imag,growth_rate,frequency,normalization,source",
+                f"0.1,0,0.0,1.0,0.0,{growth_rate},0.0,test,synthetic",
+                f"0.1,1,1.0,1.0,0.0,{growth_rate},0.0,test,synthetic",
+                "",
+            )
+        )
+    )
+
+
 def test_w7x_production_readiness_gate_blocks_on_missing_external_reference(tmp_path):
     module = _load_module()
     output = tmp_path / "production_readiness_gate.json"
@@ -58,6 +71,32 @@ def test_w7x_production_readiness_gate_blocks_on_missing_external_reference(tmp_
     )
     assert report["desc_optimization_status"].startswith("keep_reduced")
     assert any("external W7-X mode-structure fixture" in item for item in report["required_actions"])
+
+
+def test_w7x_production_readiness_gate_blocks_on_open_external_parity(tmp_path):
+    module = _load_module()
+    observed = tmp_path / "observed.csv"
+    reference = tmp_path / "reference.csv"
+    _write_single_ky_fixture(observed, growth_rate=0.0)
+    _write_single_ky_fixture(reference, growth_rate=0.1)
+
+    report = module.run_w7x_production_readiness_gate(
+        convergence_dir=CONVERGENCE,
+        observed_fixture=observed,
+        reference_fixture=reference,
+        external_gate_dir=tmp_path / "external_gate",
+        output_path=tmp_path / "production_readiness_gate.json",
+        production_timing_path=tmp_path / "production_cpu_timing.json",
+        ky_values="0.1",
+    )
+
+    assert report["status"] == "blocked_external_mode_structure_parity"
+    assert not report["passed"]
+    assert report["reduced_convergence_regression"]["passed"]
+    assert report["external_mode_structure_gate"]["status"] == "open"
+    assert report["external_mode_structure_gate"]["max_growth_error"] == 0.1
+    assert any("mode-structure parity gap" in item for item in report["required_actions"])
+    assert not any("export a matched external" in item for item in report["required_actions"])
 
 
 def test_w7x_production_readiness_gate_blocks_on_missing_production_timing_after_parity(

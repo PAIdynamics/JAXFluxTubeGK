@@ -29,9 +29,39 @@ The workflow can be audited or run through:
 uv run python scripts/run_w7x_external_reference_workflow.py
 ```
 
+If the run will happen on another machine, package the inputs and handoff
+scripts first. Unpack the tarball over a full `new-plasma-code` checkout on
+the GX/CUDA machine:
+
+```bash
+uv run python scripts/package_w7x_external_reference_bundle.py --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz
+```
+
 The current committed status is written to
 `fixtures/gx_w7x_mode_structure_run/external_reference_status.json` and is
-`blocked_missing_gx_executable`: the prepared input and source VMEC file are
-available, but no local CUDA/NVIDIA-capable GX executable or retained W7-X
-`.big.nc`/`.out.nc` outputs are present. On a GX-capable machine, rerun with
+`blocked_missing_gx_executable`: the prepared input exists, the VMEC file has
+been copied into this run directory, and the local transfer bundle
+`w7x_external_reference_bundle.tar.gz` exists, but no local
+CUDA/NVIDIA-capable GX executable or retained W7-X `.big.nc`/`.out.nc` outputs
+are present. On a GX-capable machine, rerun with
 `--copy-vmec --run-gx --gx-executable /path/to/gx`.
+
+Equivalently, set `GX_EXECUTABLE` and use the checked-in handoff:
+
+```bash
+GX_EXECUTABLE=/path/to/gx bash fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
+```
+
+After returned `.big.nc`/`.out.nc` files are available in this checkout, ingest
+them, export the CSV fixture, run the W7-X parity gate, and refresh readiness:
+
+```bash
+bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh --copy-outputs --resample-reference-to-observed-z
+```
+
+After the external parity fixture passes, run the production CPU timing/readiness
+handoff:
+
+```bash
+bash fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh
+```

@@ -1,0 +1,71 @@
+{
+  "benchmark_name": "w7x_itg_external_stella_mode_structure_reference",
+  "comparison_command": "JAX_ENABLE_X64=1 uv run python examples/compare_mode_structure_fixtures.py --observed fixtures/w7x_itg_reduced_benchmark/mode_structures.csv --reference fixtures/w7x_itg_external_mode_structure_fixture.csv --ky-values 0.1,0.2,0.3 --require-profile --resample-reference-to-observed-z --output figures/w7x_itg_external_mode_structure_comparison.csv",
+  "comparison_output": "figures/w7x_itg_external_mode_structure_comparison.csv",
+  "eik_q_used": 1.158412,
+  "eik_reference": "relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+  "export_command": "uv run python examples/export_stella_mode_structure_fixture.py --stella-output fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.out.nc --ky-values 0.1,0.2,0.3 --average-fraction 0.5 --stella-z-coordinate zed_over_2pi --output fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "external_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "geometry": {
+    "alpha0": 0.0,
+    "field_line_match": "nfield_periods = gx_npol * q_eik * nfp",
+    "geometry_option": "vmec",
+    "torflux": 0.64,
+    "vmec_filename": "wout_w7x.nc",
+    "zed_equal_arc": true,
+    "zeta_center": 0.0
+  },
+  "grid": {
+    "export_ky_values": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "kx_values": [
+      0.0
+    ],
+    "ky_values": [
+      0.0,
+      0.1,
+      0.2,
+      0.3
+    ],
+    "nakx": 1,
+    "naky": 4,
+    "nmu": 8,
+    "nvgrid": 16,
+    "nzed": 256,
+    "stella_vpa_points": 32
+  },
+  "gx_npol": 6.0,
+  "nfield_periods": 34.752359999999996,
+  "nfp": 5.0,
+  "notes": "This is the matched CPU continuum stella W7-X reference path. It uses the GX benchmark VMEC rather than stella's bundled W7-X VMEC because the existing solver gate is tied to the GX VMEC/eik provenance.",
+  "observed_fixture": "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv",
+  "prepared_input": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.in",
+  "run_command": "bash fixtures/stella_w7x_mode_structure_run/run_stella_reference.sh",
+  "species": {
+    "adiabatic_option": "field-line-average-term",
+    "electron_model": "adiabatic",
+    "ion_density": 1.0,
+    "ion_density_gradient": 1.0,
+    "ion_temperature": 1.0,
+    "ion_temperature_gradient": 3.0,
+    "kinetic_species": 1,
+    "nine": 1.0,
+    "tite": 1.0
+  },
+  "status": "prepared_stella_run_pending_execution",
+  "stella_executable": "relevant-codes/stella/stella",
+  "stella_output": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.out.nc",
+  "time": {
+    "delt": 0.1,
+    "growth_average_fraction": 0.5,
+    "nwrite": 10,
+    "tend": 200.0
+  },
+  "vmec_copied": true,
+  "vmec_destination": "fixtures/stella_w7x_mode_structure_run/wout_w7x.nc",
+  "vmec_source": "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc",
+  "vmec_source_sha256": "7d3bc31a4dd599b30619444da740c64fba27be997a2aaa25f5f211387616ab86"
+}

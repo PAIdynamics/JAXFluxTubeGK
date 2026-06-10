@@ -1160,8 +1160,9 @@ tables, an independent GX/VMEC GIST external eik-producer suite, and a DESC/GX
 block-\texttt{eik.out} DSHAPE fixture.  These references are used as objective
 targets, parser tests, and executable validation gates.
 The true RH late-plateau, production-control Cyclone selected-\(k_y\), and
-available eik parity gates now pass; the remaining production hardening item is
-full selected-mode state-history parity against GKW.
+available eik parity gates now pass.  The remaining production hardening items
+are full selected-mode state/velocity-space parity against GKW and external
+W7-X mode-structure parity.
 The validation-gate interface reports
 \[
   \left(
@@ -1877,9 +1878,82 @@ k_y & 0 & 0.1 & 0.2 & 0.3\\ \hline
 \]
 These scalar and complex \(\phi(z)\) mode-structure files are therefore
 regression artifacts for the current solver implementation.  They should be
-replaced by, or compared against, a matched GX/GKW/GS2/stella W7-X
-time-history or mode-structure fixture before claiming stellarator
-growth-rate parity.  The GX route is prepared in
+replaced by, or compared against, a matched external W7-X time-history or
+mode-structure fixture before claiming stellarator growth-rate parity.  The
+preferred route is now stella, because it is a CPU continuum gyrokinetic code
+with W7-X VMEC examples rather than a GPU-native Hermite--Laguerre moment
+reference.  The local stella checkout builds on CPU, and the bundled
+\texttt{LINEAR\_W7X\_SINGLEMODE} example has been run as a smoke test.  Its
+exported \(k_y=0.5\) fixture gives
+\(\gamma=0.0948506\) and \(\omega_r=-0.0280970\), but that run uses stella's
+kinetic-electron \(s=0.49\) example and is not yet matched to the current
+adiabatic-electron \(s=0.64\) W7-X gate.
+
+The matched stella input is now prepared in
+\path{fixtures/stella_w7x_mode_structure_run/}.  It uses the GX benchmark
+VMEC file, \(s=\texttt{torflux}=0.64\), \(\alpha=0\), a field-line length
+\(\texttt{nfield\_periods}=34.75236\) computed from the GX eik value of \(q\),
+one kinetic ion species, stella's adiabatic-electron
+\texttt{field-line-average-term} response, \(k_y=(0,0.1,0.2,0.3)\), \(k_x=0\),
+\(\texttt{nzed}=256\), \(\texttt{nmu}=8\), \(\texttt{nvgrid}=16\),
+\(\texttt{tend}=200\), \(\Delta t=0.1\), and the same late-half time window
+used by the fixture exporter.  A reduced matched-physics smoke with the same
+VMEC, surface, electron model, \(k_y\) set, and field-line-length formula has
+run successfully and exported \(k_y=(0.1,0.2,0.3)\), verifying the input
+contract and stella \texttt{.out.nc} schema.  The full matched stella
+execution has now also completed on one CPU in about \(295\,\mathrm{s}\).  It
+produced \path{fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.out.nc},
+which was exported to the shared external fixture
+\path{fixtures/w7x_itg_external_mode_structure_fixture.csv}.  The exported
+fixture contains 257 z points for each of \(k_y=(0.1,0.2,0.3)\).  With the
+late-half-window diagnostic, stella gives
+\[
+\gamma=(-7.797962\times10^{-4},\;-4.876057\times10^{-3},\;
+9.619444\times10^{-3}),
+\]
+and
+\[
+\omega_r=(-6.573003\times10^{-2},\;-1.181846\times10^{-1},\;
+-2.849346\times10^{-3}).
+\]
+The exact reproduction commands are
+\begin{verbatim}
+bash fixtures/stella_w7x_mode_structure_run/run_stella_reference.sh
+bash fixtures/stella_w7x_mode_structure_run/export_stella_fixture.sh
+\end{verbatim}
+The second command converts the stella output into the shared fixture format,
+runs the mode-structure comparison with reference-to-observed z resampling,
+and refreshes the W7-X readiness ledger.  Equivalently, a stella output can be
+converted manually with
+\begin{verbatim}
+uv run python examples/export_stella_mode_structure_fixture.py \
+  --stella-output path/to/input.out.nc \
+  --ky-values 0.1,0.2,0.3 \
+  --stella-z-coordinate zed_over_2pi \
+  --output fixtures/w7x_itg_external_mode_structure_fixture.csv
+\end{verbatim}
+The present solver comparison is open, not missing: comparing the reduced
+solver fixture to the stella fixture gives maximum growth, real-frequency, and
+phase-aligned profile errors \(1.89858341\times10^{-1}\),
+\(1.39078602\times10^{-1}\), and \(3.02836095\times10^{-1}\), respectively,
+after exporting stella with normalized \(z=\texttt{zed}/(2\pi)\).  The
+ordered audit
+\begin{verbatim}
+uv run python scripts/audit_w7x_stella_solver_parity.py
+\end{verbatim}
+writes a JSON report in the W7-X convergence fixture directory.  It shows
+that normalized z and selected \(k_y\) now pass, while the first
+failed convention is field-line length: the committed reduced solver fixture
+uses \(\texttt{field\_line\_periods}=1\), whereas the matched stella VMEC run
+spans \(\texttt{nfield\_periods}/n_{\rm fp}\simeq6.95\) zeta turns.  Later
+ordered blockers are also still present: the reduced solver fixture uses
+\(N_{k_x}=3\) with linked-mode spacing while stella uses \(\texttt{nakx}=1\),
+and the reduced solver trace covers only \(0.012\) time units versus stella's
+\(\texttt{tend}=200\).  Thus the current W7-X blocker is a
+solver-side convention/control mismatch against stella, not the absence of an
+external reference and not yet evidence for a velocity-space or RHS-term
+physics error.
+The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a
 GX run command that should produce the matching \(\texttt{.out.nc}\) and
@@ -1890,19 +1964,43 @@ solver fixture.  The comparison itself is executable through
 \begin{verbatim}
 uv run python examples/run_w7x_mode_structure_gate.py
 \end{verbatim}
-which currently reports a pending external reference and will switch to a
-growth, frequency, and profile gate once the exported W7-X fixture is present.
+which now compares against the exported stella fixture by default and reports
+an open growth, frequency, and profile gate until solver/stella parity is
+resolved.
 The external GX workflow is also executable as a status-producing driver:
 \begin{verbatim}
 uv run python scripts/run_w7x_external_reference_workflow.py
 \end{verbatim}
-It currently reports \(\texttt{blocked\_missing\_gx\_executable}\): the W7-X
-VMEC source and prepared input are available, but this local checkout has no
+For transfer to a GX/CUDA machine, the prepared input, VMEC file, handoff
+scripts, and SHA-256 manifest can be packaged as an overlay for a full
+repository checkout with
+\begin{verbatim}
+uv run python scripts/package_w7x_external_reference_bundle.py \
+  --output /tmp/w7x_external_reference_bundle.tar.gz
+\end{verbatim}
+The local run directory also contains a generated
+\texttt{w7x\_external\_reference\_bundle.tar.gz}, and the W7-X VMEC file has
+been copied into that directory.  The workflow still reports
+\(\texttt{blocked\_missing\_gx\_executable}\): this local checkout has no
 CUDA/NVIDIA-capable GX executable and no retained W7-X \(\texttt{.big.nc}\) or
-\(\texttt{.out.nc}\) outputs.  On a GX-capable machine, the same driver should
-be rerun with \(\texttt{--copy-vmec --run-gx --gx-executable /path/to/gx}\);
-if the retained outputs are produced, it exports the external fixture CSV for
-the parity gate above.
+\(\texttt{.out.nc}\) outputs.  On a GX-capable machine, use the checked-in
+handoff command below; if the retained outputs are produced, the workflow
+exports the external fixture CSV for the parity gate above.
+\begin{verbatim}
+GX_EXECUTABLE=/path/to/gx bash \
+  fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
+\end{verbatim}
+After the returned GX files are copied back, the repository-side ingest and
+gate refresh command is
+\begin{verbatim}
+bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
+  --copy-outputs --resample-reference-to-observed-z
+\end{verbatim}
+After that parity fixture passes, the production CPU timing/readiness handoff
+is
+\begin{verbatim}
+bash fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh
+\end{verbatim}
 
 A reduced W7-X convergence/timing study is stored in
 \path{fixtures/w7x_itg_convergence_study/} and regenerated by
@@ -1935,11 +2033,10 @@ state, the reduced convergence regression passes:
 the maximum \(\Delta t/2\) growth-rate change is
 \(4.52\times 10^{-11}\), and the late-window diagnostic change is
 \(3.07\times 10^{-6}\), both within their reduced-regression tolerances.
-The full production gate remains blocked by the missing external reference
-because
-\path{fixtures/w7x_itg_external_mode_structure_fixture.csv} and a true
-production CPU timing artifact are not yet present.  Therefore DESC-driven
-optimization remains labeled reduced rather than production-validated.
+The full production gate remains blocked by the open external mode-structure
+parity gate against the stella fixture, and by the post-parity production CPU
+timing artifact.  Therefore DESC-driven optimization remains labeled reduced
+rather than production-validated.
 The timing contract itself is executable through
 \begin{verbatim}
 uv run python scripts/run_w7x_production_cpu_timing.py
@@ -1949,6 +2046,56 @@ with status \(\texttt{blocked\_until\_external\_parity\_passes}\).  This avoids
 turning a local development timing run into a production claim.  The reduced
 DESC optimization example reads the same ledger and exits if invoked with
 \(\texttt{--require-production-ready}\) while the W7-X gate is still open.
+
+\subsection{What remains for a full stellarator run}
+
+The implementation now has the core linear architecture requested in
+\path{task.tex}: perpendicular Fourier modes, spectral/collocation operators
+with GKW fallback stencils, a self-consistent electrostatic residual,
+time-advance diagnostics, imported stellarator geometry, and fixed-topology
+differentiable objectives.  What remains before a trusted stellarator
+simulation claim is validation and production-control execution:
+\begin{enumerate}
+  \item Resolve the matched stella W7-X parity gap.  The CPU stella run and
+  external fixture now exist, so the next task is to make the solver match
+  stella's growth, real frequency, and phase-aligned \(\phi(z)\) for
+  \(k_y=(0.1,0.2,0.3)\).
+  \item Build a stella-matched observed solver fixture before changing
+  velocity-space or RHS terms.  It should consume the stella-exported geometry
+  arrays, or an eik table sampled on the same field-line length, use
+  \(N_{k_x}=1\), \(k_x=0\), normalized \(z=\texttt{zed}/(2\pi)\), and a
+  stella-comparable late-time growth window.
+  \item Rerun the W7-X solver at production-shape controls, then repeat the
+  convergence ladder in \(N_z\), velocity resolution, \(k_x/k_y\), field-line
+  length, time step, and growth-window choice.  The current reduced W7-X
+  ladder is useful as a regression artifact, but it is not grid/domain
+  converged.
+  \item Rerun production CPU timing only after external parity passes, and
+  check whether the \(\mathcal O(1)\)-minute target on
+  \(\mathcal O(100)\) CPUs from \path{task.tex} is credible.
+  \item Keep DESC optimization labeled reduced until the production-readiness
+  ledger passes.  The current DESC examples differentiate through fixed
+  topology and sampled geometry arrays; they are not full equilibrium
+  optimization campaigns.
+\end{enumerate}
+
+The principal discrepancies to resolve are also now narrow.  The selected
+Cyclone scalar growth, RHS/action trace, normalization, and row-normalized
+\texttt{parallel\_phi.dat} contracts are strong regression gates, but full
+selected-mode GKW state-history parity remains open: the phase-aligned
+\(\phi(z)\) error peaks near \(5.85\times10^{-2}\), the full-state error near
+\(4.78\times10^{-2}\), and the worst relative state error near
+\(3.19\times10^{-1}\) at the middle snapshot.  The multi-time velocity-slice
+error grows from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) by
+step 800, so the remaining mismatch is cumulative evolution through the fused
+\(\texttt{ltrapping\_arakawa}\)/\(\texttt{igh}\) path, Term VII, field packing,
+or Fourier sign conventions, not a simple final-output layout.
+
+A full nonlinear turbulence stellarator run is a later milestone, not the
+current implemented solver.  It requires the nonlinear ExB bracket with
+pseudo-spectral dealiasing, nonlinear timestep control, saturated heat-flux
+diagnostics, nonlinear benchmark parity, and then extensions such as kinetic
+electrons, collisions, and electromagnetic perturbations.
 
 \subsection{Validation-gate example}
 
@@ -1976,29 +2123,18 @@ now passes in the figure ledger with late-fit growth \(0.1867\) against the
 residual \(9.25\times10^2\).
 This figure is the current validation ledger: stellarator geometry can now
 enter through the DESC array path and be audited through GX/GIST/DESC-eik
-metric and drift contracts, while the remaining production hardening item is
-the full selected-mode state-history parity check against GKW.  The same generator
-also writes \path{figures/cyclone_trace_reduced.csv}, which is the reduced
-time-history artifact.  The separate Gyaradax exporter writes
-\path{figures/gyaradax_cyclone_trace_reduced.csv} and
-\path{figures/gyaradax_cyclone_trace_comparison.csv}; on the reduced setup it
-passes the physical amplitude and growth-history comparison with maximum error
-\(1.24\times10^{-2}\).  The same exporter also writes production smoke and
-full-production CSV pairs with stems
-\path{figures/gyaradax_cyclone_trace_production_control_smoke} and
-\path{figures/gyaradax_cyclone_trace_production_control}.  Those profiles pass
-their physical trace comparisons with maximum errors \(1.33\times10^{-3}\) and
-\(1.02\times10^{-2}\), respectively.  The first real GKW diagnostic conversion
-is \path{figures/gkw_simple_example_time_trace.csv}, generated from the bundled
-linear GKW \texttt{simple\_example}.  The matched selected-\(k_y\) GKW
-conversion is \path{figures/gkw_cyclone_selected_ky_time_trace.csv}, with
-summary comparisons in
-\path{figures/gkw_cyclone_selected_ky_time_comparison.csv} and
-\path{figures/cyclone_growth_diagnostic_convention_comparison.csv}.  The
-richer matched GKW parallel-potential diagnostic is
-\path{fixtures/gkw_cyclone_selected_ky_parallel_phi.dat}; its solver/GKW
-profile-shape comparison is
-\path{figures/gkw_cyclone_parallel_phi_profile_comparison.csv}.
+metric and drift contracts, while the remaining production hardening items are
+the full selected-mode state-history/velocity-space parity check against GKW
+and the external W7-X mode-structure parity gate.  The same generator also
+writes reduced Cyclone trace CSVs under \path{figures/}.  The Gyaradax
+physical trace comparisons pass on the reduced, production-smoke, and
+production-control profiles, with maximum errors \(1.24\times10^{-2}\),
+\(1.33\times10^{-3}\), and \(1.02\times10^{-2}\).  The GKW
+\texttt{simple\_example} and matched selected-\(k_y\) time traces are also
+converted to the common trace format.  The richer matched GKW
+parallel-potential diagnostic is retained as a mode-structure regression
+artifact, and its solver/GKW profile-shape comparison is stored under
+\path{figures/}.
 For multi-\(k_y\) calibration, the public scan gate now has a companion audit
 that ranks candidate \(k_\theta\rho_s\)-to-\(\texttt{krho}\) conventions,
 observed frequency sign/scale, late-time growth diagnostic, and
@@ -2159,9 +2295,9 @@ rather than hidden inside the profile comparison.
   amplitude, growth, norm, and normalization history; the Gyaradax companion
   CSVs pass the reduced, production-control-smoke, and full
   production-control physical trace comparisons.  The matched GKW
-  \texttt{parallel\_phi.dat} comparison is stored separately in
-  \texttt{figures/gkw\_cyclone\_parallel\_phi\_profile\_comparison.csv}
-  and remains open as a parallel mode-structure diagnostic.}
+  \texttt{parallel\_phi.dat} comparison is retained as a mode-structure
+  regression artifact, while the full selected-state and velocity-slice
+  comparisons remain the sharper open GKW diagnostics.}
   \label{fig:validation-gate-status}
 \end{figure}
 

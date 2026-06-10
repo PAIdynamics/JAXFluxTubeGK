@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-06-08
+Last planned: 2026-06-10
 
 ## Project Goal
 
@@ -591,69 +591,99 @@ Phase 12 DESC-array note: the solver now supports a supplied imported geometry o
 
 ## Task-Roadmap Alignment and Remaining Consistency Gaps
 
-The current code base is consistent with the `task.tex` target in its core
-architecture: it is JAX-first, differentiable, linear electrostatic, flux-tube
-oriented, uses perpendicular Fourier modes, exposes time-advance and residual
-interfaces, supports spectral and GKW-parity fallback operators, and consumes
-stellarator geometry through Boozer/Clebsch-style flux-tube arrays. The strongest
-completed validation gates are the true long-time Rosenbluth--Hinton plateau,
-the production-control Cyclone selected-`ky` scalar growth regression, term-level
-GKW/Gyaradax CBC algebra, DESC/GX/eik geometry contracts, independent GX/VMEC
-GIST eik-producer coverage, and reduced differentiable optimization examples.
+Relative to `task.tex`, the repository now satisfies the architecture of the
+first solver milestone: JAX-first differentiable linear electrostatic
+gyrokinetics, perpendicular Fourier modes, spectral/collocation operators with
+GKW finite-difference parity fallbacks, matrix-free residuals, fixed-step time
+advance, growth/frequency/mode-structure diagnostics, quasilinear proxy
+objectives, DESC/eik/Boozer-style geometry ingestion, and reduced
+fixed-topology optimization examples. In the six-month roadmap language, the
+Month 1--3 infrastructure is mostly present, the Month 4 benchmark/convergence
+work is partially complete, and the Month 5 DESC optimization integration is
+still reduced rather than production-validated.
 
-The remaining consistency failures to fix before calling the solver production
-ready are:
+The current code can run reduced linear stellarator scans today, but it is not
+yet a production-validated stellarator turbulence solver. The remaining
+discrepancies and blockers are:
 
-- Selected RHS/action parity against the patched GKW trace is now closed at
-  roundoff for the production selected-`ky` control path after matching
-  GKW's discrete `geom.F90::logbderiv` `gfun` convention in the `gkw_igh`
-  setup. The full solver-vs-GKW RHS/action trace is phase-aligned to
-  \(6.22\times10^{-12}\), same-state replay is \(2.35\times10^{-12}\),
-  mid-run same-state replay is \(2.36\times10^{-12}\), and the fused
-  `igh_or_term_i` source audit is \(1.81\times10^{-18}\). This is no longer
-  an open operator/action consistency failure.
-- Full selected-mode state-history parity against GKW remains OPEN even though
-  scalar growth now passes: the phase-aligned full-state error peaks at
-  \(4.78\times10^{-2}\), the phase-aligned \(\phi(z)\) error at
-  \(5.85\times10^{-2}\), and the worst state relative \(L^2\) error is
-  \(3.19\times10^{-1}\) at step 800.
-- Multi-time velocity-slice parity remains OPEN: direct complex max error grows
-  from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) at step 800,
-  so the mismatch is cumulative and not a final-output-only convention.
-- The direct row-normalized GKW `parallel_phi.dat` profile-shape gate now
-  passes on the current production-control `cosin2` path with maximum error
-  \(3.97\times10^{-7}\); the older \(3\times10^{-2}\) mismatch is kept only as
-  historical context for the pre-contract audit path.
-- A public multi-`ky` Cyclone/ITG scan gate is now implemented against
-  GX/GKW/GS2-style growth/frequency references, with optional profile-error
-  slots. Production scan parity remains OPEN; only the selected Cyclone
-  `ky=0.5` scalar gate is currently passing at production-control resolution.
-- `task.tex` also asks for stellarator/TEM-style benchmark cases, production
-  growth-rate/mode-frequency/mode-structure validation, CPU timing evidence on
-  target-size runs, and a simplified but real DESC-driven optimization campaign;
-  the current DESC examples remain reduced fixed-topology demonstrations.
-
-## Immediate Next Round: Toward a Trusted Stellarator Simulation
-
-Goal: move from reduced stellarator-geometry demos to a credible linear
-stellarator flux-tube simulation, without weakening the already-passing
-GKW/Gyaradax selected-`ky` parity gates. A "trusted" first stellarator run means:
-DESC or eik-compatible geometry is audited before solving, the selected
-multi-`ky` physics path has a mode-structure check, growth/frequency extraction
-is converged, and the output can be reproduced by a single example script.
-
-Use these guardrails throughout the round:
-
-- keep the passing RH plateau, CBC selected-`ky` scalar gate, GKW RHS/action
-  trace, imported-state one-window replay gates, initial-state contract,
-  row-normalized `parallel_phi.dat` profile gate, DESC/GX/eik geometry gate,
-  and independent GX/VMEC GIST eik-producer gate as regression tests;
-- keep the current exact-grid GX scan gap visible:
+- Matched external W7-X reference now exists, but parity is open: the local
+  stella checkout builds and runs on CPU, the matched W7-X stella production
+  input has completed, and `fixtures/w7x_itg_external_mode_structure_fixture.csv`
+  now contains `ky=(0.1,0.2,0.3)` with 257 normalized z points. The reduced
+  solver-vs-stella gate remains open with maximum errors
+  `growth=1.89858341e-01`, `frequency=1.39078602e-01`, and
+  phase-aligned profile `3.02836095e-01`; the ordered audit shows the first
+  blocker is field-line length, not yet velocity/RHS physics.
+- W7-X reduced fixture not converged: the current W7-X run is a real-geometry
+  reduced regression artifact. The reduced convergence ladder shows stable
+  time-step/window diagnostics, but the short baseline is not grid/domain
+  converged: `n_z`, velocity resolution, `kx`, and field-line-length variants
+  materially change the growth rate and can change the sign of the reduced
+  growth.
+- GKW selected-`ky` scalar parity is strong but not complete state parity:
+  RH plateau, selected Cyclone scalar growth, CBC term algebra, GKW
+  RHS/action trace, imported-state replay, input/state normalization, and
+  row-normalized `parallel_phi.dat` contracts are regression guardrails.
+  However full selected-mode state-history parity remains open:
+  phase-aligned \(\phi(z)\) error peaks near \(5.85\times10^{-2}\), full-state
+  error near \(4.78\times10^{-2}\), and worst state relative \(L^2\) near
+  \(3.19\times10^{-1}\) at the middle snapshot.
+- Multi-time velocity-space parity remains open: GKW velocity-slice errors grow
+  from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) by step 800,
+  indicating cumulative evolution mismatch rather than a pure output-layout or
+  final-phase convention. The remaining debugging target is the cumulative
+  fused `ltrapping_arakawa`/`igh` evolution path and its interaction with
+  Term VII/field packing and Fourier sign conventions.
+- Multi-`ky` Cyclone branch-shape parity is not closed: the selected
+  `ky=0.5` production-control scalar gate passes, but the exact-grid
+  low-`ky` branch remains a guardrail gap, for example
   `gamma(0.3)=0.14325556436195153` versus calibrated reference
-  `0.3080402563529299`, while the `ky=0.5` anchor is much closer;
-- keep DESC-driven optimization examples labeled reduced until the
-  multi-`ky`, mode-structure, geometry, convergence, and timing gates below
-  pass together.
+  `0.3080402563529299` until an external per-`ky` complex fixture is supplied.
+- Velocity representation is mixed by design: the production linear path still
+  uses the direct `v_parallel,mu` collocation backend; the GX-style
+  Hermite-Laguerre moment RHS exists as a reduced discriminator and future
+  backend seed, not as a complete production replacement for the collocation
+  kinetic RHS.
+- DESC optimization remains reduced: geometry-array extraction, eik contracts,
+  and fixed-topology gradients work, but there is not yet a production
+  DESC-driven optimization campaign over real shape degrees of freedom with
+  remeshing/topology changes and validated W7-X parity.
+- Full turbulence is beyond the current implemented physics: nonlinear ExB
+  pseudo-spectral brackets, nonlinear timestep/dealiasing, saturated heat-flux
+  diagnostics, kinetic-electron TEM validation, collisions, electromagnetic
+  perturbations, and nonlinear benchmark parity are deferred extensions.
+
+## Immediate Next Round: Trusted Linear Stellarator Run
+
+Goal: produce the first externally validated linear W7-X stellarator
+flux-tube run, then use it as the gate for CPU timing and DESC optimization.
+This is the shortest path consistent with `task.tex`; nonlinear turbulence
+should stay explicitly deferred until this linear benchmark is trusted.
+
+Definition of done for the first trusted linear stellarator run:
+
+- geometry source is audited through the DESC/GX/eik contract before solving;
+- external W7-X growth, real frequency, and phase-aligned complex \(\phi(z)\)
+  are available from the matched stella run, with GX/GKW/GS2 kept as secondary
+  cross-checks;
+- the solver W7-X mode-structure gate passes for the selected `ky` set;
+- production-control convergence is checked in `n_z`, velocity resolution,
+  `kx/ky`, field-line length, time step, and growth window;
+- production CPU timing is rerun only after external parity passes;
+- `examples/desc_fixture_optimization_loop.py --require-production-ready`
+  remains blocked until the readiness ledger passes.
+
+Guardrails for the round:
+
+- keep the passing RH plateau, selected Cyclone scalar growth, CBC algebra,
+  GKW RHS/action trace, imported-state replay, input/state normalization,
+  `parallel_phi.dat`, DESC/GX/eik geometry, W7-X eik-source, and reduced W7-X
+  fixture-contract tests as non-regression gates;
+- keep open discrepancies visible rather than tuning them away: the full
+  selected-mode state-history gap, the multi-time velocity-slice gap, and the
+  exact-grid low-`ky` Cyclone branch-shape gap;
+- do not label DESC optimization or W7-X timing as production-ready until the
+  external W7-X parity and production timing ledgers both pass.
 
 ### 1. Close the multi-`ky` physics discriminator
 
@@ -691,6 +721,12 @@ Use these guardrails throughout the round:
   `fields=true`, `moments=true`, and `nwrite_big=1000`, and writes
   `fixtures/gx_cyclone_mode_structure_run/` with the prepared input, metadata,
   and exact external GX/export/gate command sequence.
+- [x] Add a stella external fixture reader/export path. `load_stella_mode_structure_fixture`
+  reads stella `.out.nc` `phi_vs_t(t,tube,zed,kx,ky,ri)` complex fields and
+  `omega(t,kx,ky,ri)=omega+i*gamma`; `examples/export_stella_mode_structure_fixture.py`
+  writes the standard per-`ky` CSV fixture. This is the preferred W7-X physics
+  reference route because stella is a CPU continuum gyrokinetic code rather
+  than a GPU-native Hermite-Laguerre moment reference.
 - [ ] Obtain/export a true external per-`ky` complex mode-structure fixture for
   the problematic branch, especially `ky=0.3`, using GX `.big.nc`, GKW,
   Gyaradax, GS2, stella, or a local diagnostic patch. The fixture should store
@@ -803,6 +839,15 @@ Use these guardrails throughout the round:
   repo-relative copy/run/export/compare commands, and metadata pointing from
   the committed reduced fixture to the future external
   `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
+- [x] Build and smoke-test stella as the CPU W7-X external-reference route.
+  After initializing stella submodules, CMake configured with Homebrew
+  `gfortran`, `mpifort`, FFTW, and NetCDF-Fortran. The bundled
+  `LINEAR_W7X_SINGLEMODE` example ran on CPU in `/private/tmp` and exported a
+  valid `ky=0.5` fixture through `examples/export_stella_mode_structure_fixture.py`.
+  That smoke is not yet the production reference because it uses stella's
+  bundled kinetic-electron W7-X setup at `torflux=0.49`, while the current
+  reduced W7-X provenance follows the GX adiabatic-electron setup at
+  `torflux=0.64`.
 
 ### 5. Convergence, timing, and optimization readiness
 
@@ -847,8 +892,9 @@ refuses to label those paths production-ready until the gates pass.
   convergence/timing artifacts, runs the external mode-structure gate, writes
   `fixtures/w7x_itg_convergence_study/production_readiness_gate.json`, and
   keeps DESC optimization labeled reduced. The current committed ledger passes
-  the reduced convergence regression but remains `blocked_external_reference`
-  until the matched external W7-X fixture exists.
+  the reduced convergence regression but remains
+  `blocked_external_mode_structure_parity` against the exported matched stella
+  fixture.
 - [x] Add the guarded production CPU timing artifact path.
   `scripts/run_w7x_production_cpu_timing.py` writes
   `fixtures/w7x_itg_convergence_study/production_cpu_timing.json`. The
@@ -866,22 +912,112 @@ refuses to label those paths production-ready until the gates pass.
 
 External production-claim blockers, not code implementation gaps:
 
-- [ ] Generate or obtain the matched external W7-X `.big.nc`/`.out.nc` pair and
-  export `fixtures/w7x_itg_external_mode_structure_fixture.csv`.
+- [x] Create the matched stella W7-X reference input. The prepared directory is
+  `fixtures/stella_w7x_mode_structure_run/`; regenerate it with
+  `uv run python scripts/prepare_stella_w7x_reference_run.py --overwrite`.
+  It uses the GX benchmark VMEC, `torflux=0.64`, `alpha0=0`,
+  `nfield_periods=34.75236` from `gx_npol*q_eik*nfp`,
+  one kinetic ion species with stella's adiabatic-electron
+  `field-line-average-term` response, `ky=(0,0.1,0.2,0.3)`, `kx=0`,
+  `nzed=256`, `nmu=8`, `nvgrid=16`, `tend=200`, `delt=0.1`, and a late
+  half-window growth convention. A reduced matched-physics smoke run in
+  `/private/tmp/stella_w7x_matched_smoke` completed and exported
+  `ky=(0.1,0.2,0.3)`, verifying the input contract and `.out.nc` schema.
+
+- [x] Run the full matched stella W7-X production input and export the external
+  fixture. Command sequence:
+  `bash fixtures/stella_w7x_mode_structure_run/run_stella_reference.sh`,
+  then
+  `bash fixtures/stella_w7x_mode_structure_run/export_stella_fixture.sh`.
+  This created
+  `fixtures/w7x_itg_external_mode_structure_fixture.csv`, compared it against
+  the current reduced solver fixture with reference-to-observed z resampling,
+  and refreshed the production-readiness ledger. The stella run completed on
+  one CPU in about 295 seconds; the exported late-half-window values are
+  `gamma=(-7.797962e-04,-4.876057e-03,9.619444e-03)` and
+  `omega_r=(-6.573003e-02,-1.181846e-01,-2.849346e-03)` for
+  `ky=(0.1,0.2,0.3)`. The first bundled stella W7-X smoke remains useful only
+  as a build/importer test:
+  it used kinetic electrons at `torflux=0.49` and gave `ky=0.5`,
+  `gamma=0.0948506358629369`, `omega_r=-0.028097042438257974`.
+
+- [ ] Resolve the W7-X stella parity gap. The current reduced solver-vs-stella
+  gate is `open` with maximum growth, frequency, and phase-aligned profile
+  errors `1.89858341e-01`, `1.39078602e-01`, and `3.02836095e-01`,
+  respectively, and the production-readiness ledger is
+  `blocked_external_mode_structure_parity`. The first ordered audit is now
+  executable through
+  `uv run python scripts/audit_w7x_stella_solver_parity.py` and writes
+  `fixtures/w7x_itg_convergence_study/stella_solver_parity_audit.json`.
+  The normalized-z and selected-`ky` checks pass after exporting stella with
+  `--stella-z-coordinate zed_over_2pi`; the first failed check is
+  `field_line_length`. The committed reduced solver fixture uses
+  `field_line_periods=1`, while the matched stella VMEC run spans
+  `nfield_periods/nfp \approx 6.95` zeta turns. The same audit also flags
+  later blockers: the reduced solver fixture uses `n_kx=3`/`ikxspace=2`
+  while stella uses `nakx=1`, and the reduced solver trace covers only
+  `0.012` time units versus stella's `tend=200`.
+
+- [ ] Build the first stella-matched observed solver fixture. Do this before
+  changing velocity-space or RHS terms: consume the stella-exported
+  `.geometry` arrays or an eik table sampled on the same field-line length,
+  use `n_kx=1`, `kx_max=0`, `ky=(0.1,0.2,0.3)`, normalized
+  `z=zed/(2*pi)`, and a stella-comparable late-time growth window. Then rerun
+  `examples/run_w7x_mode_structure_gate.py` and the ordered parity audit.
+
+- [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
+  pair as a secondary moment-method cross-check.
   `scripts/run_w7x_external_reference_workflow.py` now audits and drives this
   workflow. The current status file
   `fixtures/gx_w7x_mode_structure_run/external_reference_status.json` reports
-  `blocked_missing_gx_executable`: the W7-X VMEC source and prepared input are
-  present, but no local CUDA/NVIDIA-capable GX executable or retained W7-X
-  `.big.nc`/`.out.nc` outputs exist yet. On a GX-capable machine, run it with
-  `--copy-vmec --run-gx --gx-executable /path/to/gx`.
+  `blocked_missing_gx_executable`: the W7-X VMEC source has been copied into
+  the run directory and the prepared input is present, but no local
+  CUDA/NVIDIA-capable GX executable or retained W7-X `.big.nc`/`.out.nc`
+  outputs exist yet. The local handoff tarball has been generated at
+  `fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz`
+  with the patched input, copied VMEC file, handoff scripts, and SHA-256
+  manifest. Regenerate it, if needed, with
+  `uv run python scripts/package_w7x_external_reference_bundle.py --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz`.
+  On a GX-capable machine, run it with
+  `--copy-vmec --run-gx --gx-executable /path/to/gx`, or set
+  `GX_EXECUTABLE` and run
+  `fixtures/gx_w7x_mode_structure_run/run_external_reference.sh`. After the
+  returned `.big.nc`/`.out.nc` files are available, ingest and gate them with
+  `bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh --copy-outputs --resample-reference-to-observed-z`.
+  The local ingest status is tracked in
+  `fixtures/gx_w7x_mode_structure_run/external_reference_ingest_status.json`
+  and currently reports `blocked_missing_external_outputs`.
+- [ ] After ingesting the external W7-X fixture, run the production-shape
+  solver gate against it, not just the committed reduced fixture:
+  `uv run python examples/run_w7x_mode_structure_gate.py --run-solver --solver-preset gx-production-shape --reference-fixture fixtures/w7x_itg_external_mode_structure_fixture.csv --resample-reference-to-observed-z --require-reference`.
+  If this fails, resolve the discrepancy in this order: eik coordinate
+  convention and field-line period, `ky`/`kx` and linked-boundary mapping,
+  growth-window/time normalization, field normalization and phase alignment,
+  velocity-space backend/resolution, then term-level RHS conventions.
+- [ ] Replace the reduced W7-X convergence ladder with a production-control
+  convergence ladder after the external reference exists. Record which grid is
+  used for the production claim and keep the reduced ladder as a regression
+  smoke test only.
 - [ ] Rerun `scripts/run_w7x_production_cpu_timing.py` after external parity
   passes, then record whether the `task.tex` target, roughly minutes on
-  \(\mathcal{O}(100)\) CPUs, is credible.
+  \(\mathcal{O}(100)\) CPUs, is credible. The committed handoff command is
+  `fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh`.
 
 Deferred beyond the first trusted stellarator run:
 
-- [ ] kinetic-electron TEM production validation,
-- [ ] collisions and electromagnetic perturbations,
-- [ ] nonlinear ExB turbulence and nonlinear dealiasing,
-- [ ] full DESC shape-optimization campaigns with topology/remeshing changes.
+- [ ] Close the remaining GKW full selected-mode state-history discrepancy and
+  multi-time velocity-slice discrepancy, or explicitly demote them to
+  non-blocking if an independent stellarator external reference validates the
+  same production path.
+- [ ] Implement a production Hermite-Laguerre velocity backend, or document why
+  Chebyshev collocation remains the production velocity backend for CPU
+  optimization while GX-style moments stay a discriminator/reference path.
+- [ ] Add kinetic-electron TEM production validation.
+- [ ] Add collisions and electromagnetic perturbations.
+- [ ] Implement nonlinear ExB pseudo-spectral turbulence:
+  dealiased real-space bracket, nonlinear timestep estimate, nonlinear field
+  update/diagnostics, saturated heat-flux averaging, and nonlinear
+  GX/GKW/stella/GS2 benchmark parity.
+- [ ] Run full DESC shape-optimization campaigns with real equilibrium updates,
+  multiple surfaces/field lines, topology/remeshing handling, and production
+  readiness gates enabled.

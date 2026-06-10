@@ -88,6 +88,7 @@ from stellarator_gk import (
     load_gx_growth_rate_reference,
     load_gx_mode_structure_fixture,
     load_per_ky_mode_structure_fixture_csv,
+    load_stella_mode_structure_fixture,
     mode_structure_fixture_from_selected_state_trace,
     resample_per_ky_mode_structure_fixture,
     resample_gx_eik_geometry_reference,
@@ -395,6 +396,85 @@ def test_gx_big_nc_mode_structure_fixture_loader(tmp_path):
 
     with pytest.raises(ValueError, match="Diagnostics/Phi"):
         load_gx_mode_structure_fixture(out_path)
+
+
+def test_stella_out_nc_mode_structure_fixture_loader(tmp_path):
+    netcdf = pytest.importorskip("netCDF4")
+    path = tmp_path / "synthetic_stella.out.nc"
+    ky = np.asarray([0.0, 0.1, 0.3], dtype=float)
+    kx = np.asarray([0.0, 0.2], dtype=float)
+    zed = np.linspace(-np.pi, np.pi, 5)
+    times = np.asarray([0.0, 1.0, 2.0], dtype=float)
+
+    with netcdf.Dataset(path, "w") as data:
+        data.createDimension("t", times.shape[0])
+        data.createDimension("tube", 1)
+        data.createDimension("zed", zed.shape[0])
+        data.createDimension("kx", kx.shape[0])
+        data.createDimension("ky", ky.shape[0])
+        data.createDimension("ri", 2)
+        data.createVariable("t", "f8", ("t",))[:] = times
+        data.createVariable("ky", "f8", ("ky",))[:] = ky
+        data.createVariable("kx", "f8", ("kx",))[:] = kx
+        data.createVariable("zed", "f8", ("zed",))[:] = zed
+        phi = data.createVariable(
+            "phi_vs_t",
+            "f8",
+            ("t", "tube", "zed", "kx", "ky", "ri"),
+        )
+        values = np.zeros((times.shape[0], 1, zed.shape[0], kx.shape[0], ky.shape[0], 2))
+        for time_index, _time in enumerate(times):
+            for ikx, _kx in enumerate(kx):
+                for iky, _ky in enumerate(ky):
+                    row = (time_index + 1.0) * (ikx + 1.0) * (iky + 1.0) * np.exp(
+                        1j * (iky + 1.0) * zed
+                    )
+                    values[time_index, 0, :, ikx, iky, 0] = row.real
+                    values[time_index, 0, :, ikx, iky, 1] = row.imag
+        phi[:] = values
+        omega = data.createVariable("omega", "f8", ("t", "kx", "ky", "ri"))
+        omega_values = np.zeros((times.shape[0], kx.shape[0], ky.shape[0], 2))
+        omega_values[..., 0] = -ky[None, None, :] - kx[None, :, None]
+        omega_values[..., 1] = 2.0 * ky[None, None, :]
+        omega[:] = omega_values
+
+    fixture = load_stella_mode_structure_fixture(
+        path,
+        ikx=1,
+        ky_values=(0.1, 0.3),
+        time_index=-1,
+        z_scale=1.0 / (2.0 * np.pi),
+    )
+    csv_path = tmp_path / "stella_fixture.csv"
+    write_per_ky_mode_structure_fixture_csv(csv_path, fixture)
+    loaded = load_per_ky_mode_structure_fixture_csv(csv_path)
+
+    assert isinstance(fixture, PerKyModeStructureFixture)
+    np.testing.assert_allclose(fixture.ky, [0.1, 0.3])
+    np.testing.assert_allclose(fixture.z, zed / (2.0 * np.pi))
+    np.testing.assert_allclose(fixture.growth_rate, [0.2, 0.6])
+    np.testing.assert_allclose(fixture.frequency, [-0.3, -0.5])
+    np.testing.assert_allclose(
+        fixture.phi[0],
+        values[-1, 0, :, 1, 1, 0] + 1j * values[-1, 0, :, 1, 1, 1],
+    )
+    assert dict(fixture.metadata)["format"] == "stella phi_vs_t(t,tube,zed,kx,ky,ri)"
+    assert fixture.normalization == "stella_out_nc_complex_phi"
+    np.testing.assert_allclose(loaded.phi, fixture.phi)
+
+    with pytest.raises(ValueError, match="requested stella ky values"):
+        load_stella_mode_structure_fixture(path, ky_values=(0.2,))
+
+    missing_phi = tmp_path / "missing_phi.out.nc"
+    with netcdf.Dataset(missing_phi, "w") as data:
+        data.createDimension("ky", ky.shape[0])
+        data.createDimension("kx", kx.shape[0])
+        data.createDimension("zed", zed.shape[0])
+        data.createVariable("ky", "f8", ("ky",))[:] = ky
+        data.createVariable("kx", "f8", ("kx",))[:] = kx
+        data.createVariable("zed", "f8", ("zed",))[:] = zed
+    with pytest.raises(ValueError, match="phi_vs_t"):
+        load_stella_mode_structure_fixture(missing_phi)
 
 
 def test_mode_structure_fixture_resampler_handles_periodic_edge_to_center_grid():

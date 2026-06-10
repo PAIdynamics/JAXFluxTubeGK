@@ -193,6 +193,7 @@ def run_external_mode_structure_gate(
             str(output_dir),
             "--ky-values",
             ky_values,
+            "--resample-reference-to-observed-z",
         ]
     )
     status_path = output_dir / "gate_status.json"
@@ -258,10 +259,16 @@ def required_actions(
             "convergence/timing artifacts"
         )
     if not external["passed"]:
-        actions.append(
-            "export a matched external W7-X mode-structure fixture at "
-            f"{_display_path(reference_fixture)}"
-        )
+        if external.get("status") == "pending_external_reference" or not reference_fixture.exists():
+            actions.append(
+                "export a matched external W7-X mode-structure fixture at "
+                f"{_display_path(reference_fixture)}"
+            )
+        else:
+            actions.append(
+                "resolve the W7-X external mode-structure parity gap against "
+                f"{_display_path(reference_fixture)}"
+            )
     if not production_timing["passed"]:
         if production_timing.get("artifact_exists"):
             actions.append(
@@ -284,7 +291,9 @@ def _blocked_status(
     if not reduced["passed"]:
         return "blocked_reduced_convergence_regression"
     if not external["passed"]:
-        return "blocked_external_reference"
+        if external.get("status") == "pending_external_reference":
+            return "blocked_external_reference"
+        return "blocked_external_mode_structure_parity"
     if not production_timing["passed"]:
         return str(production_timing["status"])
     return "open"

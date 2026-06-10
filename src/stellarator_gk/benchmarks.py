@@ -4016,6 +4016,174 @@ def mode_structure_fixture_from_selected_state_trace(
     )
 
 
+def load_stella_mode_structure_fixture(
+    path,
+    *,
+    ikx: int = 0,
+    tube_index: int = 0,
+    time_index: int = -1,
+    ky_values=None,
+    average_fraction: float = 0.5,
+    drop_zonal: bool = True,
+    ky_tolerance: float | None = 1.0e-8,
+    z_scale: float = 1.0,
+    z_offset: float = 0.0,
+    growth_scale: float = 1.0,
+    frequency_scale: float = 1.0,
+) -> PerKyModeStructureFixture:
+    """Load a stella ``.out.nc`` complex-field diagnostic as a fixture.
+
+    stella writes the electrostatic potential as
+    ``phi_vs_t(t,tube,zed,kx,ky,ri)`` when potential diagnostics are enabled,
+    and writes the complex frequency ``Omega = omega + i gamma`` as
+    ``omega(t,kx,ky,ri)`` for linear runs.  This importer converts those arrays
+    into the same per-``ky`` fixture contract used by the GX/GKW/GS2 gates.
+    """
+
+    if not 0.0 <= average_fraction < 1.0:
+        raise ValueError("average_fraction must lie in [0, 1)")
+    if ky_tolerance is not None and (
+        not np.isfinite(ky_tolerance) or ky_tolerance < 0.0
+    ):
+        raise ValueError("ky_tolerance must be nonnegative and finite")
+    if not np.isfinite(z_scale) or not np.isfinite(z_offset):
+        raise ValueError("z_scale and z_offset must be finite")
+    dataset_cls = _import_netcdf_dataset()
+    path = Path(path)
+    with dataset_cls(path, mode="r") as data:
+        variables = data.variables
+        required = {"ky", "kx", "zed", "phi_vs_t"}
+        missing = required.difference(variables)
+        if missing:
+            raise ValueError(f"stella mode-structure file missing variables: {sorted(missing)}")
+        ky_all = np.asarray(variables["ky"][:], dtype=float)
+        kx_all = np.asarray(variables["kx"][:], dtype=float)
+        z = z_scale * np.asarray(variables["zed"][:], dtype=float) + z_offset
+        phi_raw = _netcdf_variable_as(
+            variables["phi_vs_t"],
+            (
+                ("t", "time"),
+                ("tube",),
+                ("zed", "z", "theta"),
+                ("kx",),
+                ("ky",),
+                ("ri",),
+            ),
+        )
+        time = (
+            np.asarray(variables["t"][:], dtype=float)
+            if "t" in variables
+            else np.arange(phi_raw.shape[0], dtype=float)
+        )
+        omega_raw = (
+            _netcdf_variable_as(
+                variables["omega"],
+                (("t", "time"), ("kx",), ("ky",), ("ri",)),
+            )
+            if "omega" in variables
+            else None
+        )
+    if ky_all.ndim != 1 or ky_all.shape[0] == 0:
+        raise ValueError("stella mode-structure file has an empty ky grid")
+    if kx_all.ndim != 1 or kx_all.shape[0] == 0:
+        raise ValueError("stella mode-structure file has an empty kx grid")
+    if ikx < 0 or ikx >= kx_all.shape[0]:
+        raise ValueError("ikx is out of bounds for stella mode-structure file")
+    if tube_index < 0 or tube_index >= phi_raw.shape[1]:
+        raise ValueError("tube_index is out of bounds for stella mode-structure file")
+    selected_time_index = int(time_index)
+    if selected_time_index < 0:
+        selected_time_index += phi_raw.shape[0]
+    if selected_time_index < 0 or selected_time_index >= phi_raw.shape[0]:
+        raise ValueError("time_index is out of bounds for stella mode-structure file")
+    if phi_raw.shape[-1] != 2:
+        raise ValueError("stella phi_vs_t must include an ri=(real,imaginary) dimension")
+    phi_all = (
+        phi_raw[selected_time_index, tube_index, :, ikx, :, 0]
+        + 1j * phi_raw[selected_time_index, tube_index, :, ikx, :, 1]
+    ).T
+    if phi_all.shape != (ky_all.shape[0], z.shape[0]):
+        raise ValueError("stella phi_vs_t ky/z dimensions do not match ky and zed")
+
+    field_ky = ky_all
+    field_phi = phi_all
+    if drop_zonal:
+        nonzonal = np.abs(field_ky) > 1.0e-14
+        field_ky = field_ky[nonzonal]
+        field_phi = field_phi[nonzonal]
+    if field_ky.shape[0] == 0:
+        raise ValueError("no stella ky modes remain after optional zonal filtering")
+    if ky_values is None:
+        match_indices = np.arange(field_ky.shape[0], dtype=int)
+    else:
+        requested = np.asarray(ky_values, dtype=float)
+        if requested.ndim != 1 or requested.shape[0] == 0:
+            raise ValueError("ky_values must be a nonempty one-dimensional sequence")
+        if np.any(~np.isfinite(requested)) or np.any(requested < 0.0):
+            raise ValueError("ky_values must be finite and nonnegative")
+        match_indices = np.asarray(
+            [int(np.argmin(np.abs(field_ky - value))) for value in requested],
+            dtype=int,
+        )
+        distances = np.abs(field_ky[match_indices] - requested)
+        if ky_tolerance is not None and np.any(distances > ky_tolerance):
+            missing_values = requested[distances > ky_tolerance]
+            raise ValueError(
+                "requested stella ky values were not found within "
+                f"ky_tolerance={ky_tolerance}: {missing_values.tolist()}"
+            )
+    selected_ky = field_ky[match_indices]
+    selected_phi = field_phi[match_indices]
+
+    growth = np.full_like(selected_ky, np.nan, dtype=float)
+    frequency = np.full_like(selected_ky, np.nan, dtype=float)
+    if omega_raw is not None:
+        if omega_raw.shape[-1] != 2:
+            raise ValueError("stella omega must include an ri=(omega,gamma) dimension")
+        start = int(omega_raw.shape[0] * average_fraction)
+        omega_window = np.mean(omega_raw[start:, ikx, :, :], axis=0)
+        omega_frequency = frequency_scale * omega_window[:, 0]
+        omega_growth = growth_scale * omega_window[:, 1]
+        omega_ky = ky_all
+        if drop_zonal:
+            nonzonal = np.abs(omega_ky) > 1.0e-14
+            omega_ky = omega_ky[nonzonal]
+            omega_frequency = omega_frequency[nonzonal]
+            omega_growth = omega_growth[nonzonal]
+        omega_match = np.asarray(
+            [int(np.argmin(np.abs(omega_ky - value))) for value in selected_ky],
+            dtype=int,
+        )
+        frequency = omega_frequency[omega_match]
+        growth = omega_growth[omega_match]
+
+    return PerKyModeStructureFixture(
+        ky=jnp.asarray(selected_ky, dtype=jnp.float64),
+        z=jnp.asarray(z, dtype=jnp.float64),
+        phi=jnp.asarray(selected_phi, dtype=jnp.complex128),
+        growth_rate=jnp.asarray(growth, dtype=jnp.float64),
+        frequency=jnp.asarray(frequency, dtype=jnp.float64),
+        source=str(path),
+        normalization="stella_out_nc_complex_phi",
+        metadata=(
+            ("format", "stella phi_vs_t(t,tube,zed,kx,ky,ri)"),
+            ("frequency_format", "stella omega(t,kx,ky,ri)=omega+i*gamma"),
+            ("ikx", int(ikx)),
+            ("kx", float(kx_all[int(ikx)])),
+            ("tube_index", int(tube_index)),
+            ("time_index", int(time_index)),
+            ("time", float(time[selected_time_index])),
+            ("drop_zonal", bool(drop_zonal)),
+            ("ky_tolerance", None if ky_tolerance is None else float(ky_tolerance)),
+            ("average_fraction", float(average_fraction)),
+            ("z_scale", float(z_scale)),
+            ("z_offset", float(z_offset)),
+            ("growth_scale", float(growth_scale)),
+            ("frequency_scale", float(frequency_scale)),
+        ),
+    )
+
+
 def resample_per_ky_mode_structure_fixture(
     fixture: PerKyModeStructureFixture,
     z,
@@ -14010,6 +14178,24 @@ def _import_netcdf_dataset():
             "analysis dependencies or add netCDF4 to the environment"
         ) from exc
     return Dataset
+
+
+def _netcdf_variable_as(variable, dim_aliases: tuple[tuple[str, ...], ...]) -> np.ndarray:
+    """Return a NetCDF variable transposed into the requested named axes."""
+
+    dimensions = tuple(str(name) for name in variable.dimensions)
+    axes = []
+    for aliases in dim_aliases:
+        for alias in aliases:
+            if alias in dimensions:
+                axes.append(dimensions.index(alias))
+                break
+        else:
+            raise ValueError(
+                f"NetCDF variable {getattr(variable, 'name', '<unnamed>')} "
+                f"missing dimension {aliases}; found {dimensions}"
+            )
+    return np.transpose(np.asarray(variable[:]), axes)
 
 
 def _import_desc_coordinate_helpers():

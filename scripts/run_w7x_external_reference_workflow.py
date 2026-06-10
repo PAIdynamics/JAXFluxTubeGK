@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_METADATA = ROOT / "fixtures/gx_w7x_mode_structure_run/mode_structure_run_metadata.json"
 DEFAULT_STATUS = ROOT / "fixtures/gx_w7x_mode_structure_run/external_reference_status.json"
+DEFAULT_BUNDLE = ROOT / "fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -86,9 +87,20 @@ def run_w7x_external_reference_workflow(args: argparse.Namespace) -> dict[str, o
         "gx_growth_output_exists": paths["gx_growth_output"].exists(),
         "external_fixture": _display_path(paths["external_fixture"]),
         "external_fixture_exists": paths["external_fixture"].exists(),
+        "local_bundle": _display_path(paths["local_bundle"]),
+        "local_bundle_exists": paths["local_bundle"].exists(),
         "copy_vmec": bool(args.copy_vmec),
         "run_gx": bool(args.run_gx),
         "export_outputs": bool(args.export_outputs),
+        "bundle_command": (
+            "uv run python scripts/package_w7x_external_reference_bundle.py "
+            f"--output {_display_path(paths['local_bundle'])}"
+        ),
+        "returned_outputs_ingest_command": (
+            "bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh "
+            "--copy-outputs --resample-reference-to-observed-z"
+        ),
+        "local_capability": _local_capability_report(paths),
         "commands": commands,
         "required_actions": actions,
     }
@@ -107,6 +119,7 @@ def _workflow_paths(metadata: dict[str, object], args: argparse.Namespace) -> di
         "gx_big_output": _resolve(metadata["gx_big_output"]),
         "gx_growth_output": _resolve(metadata["gx_growth_output"]),
         "external_fixture": _resolve(metadata["external_fixture"]),
+        "local_bundle": _resolve(args.bundle_path),
     }
 
 
@@ -211,8 +224,25 @@ def _blocked_or_pending_status(paths: dict[str, Path], actions: list[str]) -> st
         actions.append(f"make VMEC source available at {_display_path(paths['vmec_source'])}")
         return "blocked_missing_vmec_source"
     if not _is_executable(paths["gx_executable"]):
+        if paths["local_bundle"].exists():
+            actions.append(
+                "transfer the existing external-run bundle "
+                f"{_display_path(paths['local_bundle'])} to a GX/CUDA machine"
+            )
+        else:
+            actions.append(
+                "package the external-run inputs with "
+                "scripts/package_w7x_external_reference_bundle.py if transferring machines"
+            )
         actions.append("build GX on a CUDA/NVIDIA-capable system or pass --gx-executable")
-        actions.append("rerun this script with --copy-vmec --run-gx on that system")
+        actions.append(
+            "set GX_EXECUTABLE and run "
+            "fixtures/gx_w7x_mode_structure_run/run_external_reference.sh on that system"
+        )
+        actions.append(
+            "return the .big.nc/.out.nc outputs and run "
+            "fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh"
+        )
         return "blocked_missing_gx_executable"
     actions.append("rerun this script with --copy-vmec --run-gx")
     return "pending_external_gx_run"
@@ -224,6 +254,17 @@ def _is_executable(path: Path) -> bool:
 
 def _is_placeholder_executable(path: Path) -> bool:
     return str(path).replace("\\", "/").endswith("path/to/gx")
+
+
+def _local_capability_report(paths: dict[str, Path]) -> dict[str, object]:
+    return {
+        "gx_executable_ready": _is_executable(paths["gx_executable"]),
+        "gx_on_path": shutil.which("gx"),
+        "nvcc_on_path": shutil.which("nvcc"),
+        "nvidia_smi_on_path": shutil.which("nvidia-smi"),
+        "gx_source_tree_exists": (ROOT / "relevant-codes/gx/src/main.cu").exists(),
+        "cuda_runtime_detected": shutil.which("nvidia-smi") is not None,
+    }
 
 
 def _format_command(command: list[str], *, cwd: Path) -> str:
@@ -264,6 +305,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--status-output", type=Path, default=DEFAULT_STATUS)
     parser.add_argument("--gx-executable", type=Path)
+    parser.add_argument("--bundle-path", type=Path, default=DEFAULT_BUNDLE)
     parser.add_argument("--copy-vmec", action="store_true")
     parser.add_argument("--run-gx", action="store_true")
     parser.add_argument("--no-export", dest="export_outputs", action="store_false")

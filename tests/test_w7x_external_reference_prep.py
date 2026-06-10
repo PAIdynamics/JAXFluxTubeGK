@@ -4,6 +4,7 @@ import importlib.util
 import json
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -47,6 +48,49 @@ def test_compare_mode_structure_example_filters_requested_ky_values():
 
     with pytest.raises(ValueError, match="requested ky=0.4"):
         module._select_ky_values(fixture, (0.4,), 1.0e-12)
+
+
+def test_compare_mode_structure_example_resamples_reference_to_observed_z():
+    module = _load_module(
+        ROOT / "examples/compare_mode_structure_fixtures.py",
+        "compare_mode_structure_fixtures",
+    )
+    observed = PerKyModeStructureFixture(
+        ky=np.asarray([0.1]),
+        z=np.asarray([0.0, 0.5, 1.0]),
+        phi=np.asarray([[1.0, 1.5, 2.0]], dtype=np.complex128),
+        growth_rate=np.asarray([0.1]),
+        frequency=np.asarray([0.0]),
+        source="observed",
+    )
+    reference = PerKyModeStructureFixture(
+        ky=np.asarray([0.1]),
+        z=np.asarray([0.0, 0.25, 0.5, 0.75, 1.0]),
+        phi=np.asarray([[1.0, 1.25, 1.5, 1.75, 2.0]], dtype=np.complex128),
+        growth_rate=np.asarray([0.1]),
+        frequency=np.asarray([0.0]),
+        source="reference",
+    )
+    args = SimpleNamespace(
+        resample_reference_to_observed_z=True,
+        resample_observed_to_reference_z=False,
+        periodic_z=False,
+        z_period=None,
+    )
+
+    resampled_observed, resampled_reference = module._apply_z_resampling(
+        observed,
+        reference,
+        args,
+    )
+
+    np.testing.assert_allclose(resampled_observed.z, observed.z)
+    np.testing.assert_allclose(resampled_reference.z, observed.z)
+    np.testing.assert_allclose(resampled_reference.phi, observed.phi)
+
+    args.resample_observed_to_reference_z = True
+    with pytest.raises(ValueError, match="at most one"):
+        module._apply_z_resampling(observed, reference, args)
 
 
 def test_prepare_gx_w7x_mode_structure_run_writes_external_workflow(tmp_path):

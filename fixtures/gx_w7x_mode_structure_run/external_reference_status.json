@@ -1,7 +1,8 @@
 {
   "benchmark_name": "w7x_itg_external_reference_workflow",
+  "bundle_command": "uv run python scripts/package_w7x_external_reference_bundle.py --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz",
   "commands": [],
-  "copy_vmec": false,
+  "copy_vmec": true,
   "export_outputs": true,
   "external_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
   "external_fixture_exists": false,
@@ -12,19 +13,32 @@
   "gx_executable_placeholder": true,
   "gx_growth_output": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.out.nc",
   "gx_growth_output_exists": false,
+  "local_bundle": "fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz",
+  "local_bundle_exists": true,
+  "local_capability": {
+    "cuda_runtime_detected": false,
+    "gx_executable_ready": false,
+    "gx_on_path": null,
+    "gx_source_tree_exists": true,
+    "nvcc_on_path": null,
+    "nvidia_smi_on_path": null
+  },
   "metadata": "fixtures/gx_w7x_mode_structure_run/mode_structure_run_metadata.json",
   "passed": false,
   "prepared_input": "fixtures/gx_w7x_mode_structure_run/itg_w7x_adiabatic_electrons.in",
   "prepared_input_exists": true,
   "required_actions": [
+    "transfer the existing external-run bundle fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz to a GX/CUDA machine",
     "build GX on a CUDA/NVIDIA-capable system or pass --gx-executable",
-    "rerun this script with --copy-vmec --run-gx on that system"
+    "set GX_EXECUTABLE and run fixtures/gx_w7x_mode_structure_run/run_external_reference.sh on that system",
+    "return the .big.nc/.out.nc outputs and run fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh"
   ],
+  "returned_outputs_ingest_command": "bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh --copy-outputs --resample-reference-to-observed-z",
   "run_directory": "fixtures/gx_w7x_mode_structure_run",
   "run_gx": false,
   "status": "blocked_missing_gx_executable",
   "vmec_destination": "fixtures/gx_w7x_mode_structure_run/wout_w7x.nc",
-  "vmec_destination_exists": false,
+  "vmec_destination_exists": true,
   "vmec_source": "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc",
   "vmec_source_exists": true
 }
