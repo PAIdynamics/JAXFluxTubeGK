@@ -808,13 +808,17 @@ Guardrails for the round:
   `F=b_dot_gradz/(2*pi)`, `B`, and `kperp2` at the rounded `.geometry` source
   precision, and records that standard stella diagnostics do not contain
   complex `g` or per-term RHS/source arrays.
-- [ ] Patch, rerun, or otherwise obtain a matched stella `ky=0.3` complex
+- [x] Patch and run a matched stella `ky=0.3` complex
   distribution/RHS/source-term trace for Fortran `iky=4`, `ikx=1`, species 1,
-  all `z`, `vpa`, and `mu`. The first trace should snapshot deltas around
-  `advance_parallel_streaming_explicit`, `advance_mirror_explicit`,
-  `advance_wdrifty_explicit`, `advance_wdriftx_explicit`, and
-  `advance_wstar_explicit`, preserving whether stella stores native `rhs*dt`
-  or continuous-time RHS units.
+  all `z`, `vpa`, and `mu`. `scripts/prepare_stella_w7x_rhs_trace_run.py`
+  copies stella to `/tmp`, patches only the copied
+  `gyrokinetic_equation_explicit.f90`, and generates a diagnostic input that
+  forces mirror and parallel streaming through `add_explicit_gyrokinetic_terms`.
+  The copied stella build/run completed to `istep=2000`; the raw 263 MB trace
+  stays in `/tmp`, while
+  `fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json` records
+  `required_record_terms_present=true`, 1,382,403 data rows, `rhs*dt` units,
+  and nonzero mirror/streaming/drift/drive norms for the selected mode.
 - [ ] Compare that external trace against the solver balance fixture:
   streaming/mirror, magnetic drift, field-drive, curvature/grad-B drift
   normalization, adiabatic-electron response, \(J_0/\Gamma_0\), velocity
@@ -1098,11 +1102,12 @@ External production-claim blockers, not code implementation gaps:
   close the profile/frequency gate. The new solver-side RHS audit shows the
   focus branch is streaming-dominated. The standard stella output audit shows
   geometry/streaming guardrails are available but the required complex
-  distribution/RHS arrays are not, so the next action is a targeted stella
-  trace hook around `add_explicit_gyrokinetic_terms` and its
-  streaming/mirror/drift/drive calls. Do not tune geometry, time-window
-  controls, or velocity resolution unless a regression reopens one of the
-  already-passing ordered checks.
+  distribution/RHS arrays are not. The targeted explicit-term stella trace hook
+  now exists and has produced a full selected-mode raw trace plus compact
+  committed summary, so the next action is direct stella-vs-solver term-array
+  comparison. Do not tune geometry, time-window controls, or velocity
+  resolution unless a regression reopens one of the already-passing ordered
+  checks.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

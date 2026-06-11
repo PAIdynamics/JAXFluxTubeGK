@@ -1,0 +1,353 @@
+{
+  "code_dts": [
+    0.1
+  ],
+  "code_times": [
+    199.89999999999293
+  ],
+  "ikx_values": [
+    1
+  ],
+  "iky_values": [
+    4
+  ],
+  "missing_record_terms": [],
+  "required_record_terms_present": true,
+  "rhs_units": "stella_native_rhs_times_code_dt",
+  "steps": [
+    2000
+  ],
+  "term_summaries": [
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 6.339935487767794e-08,
+      "max_abs": 1.8001085354290142e-09,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "pdf_g",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": -1.3068801337419714e-06,
+      "sum_real": -1.070366808105211e-07,
+      "term": "input_pdf",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        0,
+        0
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        0,
+        0
+      ],
+      "ivmu_range": [
+        0,
+        0
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 1.7171335697703974e-09,
+      "max_abs": 1.3827540541473744e-10,
+      "mu_range": [
+        0.0,
+        0.0
+      ],
+      "record": "phi",
+      "rows": 771,
+      "species_range": [
+        0,
+        0
+      ],
+      "sum_imag": -1.092365682493453e-08,
+      "sum_real": -5.676791488654657e-11,
+      "term": "field_phi",
+      "vpa_range": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 1.8456289873764411e-10,
+      "max_abs": 6.100254790010457e-12,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_delta",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": -1.497742673323175e-10,
+      "sum_real": -1.7376538628778026e-09,
+      "term": "equilibrium_drive_wstar",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 0.0,
+      "max_abs": 0.0,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_delta",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.0,
+      "term": "magnetic_drift_x",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 1.0128698277878894e-10,
+      "max_abs": 2.8229450661521048e-12,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_delta",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": -1.3172781081975576e-09,
+      "sum_real": -1.1020944717799065e-09,
+      "term": "magnetic_drift_y",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 7.06724342363957e-11,
+      "max_abs": 1.6404895821221904e-12,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_delta",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 3.701005933499669e-13,
+      "sum_real": 4.288888872317442e-15,
+      "term": "mirror_force",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 2.1200413812540179e-10,
+      "max_abs": 6.815048415611039e-12,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_delta",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 4.116759208107224e-10,
+      "sum_real": -5.103031228896362e-10,
+      "term": "parallel_streaming",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 2.366246793378624e-10,
+      "max_abs": 6.414467208822964e-12,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "rhs_total",
+      "rows": 197376,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": -1.0550063541257915e-09,
+      "sum_real": -3.350047168658567e-09,
+      "term": "total",
+      "vpa_range": [
+        -3.0,
+        3.0
+      ]
+    }
+  ],
+  "total_rows": 1382403,
+  "trace_format": "stellarator_gk_stella_rhs_trace_v1",
+  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat"
+}

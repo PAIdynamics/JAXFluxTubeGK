@@ -2064,8 +2064,8 @@ streaming dominated:
 \]
 The next comparison should therefore be against a stella distribution,
 RHS/source-term, or moment trace at the same \(k_y=0.3\) state.  Until that
-external term trace exists, the audit is an internal model-balance diagnostic,
-not a stella parity proof.
+comparison is complete, the audit is an internal model-balance diagnostic, not
+a stella parity proof.
 
 The standard stella output has now been audited for this purpose:
 \begin{verbatim}
@@ -2086,21 +2086,40 @@ using \(F=\texttt{b\_dot\_gradz}/(2\pi)\), has maximum error
 \(\texttt{.out.nc}\) equality is therefore not the right contract for this
 artifact.
 
-The same audit records the real blocker as a missing complex stella RHS trace.
+The same audit records the standard-output blocker as a missing complex stella
+RHS trace.
 Standard stella diagnostics contain complex \(\phi(z)\) and
 distribution-energy proxies such as \path{g2_vs_zkykxs}, but not the complex
 distribution
-\(g(v_\parallel,\mu,z,k_x,k_y,s)\) or per-term RHS/source deltas.  The next
-stella-side trace should therefore snapshot the selected Fortran indices
-\(\texttt{iky}=4\), \(\texttt{ikx}=1\), species 1, all \(z\), all
-\(v_\parallel\), and all \(\mu\), before and after
-\(\texttt{advance\_parallel\_streaming\_explicit}\),
-\(\texttt{advance\_mirror\_explicit}\),
-\(\texttt{advance\_wdrifty\_explicit}\),
-\(\texttt{advance\_wdriftx\_explicit}\), and
-\(\texttt{advance\_wstar\_explicit}\).  The comparison should preserve
-whether stella stores native \(\texttt{rhs}\Delta t\) increments or a
-continuous-time RHS before changing the solver's collocation RHS.
+\(g(v_\parallel,\mu,z,k_x,k_y,s)\) or per-term RHS/source deltas.
+
+A targeted non-destructive stella source-copy patch now supplies that missing
+term trace:
+\begin{verbatim}
+uv run python scripts/prepare_stella_w7x_rhs_trace_run.py \
+  --overwrite --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
+bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
+bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
+\end{verbatim}
+The generated diagnostic input keeps the same W7-X surface, \(k_y=0.3\)
+selected by Fortran \(\texttt{iky}=4\), \(\texttt{ikx}=1\), and the same
+late-time \(t=200\) endpoint, but forces mirror and parallel streaming through
+the explicit RHS path so that \(\texttt{add\_explicit\_gyrokinetic\_terms}\)
+can expose their deltas.  The raw file
+\path{/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat}
+contains \(1{,}382{,}403\) data rows and is not versioned.  The committed
+JSON summary fixture records
+\(\texttt{required\_record\_terms\_present=true}\), stella-native
+\(\texttt{rhs}\Delta t\) units, and nonzero norms for mirror force,
+magnetic-drift-y, equilibrium drive, parallel streaming, and total RHS.  The
+\(k_x=0\) magnetic-drift-x record is present with zero norm, as expected.
+
+The remaining task is direct array-level comparison of this stella trace with
+\path{fixtures/w7x_ky03_rhs_model_balance/}.  That comparison should first
+divide stella RHS deltas by \(\Delta t\) if continuous-time RHS units are
+needed, then check the distribution, parallel streaming, mirror force,
+magnetic drift, equilibrium drive, total RHS, and field normalization on the
+same imported geometry.
 
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
@@ -2210,9 +2229,9 @@ simulation claim is validation and production-control execution:
   velocity-resolution discriminator now exist.  Growth is close at the matched
   \(t=200\) controls, but the \(k_y=0.3\) real frequency and phase-aligned
   \(\phi(z)\) remain open.  The solver-side \(k_y=0.3\) RHS/model balance now
-  exists and is streaming dominated; the next task is a matched stella
-  distribution/RHS/source-term trace for term-level convention parity on the
-  same imported geometry.
+  exists and is streaming dominated.  A matched explicit-term stella
+  distribution/RHS/source trace now exists, so the next task is direct
+  stella-vs-solver term-array comparison on the same imported geometry.
   \item Rerun the W7-X solver at production-shape controls, then repeat the
   convergence ladder in \(N_z\), velocity resolution, \(k_x/k_y\), field-line
   length, time step, and growth-window choice.  The current reduced W7-X
