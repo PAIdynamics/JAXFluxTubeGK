@@ -1,0 +1,25 @@
+{
+  "kperp_epsilon": 1e-12,
+  "per_ky": [
+    {
+      "contribution": 2.65533627501292,
+      "growth_rate": 0.1296489000018489,
+      "kperp2_average": 0.04882579325986225,
+      "ky": 0.1
+    },
+    {
+      "contribution": 1.119610108966413,
+      "growth_rate": 0.20746728615465676,
+      "kperp2_average": 0.18530315552890467,
+      "ky": 0.2
+    },
+    {
+      "contribution": 0.7642152163257782,
+      "growth_rate": 0.2567678446022674,
+      "kperp2_average": 0.3359889192418872,
+      "ky": 0.3
+    }
+  ],
+  "softplus_temperature": null,
+  "total": 4.539161600305111
+}

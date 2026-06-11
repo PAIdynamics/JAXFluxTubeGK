@@ -1,0 +1,66 @@
+{
+  "benchmark_name": "w7x_stella_velocity_discriminator",
+  "cases": [
+    {
+      "actual_total_time": 200.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 2000,
+      "name": "cheb_4x4",
+      "steps_per_window": 5,
+      "velocity_backend": "chebyshev",
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 200.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 6,
+      "n_vpar": 6,
+      "n_windows": 2000,
+      "name": "cheb_6x6",
+      "steps_per_window": 5,
+      "velocity_backend": "chebyshev",
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 200.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 8,
+      "n_vpar": 8,
+      "n_windows": 2000,
+      "name": "cheb_8x8",
+      "steps_per_window": 5,
+      "velocity_backend": "chebyshev",
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 200.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 8,
+      "n_vpar": 16,
+      "n_windows": 2000,
+      "name": "gkw_fd_16x8",
+      "steps_per_window": 5,
+      "velocity_backend": "finite_difference",
+      "vpar_max": 2.0
+    }
+  ],
+  "focus_ky": 0.3,
+  "geometry_source": "stella-geometry",
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "purpose": "vary velocity-space resolution/backend at fixed stella-matched W7-X geometry, modes, and t=200 growth window",
+  "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "status_json": "fixtures/w7x_itg_stella_velocity_discriminator/velocity_discriminator_status.json",
+  "stella_geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+  "stella_tend": 200.0,
+  "summary_csv": "fixtures/w7x_itg_stella_velocity_discriminator/velocity_discriminator_summary.csv"
+}

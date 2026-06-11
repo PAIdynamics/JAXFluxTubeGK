@@ -761,19 +761,22 @@ turbulence stellarator run remains a later physics-extension milestone.
 
 Priority order:
 
-1. Obtain or generate the matched external W7-X `.big.nc`/`.out.nc` pair from
-   GX, GKW, GS2, stella, or another trusted code using the prepared local GX
-   `ITG_w7x` controls.
-2. Run
-   `bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh --copy-outputs --resample-reference-to-observed-z`
-   to export `fixtures/w7x_itg_external_mode_structure_fixture.csv`, run the
-   mode-structure gate, and refresh the production-readiness ledger.
-3. Re-run the production-shape solver comparison against the external fixture:
-   `uv run python examples/run_w7x_mode_structure_gate.py --run-solver --solver-preset gx-production-shape --reference-fixture fixtures/w7x_itg_external_mode_structure_fixture.csv --resample-reference-to-observed-z --require-reference`.
-4. If W7-X parity fails, resolve discrepancies in this order: eik coordinate
-   and field-line-period conventions, `ky/kx` and linked-boundary mapping,
-   growth-window/time normalization, field normalization and phase alignment,
-   velocity-space backend/resolution, then term-level RHS conventions.
+1. Add a W7-X `ky=0.3` RHS/model term-balance diagnostic on the
+   stella-imported geometry at the matched `t=200` controls. Record
+   streaming/mirror, magnetic drift, equilibrium drive, parallel-field drive,
+   drift-field drive, quasineutrality numerator/denominator, FLR factors, and
+   geometry/metric coefficients for the late-time mode structure.
+2. Compare those quantities against stella conventions where possible:
+   `bmag`, `b_dot_grad_zed`, \(k_\perp^2\), grad-B/curvature drift
+   normalization, adiabatic-electron response, velocity measure, time/frequency
+   sign, and \(J_0/\Gamma_0\) conventions.
+3. If the term-balance diagnostic remains ambiguous, add a same-geometry
+   single-`ky=0.3` trace with stored complex `phi(z,t)`, density moment,
+   temperature/energy moment, and field-solve numerator/denominator for direct
+   comparison to stella diagnostics or a small stella diagnostic patch.
+4. Keep GX/GKW/GS2 W7-X fixtures as secondary external cross-checks: the
+   prepared GX handoff path remains available, but the primary external W7-X
+   reference is now the completed CPU stella fixture.
 5. Once W7-X parity passes, rerun a production-control convergence ladder and
    `fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh`.
 6. Keep DESC optimization examples labeled reduced until
@@ -797,11 +800,12 @@ Guardrails:
 
 Expected file changes:
 
-- `fixtures/w7x_itg_external_mode_structure_fixture.csv` and W7-X gate outputs
-  when the external reference is returned,
-- `fixtures/w7x_itg_convergence_study/production_readiness_gate.json` and
-  `production_cpu_timing.json` after parity and timing are rerun,
-- optional production-control convergence artifacts,
+- a W7-X `ky=0.3` RHS/model term-balance script, tests, and machine-readable
+  fixture/figure outputs,
+- optional stella diagnostic patch or exported moment trace if the existing
+  `.out.nc` variables are insufficient,
+- refreshed W7-X gate/readiness artifacts only after a physics convention fix
+  is justified,
 - `TODO.md`,
 - `STATUS.md`,
 - `main.tex`.
@@ -809,7 +813,8 @@ Expected file changes:
 Expected tests:
 
 - retained Hermite-Laguerre moment/hypercollision tests,
-- W7-X external mode-structure gate with the returned fixture,
+- W7-X stella time-ladder and velocity-discriminator artifact tests,
+- W7-X external mode-structure gate with the stella fixture,
 - W7-X production-readiness gate tests whenever the convergence/timing ledger
   changes,
 - guarded W7-X production CPU-timing and DESC optimization-readiness tests,
@@ -823,6 +828,55 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-11: Added W7-X stella Velocity-Space Discriminator
+
+- Added `scripts/run_w7x_stella_velocity_discriminator.py`, which holds the
+  stella-imported W7-X geometry, `n_kx=1`, `kx=0`, `ikxspace=1`,
+  `ky=(0.1,0.2,0.3)`, species gradients, and `t=200` late-half growth window
+  fixed while varying only velocity-space resolution/backend.
+- Generated `fixtures/w7x_itg_stella_velocity_discriminator/` with cases
+  `cheb_4x4`, `cheb_6x6`, `cheb_8x8`, and `gkw_fd_16x8`. The `cheb_4x4`
+  baseline reuses the existing `time_200` ladder output; the other cases write
+  full scan outputs, W7-X mode-structure gates, ordered stella parity audits,
+  a combined summary CSV, and a status JSON.
+- The discriminator remains open and moves the next target to W7-X
+  `ky=0.3` RHS/model term balance. The stella-level finite-difference
+  velocity case `gkw_fd_16x8` gives `ky=0.3` growth error
+  `-1.3492631547620433e-02`, frequency error
+  `-1.6516142087339686e-01`, and phase-aligned profile error
+  `1.565173196727111e-01`. The spectral `cheb_8x8` case jumps to a
+  different strongly growing branch with `max_growth_error=2.47148401e-01`
+  and `max_frequency_error=3.24324431e+00`.
+- Added `tests/test_w7x_stella_velocity_discriminator.py` covering default
+  case construction, fixed stella/mode/time scan arguments, baseline-delta
+  bookkeeping, the reused long-time baseline, and the committed artifact status.
+- Updated `TODO.md` and this status ledger so the primary W7-X blocker is no
+  longer missing external data, field-line length, time-window normalization,
+  or simple velocity resolution. The next action is a term-level W7-X
+  `ky=0.3` RHS/model diagnostic.
+- Commands run:
+  - `uv run ruff check scripts/run_w7x_stella_velocity_discriminator.py tests/test_w7x_stella_velocity_discriminator.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stella_velocity_discriminator.py -q`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_velocity_discriminator.py --case cheb_4x4 --case cheb_6x6`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_velocity_discriminator.py --case cheb_4x4 --case cheb_6x6 --case cheb_8x8 --reuse-existing`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_velocity_discriminator.py --case cheb_4x4 --case cheb_6x6 --case cheb_8x8 --case gkw_fd_16x8 --reuse-existing`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_velocity_discriminator.py --reuse-existing`
+  - `uv run ruff check scripts/run_w7x_stella_velocity_discriminator.py tests/test_w7x_stella_velocity_discriminator.py scripts/run_w7x_stella_matched_time_ladder.py scripts/audit_w7x_stella_frequency_profile_conventions.py tests/test_w7x_stella_matched_time_ladder.py tests/test_w7x_stella_frequency_profile_conventions.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stella_velocity_discriminator.py tests/test_w7x_stella_matched_time_ladder.py tests/test_w7x_stella_frequency_profile_conventions.py -q`
+  - `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex`
+  - `rg -n "Overfull|LaTeX Warning|!" main.log`
+  - `git diff --check`
+- Verification:
+  - focused ruff checks passed,
+  - focused pytest passed with `5 passed` for the new discriminator and
+    `13 passed` for the W7-X focused bundle,
+  - `main.pdf` rebuilt with no overfull-box, LaTeX warning, or error entries,
+  - `git diff --check` passed,
+  - all four discriminator cases produced finite growth/frequency,
+  - all ordered audits pass the coordinate, field-line-length, selected-`ky`,
+    `kx`/linking, growth-window/time, and field-normalization checks before
+    stopping at `velocity_rhs_terms`.
 
 ### 2026-06-11: Fixed Long-Window Frequency Aliasing and Audited W7-X Conventions
 

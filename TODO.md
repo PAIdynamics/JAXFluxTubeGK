@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator Gyrokinetic Solver
 
-Last planned: 2026-06-10
+Last planned: 2026-06-11
 
 ## Project Goal
 
@@ -609,11 +609,22 @@ discrepancies and blockers are:
 - Matched external W7-X reference now exists, but parity is open: the local
   stella checkout builds and runs on CPU, the matched W7-X stella production
   input has completed, and `fixtures/w7x_itg_external_mode_structure_fixture.csv`
-  now contains `ky=(0.1,0.2,0.3)` with 257 normalized z points. The reduced
-  solver-vs-stella gate remains open with maximum errors
-  `growth=1.89858341e-01`, `frequency=1.39078602e-01`, and
-  phase-aligned profile `3.02836095e-01`; the ordered audit shows the first
-  blocker is field-line length, not yet velocity/RHS physics.
+  now contains `ky=(0.1,0.2,0.3)` with 257 normalized z points. The latest
+  stella-matched solver ladder imports the stella `.geometry` file directly,
+  uses `n_kx=1`, `kx=0`, `ikxspace=1`, matched selected `ky`, and reaches
+  `t=200`; the ordered audit now stops at `velocity_rhs_terms`. Growth parity
+  is good at `max_growth_error=8.00978267e-03`, but the gate remains open with
+  `max_frequency_error=1.65618027e-01` and
+  `max_profile_error=1.86133427e-01`, dominated by `ky=0.3`.
+- W7-X velocity-space resolution/backend does not close the matched stella
+  gap. `scripts/run_w7x_stella_velocity_discriminator.py` holds geometry,
+  modes, species, and `t=200` fixed while varying only velocity grids:
+  `cheb_4x4`, `cheb_6x6`, `cheb_8x8`, and `gkw_fd_16x8`. The stella-level
+  finite-difference case gives `ky=0.3` frequency error
+  `-1.6516142087339686e-01` and profile error `1.565173196727111e-01`; the
+  spectral `8x8` case jumps to a different strongly growing branch. The next
+  target is therefore W7-X `ky=0.3` RHS/model term balance and normalization,
+  not simple velocity-grid refinement.
 - W7-X reduced fixture not converged: the current W7-X run is a real-geometry
   reduced regression artifact. The reduced convergence ladder shows stable
   time-step/window diagnostics, but the short baseline is not grid/domain
@@ -727,14 +738,13 @@ Guardrails for the round:
   writes the standard per-`ky` CSV fixture. This is the preferred W7-X physics
   reference route because stella is a CPU continuum gyrokinetic code rather
   than a GPU-native Hermite-Laguerre moment reference.
-- [ ] Obtain/export a true external per-`ky` complex mode-structure fixture for
-  the problematic branch, especially `ky=0.3`, using GX `.big.nc`, GKW,
-  Gyaradax, GS2, stella, or a local diagnostic patch. The fixture should store
-  at least `ky`, `z`, complex `phi(z)`, growth rate, real frequency,
-  normalization convention, and enough metadata to identify geometry,
-  resolution, field-line length, and time/growth window. For the GX route, the
-  remaining action is to run the prepared external GX command and feed the
-  resulting `.big.nc` through the exporter/gate.
+- [x] Obtain/export a true external per-`ky` complex W7-X mode-structure
+  fixture for the problematic branch, especially `ky=0.3`. The matched stella
+  fixture now stores `ky`, normalized `z`, complex `phi(z)`, growth rate, real
+  frequency, normalization convention, and metadata through
+  `fixtures/w7x_itg_external_mode_structure_fixture.csv`. GX/GKW/GS2 fixtures
+  remain useful secondary cross-checks, but the primary W7-X blocker is no
+  longer missing external data.
 - [x] If no reliable external mode-structure fixture is available, assemble a
   minimal GX-style Hermite-Laguerre linear moment RHS for the s-alpha
   adiabatic-electron ITG case. Reuse the source-matched linked `k_z`
@@ -759,6 +769,36 @@ Guardrails for the round:
   `ky=(0.3,0.5)`, and the calibrated GX reference curve. The implementation
   path is closed; this remaining checkbox is a reference-data/validation run
   against the real GX `.big.nc`, not missing solver infrastructure.
+
+### 1A. Close the W7-X `ky=0.3` RHS/model discriminator
+
+- [x] Build and run a stella-matched long-time solver ladder. The
+  `t=200` case passes normalized z, field-line length, selected `ky`,
+  `n_kx=1`/`kx=0` linking, growth-window/time normalization, and
+  field-normalization checks; the first failed ordered check is now
+  `velocity_rhs_terms`.
+- [x] Audit simple frequency/profile conventions at the `t=200` matched case.
+  Frequency sign flips, affine rescaling, profile conjugation, z reversal, and
+  circular shifts do not close the gate.
+- [x] Run the W7-X velocity-resolution/backend discriminator. The
+  `gkw_fd_16x8` case is closest to stella's velocity resolution and still
+  leaves `ky=0.3` at frequency error `-1.6516142087339686e-01` and
+  phase-aligned profile error `1.565173196727111e-01`; `cheb_8x8` is not a
+  stable convergence step. This rules out simple velocity resolution as the
+  primary explanation.
+- [ ] Add a W7-X `ky=0.3` term-balance diagnostic, analogous to the Cyclone
+  term audits, that records streaming/mirror, magnetic drift, equilibrium
+  drive, parallel-field drive, drift-field drive, quasineutrality numerator,
+  and FLR/metric factors on the stella-imported geometry at the late-time
+  mode structure.
+- [ ] Compare the W7-X term balance against stella conventions where possible:
+  `bmag`, `b_dot_grad_zed`, \(k_\perp^2\), curvature/grad-B drift
+  normalization, adiabatic-electron response, \(J_0/\Gamma_0\), velocity
+  measure, and real-frequency sign/time normalization.
+- [ ] If term balance does not isolate the mismatch, run a same-geometry
+  single-`ky=0.3` solver trace with stored complex `phi(z,t)`, density moment,
+  temperature/energy moment, and field solve numerator/denominator for direct
+  comparison to stella diagnostics or a small stella diagnostic patch.
 
 ### 2. Build the first single-command stellarator run
 

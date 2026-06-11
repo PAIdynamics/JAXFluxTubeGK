@@ -1932,27 +1932,20 @@ uv run python examples/export_stella_mode_structure_fixture.py \
   --stella-z-coordinate zed_over_2pi \
   --output fixtures/w7x_itg_external_mode_structure_fixture.csv
 \end{verbatim}
-The present solver comparison is open, not missing: comparing the reduced
-solver fixture to the stella fixture gives maximum growth, real-frequency, and
-phase-aligned profile errors \(1.89858341\times10^{-1}\),
+The first reduced solver comparison was open, not missing: comparing the
+short reduced W7-X fixture to the stella fixture gave maximum growth,
+real-frequency, and phase-aligned profile errors \(1.89858341\times10^{-1}\),
 \(1.39078602\times10^{-1}\), and \(3.02836095\times10^{-1}\), respectively,
 after exporting stella with normalized \(z=\texttt{zed}/(2\pi)\).  The
 ordered audit
 \begin{verbatim}
 uv run python scripts/audit_w7x_stella_solver_parity.py
 \end{verbatim}
-writes a JSON report in the W7-X convergence fixture directory.  It shows
-that normalized z and selected \(k_y\) now pass, while the first
-failed convention is field-line length: the committed reduced solver fixture
-uses \(\texttt{field\_line\_periods}=1\), whereas the matched stella VMEC run
-spans \(\texttt{nfield\_periods}/n_{\rm fp}\simeq6.95\) zeta turns.  Later
-ordered blockers are also still present: the reduced solver fixture uses
-\(N_{k_x}=3\) with linked-mode spacing while stella uses \(\texttt{nakx}=1\),
-and the reduced solver trace covers only \(0.012\) time units versus stella's
-\(\texttt{tend}=200\).  Thus the current W7-X blocker is a
-solver-side convention/control mismatch against stella, not the absence of an
-external reference and not yet evidence for a velocity-space or RHS-term
-physics error.
+wrote a JSON report in the W7-X convergence fixture directory.  For that
+reduced fixture, normalized z and selected \(k_y\) passed, while field-line
+length, \(N_{k_x}=3\) linking, and the short time window failed.  Those were
+control mismatches against stella, not evidence for a velocity-space or
+RHS-term physics error.
 
 The first solver fixture matched to the stella geometry and mode controls is
 now generated with
@@ -2016,6 +2009,34 @@ tolerance, while \(k_y=0.3\) remains discrepant.  A convention audit over
 frequency sign/scale, profile conjugation, z reversal, and circular shifts
 does not close the profile gate; the active W7-X discrepancy has therefore
 moved from time-window control to velocity-space or linear RHS-term parity.
+
+The velocity-space part of that question is now separated by
+\begin{verbatim}
+uv run python scripts/run_w7x_stella_velocity_discriminator.py
+\end{verbatim}
+which writes the artifact directory
+\begin{verbatim}
+fixtures/w7x_itg_stella_velocity_discriminator/
+\end{verbatim}
+This discriminator keeps the stella geometry, \(k_x=0\), \(N_{k_x}=1\), selected \(k_y\), species
+parameters, and \(t_{\rm end}=200\) fixed, and varies only velocity-space
+resolution/backend.  The tested cases are Chebyshev \(4\times4\),
+\(6\times6\), \(8\times8\), and a GKW-style finite-difference \(16\times8\)
+velocity grid.  The stella-level finite-difference case does not close the
+dominant \(k_y=0.3\) discrepancy:
+\[
+  \Delta\gamma=-1.34926315\times10^{-2},\qquad
+  \Delta\omega_r=-1.65161421\times10^{-1},\qquad
+  \epsilon_\phi=1.56517320\times10^{-1}.
+\]
+The Chebyshev \(8\times8\) case instead jumps to a different strongly growing
+branch, with maximum growth error \(2.47148401\times10^{-1}\) and maximum
+frequency error \(3.24324431\).  Thus simple velocity-grid refinement is not
+the primary explanation.  The next W7-X target is term-level RHS/model parity
+for the \(k_y=0.3\) mode: streaming/mirror, magnetic drift, equilibrium drive,
+parallel-field drive, drift-field drive, quasineutrality, FLR factors,
+velocity measure, and stella drift/metric normalization on the same imported
+geometry.
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a
@@ -2119,15 +2140,12 @@ time-advance diagnostics, imported stellarator geometry, and fixed-topology
 differentiable objectives.  What remains before a trusted stellarator
 simulation claim is validation and production-control execution:
 \begin{enumerate}
-  \item Resolve the matched stella W7-X parity gap.  The CPU stella run and
-  external fixture now exist, so the next task is to make the solver match
-  stella's growth, real frequency, and phase-aligned \(\phi(z)\) for
-  \(k_y=(0.1,0.2,0.3)\).
-  \item Build a stella-matched observed solver fixture before changing
-  velocity-space or RHS terms.  It should consume the stella-exported geometry
-  arrays, or an eik table sampled on the same field-line length, use
-  \(N_{k_x}=1\), \(k_x=0\), normalized \(z=\texttt{zed}/(2\pi)\), and a
-  stella-comparable late-time growth window.
+  \item Resolve the matched stella W7-X parity gap.  The CPU stella run,
+  external fixture, stella-imported solver fixture, long-time ladder, and
+  velocity-resolution discriminator now exist.  Growth is close at the matched
+  \(t=200\) controls, but the \(k_y=0.3\) real frequency and phase-aligned
+  \(\phi(z)\) remain open.  The next task is a W7-X term-level RHS/model
+  diagnostic on the same imported geometry.
   \item Rerun the W7-X solver at production-shape controls, then repeat the
   convergence ladder in \(N_z\), velocity resolution, \(k_x/k_y\), field-line
   length, time step, and growth-window choice.  The current reduced W7-X
