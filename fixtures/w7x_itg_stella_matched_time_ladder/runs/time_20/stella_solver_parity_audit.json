@@ -1,0 +1,187 @@
+{
+  "benchmark_name": "w7x_stella_solver_parity_audit",
+  "first_failed_check": "growth_window_time_normalization",
+  "gate": {
+    "benchmark_name": "w7x_itg_external_mode_structure_gate",
+    "frequency_tolerance": 0.02,
+    "growth_tolerance": 0.02,
+    "ky_values": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "max_frequency_error": 0.08876838380576851,
+    "max_growth_error": 0.12307422091501255,
+    "max_profile_error": 0.1672007808562221,
+    "observed_fixture": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20/mode_structures.csv",
+    "passed": false,
+    "profile_tolerance": 0.02,
+    "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+    "report_csv": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20/mode_structure_gate/mode_structure_gate.csv",
+    "require_frequency": true,
+    "require_profile": true,
+    "run_solver": false,
+    "solver_preset": null,
+    "status": "open"
+  },
+  "next_action": "rerun the observed solver trace to a stella-comparable late-time window",
+  "ordered_checks": [
+    {
+      "name": "eik_z_coordinate_convention",
+      "notes": "The stella fixture must be exported with zed_over_2pi so both fixtures use normalized z. Endpoint policy may still differ: the solver eik grid excludes the upper endpoint while stella writes both -pi and +pi.",
+      "passed": true,
+      "solver_z_max": 0.49609375,
+      "solver_z_min": -0.5,
+      "status": "pass",
+      "stella_fixture_z_max": 0.5,
+      "stella_fixture_z_min": -0.5,
+      "stella_geometry_zed_max": 3.142,
+      "stella_geometry_zed_min": -3.142
+    },
+    {
+      "absolute_turn_error": 0.0,
+      "name": "field_line_length",
+      "notes": "The committed reduced solver fixture uses a short eik segment. The matched stella VMEC run spans nfield_periods/nfp toroidal turns along zeta; compare against a solver geometry sampled on the same field-line length before changing RHS physics.",
+      "passed": true,
+      "solver_field_line_periods": 6.951887914253988,
+      "status": "pass",
+      "stella_zeta_turns_from_geometry": 6.951887914253988,
+      "stella_zeta_turns_from_metadata": 6.9504719999999995
+    },
+    {
+      "name": "ky_normalization",
+      "notes": "The selected ky labels match numerically. This does not prove the same rho_i/a or flux-surface normalization, but it removes a simple wrong-mode comparison.",
+      "passed": true,
+      "solver_ky": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "status": "pass",
+      "stella_export_ky": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "stella_fixture_ky": [
+        0.09999999999999999,
+        0.19999999999999998,
+        0.3
+      ]
+    },
+    {
+      "name": "twist_and_shift_linking",
+      "notes": "The stella reference is a kx=0, nakx=1 run. The committed reduced solver fixture uses a linked three-kx chain, so the current profile gate mixes boundary/connectivity effects into the stella comparison.",
+      "passed": true,
+      "solver_ikxspace": 1,
+      "solver_n_kx": 1,
+      "status": "pass",
+      "stella_nakx": 1
+    },
+    {
+      "name": "growth_window_time_normalization",
+      "notes": "The reduced solver fixture is a very short regression run. Growth/frequency parity requires a solver trace long enough to use the same late-half window as stella.",
+      "passed": false,
+      "solver_growth_window_fraction": 0.5,
+      "solver_to_stella_total_time_ratio": 0.1,
+      "solver_total_time": 20.0,
+      "status": "open",
+      "stella_growth_average_fraction": 0.5,
+      "stella_total_time": 200.0
+    },
+    {
+      "max_profile_error": 0.1672007808562221,
+      "name": "field_normalization",
+      "notes": "The scalar amplitude normalizations differ by construction, but the gate uses row-normalized, phase-aligned complex phi(z). Raw amplitude parity should wait until coordinate, length, kx, and time-window controls are matched.",
+      "passed": true,
+      "solver_normalization": "unit_mode_chain_amplitude",
+      "status": "pass",
+      "stella_normalization": "stella_out_nc_complex_phi"
+    },
+    {
+      "name": "velocity_rhs_terms",
+      "notes": "Not evaluated in this ordered audit. Do not tune velocity-space or RHS terms until coordinate, field-line length, ky, kx/linking, growth-window, and field-normalization checks pass.",
+      "passed": false,
+      "status": "not_evaluated"
+    }
+  ],
+  "passed": false,
+  "solver": {
+    "config": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20/run_config.json",
+    "controls": {
+      "dt": 0.02,
+      "field_line_periods": 6.951887914253988,
+      "growth_window_fraction": 0.5,
+      "ikxspace": 1,
+      "n_kx": 1,
+      "n_windows": 200,
+      "n_z": 256,
+      "steps_per_window": 5
+    },
+    "fixture": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20/mode_structures.csv",
+    "ky": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "metadata": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20/convergence_metadata.json",
+    "normalization": "unit_mode_chain_amplitude",
+    "total_time": 20.0,
+    "z": {
+      "count": 256,
+      "max": 0.49609375,
+      "min": -0.5,
+      "span": 0.99609375
+    }
+  },
+  "status": "open",
+  "stella": {
+    "fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+    "geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "grid": {
+      "export_ky_values": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "kx_values": [
+        0.0
+      ],
+      "ky_values": [
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "nakx": 1,
+      "naky": 4,
+      "nmu": 8,
+      "nvgrid": 16,
+      "nzed": 256,
+      "stella_vpa_points": 32
+    },
+    "ky": [
+      0.09999999999999999,
+      0.19999999999999998,
+      0.3
+    ],
+    "metadata": "fixtures/stella_w7x_mode_structure_run/mode_structure_run_metadata.json",
+    "nfield_periods": 34.752359999999996,
+    "nfp": 5.0,
+    "normalization": "stella_out_nc_complex_phi",
+    "time": {
+      "delt": 0.1,
+      "growth_average_fraction": 0.5,
+      "nwrite": 10,
+      "tend": 200.0
+    },
+    "z": {
+      "count": 257,
+      "max": 0.5,
+      "min": -0.5,
+      "span": 1.0
+    },
+    "zeta_turns_from_geometry": 6.951887914253988,
+    "zeta_turns_from_metadata": 6.9504719999999995
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "adiabatic_electrons": {
+    "density": 1.0,
+    "temperature": 1.0,
+    "zonal_correction": false
+  },
+  "geometry": {
+    "alpha": 0.0,
+    "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
+    "dropped_periodic_endpoint": true,
+    "field_line_periods": 6.951887914253988,
+    "geometry_source": "stella-geometry",
+    "global_header": {
+      "aref": 0.4944,
+      "bref": 2.604,
+      "dxdpsi": 1.25,
+      "dydalpha": 0.8,
+      "exb_nonlin": 0.5,
+      "flux_fac": 0.5,
+      "one_over_Grho": 0.8053,
+      "qinp": 1.098,
+      "rhoc": 0.8,
+      "rhotor": 0.8,
+      "shat": -0.1051
+    },
+    "n_z": 256,
+    "original_n_z": 257,
+    "rho": 0.8,
+    "sampled_zeta_turns": 6.9232400244974475,
+    "source": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "stella_geometry": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "theta_max": 3.117048960983623,
+    "theta_min": -3.141592653589793,
+    "z_coordinate": "zed_over_2pi",
+    "z_max": 0.49609375,
+    "z_min": -0.5,
+    "zeta_max": 21.66,
+    "zeta_min": -21.84,
+    "zeta_turns": 6.951887914253988
+  },
+  "ikxspace": 1,
+  "kx_max": 0.0,
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "n_kx": 1,
+  "n_mu": 4,
+  "n_vpar": 4,
+  "parallel_derivative_model": "matrix",
+  "species": {
+    "charge": 1.0,
+    "density": 1.0,
+    "density_gradient": 1.0,
+    "mass": 1.0,
+    "temperature": 1.0,
+    "temperature_gradient": 3.0
+  },
+  "velocity_backend": "chebyshev"
+}

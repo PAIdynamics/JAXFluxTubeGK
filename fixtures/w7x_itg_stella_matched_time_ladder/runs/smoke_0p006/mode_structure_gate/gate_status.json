@@ -1,0 +1,23 @@
+{
+  "benchmark_name": "w7x_itg_external_mode_structure_gate",
+  "frequency_tolerance": 0.02,
+  "growth_tolerance": 0.02,
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "max_frequency_error": 0.10776992937516834,
+  "max_growth_error": 0.6579361051636541,
+  "max_profile_error": 0.11070205745377523,
+  "observed_fixture": "fixtures/w7x_itg_stella_matched_time_ladder/runs/smoke_0p006/mode_structures.csv",
+  "passed": false,
+  "profile_tolerance": 0.02,
+  "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "report_csv": "fixtures/w7x_itg_stella_matched_time_ladder/runs/smoke_0p006/mode_structure_gate/mode_structure_gate.csv",
+  "require_frequency": true,
+  "require_profile": true,
+  "run_solver": false,
+  "solver_preset": null,
+  "status": "open"
+}

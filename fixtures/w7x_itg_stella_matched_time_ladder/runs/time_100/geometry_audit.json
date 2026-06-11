@@ -1,0 +1,125 @@
+{
+  "checks": {
+    "finite_difference_mirror_force": true,
+    "finite_geometry_fields": true,
+    "finite_kperp2": true,
+    "gx_eik_export_contract": true,
+    "nonnegative_representative_kperp2": true,
+    "positive_B": true,
+    "positive_metric_diagonal": true
+  },
+  "eik_export_gate": {
+    "name": "stellarator_geometry_preflight_eik_export",
+    "notes": "standard imported-stellarator geometry preflight: finite fields, positive B/metric, kperp2, GX/GS2 eik export, and independent finite-difference mirror-force consistency",
+    "observed_value": 0.0,
+    "passed": true,
+    "quantity": "max_abs_eik_export_error",
+    "reference_value": 0.0,
+    "tolerance": 1e-12
+  },
+  "external_eik_gate": null,
+  "field_stats": {
+    "B": {
+      "finite": true,
+      "max": 1.283,
+      "mean": 1.0667781250000001,
+      "min": 0.9152
+    },
+    "D_x": {
+      "finite": true,
+      "max": 0.1326,
+      "mean": 0.0003058593749999734,
+      "min": -0.1326
+    },
+    "D_y": {
+      "finite": true,
+      "max": 0.40900000000000003,
+      "mean": -0.079700711484375,
+      "min": -0.6167
+    },
+    "E_y": {
+      "finite": true,
+      "max": 0.1831,
+      "mean": -0.06376971874999998,
+      "min": -0.3301
+    },
+    "F": {
+      "finite": true,
+      "max": 0.0019607888988921506,
+      "mean": 0.0019607888988921515,
+      "min": 0.0019607888988921506
+    },
+    "G": {
+      "finite": true,
+      "max": 0.06746590082488294,
+      "mean": 1.0191500421363742e-17,
+      "min": -0.0674659008248831
+    },
+    "g_xx": {
+      "finite": true,
+      "max": 5.699,
+      "mean": 1.7799406249999998,
+      "min": 0.2999
+    },
+    "g_xy": {
+      "finite": true,
+      "max": 9.284,
+      "mean": 0.018750000000000266,
+      "min": -9.284
+    },
+    "g_yy": {
+      "finite": true,
+      "max": 24.64,
+      "mean": 4.532028515624999,
+      "min": 0.2075
+    }
+  },
+  "geometry": {
+    "alpha": 0.0,
+    "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
+    "dropped_periodic_endpoint": true,
+    "field_line_periods": 6.951887914253988,
+    "geometry_source": "stella-geometry",
+    "global_header": {
+      "aref": 0.4944,
+      "bref": 2.604,
+      "dxdpsi": 1.25,
+      "dydalpha": 0.8,
+      "exb_nonlin": 0.5,
+      "flux_fac": 0.5,
+      "one_over_Grho": 0.8053,
+      "qinp": 1.098,
+      "rhoc": 0.8,
+      "rhotor": 0.8,
+      "shat": -0.1051
+    },
+    "n_z": 256,
+    "original_n_z": 257,
+    "rho": 0.8,
+    "sampled_zeta_turns": 6.9232400244974475,
+    "source": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "stella_geometry": "/Users/mohsensadr/Codes/GitHub/new-plasma-code/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "theta_max": 3.117048960983623,
+    "theta_min": -3.141592653589793,
+    "z_coordinate": "zed_over_2pi",
+    "z_max": 0.49609375,
+    "z_min": -0.5,
+    "zeta_max": 21.66,
+    "zeta_min": -21.84,
+    "zeta_turns": 6.951887914253988
+  },
+  "kperp2": {
+    "max": 2.2176,
+    "mean": 0.2114946640625,
+    "min": 0.0020750000000000005
+  },
+  "mirror_fd_check_enabled": true,
+  "mirror_fd_error": 0.009626609978479791,
+  "passed": true,
+  "z": {
+    "max": 0.49609375,
+    "min": -0.5,
+    "n_z": 256,
+    "weight_sum": 1.0
+  }
+}

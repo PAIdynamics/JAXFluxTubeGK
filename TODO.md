@@ -976,13 +976,26 @@ External production-claim blockers, not code implementation gaps:
   is still a short smoke trace (`dt=0.001`, `n_windows=6`, total time
   `0.006`) rather than a stella-comparable late-time trace.
 
-- [ ] Run the stella-matched observed solver trace to a comparable late-time
-  window. Use the same imported stella geometry and `n_kx=1`/`kx=0` controls,
-  but extend the solver total time toward stella's `tend=200` with the same
-  late-half growth fit. Start with a staged CPU ladder (for example
-  `t_end=1, 5, 20, 100, 200`) and require finite amplitudes, stable late-fit
-  growth, and unchanged coordinate/length/kx audit passes before interpreting
-  growth/profile errors as RHS or velocity-space discrepancies.
+- [x] Run the stella-matched observed solver trace to a comparable late-time
+  window. `scripts/run_w7x_stella_matched_time_ladder.py` now runs the fixed
+  stella-imported geometry and `n_kx=1`/`kx=0` controls over
+  `t=(0.006,1,5,20,100,200)`, writing
+  `fixtures/w7x_itg_stella_matched_time_ladder/`. The `t=100` and `t=200`
+  cases pass the ordered `growth_window_time_normalization` check; the
+  `t=200` case reaches stella's `tend=200`, has finite outputs, and reduces
+  the maximum growth error to `8.00978267e-03`. The gate remains open with
+  `max_frequency_error=1.33706264e-01` and
+  `max_profile_error=1.86133427e-01`, and the ordered audit's first remaining
+  failed check is `velocity_rhs_terms`.
+
+- [ ] Resolve the post-time-window W7-X parity gap. With coordinate,
+  field-line length, selected `ky`, `n_kx=1`, and late-half time-window
+  controls matched, compare the `t=200` solver and stella traces term by term.
+  Start with normalization and frequency conventions that can affect
+  \(\omega_r\), then inspect the stella/GKW velocity-space discretization and
+  linear RHS terms against the imported stella geometry arrays. Do not tune
+  geometry or time-window controls unless a regression reopens one of the
+  already-passing ordered checks.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

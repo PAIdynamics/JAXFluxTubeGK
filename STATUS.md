@@ -824,6 +824,37 @@ Expected tests:
 
 ## Round Log
 
+### 2026-06-11: Ran stella-Matched W7-X Long-Time Ladder
+
+- Added `scripts/run_w7x_stella_matched_time_ladder.py`, a reproducible
+  fixed-control time-window ladder for the stella W7-X comparison. It keeps
+  the stella `.geometry` import, `n_kx=1`, `kx_max=0`, `ikxspace=1`,
+  `ky=(0.1,0.2,0.3)`, species gradients, and late-half growth convention
+  fixed, and only extends the solver trace length.
+- Generated `fixtures/w7x_itg_stella_matched_time_ladder/` with cases
+  `t=(0.006,1,5,20,100,200)`. Each case writes the usual scan outputs, a
+  W7-X mode-structure gate, and an ordered stella parity audit. The full
+  ladder took about one minute on this CPU for the committed reduced velocity
+  grid (`n_vpar=n_mu=4`).
+- The ladder closes the active time-window blocker. Cases `t=100` and
+  `t=200` pass `growth_window_time_normalization`; `t=200` reaches stella's
+  `tend=200` with finite growth/frequency. The ordered audit for `t=200`
+  now stops at `velocity_rhs_terms`, not at coordinate, field-line length,
+  `ky`, kx/linking, or growth-window time.
+- The time extension significantly improves scalar growth parity: maximum
+  growth error decreases from `6.57936105e-01` in the `t=0.006` smoke trace
+  to `8.00978267e-03` at `t=200`. The W7-X gate remains open because
+  `max_frequency_error=1.33706264e-01` and
+  `max_profile_error=1.86133427e-01` exceed the `2e-2` tolerances.
+- Added `tests/test_w7x_stella_matched_time_ladder.py` covering the ladder
+  case construction, fixed stella geometry/mode scan arguments, and committed
+  ladder artifact status.
+- Commands run:
+  - `uv run ruff check scripts/run_w7x_stella_matched_time_ladder.py tests/test_w7x_stella_matched_time_ladder.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stella_matched_time_ladder.py -q`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_matched_time_ladder.py --output-dir /tmp/w7x_stella_time_ladder_smoke --max-total-time 1`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_matched_time_ladder.py`
+
 ### 2026-06-11: Built stella-Matched Observed W7-X Solver Fixture
 
 - Committed the previous ordered stella parity audit work as

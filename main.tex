@@ -1987,6 +1987,30 @@ real-frequency, and phase-aligned profile errors
 \(1.10702057\times10^{-1}\), respectively.  The next validation step is a
 staged long-time run using the same imported geometry and mode controls before
 changing velocity-space or RHS terms.
+
+That staged run is now automated by
+\begin{verbatim}
+uv run python scripts/run_w7x_stella_matched_time_ladder.py
+\end{verbatim}
+and writes \path{fixtures/w7x_itg_stella_matched_time_ladder/}.  It holds the
+stella geometry, \(k_x=0\), \(N_{k_x}=1\), selected \(k_y\) values, species
+gradients, and late-half growth convention fixed while running
+\(t_{\rm end}=0.006,1,5,20,100,200\).  The \(t_{\rm end}=100\) and
+\(t_{\rm end}=200\) cases pass the ordered growth-window/time-normalization
+check; the \(t_{\rm end}=200\) case matches stella's total time and the
+ordered audit now stops at \(\texttt{velocity\_rhs\_terms}\).  Extending the
+trace therefore removes the dominant scalar-growth discrepancy:
+\[
+\max_{k_y} |\gamma_{\rm solver}-\gamma_{\rm stella}|
+  = 8.00978267\times 10^{-3}
+\quad (t_{\rm end}=200),
+\]
+down from \(6.57936105\times10^{-1}\) in the short smoke fixture.  The W7-X
+gate remains open because the real-frequency and phase-aligned profile errors
+are still \(1.33706264\times10^{-1}\) and \(1.86133427\times10^{-1}\),
+respectively.  Thus the active W7-X discrepancy has moved from time-window
+control to frequency/profile parity, most likely involving normalization,
+velocity-space, or linear RHS-term conventions.
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a

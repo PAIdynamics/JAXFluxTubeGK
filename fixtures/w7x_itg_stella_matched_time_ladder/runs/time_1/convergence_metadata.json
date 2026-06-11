@@ -1,0 +1,12 @@
+{
+  "dt": 0.02,
+  "estimated_cfl_dt": 0.16699681907807115,
+  "finite_frequency": true,
+  "finite_growth": true,
+  "growth_diagnostic": "late_fit",
+  "growth_window_fraction": 0.5,
+  "max_abs_late_window_growth_delta": 0.1008047476051851,
+  "n_windows": 10,
+  "normalize_each_window": true,
+  "steps_per_window": 5
+}

@@ -1,0 +1,89 @@
+{
+  "benchmark_name": "w7x_stella_matched_time_ladder",
+  "cases": [
+    {
+      "actual_total_time": 0.006,
+      "dt": 0.001,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 6,
+      "name": "smoke_0p006",
+      "steps_per_window": 1,
+      "target_total_time": 0.006,
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 1.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 10,
+      "name": "time_1",
+      "steps_per_window": 5,
+      "target_total_time": 1.0,
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 5.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 50,
+      "name": "time_5",
+      "steps_per_window": 5,
+      "target_total_time": 5.0,
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 20.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 200,
+      "name": "time_20",
+      "steps_per_window": 5,
+      "target_total_time": 20.0,
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 100.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 1000,
+      "name": "time_100",
+      "steps_per_window": 5,
+      "target_total_time": 100.0,
+      "vpar_max": 2.0
+    },
+    {
+      "actual_total_time": 200.0,
+      "dt": 0.02,
+      "mu_max": 1.5,
+      "n_mu": 4,
+      "n_vpar": 4,
+      "n_windows": 2000,
+      "name": "time_200",
+      "steps_per_window": 5,
+      "target_total_time": 200.0,
+      "vpar_max": 2.0
+    }
+  ],
+  "geometry_source": "stella-geometry",
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "purpose": "extend time horizon before changing RHS or velocity-space physics",
+  "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "status_json": "fixtures/w7x_itg_stella_matched_time_ladder/time_ladder_status.json",
+  "stella_geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+  "stella_tend": 200.0,
+  "summary_csv": "fixtures/w7x_itg_stella_matched_time_ladder/time_ladder_summary.csv"
+}
