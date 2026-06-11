@@ -625,6 +625,14 @@ discrepancies and blockers are:
   spectral `8x8` case jumps to a different strongly growing branch. The next
   target is therefore W7-X `ky=0.3` RHS/model term balance and normalization,
   not simple velocity-grid refinement.
+- The standard matched stella `.out.nc` has now been audited for the needed
+  `ky=0.3` RHS/source-term trace. It is sufficient for geometry/streaming
+  guardrails and complex `phi`, but not for true term parity: it lacks the
+  complex distribution `g` and per-term RHS/source arrays. The committed
+  `fixtures/w7x_ky03_stella_trace_contract/` status is
+  `blocked_missing_complex_stella_rhs_trace`; the available geometry contract
+  agrees at the precision of the rounded stella `.geometry` file used by the
+  solver fixture.
 - W7-X reduced fixture not converged: the current W7-X run is a real-geometry
   reduced regression artifact. The reduced convergence ladder shows stable
   time-step/window diagnostics, but the short baseline is not grid/domain
@@ -786,15 +794,31 @@ Guardrails for the round:
   phase-aligned profile error `1.565173196727111e-01`; `cheb_8x8` is not a
   stable convergence step. This rules out simple velocity resolution as the
   primary explanation.
-- [ ] Add a W7-X `ky=0.3` term-balance diagnostic, analogous to the Cyclone
+- [x] Add a W7-X `ky=0.3` term-balance diagnostic, analogous to the Cyclone
   term audits, that records streaming/mirror, magnetic drift, equilibrium
   drive, parallel-field drive, drift-field drive, quasineutrality numerator,
   and FLR/metric factors on the stella-imported geometry at the late-time
-  mode structure.
-- [ ] Compare the W7-X term balance against stella conventions where possible:
-  `bmag`, `b_dot_grad_zed`, \(k_\perp^2\), curvature/grad-B drift
+  mode structure. This is implemented by
+  `scripts/audit_w7x_ky03_rhs_model_balance.py`; the selected mode is
+  streaming dominated, with secondary magnetic-drift and mirror-force
+  contributions.
+- [x] Audit the standard matched stella `.out.nc` output against the solver
+  balance fixture. `scripts/audit_w7x_stella_ky03_trace_contract.py` writes
+  `fixtures/w7x_ky03_stella_trace_contract/`, confirms normalized `z`,
+  `F=b_dot_gradz/(2*pi)`, `B`, and `kperp2` at the rounded `.geometry` source
+  precision, and records that standard stella diagnostics do not contain
+  complex `g` or per-term RHS/source arrays.
+- [ ] Patch, rerun, or otherwise obtain a matched stella `ky=0.3` complex
+  distribution/RHS/source-term trace for Fortran `iky=4`, `ikx=1`, species 1,
+  all `z`, `vpa`, and `mu`. The first trace should snapshot deltas around
+  `advance_parallel_streaming_explicit`, `advance_mirror_explicit`,
+  `advance_wdrifty_explicit`, `advance_wdriftx_explicit`, and
+  `advance_wstar_explicit`, preserving whether stella stores native `rhs*dt`
+  or continuous-time RHS units.
+- [ ] Compare that external trace against the solver balance fixture:
+  streaming/mirror, magnetic drift, field-drive, curvature/grad-B drift
   normalization, adiabatic-electron response, \(J_0/\Gamma_0\), velocity
-  measure, and real-frequency sign/time normalization.
+  measure, and real-frequency/time normalization.
 - [ ] If term balance does not isolate the mismatch, run a same-geometry
   single-`ky=0.3` solver trace with stored complex `phi(z,t)`, density moment,
   temperature/energy moment, and field solve numerator/denominator for direct
@@ -1050,6 +1074,17 @@ External production-claim blockers, not code implementation gaps:
   (`0.5307304661068116`) and `mirror_force` (`0.32597146833944524`).
   This is a solver-side diagnostic, not a stella parity proof.
 
+- [x] Audit the standard stella `ky=0.3` trace availability against that
+  solver-side balance. `scripts/audit_w7x_stella_ky03_trace_contract.py`
+  writes `fixtures/w7x_ky03_stella_trace_contract/`. The available stella
+  `.out.nc` arrays confirm the normalized-z and streaming-multiplier
+  convention at the precision of the rounded `.geometry` file used by the
+  solver (`max_abs_F_error=6.74434460409476e-07`,
+  `max_abs_B_error=4.946551081135286e-04`,
+  `max_abs_kperp2_error=3.9841172216437126e-04`), but standard stella output
+  lacks complex `g` and per-term RHS/source arrays. The committed status is
+  therefore `blocked_missing_complex_stella_rhs_trace`.
+
 - [ ] Resolve the post-time-window W7-X parity gap. With coordinate,
   field-line length, selected `ky`, `n_kx=1`, and late-half time-window
   controls matched, compare the `t=200` solver and stella traces term by term.
@@ -1061,12 +1096,13 @@ External production-claim blockers, not code implementation gaps:
   remains open. `scripts/audit_w7x_stella_frequency_profile_conventions.py`
   shows that sign flip, conjugation, z reversal, and circular z shift do not
   close the profile/frequency gate. The new solver-side RHS audit shows the
-  focus branch is streaming-dominated, so the next action is to obtain or
-  export a matched stella distribution/RHS/source-term trace for `ky=0.3` and
-  compare streaming/mirror, magnetic drift, field-drive, FLR, velocity
-  measure, and quasineutrality conventions before changing collocation physics.
-  Do not tune geometry, time-window controls, or velocity resolution unless a
-  regression reopens one of the already-passing ordered checks.
+  focus branch is streaming-dominated. The standard stella output audit shows
+  geometry/streaming guardrails are available but the required complex
+  distribution/RHS arrays are not, so the next action is a targeted stella
+  trace hook around `add_explicit_gyrokinetic_terms` and its
+  streaming/mirror/drift/drive calls. Do not tune geometry, time-window
+  controls, or velocity resolution unless a regression reopens one of the
+  already-passing ordered checks.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

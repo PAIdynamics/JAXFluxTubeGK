@@ -2066,6 +2066,42 @@ The next comparison should therefore be against a stella distribution,
 RHS/source-term, or moment trace at the same \(k_y=0.3\) state.  Until that
 external term trace exists, the audit is an internal model-balance diagnostic,
 not a stella parity proof.
+
+The standard stella output has now been audited for this purpose:
+\begin{verbatim}
+uv run python scripts/audit_w7x_stella_ky03_trace_contract.py
+\end{verbatim}
+which writes
+\path{fixtures/w7x_ky03_stella_trace_contract/}.  This audit selects the
+matched stella \(k_y=0.3\), \(k_x=0\) mode, drops the duplicate periodic
+endpoint, and compares the available \(\texttt{.out.nc}\) geometry and field
+arrays against the solver-side balance fixture.  The normalized coordinate
+matches to \(5.55111512\times10^{-17}\).  The streaming multiplier comparison,
+using \(F=\texttt{b\_dot\_gradz}/(2\pi)\), has maximum error
+\(6.74434460\times10^{-7}\).  The remaining direct differences,
+\(\max|B_{\rm stella}-B_{\rm solver}|=4.94655108\times10^{-4}\) and
+\(\max|k_{\perp,\rm stella}^2-k_{\perp,\rm solver}^2|
+=3.98411722\times10^{-4}\), are consistent with the rounded ASCII stella
+\texttt{.geometry} file used by the solver fixture; strict full-precision
+\(\texttt{.out.nc}\) equality is therefore not the right contract for this
+artifact.
+
+The same audit records the real blocker as a missing complex stella RHS trace.
+Standard stella diagnostics contain complex \(\phi(z)\) and
+distribution-energy proxies such as \path{g2_vs_zkykxs}, but not the complex
+distribution
+\(g(v_\parallel,\mu,z,k_x,k_y,s)\) or per-term RHS/source deltas.  The next
+stella-side trace should therefore snapshot the selected Fortran indices
+\(\texttt{iky}=4\), \(\texttt{ikx}=1\), species 1, all \(z\), all
+\(v_\parallel\), and all \(\mu\), before and after
+\(\texttt{advance\_parallel\_streaming\_explicit}\),
+\(\texttt{advance\_mirror\_explicit}\),
+\(\texttt{advance\_wdrifty\_explicit}\),
+\(\texttt{advance\_wdriftx\_explicit}\), and
+\(\texttt{advance\_wstar\_explicit}\).  The comparison should preserve
+whether stella stores native \(\texttt{rhs}\Delta t\) increments or a
+continuous-time RHS before changing the solver's collocation RHS.
+
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a

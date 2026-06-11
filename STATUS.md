@@ -124,7 +124,17 @@ zero, quasineutrality residual is `1.075384823136963e-16`, and the selected
 RHS is dominated by `parallel_streaming` with large secondary magnetic-drift
 and mirror-force contributions. The remaining W7-X blocker is therefore a
 matched stella distribution/RHS/source-term trace for term-level convention
-parity, not more velocity resolution.
+parity, not more velocity resolution. The standard stella `.out.nc` output has
+now been audited by `scripts/audit_w7x_stella_ky03_trace_contract.py` against
+`fixtures/w7x_ky03_rhs_model_balance/`: the available geometry/streaming
+contract passes at the precision of the rounded stella `.geometry` file used
+by the solver fixture (`max |F|` error `6.74434460409476e-07`,
+`max |B|` error `4.946551081135286e-04`, and `max |kperp2|` error
+`3.9841172216437126e-04`), while strict full-precision `.out.nc` equality is
+not expected from that rounded source. The standard stella diagnostics contain
+complex `phi` and distribution-energy proxies, but not complex `g` or per-term
+RHS/source arrays, so the new trace-contract fixture is correctly
+`blocked_missing_complex_stella_rhs_trace`.
 The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
@@ -775,28 +785,34 @@ turbulence stellarator run remains a later physics-extension milestone.
 
 Priority order:
 
-1. Export or obtain a matched stella `ky=0.3` distribution/RHS/source-term
-   trace on the same W7-X run, then compare it with
-   `fixtures/w7x_ky03_rhs_model_balance/`. The solver-side audit is now
-   streaming-dominated, so the first external comparison should prioritize
-   parallel streaming/mirror conventions, `b_dot_grad_zed` scaling, velocity
-   measure, and field-drive normalization before changing the collocation RHS.
-2. Compare the remaining solver-side balance quantities against stella
-   conventions where possible: `bmag`, \(k_\perp^2\), grad-B/curvature drift
-   normalization, adiabatic-electron response, time/frequency sign, and
-   \(J_0/\Gamma_0\) conventions.
-3. If stella source-term export is too invasive, add a same-geometry
+1. Apply the smallest stella diagnostic/export hook for the matched W7-X
+   `ky=0.3` run: save the complex `pdf/g` state and RHS deltas around
+   `advance_parallel_streaming_explicit`, `advance_mirror_explicit`,
+   `advance_wdrifty_explicit`, `advance_wdriftx_explicit`, and
+   `advance_wstar_explicit` for Fortran indices `iky=4`, `ikx=1`.
+2. Ingest that stella trace and compare it with
+   `fixtures/w7x_ky03_rhs_model_balance/`, prioritizing parallel
+   streaming/mirror conventions, `b_dot_grad_zed` scaling, velocity measure,
+   field-drive normalization, and whether stella stores native `rhs*dt` or
+   continuous-time RHS units.
+3. Keep the already available standard-output comparison as a guardrail:
+   `fixtures/w7x_ky03_stella_trace_contract/` shows that normalized `z`,
+   `F=b_dot_gradz/(2*pi)`, `B`, and `kperp2` agree at the precision of the
+   rounded stella `.geometry` file used by the solver, while standard stella
+   `.out.nc` lacks the complex distribution/per-term RHS arrays needed for
+   true term parity.
+4. If stella source-term export is too invasive, add a same-geometry
    single-`ky=0.3` solver trace with stored complex `phi(z,t)`, density moment,
    temperature/energy moment, and field-solve numerator/denominator, then patch
    the smallest matching stella diagnostic hook.
-4. Keep GX/GKW/GS2 W7-X fixtures as secondary external cross-checks: the
+5. Keep GX/GKW/GS2 W7-X fixtures as secondary external cross-checks: the
    prepared GX handoff path remains available, but the primary external W7-X
    reference is now the completed CPU stella fixture.
-5. Once W7-X parity passes, rerun a production-control convergence ladder and
+6. Once W7-X parity passes, rerun a production-control convergence ladder and
    `fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh`.
-6. Keep DESC optimization examples labeled reduced until
+7. Keep DESC optimization examples labeled reduced until
    `scripts/run_w7x_production_readiness_gate.py --require-pass` succeeds.
-7. In parallel, keep the GKW full selected-mode state-history and multi-time
+8. In parallel, keep the GKW full selected-mode state-history and multi-time
    velocity-slice discrepancy visible. It is not blocking the external W7-X
    artifact ingestion, but it remains a production-confidence gap unless an
    independent stellarator reference validates the same path.
@@ -815,8 +831,8 @@ Guardrails:
 
 Expected file changes:
 
-- optional stella diagnostic patch or exported moment trace if the existing
-  `.out.nc` variables are insufficient,
+- optional stella diagnostic patch or exported distribution/RHS trace because
+  the existing `.out.nc` variables are confirmed insufficient,
 - a stella-vs-solver term-balance comparator once a matched external term trace
   exists,
 - refreshed W7-X gate/readiness artifacts only after a physics convention fix
@@ -830,6 +846,7 @@ Expected tests:
 - retained Hermite-Laguerre moment/hypercollision tests,
 - W7-X stella time-ladder, velocity-discriminator, and `ky=0.3` RHS-balance
   artifact tests,
+- W7-X stella `ky=0.3` trace-contract tests,
 - W7-X external mode-structure gate with the stella fixture,
 - W7-X production-readiness gate tests whenever the convergence/timing ledger
   changes,
@@ -844,6 +861,43 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-11: Added W7-X stella `ky=0.3` Trace Contract Audit
+
+- Added `scripts/audit_w7x_stella_ky03_trace_contract.py`, which reads the
+  matched stella `.out.nc`, selects `ky=0.3`/`kx=0`, drops the duplicate
+  periodic endpoint, and compares available stella geometry/field-contract
+  arrays against `fixtures/w7x_ky03_rhs_model_balance/`.
+- Generated `fixtures/w7x_ky03_stella_trace_contract/` with:
+  - `stella_solver_geometry_comparison.csv`,
+  - `stella_standard_trace_availability.json`,
+  - `stella_ky03_trace_contract_status.json`,
+  - `stella_rhs_trace_patch_plan.md`,
+  - `README.md`.
+- The standard output comparison confirms the streaming-coordinate path at the
+  precision of the rounded stella `.geometry` source used by the solver:
+  normalized `z` matches to `5.551115123125783e-17`,
+  `F=b_dot_gradz/(2*pi)` differs by at most `6.74434460409476e-07`,
+  `B` by at most `4.946551081135286e-04`, and `kperp2` by at most
+  `3.9841172216437126e-04`. Strict `.out.nc` precision does not pass because
+  the solver fixture intentionally imported the rounded ASCII `.geometry`
+  table, not the full-precision NetCDF geometry arrays.
+- The audit records the true blocker as
+  `blocked_missing_complex_stella_rhs_trace`: standard stella diagnostics
+  include complex `phi` and `g2/h2/f2` distribution-energy proxies, but not the
+  complex distribution `g` or per-term RHS/source deltas needed for
+  streaming/mirror convention parity.
+- Added `tests/test_w7x_stella_ky03_trace_contract.py` covering synthetic
+  stella NetCDF loading, duplicate-endpoint handling, standard-output trace
+  availability, and the committed contract fixture.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex` so the next W7-X target is a
+  targeted stella distribution/RHS/source-term trace around
+  `add_explicit_gyrokinetic_terms`, not more geometry/time/velocity scans.
+- Commands run:
+  - `python -m py_compile scripts/audit_w7x_stella_ky03_trace_contract.py`
+  - `uv run python scripts/audit_w7x_stella_ky03_trace_contract.py`
+  - `uv run ruff check scripts/audit_w7x_stella_ky03_trace_contract.py tests/test_w7x_stella_ky03_trace_contract.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stella_ky03_trace_contract.py tests/test_w7x_ky03_rhs_model_balance.py -q`
 
 ### 2026-06-11: Added W7-X `ky=0.3` RHS/Model Balance Audit
 

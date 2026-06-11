@@ -1,0 +1,99 @@
+{
+  "availability": {
+    "missing_for_true_term_parity": [
+      "complex_g(vpa,mu,z,kx,ky,species)",
+      "rhs_total(vpa,mu,z,kx,ky,species,ri)",
+      "rhs_parallel_streaming(vpa,mu,z,kx,ky,species,ri)",
+      "rhs_mirror_force(vpa,mu,z,kx,ky,species,ri)",
+      "rhs_magnetic_drift(vpa,mu,z,kx,ky,species,ri)",
+      "rhs_field_drive(vpa,mu,z,kx,ky,species,ri)"
+    ],
+    "standard_output_distribution_energy_variables": [
+      "f2_vs_zkykxs",
+      "g2_vs_zkykxs",
+      "h2_vs_zkykxs"
+    ],
+    "standard_output_has_complex_distribution": false,
+    "standard_output_has_complex_phi": true,
+    "standard_output_has_geometry": true,
+    "standard_output_has_per_term_rhs": false,
+    "standard_output_optional_trace_shapes": {
+      "f2_vs_zkykxs": [
+        201,
+        1,
+        1,
+        4,
+        257,
+        1
+      ],
+      "g2_vs_zkykxs": [
+        201,
+        1,
+        1,
+        4,
+        257,
+        1
+      ],
+      "h2_vs_zkykxs": [
+        201,
+        1,
+        1,
+        4,
+        257,
+        1
+      ]
+    },
+    "usable_now": [
+      "geometry/streaming coefficient convention audit",
+      "complex phi phase/profile comparison",
+      "phase-free distribution-energy profile checks if needed"
+    ]
+  },
+  "benchmark_name": "w7x_ky03_stella_trace_contract",
+  "comparison_row_count": 256,
+  "dominant_solver_rhs_terms": [
+    {
+      "projection_imag": -0.0010715835716158845,
+      "projection_real": 0.914735762235828,
+      "rhs_fraction_of_total_l2": 1.113240064720198,
+      "term": "parallel_streaming"
+    },
+    {
+      "projection_imag": 0.00479716908022009,
+      "projection_real": 0.042314461836274846,
+      "rhs_fraction_of_total_l2": 0.5307304661068116,
+      "term": "magnetic_drift"
+    },
+    {
+      "projection_imag": 0.0014975745051568152,
+      "projection_real": 0.014540950325947415,
+      "rhs_fraction_of_total_l2": 0.32597146833944524,
+      "term": "mirror_force"
+    },
+    {
+      "projection_imag": -0.0025910017456497346,
+      "projection_real": 0.021032753487971977,
+      "rhs_fraction_of_total_l2": 0.1398516993536452,
+      "term": "parallel_field_drive"
+    }
+  ],
+  "focus_ky": 0.3,
+  "geometry_summary": {
+    "direct_geometry_contract_passed": true,
+    "max_abs_B_error": 0.0004946551081135286,
+    "max_abs_F_error": 6.74434460409476e-07,
+    "max_abs_kperp2_error": 0.00039841172216437126,
+    "max_abs_z_error": 5.551115123125783e-17,
+    "stella_geometry_file_rounding_contract_passed": true,
+    "stella_geometry_file_rounding_tolerance": 0.0007,
+    "strict_out_nc_precision_contract_passed": false,
+    "strict_out_nc_precision_tolerance": 5e-10
+  },
+  "next_action": "rerun stella with a targeted complex distribution/RHS trace or apply the patch plan around add_explicit_gyrokinetic_terms, then compare the streaming-dominated ky=0.3 term balance against the solver fixture",
+  "passed": false,
+  "patch_plan": "fixtures/w7x_ky03_stella_trace_contract/stella_rhs_trace_patch_plan.md",
+  "solver_balance_dir": "fixtures/w7x_ky03_rhs_model_balance",
+  "solver_rhs_reconstruction_max_abs_error": 0.0,
+  "status": "blocked_missing_complex_stella_rhs_trace",
+  "stella_output": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.out.nc"
+}

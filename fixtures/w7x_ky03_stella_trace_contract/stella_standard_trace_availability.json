@@ -1,0 +1,50 @@
+{
+  "missing_for_true_term_parity": [
+    "complex_g(vpa,mu,z,kx,ky,species)",
+    "rhs_total(vpa,mu,z,kx,ky,species,ri)",
+    "rhs_parallel_streaming(vpa,mu,z,kx,ky,species,ri)",
+    "rhs_mirror_force(vpa,mu,z,kx,ky,species,ri)",
+    "rhs_magnetic_drift(vpa,mu,z,kx,ky,species,ri)",
+    "rhs_field_drive(vpa,mu,z,kx,ky,species,ri)"
+  ],
+  "standard_output_distribution_energy_variables": [
+    "f2_vs_zkykxs",
+    "g2_vs_zkykxs",
+    "h2_vs_zkykxs"
+  ],
+  "standard_output_has_complex_distribution": false,
+  "standard_output_has_complex_phi": true,
+  "standard_output_has_geometry": true,
+  "standard_output_has_per_term_rhs": false,
+  "standard_output_optional_trace_shapes": {
+    "f2_vs_zkykxs": [
+      201,
+      1,
+      1,
+      4,
+      257,
+      1
+    ],
+    "g2_vs_zkykxs": [
+      201,
+      1,
+      1,
+      4,
+      257,
+      1
+    ],
+    "h2_vs_zkykxs": [
+      201,
+      1,
+      1,
+      4,
+      257,
+      1
+    ]
+  },
+  "usable_now": [
+    "geometry/streaming coefficient convention audit",
+    "complex phi phase/profile comparison",
+    "phase-free distribution-energy profile checks if needed"
+  ]
+}
