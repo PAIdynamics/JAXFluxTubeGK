@@ -984,18 +984,24 @@ External production-claim blockers, not code implementation gaps:
   cases pass the ordered `growth_window_time_normalization` check; the
   `t=200` case reaches stella's `tend=200`, has finite outputs, and reduces
   the maximum growth error to `8.00978267e-03`. The gate remains open with
-  `max_frequency_error=1.33706264e-01` and
+  corrected `max_frequency_error=1.65618027e-01` and
   `max_profile_error=1.86133427e-01`, and the ordered audit's first remaining
   failed check is `velocity_rhs_terms`.
 
 - [ ] Resolve the post-time-window W7-X parity gap. With coordinate,
   field-line length, selected `ky`, `n_kx=1`, and late-half time-window
   controls matched, compare the `t=200` solver and stella traces term by term.
-  Start with normalization and frequency conventions that can affect
-  \(\omega_r\), then inspect the stella/GKW velocity-space discretization and
-  linear RHS terms against the imported stella geometry arrays. Do not tune
-  geometry or time-window controls unless a regression reopens one of the
-  already-passing ordered checks.
+  The scan now reports real frequency from consecutive late-window phase
+  increments rather than a long endpoint phase difference, removing phase
+  aliasing in the diagnostic. With that correction, `ky=0.1` and `ky=0.2`
+  pass the frequency tolerance, while `ky=0.3` has
+  `frequency_error=-1.65618027e-01`; growth still passes and the profile gate
+  remains open. `scripts/audit_w7x_stella_frequency_profile_conventions.py`
+  shows that sign flip, conjugation, z reversal, and circular z shift do not
+  close the profile/frequency gate. Next inspect the stella/GKW velocity-space
+  discretization and linear RHS terms against the imported stella geometry
+  arrays. Do not tune geometry or time-window controls unless a regression
+  reopens one of the already-passing ordered checks.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

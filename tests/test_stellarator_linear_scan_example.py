@@ -121,3 +121,34 @@ def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():
     assert np.all(np.isfinite(np.asarray(geometry.B)))
     assert np.all(np.isfinite(np.asarray(geometry.F)))
     assert np.all(np.isfinite(np.asarray(geometry.G)))
+
+
+def test_late_window_frequency_uses_unaliased_short_phase_increments():
+    module = _load_scan_module()
+    omega = 0.12
+    times = np.linspace(0.0, 200.0, 2001)
+    base = np.ones((2, 1, 1), dtype=np.complex128)
+    phi_samples = [base * np.exp(-1j * omega * time) for time in times]
+    weights = np.full((2,), 0.5)
+    late_start = 1000
+
+    frequency = module._frequency_from_phi_samples(
+        times,
+        phi_samples,
+        late_start,
+        w_z=weights,
+        connectivity=None,
+    )
+    endpoint_frequency = np.asarray(
+        module.real_frequency(
+            phi_samples[late_start],
+            phi_samples[-1],
+            times[late_start],
+            times[-1],
+            w_z=weights,
+            connectivity=None,
+        )
+    )
+
+    np.testing.assert_allclose(frequency, [omega], atol=1.0e-12)
+    assert abs(float(endpoint_frequency[0]) - omega) > 0.05

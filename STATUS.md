@@ -824,6 +824,42 @@ Expected tests:
 
 ## Round Log
 
+### 2026-06-11: Fixed Long-Window Frequency Aliasing and Audited W7-X Conventions
+
+- Committed the long-time ladder work as
+  `b9ecb19 Add stella-matched W7-X time ladder`.
+- Fixed `examples/run_stellarator_linear_scan.py` so real frequency is
+  estimated from consecutive late-window phase increments rather than a single
+  long endpoint phase difference. The previous endpoint estimator aliases
+  phase when \(|\omega|\Delta t_{\rm window}>\pi\), which occurs for the
+  stella-matched `t=200` comparison.
+- Added a regression test showing that the new diagnostic recovers a known
+  frequency over a long window where the endpoint estimator aliases.
+- Regenerated `fixtures/w7x_itg_stella_matched_time_ladder/` with the
+  corrected diagnostic. Growth parity remains good at `t=200`
+  (`max_growth_error=8.00978267e-03`), and `ky=0.1`/`ky=0.2` now pass the
+  frequency tolerance. The corrected direct frequency errors are
+  `(-1.92705573e-02, 3.14444835e-03, -1.65618027e-01)` for
+  `ky=(0.1,0.2,0.3)`, so the remaining frequency failure is concentrated in
+  `ky=0.3`.
+- Added `scripts/audit_w7x_stella_frequency_profile_conventions.py`, which
+  compares the `t=200` solver/stella fixtures under frequency sign/scale
+  transforms and profile conjugation, z reversal, and circular shifts. The
+  audit writes
+  `fixtures/w7x_itg_stella_matched_time_ladder/frequency_profile_convention_audit.json`
+  and `.csv`.
+- The convention audit remains open: sign flip and conjugation do not explain
+  the discrepancy; the best simple profile transform is only a common circular
+  shift with `max_profile_error=1.72815751e-01`. The best frequency affine fit
+  still leaves `max_frequency_error=3.61271242e-02`. Next action is therefore
+  velocity-space/RHS parity, especially the selected `ky=0.3` mode structure.
+- Commands run:
+  - `uv run ruff check examples/run_stellarator_linear_scan.py tests/test_stellarator_linear_scan_example.py scripts/audit_w7x_stella_frequency_profile_conventions.py tests/test_w7x_stella_frequency_profile_conventions.py`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_stellarator_linear_scan_example.py tests/test_w7x_stella_frequency_profile_conventions.py -q`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_matched_time_ladder.py --output-dir /tmp/w7x_stella_time200_frequency_fix --no-smoke --case time_200`
+  - `JAX_ENABLE_X64=1 uv run python scripts/run_w7x_stella_matched_time_ladder.py`
+  - `JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_stella_frequency_profile_conventions.py`
+
 ### 2026-06-11: Ran stella-Matched W7-X Long-Time Ladder
 
 - Added `scripts/run_w7x_stella_matched_time_ladder.py`, a reproducible
@@ -844,7 +880,7 @@ Expected tests:
 - The time extension significantly improves scalar growth parity: maximum
   growth error decreases from `6.57936105e-01` in the `t=0.006` smoke trace
   to `8.00978267e-03` at `t=200`. The W7-X gate remains open because
-  `max_frequency_error=1.33706264e-01` and
+  corrected `max_frequency_error=1.65618027e-01` and
   `max_profile_error=1.86133427e-01` exceed the `2e-2` tolerances.
 - Added `tests/test_w7x_stella_matched_time_ladder.py` covering the ladder
   case construction, fixed stella geometry/mode scan arguments, and committed

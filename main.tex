@@ -2006,11 +2006,16 @@ trace therefore removes the dominant scalar-growth discrepancy:
 \quad (t_{\rm end}=200),
 \]
 down from \(6.57936105\times10^{-1}\) in the short smoke fixture.  The W7-X
-gate remains open because the real-frequency and phase-aligned profile errors
-are still \(1.33706264\times10^{-1}\) and \(1.86133427\times10^{-1}\),
-respectively.  Thus the active W7-X discrepancy has moved from time-window
-control to frequency/profile parity, most likely involving normalization,
-velocity-space, or linear RHS-term conventions.
+gate remains open because the corrected real-frequency and phase-aligned
+profile errors are still \(1.65618027\times10^{-1}\) and
+\(1.86133427\times10^{-1}\), respectively.  The frequency diagnostic now uses
+consecutive late-window phase increments rather than a single long endpoint
+phase difference, avoiding modulo-\(2\pi\) aliasing over the \(t=100\) late
+window.  With this correction \(k_y=0.1\) and \(k_y=0.2\) pass the frequency
+tolerance, while \(k_y=0.3\) remains discrepant.  A convention audit over
+frequency sign/scale, profile conjugation, z reversal, and circular shifts
+does not close the profile gate; the active W7-X discrepancy has therefore
+moved from time-window control to velocity-space or linear RHS-term parity.
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a

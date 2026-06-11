@@ -1,0 +1,246 @@
+{
+  "benchmark_name": "w7x_stella_frequency_profile_convention_audit",
+  "frequency_variants": {
+    "direct_reference": {
+      "frequency_error": [
+        -0.019270557263505544,
+        0.0031444483481727903,
+        -0.1656180274599258
+      ],
+      "max_abs_error": 0.1656180274599258,
+      "predicted_frequency": [
+        -0.06573003284376668,
+        -0.11818459283860903,
+        -0.0028493457942134434
+      ],
+      "rms_error": 0.09628183101772474
+    },
+    "least_squares_affine_reference": {
+      "frequency_error": [
+        0.03612712420372631,
+        -0.01969648003771482,
+        -0.016430644166011366
+      ],
+      "max_abs_error": 0.03612712420372631,
+      "offset": -0.15343732560497397,
+      "predicted_frequency": [
+        -0.12112771431099853,
+        -0.09534366445272142,
+        -0.15203672908812788
+      ],
+      "rms_error": 0.025580503622991534,
+      "scale": -0.4915502076618761
+    },
+    "least_squares_scaled_reference": {
+      "frequency_error": [
+        -0.014359771735339852,
+        0.011974189686405415,
+        -0.16540514872724324
+      ],
+      "max_abs_error": 0.16540514872724324,
+      "predicted_frequency": [
+        -0.07064081837193237,
+        -0.12701433417684166,
+        -0.0030622245268959888
+      ],
+      "rms_error": 0.0961048862587443,
+      "scale": 1.0747114418737338
+    },
+    "negated_reference": {
+      "frequency_error": [
+        -0.1507306229510389,
+        -0.23322473732904528,
+        -0.1713167190483527
+      ],
+      "max_abs_error": 0.23322473732904528,
+      "predicted_frequency": [
+        0.06573003284376668,
+        0.11818459283860903,
+        0.0028493457942134434
+      ],
+      "rms_error": 0.1883816312904053
+    }
+  },
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "observed_fixture": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200/mode_structures.csv",
+  "passed": false,
+  "per_ky": [
+    {
+      "best_frequency_error": 0.03612712420372631,
+      "best_frequency_variant": "least_squares_affine_reference",
+      "best_profile_error": 0.14638403135334838,
+      "best_profile_variant": "best_common_circular_shift",
+      "direct_frequency_error": -0.019270557263505544,
+      "direct_profile_error": 0.14717422297330432,
+      "ky": 0.1,
+      "observed_frequency": -0.08500059010727222,
+      "reference_frequency": -0.06573003284376668
+    },
+    {
+      "best_frequency_error": -0.01969648003771482,
+      "best_frequency_variant": "least_squares_affine_reference",
+      "best_profile_error": 0.16404284179114392,
+      "best_profile_variant": "best_common_circular_shift",
+      "direct_frequency_error": 0.0031444483481727903,
+      "direct_profile_error": 0.1628235787667622,
+      "ky": 0.2,
+      "observed_frequency": -0.11504014449043624,
+      "reference_frequency": -0.11818459283860903
+    },
+    {
+      "best_frequency_error": -0.016430644166011366,
+      "best_frequency_variant": "least_squares_affine_reference",
+      "best_profile_error": 0.17281575118421877,
+      "best_profile_variant": "best_common_circular_shift",
+      "direct_frequency_error": -0.1656180274599258,
+      "direct_profile_error": 0.18613342660877644,
+      "ky": 0.3,
+      "observed_frequency": -0.16846737325413924,
+      "reference_frequency": -0.0028493457942134434
+    }
+  ],
+  "profile_variants": {
+    "best_common_circular_shift": {
+      "alignment_scale": [
+        {
+          "imag": 0.006305627333476984,
+          "real": 0.0026130212655278632
+        },
+        {
+          "imag": -0.004912128668990486,
+          "real": 0.031282463018756236
+        },
+        {
+          "imag": -0.02830027698750064,
+          "real": 0.0955296408895788
+        }
+      ],
+      "max_phase_aligned_error": 0.17281575118421877,
+      "phase_aligned_error": [
+        0.14638403135334838,
+        0.16404284179114392,
+        0.17281575118421877
+      ],
+      "shift_index": 115
+    },
+    "best_per_ky_circular_shift": {
+      "max_phase_aligned_error": 0.17281575118421877,
+      "phase_aligned_error": [
+        0.1449737039207654,
+        0.15643416244171748,
+        0.17281575118421877
+      ],
+      "shift_index": [
+        204,
+        154,
+        115
+      ]
+    },
+    "conjugate_reference": {
+      "alignment_scale": [
+        {
+          "imag": 0.011377756139319475,
+          "real": 0.01951738509594986
+        },
+        {
+          "imag": -0.008467393866426573,
+          "real": -0.0006939625619934334
+        },
+        {
+          "imag": -0.06229288413288892,
+          "real": 0.06569934643772822
+        }
+      ],
+      "max_phase_aligned_error": 0.18814338371091496,
+      "phase_aligned_error": [
+        0.1465528679356746,
+        0.16315013685646018,
+        0.18814338371091496
+      ]
+    },
+    "conjugate_reverse_z_reference": {
+      "alignment_scale": [
+        {
+          "imag": 0.01137775613931978,
+          "real": 0.019517385095954538
+        },
+        {
+          "imag": -0.008467393866428323,
+          "real": -0.0006939625619920129
+        },
+        {
+          "imag": -0.06229288413289615,
+          "real": 0.06569934643772628
+        }
+      ],
+      "max_phase_aligned_error": 0.1881433837109153,
+      "phase_aligned_error": [
+        0.14655286793567482,
+        0.16315013685646024,
+        0.1881433837109153
+      ]
+    },
+    "direct_reference": {
+      "alignment_scale": [
+        {
+          "imag": -0.0043093293369632964,
+          "real": -0.019096841244165642
+        },
+        {
+          "imag": -0.012578044587983962,
+          "real": 0.021685444531832847
+        },
+        {
+          "imag": 0.058402217053302674,
+          "real": -0.05835783445127743
+        }
+      ],
+      "max_phase_aligned_error": 0.18613342660877644,
+      "phase_aligned_error": [
+        0.14717422297330432,
+        0.1628235787667622,
+        0.18613342660877644
+      ]
+    },
+    "reverse_z_reference": {
+      "alignment_scale": [
+        {
+          "imag": -0.004309329336962356,
+          "real": -0.01909684124416158
+        },
+        {
+          "imag": -0.012578044587984845,
+          "real": 0.02168544453183318
+        },
+        {
+          "imag": 0.05840221705330987,
+          "real": -0.05835783445127752
+        }
+      ],
+      "max_phase_aligned_error": 0.186133426608776,
+      "phase_aligned_error": [
+        0.1471742229733041,
+        0.1628235787667622,
+        0.186133426608776
+      ]
+    }
+  },
+  "reference_fixture": "fixtures/w7x_itg_external_mode_structure_fixture.csv",
+  "status": "open",
+  "summary": {
+    "best_frequency_max_abs_error": 0.03612712420372631,
+    "best_frequency_variant": "least_squares_affine_reference",
+    "best_profile_max_abs_error": 0.17281575118421877,
+    "best_profile_variant": "best_common_circular_shift",
+    "direct_frequency_max_abs_error": 0.1656180274599258,
+    "direct_profile_max_abs_error": 0.18613342660877644,
+    "frequency_sign_flip_improves": false,
+    "next_action": "inspect velocity/RHS terms; simple frequency/profile convention transforms do not close the W7-X gate",
+    "profile_conjugation_improves": false,
+    "profile_z_reversal_improves": true
+  }
+}

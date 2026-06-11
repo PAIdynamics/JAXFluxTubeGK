@@ -10,7 +10,7 @@
       0.2,
       0.3
     ],
-    "max_frequency_error": 0.13370626387568643,
+    "max_frequency_error": 0.1656180274599258,
     "max_growth_error": 0.00800978266875123,
     "max_profile_error": 0.1861334266087764,
     "observed_fixture": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200/mode_structures.csv",

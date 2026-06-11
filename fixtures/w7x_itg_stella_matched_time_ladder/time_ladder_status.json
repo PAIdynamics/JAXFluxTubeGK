@@ -9,14 +9,14 @@
     "first_failed_check": "growth_window_time_normalization",
     "gate_passed": false,
     "late_window_growth_delta": 0.0003813900966894712,
-    "max_frequency_error": 0.10776992937516834,
+    "max_frequency_error": 0.107769910113719,
     "max_growth_error": 0.6579361051636541,
     "max_profile_error": 0.11070205745377523,
     "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/smoke_0p006",
     "solver_to_stella_total_time_ratio": 3e-05,
     "target_total_time": 0.006,
     "time_window_passed": false,
-    "wall_seconds": 2.921971125062555
+    "wall_seconds": 3.2264677500352263
   },
   "case_count": 6,
   "finite_outputs": true,
@@ -42,14 +42,14 @@
     "first_failed_check": "velocity_rhs_terms",
     "gate_passed": false,
     "late_window_growth_delta": 0.023673122635288976,
-    "max_frequency_error": 0.13370626387568643,
+    "max_frequency_error": 0.1656180274599258,
     "max_growth_error": 0.00800978266875123,
     "max_profile_error": 0.1861334266087764,
     "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200",
     "solver_to_stella_total_time_ratio": 1.0,
     "target_total_time": 200.0,
     "time_window_passed": true,
-    "wall_seconds": 39.623934499919415
+    "wall_seconds": 35.64851349988021
   },
   "next_action": "inspect RHS/velocity-space parity at the longest matched-time case",
   "passed": false,
@@ -65,14 +65,14 @@
       "first_failed_check": "growth_window_time_normalization",
       "gate_passed": false,
       "late_window_growth_delta": 0.0003813900966894712,
-      "max_frequency_error": 0.10776992937516834,
+      "max_frequency_error": 0.107769910113719,
       "max_growth_error": 0.6579361051636541,
       "max_profile_error": 0.11070205745377523,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/smoke_0p006",
       "solver_to_stella_total_time_ratio": 3e-05,
       "target_total_time": 0.006,
       "time_window_passed": false,
-      "wall_seconds": 2.921971125062555
+      "wall_seconds": 3.2264677500352263
     },
     {
       "actual_total_time": 1.0,
@@ -83,14 +83,14 @@
       "first_failed_check": "growth_window_time_normalization",
       "gate_passed": false,
       "late_window_growth_delta": 0.1008047476051851,
-      "max_frequency_error": 0.10153805275888242,
+      "max_frequency_error": 0.10140654131606558,
       "max_growth_error": 0.5231970699301207,
       "max_profile_error": 0.14363109322991582,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_1",
       "solver_to_stella_total_time_ratio": 0.005,
       "target_total_time": 1.0,
       "time_window_passed": false,
-      "wall_seconds": 0.40880341711454093
+      "wall_seconds": 0.33328645885922015
     },
     {
       "actual_total_time": 5.0,
@@ -101,14 +101,14 @@
       "first_failed_check": "growth_window_time_normalization",
       "gate_passed": false,
       "late_window_growth_delta": 0.23784514859503184,
-      "max_frequency_error": 0.08439102411699528,
+      "max_frequency_error": 0.08297069156374483,
       "max_growth_error": 0.21802139976454218,
       "max_profile_error": 0.14296071576066038,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_5",
       "solver_to_stella_total_time_ratio": 0.025,
       "target_total_time": 5.0,
       "time_window_passed": false,
-      "wall_seconds": 1.0117627081926912
+      "wall_seconds": 0.9258200828917325
     },
     {
       "actual_total_time": 20.0,
@@ -119,14 +119,14 @@
       "first_failed_check": "growth_window_time_normalization",
       "gate_passed": false,
       "late_window_growth_delta": 0.33579005655553573,
-      "max_frequency_error": 0.08876838380576851,
+      "max_frequency_error": 0.0724965950452845,
       "max_growth_error": 0.12307422091501255,
       "max_profile_error": 0.1672007808562221,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_20",
       "solver_to_stella_total_time_ratio": 0.1,
       "target_total_time": 20.0,
       "time_window_passed": false,
-      "wall_seconds": 3.6384540828876197
+      "wall_seconds": 3.3843311660457402
     },
     {
       "actual_total_time": 100.0,
@@ -137,14 +137,14 @@
       "first_failed_check": "velocity_rhs_terms",
       "gate_passed": false,
       "late_window_growth_delta": 0.04014866528314272,
-      "max_frequency_error": 0.08173154316016701,
+      "max_frequency_error": 0.1099115993652026,
       "max_growth_error": 0.01129943012595958,
       "max_profile_error": 0.174004958214844,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_100",
       "solver_to_stella_total_time_ratio": 0.5,
       "target_total_time": 100.0,
       "time_window_passed": true,
-      "wall_seconds": 17.52677704114467
+      "wall_seconds": 16.238299541873857
     },
     {
       "actual_total_time": 200.0,
@@ -155,14 +155,14 @@
       "first_failed_check": "velocity_rhs_terms",
       "gate_passed": false,
       "late_window_growth_delta": 0.023673122635288976,
-      "max_frequency_error": 0.13370626387568643,
+      "max_frequency_error": 0.1656180274599258,
       "max_growth_error": 0.00800978266875123,
       "max_profile_error": 0.1861334266087764,
       "run_dir": "fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200",
       "solver_to_stella_total_time_ratio": 1.0,
       "target_total_time": 200.0,
       "time_window_passed": true,
-      "wall_seconds": 39.623934499919415
+      "wall_seconds": 35.64851349988021
     }
   ],
   "status": "time_window_reached_gate_open",

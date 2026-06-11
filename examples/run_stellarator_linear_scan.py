@@ -683,16 +683,12 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
         args.growth_diagnostic,
         late_start,
     )
-    frequency = np.asarray(
-        real_frequency(
-            phi_samples[late_start],
-            phi_samples[-1],
-            times_array[late_start],
-            times_array[-1],
-            w_z=geometry.w_z,
-            connectivity=connectivity,
-        ),
-        dtype=float,
+    frequency = _frequency_from_phi_samples(
+        times_array,
+        phi_samples,
+        late_start,
+        w_z=geometry.w_z,
+        connectivity=connectivity,
     )
     final_phi = phi_samples[-1]
     final_amplitude = mode_chain_amplitude(final_phi, w_z=geometry.w_z, connectivity=connectivity)
@@ -955,6 +951,31 @@ def _growth_from_log_amplitudes(times, log_amplitudes, diagnostic: str, late_sta
         start = min(max(late_start, 0), window_growth.shape[0] - 1)
         return np.mean(window_growth[start:], axis=0)
     return _fit_log_amplitudes(times[late_start:], log_amplitudes[late_start:])
+
+
+def _frequency_from_phi_samples(times, phi_samples, late_start: int, *, w_z, connectivity):
+    """Estimate real frequency from unaliased consecutive late-window phase increments."""
+
+    if len(phi_samples) != len(times):
+        raise ValueError("phi_samples and times must have the same length")
+    if len(times) < 2:
+        raise ValueError("at least two samples are required")
+    first = max(1, min(int(late_start) + 1, len(times) - 1))
+    increments = [
+        np.asarray(
+            real_frequency(
+                phi_samples[index - 1],
+                phi_samples[index],
+                times[index - 1],
+                times[index],
+                w_z=w_z,
+                connectivity=connectivity,
+            ),
+            dtype=float,
+        )
+        for index in range(first, len(times))
+    ]
+    return np.mean(np.asarray(increments, dtype=float), axis=0)
 
 
 def _fit_log_amplitudes(times, log_amplitudes):
