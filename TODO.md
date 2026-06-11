@@ -1028,6 +1028,28 @@ External production-claim blockers, not code implementation gaps:
   `max_profile_error=1.86133427e-01`, and the ordered audit's first remaining
   failed check is `velocity_rhs_terms`.
 
+- [x] Separate velocity-resolution effects from the post-time-window W7-X
+  parity gap. `scripts/run_w7x_stella_velocity_discriminator.py` keeps the
+  stella geometry, `kx=0`, `n_kx=1`, selected `ky`, species parameters, and
+  `t_end=200` fixed while varying only velocity-space resolution/backend.
+  The stella-scale finite-difference case `gkw_fd_16x8` still leaves the
+  focus-mode discrepancies
+  `growth_error=-1.3492631547620433e-02`,
+  `frequency_error=-1.6516142087339686e-01`, and
+  `phi_phase_aligned_error=1.565173196727111e-01`, so more velocity
+  resolution is not the next real target.
+
+- [x] Add a solver-side W7-X `ky=0.3` RHS/model term-balance audit.
+  `scripts/audit_w7x_ky03_rhs_model_balance.py` runs the focused
+  `gkw_fd_16x8` case to the stella-matched `t=200` state and writes
+  `fixtures/w7x_ky03_rhs_model_balance/`.  The stored audit has zero
+  RHS-reconstruction error and quasineutrality residual
+  `1.075384823136963e-16`; the selected-mode RHS balance is dominated by
+  `parallel_streaming` (`rhs_fraction_of_total_l2=1.113240064720198`,
+  projection real `0.914735762235828`), followed by `magnetic_drift`
+  (`0.5307304661068116`) and `mirror_force` (`0.32597146833944524`).
+  This is a solver-side diagnostic, not a stella parity proof.
+
 - [ ] Resolve the post-time-window W7-X parity gap. With coordinate,
   field-line length, selected `ky`, `n_kx=1`, and late-half time-window
   controls matched, compare the `t=200` solver and stella traces term by term.
@@ -1038,10 +1060,13 @@ External production-claim blockers, not code implementation gaps:
   `frequency_error=-1.65618027e-01`; growth still passes and the profile gate
   remains open. `scripts/audit_w7x_stella_frequency_profile_conventions.py`
   shows that sign flip, conjugation, z reversal, and circular z shift do not
-  close the profile/frequency gate. Next inspect the stella/GKW velocity-space
-  discretization and linear RHS terms against the imported stella geometry
-  arrays. Do not tune geometry or time-window controls unless a regression
-  reopens one of the already-passing ordered checks.
+  close the profile/frequency gate. The new solver-side RHS audit shows the
+  focus branch is streaming-dominated, so the next action is to obtain or
+  export a matched stella distribution/RHS/source-term trace for `ky=0.3` and
+  compare streaming/mirror, magnetic drift, field-drive, FLR, velocity
+  measure, and quasineutrality conventions before changing collocation physics.
+  Do not tune geometry, time-window controls, or velocity resolution unless a
+  regression reopens one of the already-passing ordered checks.
 
 - [ ] Optionally generate or obtain the matched external GX W7-X `.big.nc`/`.out.nc`
   pair as a secondary moment-method cross-check.

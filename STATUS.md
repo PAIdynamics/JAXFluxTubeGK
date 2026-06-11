@@ -111,6 +111,20 @@ check is `field_line_length` (`field_line_periods=1` versus stella
 `n_kx=3`/`ikxspace=2` versus stella `nakx=1` plus the reduced solver time
 window `0.012` versus stella `tend=200`. The production-readiness ledger
 therefore reports `blocked_external_mode_structure_parity`.
+The stella-matched long-time ladder now reaches `t=200` with matched
+normalized-z, field-line length, selected `ky`, `n_kx=1`, and late-half
+growth-window controls; growth is close, but the focus-mode `ky=0.3`
+frequency/profile discrepancy remains. The velocity discriminator shows this
+is not closed by simple velocity-grid refinement: the stella-scale
+`gkw_fd_16x8` case still has `frequency_error=-1.6516142087339686e-01` and
+`phi_phase_aligned_error=1.565173196727111e-01`. The new
+`scripts/audit_w7x_ky03_rhs_model_balance.py` fixture narrows the next target:
+at the `gkw_fd_16x8`, `t=200`, `ky=0.3` state, RHS reconstruction error is
+zero, quasineutrality residual is `1.075384823136963e-16`, and the selected
+RHS is dominated by `parallel_streaming` with large secondary magnetic-drift
+and mirror-force contributions. The remaining W7-X blocker is therefore a
+matched stella distribution/RHS/source-term trace for term-level convention
+parity, not more velocity resolution.
 The current
 benchmark-informed
 optimization pass adds named RH/CBC scalar targets, GX NetCDF growth-curve
@@ -761,19 +775,20 @@ turbulence stellarator run remains a later physics-extension milestone.
 
 Priority order:
 
-1. Add a W7-X `ky=0.3` RHS/model term-balance diagnostic on the
-   stella-imported geometry at the matched `t=200` controls. Record
-   streaming/mirror, magnetic drift, equilibrium drive, parallel-field drive,
-   drift-field drive, quasineutrality numerator/denominator, FLR factors, and
-   geometry/metric coefficients for the late-time mode structure.
-2. Compare those quantities against stella conventions where possible:
-   `bmag`, `b_dot_grad_zed`, \(k_\perp^2\), grad-B/curvature drift
-   normalization, adiabatic-electron response, velocity measure, time/frequency
-   sign, and \(J_0/\Gamma_0\) conventions.
-3. If the term-balance diagnostic remains ambiguous, add a same-geometry
-   single-`ky=0.3` trace with stored complex `phi(z,t)`, density moment,
-   temperature/energy moment, and field-solve numerator/denominator for direct
-   comparison to stella diagnostics or a small stella diagnostic patch.
+1. Export or obtain a matched stella `ky=0.3` distribution/RHS/source-term
+   trace on the same W7-X run, then compare it with
+   `fixtures/w7x_ky03_rhs_model_balance/`. The solver-side audit is now
+   streaming-dominated, so the first external comparison should prioritize
+   parallel streaming/mirror conventions, `b_dot_grad_zed` scaling, velocity
+   measure, and field-drive normalization before changing the collocation RHS.
+2. Compare the remaining solver-side balance quantities against stella
+   conventions where possible: `bmag`, \(k_\perp^2\), grad-B/curvature drift
+   normalization, adiabatic-electron response, time/frequency sign, and
+   \(J_0/\Gamma_0\) conventions.
+3. If stella source-term export is too invasive, add a same-geometry
+   single-`ky=0.3` solver trace with stored complex `phi(z,t)`, density moment,
+   temperature/energy moment, and field-solve numerator/denominator, then patch
+   the smallest matching stella diagnostic hook.
 4. Keep GX/GKW/GS2 W7-X fixtures as secondary external cross-checks: the
    prepared GX handoff path remains available, but the primary external W7-X
    reference is now the completed CPU stella fixture.
@@ -800,10 +815,10 @@ Guardrails:
 
 Expected file changes:
 
-- a W7-X `ky=0.3` RHS/model term-balance script, tests, and machine-readable
-  fixture/figure outputs,
 - optional stella diagnostic patch or exported moment trace if the existing
   `.out.nc` variables are insufficient,
+- a stella-vs-solver term-balance comparator once a matched external term trace
+  exists,
 - refreshed W7-X gate/readiness artifacts only after a physics convention fix
   is justified,
 - `TODO.md`,
@@ -813,7 +828,8 @@ Expected file changes:
 Expected tests:
 
 - retained Hermite-Laguerre moment/hypercollision tests,
-- W7-X stella time-ladder and velocity-discriminator artifact tests,
+- W7-X stella time-ladder, velocity-discriminator, and `ky=0.3` RHS-balance
+  artifact tests,
 - W7-X external mode-structure gate with the stella fixture,
 - W7-X production-readiness gate tests whenever the convergence/timing ledger
   changes,
@@ -828,6 +844,44 @@ Expected tests:
   and reduced DESC objective/gradient checks.
 
 ## Round Log
+
+### 2026-06-11: Added W7-X `ky=0.3` RHS/Model Balance Audit
+
+- Added `scripts/audit_w7x_ky03_rhs_model_balance.py`, which freezes the
+  stella-imported W7-X geometry, `kx=0`, `n_kx=1`, `ky=0.3`, species
+  gradients, and late-time normalization controls, then decomposes the
+  final normalized state into streaming/mirror, magnetic drift, equilibrium
+  drive, parallel-field drive, drift-field drive, recurrence, dissipation,
+  quasineutrality-density, FLR, and geometry/metric balance outputs.
+- Added `tests/test_w7x_ky03_rhs_model_balance.py` for fixed-control argument
+  construction, term-projection bookkeeping, geometry/FLR row construction,
+  and the committed fixture status contract.
+- Generated `fixtures/w7x_ky03_rhs_model_balance/` with the focused
+  `gkw_fd_16x8` case at `t=200`. The audit records:
+  - `rhs_reconstruction_max_abs_error=0.0`,
+  - `quasineutrality_residual_rms=1.075384823136963e-16`,
+  - `final_growth_rate=0.0012482718253991072`,
+  - `final_frequency=-0.11340257633385897`,
+  - dominant selected-mode RHS terms:
+    `parallel_streaming` with `rhs_fraction_of_total_l2=1.113240064720198`
+    and projection real `0.914735762235828`,
+    `magnetic_drift` with fraction `0.5307304661068116`,
+    `mirror_force` with fraction `0.32597146833944524`, and
+    `parallel_field_drive` with fraction `0.1398516993536452`.
+- Updated `TODO.md`, `STATUS.md`, and `main.tex` to record that the next W7-X
+  blocker is a matched stella distribution/RHS/source-term trace for
+  term-level convention parity, not more velocity resolution.
+- Commands run:
+  - `python -m py_compile scripts/audit_w7x_ky03_rhs_model_balance.py tests/test_w7x_ky03_rhs_model_balance.py`
+  - `uv run ruff check scripts/audit_w7x_ky03_rhs_model_balance.py tests/test_w7x_ky03_rhs_model_balance.py`
+  - `JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py --case cheb_4x4 --n-windows 2 --output-dir /tmp/w7x_ky03_rhs_smoke`
+  - `JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_ky03_rhs_model_balance.py -k 'not committed' -q`
+  - `JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py --case gkw_fd_16x8 --output-dir fixtures/w7x_ky03_rhs_model_balance`
+- Interpretation: the solver-side field solve and RHS assembly are internally
+  consistent at the discrepant `ky=0.3` state. The remaining W7-X parity target
+  is external: compare these streaming-dominated balance terms against stella's
+  own distribution/source-term conventions before changing the collocation
+  model.
 
 ### 2026-06-11: Added W7-X stella Velocity-Space Discriminator
 

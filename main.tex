@@ -2037,6 +2037,35 @@ for the \(k_y=0.3\) mode: streaming/mirror, magnetic drift, equilibrium drive,
 parallel-field drive, drift-field drive, quasineutrality, FLR factors,
 velocity measure, and stella drift/metric normalization on the same imported
 geometry.
+
+The corresponding solver-side term-balance audit is
+\begin{verbatim}
+uv run python scripts/audit_w7x_ky03_rhs_model_balance.py
+\end{verbatim}
+and writes
+\begin{verbatim}
+fixtures/w7x_ky03_rhs_model_balance/
+\end{verbatim}
+For the focused finite-difference velocity case, \(N_{v_\parallel}=16\),
+\(N_\mu=8\), \(k_y=0.3\), and \(t_{\rm end}=200\), the audit reconstructs the
+matrix-free RHS with stored maximum error zero and gives a quasineutrality
+residual RMS of \(1.07538482\times10^{-16}\).  The selected-mode RHS is
+streaming dominated:
+\[
+\begin{array}{c|c|c}
+\hbox{term} & \|R_{\rm term}\|_2/\|R\|_2 &
+\Re\langle R,R_{\rm term}\rangle/\langle R,R\rangle\\
+\hline
+\hbox{parallel streaming} & 1.11324006 & 0.91473576\\
+\hbox{magnetic drift} & 0.53073047 & 0.04231446\\
+\hbox{mirror force} & 0.32597147 & 0.01454095\\
+\hbox{parallel field drive} & 0.13985170 & 0.02103275
+\end{array}
+\]
+The next comparison should therefore be against a stella distribution,
+RHS/source-term, or moment trace at the same \(k_y=0.3\) state.  Until that
+external term trace exists, the audit is an internal model-balance diagnostic,
+not a stella parity proof.
 The older GX route is still prepared in
 \path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
 GX W7-X input, a command to copy the local VMEC file into the run directory, a
@@ -2144,8 +2173,10 @@ simulation claim is validation and production-control execution:
   external fixture, stella-imported solver fixture, long-time ladder, and
   velocity-resolution discriminator now exist.  Growth is close at the matched
   \(t=200\) controls, but the \(k_y=0.3\) real frequency and phase-aligned
-  \(\phi(z)\) remain open.  The next task is a W7-X term-level RHS/model
-  diagnostic on the same imported geometry.
+  \(\phi(z)\) remain open.  The solver-side \(k_y=0.3\) RHS/model balance now
+  exists and is streaming dominated; the next task is a matched stella
+  distribution/RHS/source-term trace for term-level convention parity on the
+  same imported geometry.
   \item Rerun the W7-X solver at production-shape controls, then repeat the
   convergence ladder in \(N_z\), velocity resolution, \(k_x/k_y\), field-line
   length, time step, and growth-window choice.  The current reduced W7-X
