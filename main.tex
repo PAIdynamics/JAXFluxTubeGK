@@ -1086,1467 +1086,181 @@ In the present implementation, imported DESC-style arrays are accepted as a
 \texttt{desc} geometry model in the single-surface objective; the direct DESC object
 adapter is optional and remains outside the solver-core dependency chain.
 
-\section{Current Reduced Validation and Optimization Results}
-\label{sec:reduced-optimization-results}
 
-This section records the first executable validation gates and end-to-end
-optimization demonstrations produced by the current implementation.  These are
-reduced solver plumbing tests, not validated physical design results.  Their
-purpose is to show that the linear residual, adiabatic field solve, benchmark
-diagnostics, RK4 initial-value objective, and reverse-mode derivatives can be
-combined into fixed-topology validation and optimization loops.
+\section{Current Implementation and Validation Status}
+\label{sec:current-status}
 
-\subsection{Optimization problem}
+The implementation now covers the linear electrostatic architecture specified
+above.  The core package in \path{src/stellarator_gk/} contains PyTree parameter
+objects, Fourier grids, spectral and finite-difference derivative backends,
+analytic and imported stellarator geometry adapters, quasineutrality solvers,
+term-level linear RHS assembly, RK4 time advance, growth/frequency diagnostics,
+linear objectives, and fixed-topology optimization helpers.  The production
+physics target remains linear electrostatic gyrokinetics with adiabatic
+electrons; nonlinear turbulence and extended physics are deferred to
+Sec.~\ref{sec:nonlinear-extension}.
 
-For a vector of differentiable knobs
-\begin{equation}
-  u =
-  \left(
-    q,\hat s,\epsilon,\rho,\alpha,
-    R/L_n,R/L_T,
-    \beta,\beta',
-    c_1,c_2,\ldots
-  \right),
-  \label{eq:optimization-knobs}
-\end{equation}
-the code evaluates a scalar objective
-\begin{equation}
-  J(u)
-  =
-  \mathcal{J}
-  \left[
-    \gamma(k_y;u),
-    \omega(k_y;u),
-    Q_{\mathrm{QL}}(u),
-    \phi(z,k_x,k_y;u)
-  \right],
-  \qquad
-  \frac{\partial J}{\partial u}
-  =
-  \mathrm{AD}\left[J(u)\right],
-  \label{eq:optimization-objective}
-\end{equation}
-where the reduced examples choose a scalar residual \(r(u)\) from either a
-selected nonzonal growth rate or the maximum nonzonal growth rate.  The
-optimized cost is the zero-target least-squares objective
-\begin{equation}
-  J(u) = \frac{1}{2}\left|r(u)\right|^2,
-  \qquad
-  r(u) =
-  \begin{cases}
-    \gamma(k_y;u), & \text{selected-mode cases},\\
-    \max_{k_y>0}\gamma(k_y;u), & \text{max-growth case}.
-  \end{cases}
-  \label{eq:optimization-zero-target-cost}
-\end{equation}
-The same plumbing now supports benchmark-gated targets.  Given a scalar
-diagnostic \(\mathcal{O}(u)\), a reference value
-\(\mathcal{O}_{\mathrm{ref}}\), and an accepted tolerance \(\sigma\), the
-targeted optimization cost is
-\begin{equation}
-  J_{\mathrm{bench}}(u)
-  =
-  \frac{1}{2}
-  \left(
-    \frac{\mathcal{O}(u)-\mathcal{O}_{\mathrm{ref}}}{\sigma}
-  \right)^2 .
-  \label{eq:benchmark-target-cost}
-\end{equation}
-The implemented target catalog currently records the documented
-Rosenbluth--Hinton residual \(0.0711\), the Gyaradax/GKW Cyclone selected
-growth target \(\gamma(k_\theta\rho_s=0.5)=0.179\), GX NetCDF growth and
-frequency curves from \texttt{omega\_kxkyt}, GX/GS2 eik-style geometry
-tables, an independent GX/VMEC GIST external eik-producer suite, and a DESC/GX
-block-\texttt{eik.out} DSHAPE fixture.  These references are used as objective
-targets, parser tests, and executable validation gates.
-The true RH late-plateau, production-control Cyclone selected-\(k_y\), and
-available eik parity gates now pass.  The remaining production hardening items
-are full selected-mode state/velocity-space parity against GKW and external
-W7-X mode-structure parity.
-The validation-gate interface reports
-\[
-  \left(
-    \mathcal{O}_{\mathrm{obs}},
-    \frac{\mathcal{O}_{\mathrm{obs}}-\mathcal{O}_{\mathrm{ref}}}{\sigma},
-    J_{\mathrm{bench}},
-    \mathrm{pass/open}
-  \right).
-\]
-With the present executable gates, the GX/GS2 eik metric import, DESC
-geometry-to-eik export, DESC/GX block-eik comparison, independent GX/VMEC GIST
-eik-producer suite,
-true RH late-plateau metric, and reduced Gyaradax physical trace comparison
-pass their stated tolerances.  The short RH endpoint smoke test remains marked
-open, while the production-control Cyclone selected-\(k_y\) gate passes.  A new
-CBC term audit passes for the
-drift, drive, field-drive, boundary-map, and grid-normalization conventions.
-This is intentional bookkeeping: it prevents DESC-driven optimization studies
-from being mistaken for full production campaigns before the reduced
-fixed-topology examples are replaced by complete DESC optimization runs.
-The current implementation now also includes eleven validation-hardening tools.
-First, late-time growth rates may be computed by a least-squares fit of
-\(\log A_{k_y}(t)\) over a selected diagnostic window,
-\begin{equation}
-  \gamma_{k_y}^{\mathrm{fit}}
-  =
-  \frac{\sum_{m\in W}(t_m-\bar t)
-  [\log A_{k_y}(t_m)-\overline{\log A_{k_y}}]}
-  {\sum_{m\in W}(t_m-\bar t)^2},
-  \label{eq:windowed-growth-fit}
-\end{equation}
-where \(A_{k_y}\) is the weighted connected-mode-chain potential amplitude.
-This is the diagnostic path intended for Cyclone/GX/GKW growth-rate gates.
-For the Cyclone selected-\(k_y\) case, the executable gate uses the GKW
-cell-centered \(s\)-grid with \(n_{\rm period}=5\), the single-mode
-\(k_y\rho_s=0.5\) convention, \(v_{\parallel,\max}=3\), and
-\(\texttt{disp\_par}=1\).  The current production-control path uses the GKW
-finite-difference velocity fallback and a zero-boundary finite-difference
-parallel operator.  For GKW/Gyaradax parity studies, the fallback parallel
-operator can be switched from a centered matrix derivative to the sign-dependent
-fourth-order upwind stencil used by GKW for Term I and Term VII, with open
-parallel boundary maps and fused \(\texttt{disp\_par}\) recurrence control.
-The production-control runner jit-compiles each amplitude window, stores only
-per-window amplitudes, and fits the late-time logarithmic amplitude, so
-documented production grids can be probed without retaining a full field
-history.  A medium control run with the GKW upwind fallback,
-\(N_z=48\), \(N_{v_\parallel}=32\), \(N_\mu=8\), 20 steps per window, and 80
-windows gives \(\gamma=0.164715\), compared with the GKW/Gyaradax target
-\(\gamma=0.179\).  The normalized residual is \(-1.43\), so the gate is close
-but still open against the \(10^{-2}\) tolerance.
-Second, the RH gate now evaluates the actual late-time plateau metric used by
-the GKW/Gyaradax benchmark,
-\begin{equation}
-  R_{\mathrm{RH}}
-  =
-  \left[
-    \frac{1}{|W|}
-    \sum_{t_m\in W}
-    \frac{\sum_j w_{z,j}|\phi_j(t_m,k_x,k_y=0)|^2}
-         {\sum_j w_{z,j}|\phi_j(0,k_x,k_y=0)|^2}
-  \right]^{1/2},
-  \qquad W=\{t_m:t_m>80\}.
-  \label{eq:rh-plateau-gate}
-\end{equation}
-The passing RH path uses the normalized GKW cell-centered \(s\)-grid, the GKW
-finite-difference fallback stencils in \(s\) and \(v_\parallel\), the
-\texttt{finit='zonal'} conjugate \(k_x=\pm 1\) initialization, and direct
-fourth-difference in-residual recurrence operators.  The default CPU gate uses
-\(N_z=64\), \(N_{v_\parallel}=64\), \(N_\mu=16\),
-\(\texttt{disp\_par}=0.01\), and an effective
-\(\texttt{disp\_vp}=0.08\).  Passing this gate requires both the reference
-residual and convergence of the two half-window means over \(t>80\).  The
-current run gives \(R_{\mathrm{RH}}=0.070413\), within the
-\(10^{-3}\) tolerance of the GKW/Gyaradax value \(0.0711\), with late-window
-mean difference \(7.50\times 10^{-3}\).  Post-step modal damping remains
-disabled by default because it can suppress recurrence while also damping the
-residual itself.
-Third, the eik parity layer can compare any solver-produced geometry object
-against a GX/GS2 table field by field:
-\[
-  B,\ F,\ g^{xx},\ g^{xy},\ g^{yy},\
-  D_x,\ D_y,\ G,\ \kperp^2 .
-\]
-Imported eik tables pass this contract exactly; DESC- or solver-generated
-stellarator geometry must pass the same comparison before being used for
-validated optimization.
-Fourth, a DESC/GX parity path evaluates a DESC equilibrium on the solver
-parallel grid using the GX \texttt{eik.out} convention and compares the result
-against a matched block-\texttt{eik.out} fixture.  For the DSHAPE fixture at
-\(\rho=0.5\) and \(\alpha=0\), the field-by-field residual is zero to the
-stored precision.  This closes the current solver-produced DESC geometry
-contract.  This matched DESC/GX fixture is supplemented, but not replaced, by
-an independent GX/VMEC GIST eik-producer suite that records per-producer
-geometry-contract errors; a future DESC-specific external runner can still
-strengthen production code-to-code parity.
-Fifth, the CBC term audit evaluates the same reduced CBC setup at the
-coefficient and single-RHS level.  It compares the magnetic-drift frequency,
-equilibrium-gradient drive, drift-field drive, GKW open-boundary maps, grid and
-velocity normalization, and assembled RHS against the GKW/Gyaradax algebraic
-forms.  The current audit has zero stored error in all reported fields.  The
-difference between the centered finite-difference parallel matrix and the GKW
-upwind/open-boundary operator on the audit state is only
-\(1.09\times10^{-4}\), explaining why the growth-rate residual is essentially
-unchanged by that fallback switch.  The remaining CBC discrepancy is therefore
-not a visible sign, metric, boundary-map, or scalar normalization mismatch in
-the audited terms.
-Sixth, a trace-level CBC diagnostic records the selected-\(k_y\) time history
-needed for code-to-code debugging.  The trace stores raw selected-mode
-amplitude, physical amplitude after accounting for per-window normalization,
-physical per-window growth, cumulative fitted growth, \(\phi\), state, and RHS
-norms, and the accumulated log-normalization.  The reduced solver artifact is
-written to \path{figures/cyclone_trace_reduced.csv}.  A companion Gyaradax
-exporter writes \path{figures/gyaradax_cyclone_trace_reduced.csv} and compares
-the normalization-independent fields \(t\), physical amplitude, per-window
-growth, fitted growth, and the physical \(\phi\), state, and RHS norms obtained
-by multiplying raw norms by \(\exp(\ell_{\mathrm{norm}})\).  On the reduced grid
-\((N_z,N_{v_\parallel},N_\mu)=(8,6,4)\), two steps per window, and three
-windows, this comparison passes with maximum error \(1.24\times10^{-2}\) at
-tolerance \(2\times10^{-2}\).  On the production-control grid
-\((N_z,N_{v_\parallel},N_\mu)=(48,32,8)\) with 20 steps per window, a
-four-window smoke trace passes with maximum error \(1.33\times10^{-3}\), and
-the full 80-window trace passes with maximum error \(1.02\times10^{-2}\).  In
-the full trace, the largest field error is the per-window growth history;
-fitted growth differs by \(2.00\times10^{-3}\), and the physical norm errors
-remain below \(1.9\times10^{-4}\).  This moves the remaining Cyclone scalar
-gap from a solver--Gyaradax time-history mismatch to a GKW/Gyaradax target and
-diagnostic-window alignment problem.  A GKW \texttt{time.dat} loader now maps
-linear GKW time/growth diagnostics into the same \texttt{CycloneTrace} schema
-by reconstructing a relative physical amplitude from growth-rate increments.
-Raw amplitudes and raw log-normalization are not yet used as pass criteria
-because Gyaradax and this solver store per-window normalization factors
-differently, and compact GKW \texttt{time.dat} files do not contain field,
-state, or RHS norms.  As a first end-to-end GKW diagnostic smoke test, the
-bundled serial/no-FFT GKW \texttt{simple\_example} was built and run locally.
-Its \texttt{time.dat} file was converted to
-\path{figures/gkw_simple_example_time_trace.csv}.  The converted trace contains
-50 samples, final GKW-reported window growth \(0.184492\), and
-loader-reconstructed full-history fitted growth \(0.160910\).  This is not yet
-the matched production Cyclone trace, but it validates the ingestion path on
-real GKW output.
-The matched selected-\(k_y\) GKW input
-\path{fixtures/gkw_cyclone_selected_ky_linear_input.dat} uses the same
-production-control grid and window settings as the solver/Gyaradax trace:
-\((N_z,N_{v_\parallel},N_\mu)=(48,32,8)\),
-\(n_{\mathrm{period}}=5\), \(\Delta t=0.003\), 20 steps per output window, and
-80 windows.  The resulting compact GKW diagnostic
-\path{fixtures/gkw_cyclone_selected_ky_time.dat} gives late-window mean growth
-\(0.180408\), close to the nominal \(0.179\) target, and reconstructed-amplitude
-late-fit growth \(0.188531\).  In contrast, the solver production gate gives
-\(0.164715\) for the default \(\texttt{cosine2}\) late-fit diagnostic and
-\(0.165973\) for the GKW-native \(\texttt{cosine}\) late-fit diagnostic.  The
-GKW-style late-window-mean diagnostic gives \(0.156742\) and \(0.155721\) for
-the same two initial profiles.  Thus the target is consistent with GKW's
-compact \texttt{time.dat} convention, but the compact file alone cannot expose
-the field-normalization or parallel mode-structure source of the remaining
-selected-mode history gap.
-The richer GKW diagnostic \texttt{parallel\_phi.dat} is now loaded as a
-parallel profile trace.  In GKW this file stores, at each output window,
-\begin{equation}
-  P_j^{\mathrm{GKW}}(t_m)
-  =
-  \frac{1}{N_xN_y}
-  \sum_{i_x,i_y}
-  \left|\phi_{i_y,i_x,j}(t_m)\right|^2 ,
-  \qquad j=1,\ldots,N_z .
-  \label{eq:gkw-parallel-phi-diagnostic}
-\end{equation}
-For the matched single-mode run, this reduces to the selected-mode
-\(|\phi(z_j)|^2\) profile.  The solver comparison records the analogous
-selected-\(k_y\) profile after each production-control window and compares the
-row-normalized shapes
-\begin{equation}
-  \widehat P_j(t_m)
-  =
-  \frac{P_j(t_m)}{\sum_\ell P_\ell(t_m)} .
-  \label{eq:parallel-profile-normalization}
-\end{equation}
-Using the GKW-native \(\texttt{finit='cosine'}\) initialization and GKW's
-unweighted field normalization, the matched profile comparison remains open:
-the maximum row-wise profile error is \(3.39\times10^{-2}\), the mean row
-error is \(1.84\times10^{-2}\), and the final-row error is
-\(2.21\times10^{-2}\) at the current exploratory tolerance \(2\times10^{-2}\).
-The raw total-power ratio is \(1.00000006\) on average after switching the
-solver trace to the same unweighted field norm used by GKW.  Reversing the
-parallel output order or applying all circular shifts does not reduce the
-best-aligned error; the best shift is zero.  The center-of-power error is
-\(O(10^{-7})\), and the edge-fraction error is \(O(10^{-3})\).  The largest
-localized signed shape error occurs at \(t=3.72\) and \(z=0.09375\), where the
-solver's normalized profile value is \(0.356978\) versus \(0.323098\) in GKW.
-The profile-width diagnostic is negative in this worst row
-(\(-2.08\times10^{-2}\)), so the remaining discrepancy is concentrated in the
-central curvature/width of the parallel eigenfunction rather than in a scalar
-normalization, output ordering, center-of-mass displacement, or edge
-convention.  A solver-internal operator audit at the same row now separates
-the candidate causes.  The quasineutrality residual is
-\(4.74\times10^{-16}\), solving \(\phi\) again from the density numerator
-changes the field by only \(3.72\times10^{-16}\), and the manually assembled
-RHS agrees with the public residual wrapper to stored precision.  At the
-localized central point, however, the matrix-versus-GKW-upwind parallel
-streaming delta is \(5.23\times10^{-3}\), while the corresponding parallel
-field-drive delta is \(2.76\times10^{-19}\).  The audit CSV is
-\path{figures/cyclone_profile_operator_audit.csv}.  A second audit
-reconstructs the selected-mode Term I coefficients directly from the GKW
-\path{linear_terms.F90} routine \texttt{vpar\_grad\_df\_4d\_testnewbc},
-including the sign-dependent fourth-order boundary cases and the
-\(\texttt{idisp}=2\) \(\texttt{vpgr\_rms}\) recurrence convention.  That
-source reconstruction matches the implemented operator with maximum term
-error \(5.14\times10^{-18}\), maximum coefficient error
-\(4.44\times10^{-16}\), and recurrence-speed error \(5.55\times10^{-17}\);
-the CSV is \path{figures/cyclone_term_i_fortran_audit.csv}.  A seventh audit
-then reconstructs the explicit source sequence in
-\path{exp_integration.F90} and \path{normalise.F90}: the GKW
-\texttt{rk4} routine stores stage increments as \(\Delta t\,R(g)\), and
-\texttt{normalize(2)} computes the unweighted field norm, divides the full
-state by that factor, and reports
-\(\log(\mathrm{factor})/(t-t_{\mathrm{last}})\) as the window growth.
-For the same production-control trace, the reconstructed source sequence
-matches the solver's GKW-unweighted window trace with RK4-step error
-\(3.48\times10^{-18}\), growth-sequence error \(1.29\times10^{-14}\),
-post-normalization field-norm error \(1.33\times10^{-15}\), and field
-linearity error \(1.67\times10^{-15}\); the CSV is
-\path{figures/cyclone_time_normalization_audit.csv}.  An eighth audit checks
-the field diagnostic path itself.  In GKW, \path{dist.F90} and
-\path{index_function.F90} store electrostatic field values after the kinetic
-distribution with \(i_x\) fastest, then mode index, then parallel index, and
-\path{diagnostic.F90} writes \texttt{parallel\_phi.dat}, \texttt{kyspec}, and
-\texttt{kxspec} by summing \(|\phi_{\mathrm{mode},i_x,j}|^2\) with fixed
-normalizing counts.  Packing the solver field into this source layout and
-unpacking it through the same contract gives zero roundtrip error, zero
-\texttt{parallel\_phi} error, zero selected-profile error, and zero
-\(k_y/k_x\) spectrum error at the same production-control audit point; the CSV
-is \path{figures/cyclone_diagnostic_packing_audit.csv}.  A ninth reduced audit
-checks the sparse matrix/source conventions in \path{matdat.F90}.  The audit
-constructs a dense matrix from the matrix-free residual on a
-\((N_z,N_{v_\parallel},N_\mu)=(8,6,4)\) selected-\(k_y\) case, splits its
-entries into duplicate triplets, compresses duplicate \((i,j)\) entries, and
-replays GKW's explicit \(\Delta t(\mathrm{source}+M f)\) convention.  It finds
-matrix-action error \(2.60\times10^{-18}\), zero source term,
-explicit-delta error \(8.47\times10^{-21}\), compressed-triplet error
-\(3.04\times10^{-18}\), and \texttt{complex-real} split error
-\(1.73\times10^{-18}\); the CSV is
-\path{figures/cyclone_matdat_matrix_audit.csv}.  A tenth audit then
-reconstructs source-level GKW coefficients for Terms II, IV, V, VII, and VIII
-at the same production-control selected-\(k_y\) point.  The audited source
-routines are \texttt{vdgradf}, \texttt{trapdf\_4d},
-\texttt{ve\_grad\_fm}, \texttt{vpgrphi\_3\_newbc}, and
-\texttt{vd\_grad\_phi\_fm}.  At \(t=3.72\) and \(z=0.09375\), the maximum
-term/action error is \(3.10\times10^{-17}\), the maximum coefficient error is
-zero to stored precision, and the maximum insertion error is
-\(3.10\times10^{-17}\); the CSV is
-\path{figures/cyclone_coefficient_source_audit.csv}.  The next CBC parity step
-is therefore not the separated Term II/IV/V/VII/VIII coefficient formulas.  An
-eleventh audit targets the actual production GKW \texttt{ltrapping\_arakawa}
-path, which fuses Term I and Term IV into the Hamiltonian stencil
-\texttt{igh} and applies both \(\texttt{disp\_par}=1\) and
-\(\texttt{disp\_vp}=0.2\) diffusion.  This audit is intentionally open: the
-fused GKW operator differs from the separated solver streaming/mirror fallback
-by local profile delta \(3.58\times10^{-4}\), maximum profile delta
-\(1.51\times10^{-3}\), and relative envelope \(1.26\times10^{-1}\).  The
-parallel and velocity diffusion components of \texttt{igh} peak at
-\(7.04\times10^{-3}\) and \(7.60\times10^{-4}\), respectively; the CSV is
-\path{figures/cyclone_igh_arakawa_audit.csv}.  The source reconstruction has
-now been promoted into an optional matrix-free solver backend,
-\(\texttt{parallel\_derivative\_model}=\texttt{gkw\_igh}\).  In this backend
-the fused \texttt{igh} action replaces the separated parallel-streaming,
-mirror-force, \(\texttt{disp\_par}\), and \(\texttt{disp\_vp}\) terms while the
-parallel field drive still uses the GKW upwind derivative.  A direct reduced
-test compares the backend against the reconstructed Fortran-style
-\texttt{igh} action, including a JIT call, to roundoff.  The next validation
-step was to rerun the production selected-\(k_y\) growth/profile gates with
-this backend enabled.  The GKW-native \(\texttt{finit='cosine'}\),
-GKW-unweighted, production-control rerun remains open:
-\(\gamma_{\mathrm{late\,fit}}=0.164465\) versus the matched GKW
-\(0.188531\), and the late-window mean is \(0.154739\) versus \(0.180408\).
-The row-normalized \(\texttt{parallel\_phi.dat}\) profile comparison improves
-only slightly, with maximum error \(3.28\times10^{-2}\) and best circular
-shift zero; the CSV artifacts are
-\path{figures/gkw_igh_cyclone_selected_ky_time_comparison.csv} and
-\path{figures/gkw_igh_cyclone_parallel_phi_profile_comparison.csv}.
-A multi-window version of the same fused-operator audit,
-\path{figures/cyclone_igh_arakawa_series_audit.csv}, samples output windows
-1, 40, and 80.  It remains open, but the maximum fused-versus-separated profile
-delta is largest at the first sampled window:
-\(1.40\times10^{-2}\) at \(t=0.06\), then \(2.80\times10^{-3}\) at \(t=2.4\)
-and \(6.15\times10^{-4}\) at \(t=4.8\).  Thus the fused \(\texttt{igh}\)
-difference is an early operator-shape mismatch, not by itself a monotone
-explanation of the later step-20 to step-800 distribution divergence.  The next
-comparison should use a matched state-history or source-term time trace under
-the promoted \(\texttt{gkw\_igh}\) backend.
-The solver-side source-term trace for that comparison is now in place.  The
-trace writes \path{figures/cyclone_source_term_trace.csv} and stores, at each
-selected output window, the raw selected-mode norms of \(\phi\), \(f\), the
-assembled RHS, and the decomposed RHS terms
-\begin{equation}
-  \mathcal R
-  =
-  \mathcal R_{\mathrm{igh}}
-  + \mathcal R_{\omega_d f}
-  + \mathcal R_{\nabla F}
-  + \mathcal R_{\nabla_\parallel \phi}
-  + \mathcal R_{\omega_d \phi}
-  + \mathcal R_{\mathrm{damp}} .
-  \label{eq:source-term-trace-decomposition}
-\end{equation}
-It also stores the accumulated selected-\(k_y\) log-normalization so that the
-same rows can be compared in either raw or physicalized units.  For the
-production-control \(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\) run sampled at
-windows \(0,1,40,80\), the reconstructed sum in
-Eq.~\eqref{eq:source-term-trace-decomposition} agrees with the public
-matrix-free RHS with maximum stored error zero.  At \(t=4.8\), the raw
-selected-mode norms are
-\(\|\mathcal R\|=9.14\times10^{-2}\),
-\(\|\mathcal R_{\omega_d f}\|=9.04\times10^{-2}\), and
-\(\|\mathcal R_{\mathrm{igh}}\|=4.49\times10^{-3}\), with accumulated
-log-normalization \(-4.3987\).  This does not close the GKW gap, but it gives a
-compact solver-side target for a matched GKW source-term, state-history, or
-restart/final-state dump.
-The matched GKW state-history path is now defined non-destructively.  Running
-\path{scripts/prepare_gkw_cosine2_run.py} with
-\(\texttt{--state-trace}\) patches only the copied GKW
-\path{diagnostic.F90}; the patched diagnostic writes
-\path{stellarator_gk_state_trace.dat} with columns
-\((\texttt{step},t,\|f\|,\|\phi\|)\) at each normal output window.  The file is
-loaded as a \(\texttt{GkwStateTrace}\) and compared against the solver
-\(\texttt{CycloneSourceTermTrace}\).  The matched production-control
-\(\texttt{cosin2}\) trace is stored in
-\path{fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat}.  Since GKW
-writes diagnostics after \(\texttt{normalize(2)}\), the solver comparison uses
-post-normalization snapshots.  The resulting compact norm comparison,
-\path{figures/gkw_cosin2_cyclone_state_trace_comparison.csv}, passes at
-tolerance \(5\times10^{-3}\): the maximum state-norm error is
-\(3.31\times10^{-3}\), the time error is \(7.02\times10^{-14}\), and the
-field-norm error is \(6.11\times10^{-16}\).  Thus compact state and field
-norms are aligned; the remaining production discrepancy must be resolved with a
-full selected-mode state dump or a term-resolved GKW RHS/source trace.
-The full selected-mode dump path has now been exercised on the same patched
-GKW case.  Running \path{scripts/prepare_gkw_cosine2_run.py} with
-\(\texttt{--selected-state-dump}\) patches only the copied
-\path{diagnostic.F90} and writes
-\(\texttt{stellarator\_gk\_selected\_state\_<step>.dat}\) files containing
-\(f(v_\parallel,\mu,z)\) and complex \(\phi(z)\) for \(i_{\mathrm{mod}}=1\),
-\(i_x=1\), species 1.  The sampled production-control fixtures at steps
-20, 800, and 1600 are stored in
-\path{fixtures/gkw_cyclone_selected_ky_cosin2_selected_state/} and load as a
-\(\texttt{SelectedModeStateTrace}\) with shape \((3,32,8,48)\).  The matching
-solver trace uses the \(\texttt{cosine2}\), \(\texttt{gkw\_igh}\), and
-post-normalization diagnostic settings.  The comparison artifact
-\path{figures/gkw_cosin2_cyclone_selected_state_comparison.csv} remains open:
-after fitting one complex scale per snapshot, the maximum \(\phi(z)\) error is
-\(5.85\times10^{-2}\), the maximum full-state error is
-\(4.78\times10^{-2}\), and the worst full-state relative \(L^2\) error is
-\(3.19\times10^{-1}\) at step 800.  Direct layout is the best layout, so the
-remaining discrepancy is not a scalar norm, output-order, or simple global
-phase convention.  The next production discriminator should therefore be a
-term-resolved GKW RHS/source trace at the same selected snapshots.
-The GKW side of that discriminator is now available.  The
-\(\texttt{--rhs-trace}\) copied-source patch tags matrix/source entries by term
-in \path{matdat.F90}, sets the active tag through \path{linear_terms.F90}, and
-writes dtim-scaled selected-mode actions from \path{exp_integration.F90}
-immediately after the end-of-window \(\texttt{normalize(2)}\) call.  The sampled
-fixtures in \path{fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace/} load as
-\(\texttt{GkwSelectedModeRhsTrace}\) with shape \((3,9,32,8,48)\), for the
-nine term groups
-\[
-\begin{aligned}
-&\texttt{untagged},\quad \texttt{igh},\quad \texttt{trapdf},\quad
-  \texttt{vdgradf},\quad \texttt{hyper/collision},\\
-&\texttt{ve\_grad\_fm},\quad \texttt{vd\_grad\_phi\_fm},\quad
-  \texttt{vpgrphi},\quad \texttt{field}.
-\end{aligned}
-\]
-The internal term-sum error is \(9.55\times10^{-18}\).  At the final snapshot,
-the dtim-scaled total-action norm is \(1.94\times10^{-2}\), dominated by
-\(\texttt{vdgradf}\) \((1.91\times10^{-2})\), then
-\(\texttt{ve\_grad\_fm}\) \((2.62\times10^{-3})\) and
-\(\texttt{igh}\) \((1.25\times10^{-3})\).
+\subsection{Validation guardrails}
 
-The solver now records the same selected-mode action tensor with the
-\texttt{selected-rhs} trace helper.  Each solver snapshot stores
-\(\Delta t\,\mathcal{R}_a[h,\phi]\) in the same nine GKW term buckets, so
-\(\sum_a \Delta t\,\mathcal{R}_a\) reconstructs the selected total action.
-Comparing the production solver trace with the GKW RHS fixture at steps
-\(20,800,1600\) exposed a GKW wave-number convention.  In s-alpha geometry,
-\(\texttt{mode.F90::kgrid}\) divides the input \(\texttt{KTHRHO}\) by
-\(\texttt{kthnorm}=q/(2\pi\epsilon)\) before the linear terms use
-\(\texttt{krho}\).  For \(q=1.4\), \(\epsilon=0.19\), and
-\(\texttt{KTHRHO}=0.5\), the internal value is
-\(\texttt{krho}=0.426359\).  After applying this convention, the best RHS
-layout is direct and the maximum elementwise error drops to
-\(2.238\times10^{-5}\), still dominated by \(\texttt{vdgradf}\) but now at
-state-history scale rather than coefficient-convention scale.  The matched
-48/32/8 selected-\(k_y\) growth gate now passes: the late-window mean is
-\(0.178001\) and the late fit is \(0.185606\), compared with the
-GKW/GX target \(0.179\).
-
-We then removed the initialization mismatch by adding a non-destructive GKW
-patch helper, \path{scripts/prepare_gkw_cosine2_run.py}.  The helper copies
-GKW to a scratch tree and patches only the copy.  Since the original GKW
-\texttt{finit} variable has length six, the new branch is named
-\(\texttt{cosin2}\), but it implements the solver/Gyaradax
-\(\texttt{cosine2}\) profile \(1+\cos(2\pi s)\).  The patched serial/no-FFT
-GKW tree builds and runs, producing matched \(\texttt{cosin2}\) time and
-\(\texttt{parallel\_phi}\) fixtures under \path{fixtures/}.  Against these
-fixtures, the pre-\(\texttt{krho}\)-fix solver
-\(\texttt{cosine2}\)/\(\texttt{gkw\_igh}\) late-fit growth was \(0.163899\)
-versus GKW \(0.187415\), and the late-window mean was \(0.156237\) versus
-\(0.177999\).  The corresponding CSV artifacts are the
-\(\texttt{gkw\_cosin2}\) time and parallel-profile comparisons under
-\path{figures/}.  After applying the GKW internal-\(\texttt{krho}\) convention,
-the selected-\(k_y\) production-control gate passes the GKW/GX tolerance
-ladder at the matched fixture resolution.  Thus the initialization,
-field-normalization, and magnetic-drift wave-number conventions are no longer
-the dominant remaining explanations; the next audit should compare the evolved
-velocity-space distribution state, either through GKW \(\texttt{distr*.dat}\)
-slices or through a non-destructive final-state dump.
-
-That velocity-space audit is now available in
-\path{figures/gkw_cosin2_cyclone_velocity_slice_audit.csv}.  It loads GKW
-\(\texttt{distr1.dat}\)--\(\texttt{distr4.dat}\), which contain the final
-peak-\(\phi\) slice
-\[
-  \left(v_\parallel,\sqrt{2B\mu},
-  \Im\!\left[\frac{f\,\Delta\mu\,\Delta v_\parallel}{\phi}\right],
-  \Re\!\left[\frac{f\,\Delta\mu\,\Delta v_\parallel}{\phi}\right]\right),
-\]
-and compares it with the same diagnostic computed from the solver state at
-\(t=4.8\).  The velocity grids agree to GKW output precision:
-\(\|v_\parallel-v_\parallel^{\mathrm{GKW}}\|_\infty=5.0\times10^{-5}\) and
-\(\|v_\perp-v_\perp^{\mathrm{GKW}}\|_\infty=4.66\times10^{-5}\).  The
-normalized distribution slice remains open, with complex maximum error
-\(3.53\times10^{-2}\), complex \(L^2\) error \(8.46\times10^{-3}\), and
-relative \(L^2\) error \(3.78\times10^{-1}\).  Because GKW allocates
-\(\texttt{global\_vpar\_mu(n\_vpar,n\_mu)}\) but
-\(\texttt{output\_slice\_2d}\) writes rows over the second Fortran index and
-columns over the first, the file layout is \(N_\mu\times N_{v_\parallel}\):
-\(\mu\) rows and \(v_\parallel\) columns.  A follow-on convention audit,
-\path{figures/gkw_cosin2_cyclone_velocity_slice_conventions.csv}, keeps this
-direct convention as the baseline and tests transposition-like C/F reshapes,
-\(\mu\) reversal, \(v_\parallel\) reversal, one-cell shifts, conjugation, sign
-flips, and \(\pm i\) phase rotations.  The best simple variant is
-\(v_\parallel\)-column reversal with no phase change, reducing the maximum
-error to \(1.85\times10^{-2}\) and the \(L^2\) error to \(5.53\times10^{-3}\).
-An even/odd decomposition in \(v_\parallel\) gives the same diagnosis: the
-odd same-sign \(L^2\) error is \(6.67\times10^{-3}\), while the odd
-opposite-sign \(L^2\) error is \(1.90\times10^{-3}\).
-The follow-on odd-\(v_\parallel\) RHS sign audit,
-\path{figures/gkw_cosin2_cyclone_vpar_odd_sign_audit.csv}, keeps GKW's
-one-based \(k=1,\ldots,N_{v_\parallel}\) convention with
-\(v_{\parallel,k}=-v_{\max}+(k-\tfrac12)\Delta v\), and tests controlled sign
-flips of only the fused \(\texttt{igh}\) Term I/IV block and the parallel
-field-drive Term VII block.  A global \(\texttt{igh}\) sign reversal is ruled
-out: flipping it increases the direct final-slice maximum error to
-\(1.71\times10^{1}\).  Flipping only Term VII is not yet adopted as physics,
-but it is diagnostic: the direct Fortran layout becomes the best layout and
-the direct maximum error decreases from \(3.53\times10^{-2}\) to
-\(2.01\times10^{-2}\), with relative \(L^2\) error \(2.69\times10^{-1}\).
-The remaining debugging target is therefore the true Term VII
-\(\texttt{vpgrphi\_3\_newbc}\) source, matrix-insertion, and field-variable
-convention across \path{linear_terms.F90}, \path{matdat.F90}, and
-\path{dist.F90::get_phi}, rather than a broad velocity-grid transpose or a
-global \(\texttt{igh}\) sign flip.
-The next field-convention ladder,
-\path{figures/gkw_cosin2_cyclone_term_vii_field_convention_audit.csv},
-varies the potential supplied to Term V, Term VII, and Term VIII separately.
-It rules out a global field-variable convention: applying \(-\phi\),
-\(\phi^\ast\), or \(-\phi^\ast\) to all three field terms worsens the direct
-slice error to \(1.28\times10^{-1}\), \(7.48\times10^{-2}\), and
-\(1.15\times10^{-1}\).  The best diagnostic variant is local to Term VII:
-using \(\phi^\ast\) only in \(\texttt{vpgrphi\_3\_newbc}\) reduces the direct
-maximum error to \(1.60\times10^{-2}\), with complex \(L^2\) error
-\(5.11\times10^{-3}\) and relative \(L^2\) error \(2.29\times10^{-1}\).
-The corresponding \(-\phi^\ast\) test is close but worse
-\((1.70\times10^{-2})\).  This remains a diagnostic comparison, not an adopted
-RHS change; it points next to the Term VII complex phase path through
-\path{linear_terms.F90::add_element}, \path{matdat.F90}, complex-real matrix
-storage, \(k_y\)/Fourier signs, and the \(\texttt{iphi}\) field variable read
-by \path{dist.F90::get_phi}.
-Direct source inspection then removes the simplest hidden phase conventions:
-\(\texttt{vpgrphi\_3\_newbc}\) inserts real scalar coefficients into the
-\(\texttt{iphi}\) column, \(\texttt{add\_element}\) maps them directly to the
-connected \(\texttt{iphi}\) index, \(\texttt{put\_element}\) stores the
-coefficient unchanged in both \(\texttt{complex}\) and
-\(\texttt{complex-real}\) matrix formats, and \(\texttt{get\_phi}\) copies
-\(\texttt{fdis(iphi)}\) directly.  Also,
-\(\texttt{velocity\_space\_output}\) writes \(f\,\Delta\mu\,\Delta
-v_\parallel/\phi\), not \(f/\phi^\ast\).  The phase-alignment audit
-\path{figures/gkw_cosin2_cyclone_velocity_phase_audit.csv} therefore tests
-whether the remaining final-slice difference is only an arbitrary eigenvector
-phase.  It is not: the best unit-phase alignment is still the
-\(v_\parallel\)-reversed layout, with maximum error \(1.89\times10^{-2}\) and
-relative \(L^2\) error \(2.47\times10^{-1}\).  Even allowing an unconstrained
-complex scale only reduces the maximum error to \(1.80\times10^{-2}\).  The
-remaining ambiguity is thus a genuine evolved-state or mode-sign issue, not a
-free final-output phase.
-To remove the final-slice ambiguity from the reference side, the copied-GKW
-preparation script now has a second non-destructive patch,
-\(\texttt{--multi-time-distr}\).  This patch is applied only to a scratch copy
-of \path{diagnostic.F90}.  It imports \(\texttt{ntotstep}\) into
-\(\texttt{write\_output}\), calls
-\(\texttt{velocity\_space\_output(ntotstep)}\) at every normal diagnostic
-window, and writes
-\(\texttt{distr1\_00000020.dat},\ldots,\texttt{distr4\_00001600.dat}\)
-without removing the original final \(\texttt{distr*.dat}\) files.  A matched
-serial/no-FFT \(\texttt{cosin2}\) run produced \(320\) suffixed files, i.e.
-\(80\) time windows times four velocity-slice components.  The new
-\(\texttt{GkwVelocitySpaceSliceSeries}\) loader reads these as an
-\(80\times 8\times 32\) series over \(t=0.06,\ldots,4.8\).  The next
-validation comparison should therefore use early, middle, and late snapshots
-to decide whether the distribution mismatch is present immediately,
-accumulates during the time evolution, or is biased by the final
-peak-\(\phi\) sampling point.
-The first such comparison is recorded in
-\path{figures/gkw_cosin2_cyclone_velocity_series_audit.csv}.  At GKW steps
-20, 800, and 1600, the direct complex maximum errors are
-\[
-  3.99\times10^{-3},\qquad
-  3.67\times10^{-2},\qquad
-  3.53\times10^{-2},
-\]
-with matching \(v_\parallel\), \(v_\perp\), and time grids to output
-precision.  The best simple layout is the direct GKW row/column convention at
-step 20, but \(v_\parallel\)-column reversal becomes the best simple layout
-by steps 800 and 1600.  Therefore the large final velocity-space discrepancy
-is mainly a cumulative evolution error that develops between the first and
-middle diagnostic windows, not a pure final-output phase, grid-ordering, or
-peak-\(\phi\) sampling artifact.  The next parity target is the step-20 to
-step-800 evolution through the fused \(\texttt{gkw\_igh}\) path, Term VII,
-field packing, and \(k_y\)/Fourier sign conventions.
-The multi-time variant audit
-\path{figures/gkw_cosin2_cyclone_velocity_series_variant_audit.csv} applies
-these tests to the same early/middle/late snapshots.  A global
-\(\texttt{gkw\_igh}\) sign flip remains ruled out: its step-1600 direct error is
-\(1.71\times10^{1}\).  Global field conjugation also worsens the middle and
-final snapshots.  The best diagnostic variant at step 800 is a Term VII-only
-sign flip, which reduces the direct maximum error from \(3.67\times10^{-2}\) to
-\(2.60\times10^{-2}\); at step 1600 the best diagnostic variant is Term VII-only
-conjugation, reducing \(3.53\times10^{-2}\) to \(1.60\times10^{-2}\).  Because
-the best diagnostic convention changes with time and the gap is not closed, no
-Term VII sign or conjugation change is promoted into the solver.  The remaining
-source-level task is to trace the selected-mode \(k_y\)/Fourier sign and
-field-packing path through \path{mode.F90}, \path{dist.F90::get_phi},
-\path{linear_terms.F90::vpgrphi_3_newbc}, and the real/complex storage
-convention.
-That trace is now recorded in
-\path{figures/cyclone_term_vii_mode_packing_audit.csv}.  For the selected
-single positive-\(k_y\) Cyclone mode, GKW's \path{mode.F90} convention gives
-\(\texttt{krho}=k_y=0.5\), and the single nonzonal \(k_x\) chain has open
-boundary maps \(\texttt{ixplus}=\texttt{ixminus}=0\), represented as \(-1\) in
-the Python static topology.  Packing \(\phi\) into the GKW field block and
-unpacking it through the \(\texttt{iphi}\) contract gives zero roundtrip error,
-and the direct packed-field reconstruction of
-\(\texttt{vpgrphi\_3\_newbc}\) differs from the solver Term VII action by only
-\(3.47\times10^{-18}\).  By contrast, conjugating or negating the packed field
-changes the Term VII action by about \(2.89\times10^{-2}\).  Thus the Term VII
-sign/conjugation variants remain useful diagnostics but are not GKW source
-conventions.  The remaining validation target is cumulative state evolution,
-especially the fused \(\texttt{ltrapping\_arakawa}\)/\(\texttt{igh}\) path.
-The optimization update used for the figures is plain gradient descent,
-\begin{equation}
-  u^{(m+1)} = \Pi\!\left(u^{(m)}-\eta \nabla_u J(u^{(m)})\right),
-  \label{eq:optimization-update}
-\end{equation}
-where \(\Pi\) only enforces positivity of \(q,\epsilon,n,T\).  The coefficients
-\(c_i\) are low-amplitude toy equilibrium coefficients that modulate analytic
-circular geometry.  They are included to exercise the same differentiable API
-that later Boozer/DESC geometry coefficients will use.
-
-\subsection{Reduced simulation setup}
-
-All three examples use the same small fixed-topology linear electrostatic run:
+The current regression suite is intentionally layered.  Algebraic tests cover
+broadcasting, PyTree behavior, derivative operators, field solves, term
+linearity, and differentiability on reduced grids.  Code-to-code and benchmark
+fixtures then check the pieces most likely to hide convention errors:
 \begin{itemize}
-  \item one kinetic ion species and adiabatic electrons;
-  \item analytic circular flux-tube geometry;
-  \item Chebyshev--Lobatto velocity grids with \(N_{v_\parallel}=3\) and \(N_\mu=3\);
-  \item periodic spectral parallel grid with \(N_z=5\);
-  \item centered radial Fourier grid \(k_x\in\{-0.5,0,0.5\}\);
-  \item endpoint-only RK4 integration with \(\Delta t=0.01\) and two steps per objective evaluation;
-  \item deterministic complex initial condition
-  \[
-    f_0 = 10^{-2}\left[\cos(I/6)+\ii\sin(I/8)\right],
-  \]
-  where \(I\) is the flattened phase-space index reshaped onto
-  \((v_\parallel,\mu,z,k_x,k_y)\).
+  \item the true Rosenbluth--Hinton late-plateau metric passes against the
+  GKW/Gyaradax value \(0.0711\), with observed value \(0.070413\);
+  \item the Cyclone selected-\(k_y\) scalar growth gate passes after matching
+  GKW's internal wave-number convention;
+  \item GKW selected-mode RHS/action traces, imported-state one-window replays,
+  initial-state normalization, and row-normalized \path{parallel_phi.dat}
+  profile checks pass at their current tolerances;
+  \item eik geometry checks pass for DESC/GX fixtures, solver export, GX/GS2
+  import, and independent GX/VMEC GIST sources;
+  \item reduced stellarator scan and DESC optimization examples execute through
+  fixed-topology differentiable objectives, but are not production claims.
 \end{itemize}
-A second reduced example replaces the analytic circular geometry by the
-extracted DESC DSHAPE fixture
-\path{fixtures/desc_geometry_dshape_rho05_alpha0.npz}.  The simulation uses
-\(N_z=33\), \(N_{v_\parallel}=N_\mu=3\), \(k_y\in\{0,0.35\}\), one RK4 step
-with \(\Delta t=0.005\), and the benchmark-target cost
-\eqref{eq:benchmark-target-cost} with a zero selected-growth proxy target.
-This test exercises the imported DESC geometry path, profile-gradient
-derivatives, and per-iteration optimization diagnostics without yet claiming
-physical design convergence.
-The example data and figures are generated by
-\begin{equation}
-  \texttt{uv run --extra dev python examples/generate\_optimization\_figures.py}.
-  \label{eq:figure-generation-command}
-\end{equation}
-The validation-gate figure and CSV summaries are generated by
-\begin{equation}
-  \texttt{uv run --extra dev python examples/generate\_validation\_gate\_figures.py}.
-  \label{eq:validation-figure-generation-command}
-\end{equation}
-The reduced Gyaradax trace comparison is generated by
-\begin{equation}
-  \begin{aligned}
-  &\texttt{uv run --extra dev --extra reference python}\\
-  &\texttt{scripts/export\_gyaradax\_cyclone\_trace.py}.
-  \end{aligned}
-  \label{eq:gyaradax-trace-generation-command}
-\end{equation}
-The same exporter accepts two production profiles:
-\begin{center}
-  \texttt{--profile production-control}\\
-  \texttt{--profile production-control-smoke}
-\end{center}
-The matched GKW parallel-profile comparison is generated by
-\begin{equation}
-  \texttt{uv run --extra dev python examples/compare\_gkw\_parallel\_phi\_profile.py}.
-  \label{eq:gkw-parallel-phi-comparison-command}
-\end{equation}
 
-\subsection{Single-command stellarator scan}
+These passing gates are guardrails, not the end state.  Two confidence gaps are
+kept visible: full selected-mode GKW state-history parity remains open, and the
+multi-time GKW velocity-slice error grows from \(3.99\times10^{-3}\) at step 20
+to \(3.67\times10^{-2}\) by step 800.  They do not currently block the W7-X
+external-reference path, but they remain useful warnings against overclaiming.
 
-The first one-command stellarator run is now
-\begin{equation}
-  \texttt{uv run --extra dev python examples/run\_stellarator\_linear\_scan.py}.
-  \label{eq:stellarator-single-command}
-\end{equation}
-By default this command loads
-\path{fixtures/desc_geometry_dshape_rho05_alpha0.npz}, builds the imported
-DESC geometry on the stored \(N_z=33\) Boozer toroidal-angle grid, uses
-Chebyshev velocity grids with \(N_{v_\parallel}=N_\mu=3\), the centered
-\(k_x\) grid \(\{-0.45,0,0.45\}\), \(k_y\in\{0,0.35\}\), one kinetic ion
-species with \(R/L_n=0.8\), \(R/L_T=2.1\), adiabatic electrons, and a
-matrix-based parallel derivative.  It advances two one-step RK4 diagnostic
-windows with \(\Delta t=0.005\), normalizing each \(k_y\) chain after each
-window while accumulating the physical log-amplitude.
+\subsection{One-command stellarator scans}
 
-Before solving, the command applies a geometry preflight: all internal
-geometry fields must be finite, \(B>0\), the diagonal metric entries must be
-positive, the representative \(k_\perp^2\) grid must be nonnegative, and the
-solver-produced geometry must pass the GX/GS2 eik-export contract.  A run from
-a real DESC file can additionally require a matched external
-\path{eik.out} parity check through
-\texttt{--external-eik-reference}.  This preflight is now a public solver
-contract, \texttt{run\_stellarator\_geometry\_preflight}, which also performs
-an independent fourth-order finite-difference check of
-\(G=-F\,\partial_zB/B\) on the sampled grid.  The default DSHAPE fixture run
-passes the internal preflight with zero eik-export residual and
-finite-difference mirror-force error below \(10^{-2}\).
-
-The static flux-tube boundary contract is separated into
-\texttt{run\_mode\_boundary\_contract}.  It checks that zonal modes have
-identity boundary maps, nonzonal chains have open ends, linked shifts are
-reciprocal, and neighboring links are spaced by \(\texttt{ikxspace}\).  The
-same geometry preflight has also been exercised on the non-axisymmetric W7X
-GX/GIST eik fixture over one- and two-period field-line samples, so the current
-stellarator entry point tests both geometry values and linked-mode topology
-before a benchmark-specific growth-rate tolerance is attached.
-
-The command writes a reusable artifact directory:
-\begin{center}
-\begin{tabular}{ll}
-\path{geometry_audit.json} & \path{geometry_audit.csv} \\
-\path{ky_growth.csv} & \path{mode_structures.csv} \\
-\path{convergence_history.csv} & \path{convergence_metadata.json} \\
-\path{quasilinear_proxy.json} & \path{run_config.json}.
-\end{tabular}
-\end{center}
-For the default reduced DSHAPE smoke run, the finite late-fit growth rates are
-\[
-  \gamma(0)=-0.635553,\qquad
-  \gamma(0.35)=-0.612900,
-\]
-with corresponding real frequencies \(0.0280675\) and \(0.303845\).  The
-nonzonal quasilinear proxy is zero because the only nonzonal mode is damped in
-this short reduced setup.  These numbers are an executable integration and
-artifact-contract check, not a stellarator benchmark claim.
-
-A first real-geometry W7-X fixture is now stored in
-\path{fixtures/w7x_itg_reduced_benchmark/} and can be regenerated with
+The reduced imported-geometry scan is executable with
 \begin{verbatim}
-uv run python scripts/generate_w7x_itg_reduced_benchmark.py
+uv run python examples/run_stellarator_linear_scan.py
 \end{verbatim}
-It uses the GX W7-X adiabatic-electron ITG input
-\path{relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in}
-as the physics-control provenance and samples the real GX/GIST W7-X eik table
-recorded in the fixture metadata.  The file
-\path{fixtures/w7x_itg_reduced_benchmark/benchmark_metadata.json} stores the
-exact local path and hash for this GX VMEC high-resolution GIST source.
-The GX input specifies \(s=\texttt{torflux}=0.64\), \(\alpha=0\),
-\(N_\theta=256\), \(N_{k_y}=28\), \(N_{k_x}=1\), \(N_H=16\),
-\(N_L=8\), ion gradients \(a/L_n=1\) and \(a/L_T=3\), and adiabatic
-electrons.  The committed reduced solver fixture uses \(N_z=33\), one
-field-line period, \(k_y=(0,0.1,0.2,0.3)\), \(N_{k_x}=3\),
-\(N_{v_\parallel}=N_\mu=4\), Chebyshev velocity collocation, and six
-one-step RK4 diagnostic windows with \(\Delta t=0.002\).  Its geometry
-preflight passes the GX/GS2 eik export contract with zero residual; the
-finite-difference mirror-force check is disabled for this imported eik path
-because the eik drift column is used as a GX-style drift proxy rather than as
-an independently sampled \(-F\,\partial_zB/B\) field.
+By default it loads \path{fixtures/desc_geometry_dshape_rho05_alpha0.npz}, runs
+a short fixed-topology linear scan, and writes geometry audits, growth/frequency
+tables, mode structures, convergence metadata, and a quasilinear proxy.  The
+same command can read DESC paths, eik tables, and stella \path{.geometry}
+files.  Before solving, it applies the shared geometry-preflight contract:
+finite fields, positive \(B\), positive metric diagonals, representative
+nonnegative \(k_\perp^2\), GX/GS2 eik-export compatibility, and an optional
+finite-difference mirror-force check when the source data supports it.  The
+separate mode-boundary contract checks zonal identity maps, nonzonal open chain
+ends, reciprocal linked shifts, and \texttt{ikxspace} spacing.
 
-The reduced W7-X output is finite and damped on this short-window setup:
-\[
-\begin{array}{c|cccc}
-k_y & 0 & 0.1 & 0.2 & 0.3\\ \hline
-\gamma &
--0.181828 & -0.181761 & -0.181065 & -0.180239\\
-\omega_r &
-0.035271 & 0.030532 & 0.020894 & 0.009369
-\end{array}
-\]
-These scalar and complex \(\phi(z)\) mode-structure files are therefore
-regression artifacts for the current solver implementation.  They should be
-replaced by, or compared against, a matched external W7-X time-history or
-mode-structure fixture before claiming stellarator growth-rate parity.  The
-preferred route is now stella, because it is a CPU continuum gyrokinetic code
-with W7-X VMEC examples rather than a GPU-native Hermite--Laguerre moment
-reference.  The local stella checkout builds on CPU, and the bundled
-\texttt{LINEAR\_W7X\_SINGLEMODE} example has been run as a smoke test.  Its
-exported \(k_y=0.5\) fixture gives
-\(\gamma=0.0948506\) and \(\omega_r=-0.0280970\), but that run uses stella's
-kinetic-electron \(s=0.49\) example and is not yet matched to the current
-adiabatic-electron \(s=0.64\) W7-X gate.
+A real-geometry reduced W7-X fixture is stored in
+\path{fixtures/w7x_itg_reduced_benchmark/}.  It uses the local GX/GIST W7-X eik
+geometry and GX W7-X adiabatic-electron ITG input as provenance.  Its scalar
+outputs are finite regression artifacts, not an external growth-rate claim; the
+fixture is deliberately guarded by production-readiness ledgers.
 
-The matched stella input is now prepared in
-\path{fixtures/stella_w7x_mode_structure_run/}.  It uses the GX benchmark
-VMEC file, \(s=\texttt{torflux}=0.64\), \(\alpha=0\), a field-line length
-\(\texttt{nfield\_periods}=34.75236\) computed from the GX eik value of \(q\),
-one kinetic ion species, stella's adiabatic-electron
-\texttt{field-line-average-term} response, \(k_y=(0,0.1,0.2,0.3)\), \(k_x=0\),
-\(\texttt{nzed}=256\), \(\texttt{nmu}=8\), \(\texttt{nvgrid}=16\),
-\(\texttt{tend}=200\), \(\Delta t=0.1\), and the same late-half time window
-used by the fixture exporter.  A reduced matched-physics smoke with the same
-VMEC, surface, electron model, \(k_y\) set, and field-line-length formula has
-run successfully and exported \(k_y=(0.1,0.2,0.3)\), verifying the input
-contract and stella \texttt{.out.nc} schema.  The full matched stella
-execution has now also completed on one CPU in about \(295\,\mathrm{s}\).  It
-produced \path{fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.out.nc},
-which was exported to the shared external fixture
+\subsection{Matched W7-X stella reference}
+
+The preferred current external W7-X reference is stella, because it is a CPU
+continuum gyrokinetic code and can run the matched W7-X case locally.  The
+prepared directory \path{fixtures/stella_w7x_mode_structure_run/} uses the GX
+benchmark VMEC file, \(\texttt{torflux}=0.64\), \(\alpha=0\), adiabatic
+electrons, \(k_y=(0,0.1,0.2,0.3)\), \(k_x=0\), \(\texttt{nzed}=256\),
+\(\texttt{nmu}=8\), \(\texttt{nvgrid}=16\), \(\texttt{tend}=200\), and a
+late-half-window growth convention.  The full matched run completed on one CPU
+in about \(295\,\mathrm{s}\) and was exported to
 \path{fixtures/w7x_itg_external_mode_structure_fixture.csv}.  The exported
-fixture contains 257 z points for each of \(k_y=(0.1,0.2,0.3)\).  With the
-late-half-window diagnostic, stella gives
+stella values are
 \[
-\gamma=(-7.797962\times10^{-4},\;-4.876057\times10^{-3},\;
-9.619444\times10^{-3}),
+\gamma=(-7.797962\times10^{-4},-4.876057\times10^{-3},9.619444\times10^{-3}),
 \]
-and
 \[
-\omega_r=(-6.573003\times10^{-2},\;-1.181846\times10^{-1},\;
--2.849346\times10^{-3}).
+\omega_r=(-6.573003\times10^{-2},-1.181846\times10^{-1},-2.849346\times10^{-3})
 \]
-The exact reproduction commands are
-\begin{verbatim}
-bash fixtures/stella_w7x_mode_structure_run/run_stella_reference.sh
-bash fixtures/stella_w7x_mode_structure_run/export_stella_fixture.sh
-\end{verbatim}
-The second command converts the stella output into the shared fixture format,
-runs the mode-structure comparison with reference-to-observed z resampling,
-and refreshes the W7-X readiness ledger.  Equivalently, a stella output can be
-converted manually with
-\begin{verbatim}
-uv run python examples/export_stella_mode_structure_fixture.py \
-  --stella-output path/to/input.out.nc \
-  --ky-values 0.1,0.2,0.3 \
-  --stella-z-coordinate zed_over_2pi \
-  --output fixtures/w7x_itg_external_mode_structure_fixture.csv
-\end{verbatim}
-The first reduced solver comparison was open, not missing: comparing the
-short reduced W7-X fixture to the stella fixture gave maximum growth,
-real-frequency, and phase-aligned profile errors \(1.89858341\times10^{-1}\),
-\(1.39078602\times10^{-1}\), and \(3.02836095\times10^{-1}\), respectively,
-after exporting stella with normalized \(z=\texttt{zed}/(2\pi)\).  The
-ordered audit
-\begin{verbatim}
-uv run python scripts/audit_w7x_stella_solver_parity.py
-\end{verbatim}
-wrote a JSON report in the W7-X convergence fixture directory.  For that
-reduced fixture, normalized z and selected \(k_y\) passed, while field-line
-length, \(N_{k_x}=3\) linking, and the short time window failed.  Those were
-control mismatches against stella, not evidence for a velocity-space or
-RHS-term physics error.
+for \(k_y=(0.1,0.2,0.3)\).
 
-The first solver fixture matched to the stella geometry and mode controls is
-now generated with
-\begin{verbatim}
-uv run python examples/run_stellarator_linear_scan.py \
-  --geometry-source stella-geometry \
-  --stella-geometry fixtures/stella_w7x_mode_structure_run/\
-stella_w7x_adiabatic_electrons.geometry \
-  --output-dir fixtures/w7x_itg_stella_matched_observed \
-  --n-kx 1 --kx-max 0.0 --ikxspace 1 \
-  --ky-values 0.1,0.2,0.3 \
-  --n-vpar 4 --n-mu 4 --vpar-max 2.0 --mu-max 1.5 \
-  --density 1.0 --temperature 1.0 \
-  --density-gradient 1.0 --temperature-gradient 3.0 \
-  --electron-density 1.0 --electron-temperature 1.0 \
-  --dt 0.001 --steps-per-window 1 --n-windows 6 \
-  --growth-diagnostic late_fit --growth-window-fraction 0.5
-\end{verbatim}
-This path imports the stella \(\texttt{.geometry}\) table directly, drops the
-duplicate periodic endpoint, reconstructs exact normalized
-\(z\in[-0.5,0.5)\), and scales the stella streaming coefficient as
-\(F=\texttt{b.Gz}/(2\pi)\) because the solver differentiates with respect to
-\(\texttt{zed}/(2\pi)\).  The ordered audit for this matched observed fixture
-passes normalized \(z\), field-line length, selected \(k_y\), and
-\(N_{k_x}=1\) linking.  The first remaining failed check is now
-growth-window/time normalization: the current observed fixture is only a
-short smoke trace with total time \(0.006\), whereas the stella reference uses
-\(\texttt{tend}=200\) and a late-half growth window.  Its current
-mode-structure comparison is therefore still open, with maximum growth,
-real-frequency, and phase-aligned profile errors
-\(6.57936105\times10^{-1}\), \(1.07769929\times10^{-1}\), and
-\(1.10702057\times10^{-1}\), respectively.  The next validation step is a
-staged long-time run using the same imported geometry and mode controls before
-changing velocity-space or RHS terms.
-
-That staged run is now automated by
-\begin{verbatim}
-uv run python scripts/run_w7x_stella_matched_time_ladder.py
-\end{verbatim}
-and writes \path{fixtures/w7x_itg_stella_matched_time_ladder/}.  It holds the
-stella geometry, \(k_x=0\), \(N_{k_x}=1\), selected \(k_y\) values, species
-gradients, and late-half growth convention fixed while running
-\(t_{\rm end}=0.006,1,5,20,100,200\).  The \(t_{\rm end}=100\) and
-\(t_{\rm end}=200\) cases pass the ordered growth-window/time-normalization
-check; the \(t_{\rm end}=200\) case matches stella's total time and the
-ordered audit now stops at \(\texttt{velocity\_rhs\_terms}\).  Extending the
-trace therefore removes the dominant scalar-growth discrepancy:
+The solver can now import the stella \path{.geometry} table directly.  After
+matching normalized \(z\), field-line length, selected \(k_y\), \(k_x=0\), and
+late-time growth-window controls, the \(t=200\) comparison has good growth
+agreement,
 \[
-\max_{k_y} |\gamma_{\rm solver}-\gamma_{\rm stella}|
-  = 8.00978267\times 10^{-3}
-\quad (t_{\rm end}=200),
+\max_{k_y}|\gamma_{\rm solver}-\gamma_{\rm stella}|=8.00978267\times10^{-3},
 \]
-down from \(6.57936105\times10^{-1}\) in the short smoke fixture.  The W7-X
-gate remains open because the corrected real-frequency and phase-aligned
-profile errors are still \(1.65618027\times10^{-1}\) and
-\(1.86133427\times10^{-1}\), respectively.  The frequency diagnostic now uses
-consecutive late-window phase increments rather than a single long endpoint
-phase difference, avoiding modulo-\(2\pi\) aliasing over the \(t=100\) late
-window.  With this correction \(k_y=0.1\) and \(k_y=0.2\) pass the frequency
-tolerance, while \(k_y=0.3\) remains discrepant.  A convention audit over
-frequency sign/scale, profile conjugation, z reversal, and circular shifts
-does not close the profile gate; the active W7-X discrepancy has therefore
-moved from time-window control to velocity-space or linear RHS-term parity.
+but the W7-X gate remains open.  The remaining discrepancy is concentrated in
+\(k_y=0.3\): the closest stella-scale finite-difference velocity case has
+\(\Delta\omega_r=-1.65161421\times10^{-1}\) and phase-aligned profile error
+\(1.56517320\times10^{-1}\).  Frequency sign, affine rescaling, profile
+conjugation, z reversal, circular shifts, longer time windows, and simple
+velocity-grid refinement do not close the gate.
 
-The velocity-space part of that question is now separated by
-\begin{verbatim}
-uv run python scripts/run_w7x_stella_velocity_discriminator.py
-\end{verbatim}
-which writes the artifact directory
-\begin{verbatim}
-fixtures/w7x_itg_stella_velocity_discriminator/
-\end{verbatim}
-This discriminator keeps the stella geometry, \(k_x=0\), \(N_{k_x}=1\), selected \(k_y\), species
-parameters, and \(t_{\rm end}=200\) fixed, and varies only velocity-space
-resolution/backend.  The tested cases are Chebyshev \(4\times4\),
-\(6\times6\), \(8\times8\), and a GKW-style finite-difference \(16\times8\)
-velocity grid.  The stella-level finite-difference case does not close the
-dominant \(k_y=0.3\) discrepancy:
-\[
-  \Delta\gamma=-1.34926315\times10^{-2},\qquad
-  \Delta\omega_r=-1.65161421\times10^{-1},\qquad
-  \epsilon_\phi=1.56517320\times10^{-1}.
-\]
-The Chebyshev \(8\times8\) case instead jumps to a different strongly growing
-branch, with maximum growth error \(2.47148401\times10^{-1}\) and maximum
-frequency error \(3.24324431\).  Thus simple velocity-grid refinement is not
-the primary explanation.  The next W7-X target is term-level RHS/model parity
-for the \(k_y=0.3\) mode: streaming/mirror, magnetic drift, equilibrium drive,
-parallel-field drive, drift-field drive, quasineutrality, FLR factors,
-velocity measure, and stella drift/metric normalization on the same imported
-geometry.
+\subsection{Current W7-X blocker}
 
-The corresponding solver-side term-balance audit is
-\begin{verbatim}
-uv run python scripts/audit_w7x_ky03_rhs_model_balance.py
-\end{verbatim}
-and writes
-\begin{verbatim}
-fixtures/w7x_ky03_rhs_model_balance/
-\end{verbatim}
-For the focused finite-difference velocity case, \(N_{v_\parallel}=16\),
-\(N_\mu=8\), \(k_y=0.3\), and \(t_{\rm end}=200\), the audit reconstructs the
-matrix-free RHS with stored maximum error zero and gives a quasineutrality
-residual RMS of \(1.07538482\times10^{-16}\).  The selected-mode RHS is
-streaming dominated:
+The active W7-X task is term-array parity for \(k_y=0.3\).  The solver-side
+balance fixture \path{fixtures/w7x_ky03_rhs_model_balance/} reconstructs the RHS
+with zero stored error and has quasineutrality residual near machine precision.
+Its selected-mode RHS is streaming dominated:
 \[
-\begin{array}{c|c|c}
-\hbox{term} & \|R_{\rm term}\|_2/\|R\|_2 &
-\Re\langle R,R_{\rm term}\rangle/\langle R,R\rangle\\
+\begin{array}{c|c}
+\hbox{term} & \|R_{\rm term}\|_2/\|R\|_2 \\
 \hline
-\hbox{parallel streaming} & 1.11324006 & 0.91473576\\
-\hbox{magnetic drift} & 0.53073047 & 0.04231446\\
-\hbox{mirror force} & 0.32597147 & 0.01454095\\
-\hbox{parallel field drive} & 0.13985170 & 0.02103275
+\hbox{parallel streaming} & 1.11324006\\
+\hbox{magnetic drift} & 0.53073047\\
+\hbox{mirror force} & 0.32597147\\
+\hbox{parallel field drive} & 0.13985170
 \end{array}
 \]
-The next comparison should therefore be against a stella distribution,
-RHS/source-term, or moment trace at the same \(k_y=0.3\) state.  Until that
-comparison is complete, the audit is an internal model-balance diagnostic, not
-a stella parity proof.
 
-The standard stella output has now been audited for this purpose:
-\begin{verbatim}
-uv run python scripts/audit_w7x_stella_ky03_trace_contract.py
-\end{verbatim}
-which writes
-\path{fixtures/w7x_ky03_stella_trace_contract/}.  This audit selects the
-matched stella \(k_y=0.3\), \(k_x=0\) mode, drops the duplicate periodic
-endpoint, and compares the available \(\texttt{.out.nc}\) geometry and field
-arrays against the solver-side balance fixture.  The normalized coordinate
-matches to \(5.55111512\times10^{-17}\).  The streaming multiplier comparison,
-using \(F=\texttt{b\_dot\_gradz}/(2\pi)\), has maximum error
-\(6.74434460\times10^{-7}\).  The remaining direct differences,
-\(\max|B_{\rm stella}-B_{\rm solver}|=4.94655108\times10^{-4}\) and
-\(\max|k_{\perp,\rm stella}^2-k_{\perp,\rm solver}^2|
-=3.98411722\times10^{-4}\), are consistent with the rounded ASCII stella
-\texttt{.geometry} file used by the solver fixture; strict full-precision
-\(\texttt{.out.nc}\) equality is therefore not the right contract for this
-artifact.
+Standard stella output is enough to verify normalized \(z\), \(F=b\cdot\nabla
+z/(2\pi)\), \(B\), and \(k_\perp^2\) at the precision of the rounded
+\path{.geometry} table, but it does not contain complex distribution or
+per-term RHS/source arrays.  A non-destructive stella source-copy patch now
+emits a selected-mode explicit-term trace for Fortran \texttt{iky=4},
+\texttt{ikx=1}.  The raw trace is intentionally kept in \path{/tmp}; the compact
+summary is stored in
+\path{fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json}.
 
-The same audit records the standard-output blocker as a missing complex stella
-RHS trace.
-Standard stella diagnostics contain complex \(\phi(z)\) and
-distribution-energy proxies such as \path{g2_vs_zkykxs}, but not the complex
-distribution
-\(g(v_\parallel,\mu,z,k_x,k_y,s)\) or per-term RHS/source deltas.
+The first RHS-trace comparator converts stella-native
+\(\texttt{rhs}\Delta t\) records to continuous-time RHS norms and compares
+scale-free term fractions.  It exposed one concrete convention fix:
+the stella-imported equilibrium-gradient drive coefficient must use the
+stella global-header \texttt{flux\_fac}.  After this correction, the solver
+and stella scalar fractions are
+\[
+\begin{array}{c|cc}
+\hbox{group} & \hbox{stella} & \hbox{solver}\\
+\hline
+\hbox{parallel streaming bundle} & 0.89595108 & 1.16029482\\
+\hbox{mirror force} & 0.29866891 & 0.24474080\\
+\hbox{magnetic drift bundle} & 0.42804911 & 0.56430754\\
+\hbox{equilibrium drive} & 0.77998161 & 0.61459833
+\end{array}
+\]
+The old solver equilibrium-drive fraction was \(0.07783134\), so the
+\texttt{flux\_fac} correction removed the dominant scalar error.  The remaining
+blocker is a contract mismatch rather than a justified physics change: the
+current stella trace has a duplicate z endpoint, \(N_{v_\parallel}=32\),
+\(v_\parallel\in[-3,3]\), large Gauss-like \(\mu\) nodes, and no velocity
+weights, while the committed solver balance fixture stores scalar summaries on
+a smaller grid.  The next run should use the trace format with \texttt{wgts\_vpa}
+and z-dependent \texttt{wgts\_mu}, then compare weighted complex arrays on a
+shared or explicitly interpolated grid before changing the streaming/mirror
+physics.
 
-A targeted non-destructive stella source-copy patch now supplies that missing
-term trace:
-\begin{verbatim}
-uv run python scripts/prepare_stella_w7x_rhs_trace_run.py \
-  --overwrite --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
-\end{verbatim}
-The generated diagnostic input keeps the same W7-X surface, \(k_y=0.3\)
-selected by Fortran \(\texttt{iky}=4\), \(\texttt{ikx}=1\), and the same
-late-time \(t=200\) endpoint, but forces mirror and parallel streaming through
-the explicit RHS path so that \(\texttt{add\_explicit\_gyrokinetic\_terms}\)
-can expose their deltas.  The raw file
-\path{/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat}
-contains \(1{,}382{,}403\) data rows and is not versioned.  The committed
-JSON summary fixture records
-\(\texttt{required\_record\_terms\_present=true}\), stella-native
-\(\texttt{rhs}\Delta t\) units, and nonzero norms for mirror force,
-magnetic-drift-y, equilibrium drive, parallel streaming, and total RHS.  The
-\(k_x=0\) magnetic-drift-x record is present with zero norm, as expected.
+\subsection{Optimization status}
 
-The remaining task is direct array-level comparison of this stella trace with
-\path{fixtures/w7x_ky03_rhs_model_balance/}.  That comparison should first
-divide stella RHS deltas by \(\Delta t\) if continuous-time RHS units are
-needed, then check the distribution, parallel streaming, mirror force,
-magnetic drift, equilibrium drive, total RHS, and field normalization on the
-same imported geometry.
+The optimization layer is useful for plumbing and reduced studies.  It exposes
+single-surface objectives, scans over \(\rho\), \(\alpha\), and \(k_y\),
+selected-growth and quasilinear proxy objectives, benchmark-target least-square
+wrappers, and examples that differentiate through a fixed number of RK4 steps.
+DESC coupling currently uses sampled geometry arrays or optional DESC path
+loading; integer topology and remeshing remain static.  Therefore the DESC
+examples should remain labeled reduced until the W7-X external parity,
+production convergence, and guarded CPU-timing ledgers pass.
 
-The older GX route is still prepared in
-\path{fixtures/gx_w7x_mode_structure_run/}: its metadata contains a patched
-GX W7-X input, a command to copy the local VMEC file into the run directory, a
-GX run command that should produce the matching \(\texttt{.out.nc}\) and
-\(\texttt{.big.nc}\) files, an export command for
-\path{fixtures/w7x_itg_external_mode_structure_fixture.csv}, and a selected
-\(k_y=(0.1,0.2,0.3)\) phase-aligned comparison command against the committed
-solver fixture.  The comparison itself is executable through
-\begin{verbatim}
-uv run python examples/run_w7x_mode_structure_gate.py
-\end{verbatim}
-which now compares against the exported stella fixture by default and reports
-an open growth, frequency, and profile gate until solver/stella parity is
-resolved.
-The external GX workflow is also executable as a status-producing driver:
-\begin{verbatim}
-uv run python scripts/run_w7x_external_reference_workflow.py
-\end{verbatim}
-For transfer to a GX/CUDA machine, the prepared input, VMEC file, handoff
-scripts, and SHA-256 manifest can be packaged as an overlay for a full
-repository checkout with
-\begin{verbatim}
-uv run python scripts/package_w7x_external_reference_bundle.py \
-  --output /tmp/w7x_external_reference_bundle.tar.gz
-\end{verbatim}
-The local run directory also contains a generated
-\texttt{w7x\_external\_reference\_bundle.tar.gz}, and the W7-X VMEC file has
-been copied into that directory.  The workflow still reports
-\(\texttt{blocked\_missing\_gx\_executable}\): this local checkout has no
-CUDA/NVIDIA-capable GX executable and no retained W7-X \(\texttt{.big.nc}\) or
-\(\texttt{.out.nc}\) outputs.  On a GX-capable machine, use the checked-in
-handoff command below; if the retained outputs are produced, the workflow
-exports the external fixture CSV for the parity gate above.
-\begin{verbatim}
-GX_EXECUTABLE=/path/to/gx bash \
-  fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
-\end{verbatim}
-After the returned GX files are copied back, the repository-side ingest and
-gate refresh command is
-\begin{verbatim}
-bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
-  --copy-outputs --resample-reference-to-observed-z
-\end{verbatim}
-After that parity fixture passes, the production CPU timing/readiness handoff
-is
-\begin{verbatim}
-bash fixtures/gx_w7x_mode_structure_run/run_production_timing_after_parity.sh
-\end{verbatim}
+\subsection{Production criteria}
 
-A reduced W7-X convergence/timing study is stored in
-\path{fixtures/w7x_itg_convergence_study/} and regenerated by
-\begin{verbatim}
-uv run python scripts/run_w7x_reduced_convergence_study.py
-\end{verbatim}
-It varies \(N_z\), \(N_{v_\parallel},N_\mu\), \(N_{k_x}\), field-line length,
-time step, and growth-window diagnostic around the reduced baseline above.
-The time-step and diagnostic-window checks are self-consistent:
-for \(k_y=0.3\), halving \(\Delta t\) while doubling steps per window changes
-\(\gamma\) by only \(-4.49\times10^{-11}\), and replacing the late fit by the
-late-window mean changes \(\gamma\) by \(-2.98\times10^{-6}\).  The grid and
-domain checks are not yet converged: the two-period field line remains damped
-but shifts \(\gamma(0.3)\) by \(-1.11\times10^{-1}\), while the
-\(N_z=49\), velocity-resolution, and \(N_{k_x}=5\) variants move to positive
-growth in this short reduced setup.  Thus the W7-X fixture is currently a
-real-geometry regression and artifact contract, not a trusted stellarator
-growth-rate benchmark.  The same study records a production-control memory
-estimate for the GX W7-X dimensions
-\((N_z,N_{k_x},N_{k_y},N_{v_\parallel},N_\mu)=(256,1,28,16,8)\):
-the estimated two-state linear storage is \(51.14\,\mathrm{MiB}\).  No
-production CPU runtime claim is made until the external W7-X parity and
-production convergence gates pass.
-The corresponding production-readiness ledger is generated by
-\begin{verbatim}
-uv run python scripts/run_w7x_production_readiness_gate.py
-\end{verbatim}
-and stored with the W7-X convergence fixture.  In the current repository
-state, the reduced convergence regression passes:
-the maximum \(\Delta t/2\) growth-rate change is
-\(4.52\times 10^{-11}\), and the late-window diagnostic change is
-\(3.07\times 10^{-6}\), both within their reduced-regression tolerances.
-The full production gate remains blocked by the open external mode-structure
-parity gate against the stella fixture, and by the post-parity production CPU
-timing artifact.  Therefore DESC-driven optimization remains labeled reduced
-rather than production-validated.
-The timing contract itself is executable through
-\begin{verbatim}
-uv run python scripts/run_w7x_production_cpu_timing.py
-\end{verbatim}
-which currently writes the production-control dimensions and memory estimate
-with status \(\texttt{blocked\_until\_external\_parity\_passes}\).  This avoids
-turning a local development timing run into a production claim.  The reduced
-DESC optimization example reads the same ledger and exits if invoked with
-\(\texttt{--require-production-ready}\) while the W7-X gate is still open.
-
-\subsection{What remains for a full stellarator run}
-
-The implementation now has the core linear architecture requested in
-\path{task.tex}: perpendicular Fourier modes, spectral/collocation operators
-with GKW fallback stencils, a self-consistent electrostatic residual,
-time-advance diagnostics, imported stellarator geometry, and fixed-topology
-differentiable objectives.  What remains before a trusted stellarator
-simulation claim is validation and production-control execution:
+Before claiming a trusted linear stellarator run, the project needs:
 \begin{enumerate}
-  \item Resolve the matched stella W7-X parity gap.  The CPU stella run,
-  external fixture, stella-imported solver fixture, long-time ladder, and
-  velocity-resolution discriminator now exist.  Growth is close at the matched
-  \(t=200\) controls, but the \(k_y=0.3\) real frequency and phase-aligned
-  \(\phi(z)\) remain open.  The solver-side \(k_y=0.3\) RHS/model balance now
-  exists and is streaming dominated.  A matched explicit-term stella
-  distribution/RHS/source trace now exists, so the next task is direct
-  stella-vs-solver term-array comparison on the same imported geometry.
-  \item Rerun the W7-X solver at production-shape controls, then repeat the
-  convergence ladder in \(N_z\), velocity resolution, \(k_x/k_y\), field-line
-  length, time step, and growth-window choice.  The current reduced W7-X
-  ladder is useful as a regression artifact, but it is not grid/domain
-  converged.
-  \item Rerun production CPU timing only after external parity passes, and
-  check whether the \(\mathcal O(1)\)-minute target on
-  \(\mathcal O(100)\) CPUs from \path{task.tex} is credible.
-  \item Keep DESC optimization labeled reduced until the production-readiness
-  ledger passes.  The current DESC examples differentiate through fixed
-  topology and sampled geometry arrays; they are not full equilibrium
-  optimization campaigns.
+  \item weighted stella-vs-solver \(k_y=0.3\) term-array parity, or a documented
+  convention difference justified by arrays rather than scalar norms;
+  \item a passing W7-X mode-structure gate against the matched stella fixture;
+  \item a production-control W7-X convergence ladder in field-line length,
+  \(N_z\), velocity resolution/backend, \(k_x/k_y\), timestep, and growth-window
+  diagnostic;
+  \item a guarded production CPU timing result after parity passes;
+  \item an updated readiness ledger that allows production DESC optimization.
 \end{enumerate}
 
-The principal discrepancies to resolve are also now narrow.  The selected
-Cyclone scalar growth, RHS/action trace, normalization, and row-normalized
-\texttt{parallel\_phi.dat} contracts are strong regression gates, but full
-selected-mode GKW state-history parity remains open: the phase-aligned
-\(\phi(z)\) error peaks near \(5.85\times10^{-2}\), the full-state error near
-\(4.78\times10^{-2}\), and the worst relative state error near
-\(3.19\times10^{-1}\) at the middle snapshot.  The multi-time velocity-slice
-error grows from \(3.99\times10^{-3}\) at step 20 to \(3.67\times10^{-2}\) by
-step 800, so the remaining mismatch is cumulative evolution through the fused
-\(\texttt{ltrapping\_arakawa}\)/\(\texttt{igh}\) path, Term VII, field packing,
-or Fourier sign conventions, not a simple final-output layout.
-
-A full nonlinear turbulence stellarator run is a later milestone, not the
-current implemented solver.  It requires the nonlinear ExB bracket with
-pseudo-spectral dealiasing, nonlinear timestep control, saturated heat-flux
-diagnostics, nonlinear benchmark parity, and then extensions such as kinetic
-electrons, collisions, and electromagnetic perturbations.
-
-\subsection{Validation-gate example}
-
-Figure~\ref{fig:validation-gate-status} shows the current reduced validation
-state.  The left panel evaluates the late-window Rosenbluth--Hinton metric
-\eqref{eq:rh-plateau-gate} on short smoke-test windows using
-\(N_z=8\), \(N_{v_\parallel}=6\), \(N_\mu=4\),
-\(\Delta t=0.01\), the GKW cell-centered \(s\)-grid, the nonzero zonal
-\(k_x\rho_s=0.025\) mode, and in-residual GKW-scaled
-\(\texttt{disp\_par}=0.01\) and \(\texttt{disp\_vp}=0.08\).  Over
-\(t_{\mathrm{end}}\in[0.02,0.10]\), the measured
-metric decreases only from \(0.9994\) to \(0.9907\), far from the documented
-Rosenbluth--Hinton residual \(0.0711\).  The gate is therefore correctly
-reported as open rather than artificially calibrated.
-
-The right panel summarizes eight executable gates.  The imported GX/GS2 eik
-metric contract, the DESC DSHAPE geometry-to-eik export contract, the matched
-DESC/GX block-eik fixture, and the independent three-producer GX/VMEC GIST eik
-suite pass with zero residual.  The CBC term-level audit also passes with zero reported error,
-and the true RH late-plateau gate passes with normalized residual
-\(-6.87\times10^{-1}\).  The production-control Cyclone selected-\(k_y\) gate
-now passes in the figure ledger with late-fit growth \(0.1867\) against the
-\(0.179\) reference; the separate GKW-style late-window-mean regression gives
-\(0.1780\).  The short RH endpoint smoke gate remains open with normalized
-residual \(9.25\times10^2\).
-This figure is the current validation ledger: stellarator geometry can now
-enter through the DESC array path and be audited through GX/GIST/DESC-eik
-metric and drift contracts, while the remaining production hardening items are
-the full selected-mode state-history/velocity-space parity check against GKW
-and the external W7-X mode-structure parity gate.  The same generator also
-writes reduced Cyclone trace CSVs under \path{figures/}.  The Gyaradax
-physical trace comparisons pass on the reduced, production-smoke, and
-production-control profiles, with maximum errors \(1.24\times10^{-2}\),
-\(1.33\times10^{-3}\), and \(1.02\times10^{-2}\).  The GKW
-\texttt{simple\_example} and matched selected-\(k_y\) time traces are also
-converted to the common trace format.  The richer matched GKW
-parallel-potential diagnostic is retained as a mode-structure regression
-artifact, and its solver/GKW profile-shape comparison is stored under
-\path{figures/}.
-For multi-\(k_y\) calibration, the public scan gate now has a companion audit
-that ranks candidate \(k_\theta\rho_s\)-to-\(\texttt{krho}\) conventions,
-observed frequency sign/scale, late-time growth diagnostic, and
-field-normalization model.  A
-deliberately tiny two-window GX smoke audit at \(k_y=(0.3,0.5)\) is finite but
-open: the expanded diagnostic/normalization variants tie at this resolution
-with maximum growth and frequency errors \(2.23\) and \(29.76\).  The script
-\path{examples/run_cyclone_ky_scan_calibration.py} writes the corresponding
-candidate-by-\(k_y\) CSV table for reduced or production-control settings.
-After explicitly calibrating the GX growth curve to the GKW/Gyaradax selected
-Cyclone target at \(k_y=0.5\), the production-control scan wrapper passes that
-anchor with growth error \(1.00\times10^{-3}\).  The calibrated two-point scan
-still fails at low \(k_y\): the best tested memory-light GX-style setup gives
-\(\gamma(k_y=0.3)=0.138\) versus calibrated reference \(0.308\).  A subsequent
-GX input-convention audit found an additional domain mismatch that must be
-removed before interpreting this as an RHS defect: GX's
-\texttt{ntheta=32} is per \(2\pi\) segment and, with \texttt{nperiod=2}, the
-full stored field-line grid is \(N_z=96\), not 32.  The same audit records the
-remaining true cross-method differences: GX uses a linked boundary,
-Hermite--Laguerre moment evolution with \(48/16\) moments, and a default
-\(k_z\)-dependent hypercollision model, while the current scan path is still the
-collocation/GKW-parity RHS and lacks a per-\(k_y\) complex eigenfunction
-fixture.  The next meaningful comparison is therefore the calibrated
-\texttt{gx-salpha-input} scan on the \(96/48/16\) grid.  That exact-grid scan
-was run with the calibrated GX curve and internal-\(k_\rho\) convention; it
-remains open with
-\(\gamma(k_y=0.3)=0.1433\) versus \(0.3080\) and
-\(\gamma(k_y=0.5)=0.1476\) versus \(0.179\).  Thus the corrected domain is not
-the sole explanation.  The first GX moment-space discriminator has now been
-implemented as a source-matched linked-boundary \(k_z\) hypercollision
-contribution for Hermite--Laguerre coefficients \(G_{\ell m}\):
-\begin{equation}
-  R_{\ell m}^{(k_z{\rm hyp})}
-  =
-  \left|\partial_z\right|_{\rm link}
-  \left[-\nu_m G_{\ell m}\right],
-  \qquad
-  \nu_m =
-  \begin{cases}
-  \nu_{\rm hyp}
-  \dfrac{p+1/2}{M^{p+1/2}}\,
-  2.3\,v_t\,|\nabla_\parallel|\,m^p, & m>2,\\[0.9em]
-  0, & m\le 2,
-  \end{cases}
-\end{equation}
-with \(M=N_m-1\).  The linked operator uses GX's chain ordering
-\(k_z=i/(Z_p n_{\rm link})\) up to the Nyquist branch and
-\((i-N_z n_{\rm link})/(Z_p n_{\rm link})\) on the negative branch, with the
-same optional one-third dealias mask.  This contribution is tested, JIT
-compatible, and differentiable with respect to the moment amplitudes.
-
-The implementation-side fallback discriminator now wraps this term in a reduced
-GX-style Hermite--Laguerre linear RHS for the s-alpha adiabatic-electron ITG
-case.  With moment layout \(G_{\ell m}(k_y,z)\), it solves
-\[
-  \phi(k_y,z)
-  =
-  \frac{\sum_{\ell} J_\ell(b)G_{\ell 0}(k_y,z)}
-  {\tau + 1 - \sum_\ell J_\ell(b)^2},
-  \qquad
-  J_\ell(b)=e^{-b/2}\frac{(-b/2)^\ell}{\ell!},
-\]
-and advances
-\[
-\begin{aligned}
-  \partial_t G
-  ={}&
-  - a_\parallel v_\parallel \partial_z^{\rm link}G \\
-  &+ i k_y a_\ast \phi
-  \left[
-    a_n J_\ell
-    + a_T\left((\mu B-1)J_\ell
-    + \frac{v_\parallel^2-1}{2}J_\ell\right)
-  \right] \\
-  &- i k_y a_d\,\omega_d^{s\alpha}(z)
-    \left(\frac{v_\parallel^2}{2}+\mu B\right)G
-  + R^{(k_z{\rm hyp})}.
-\end{aligned}
-\]
-The \(v_\parallel\), \(v_\parallel^2\), and \(\mu B\) multiplications are
-applied by the tested Hermite and Laguerre modal matrices, and
-\(\partial_z^{\rm link}\) uses the same linked Fourier ordering as the
-hypercollision.  This is not a full GX replacement, but it is an independent
-moment-space producer of the same per-\(k_y\) complex fixture used by the
-collocation solver and external-code gates.
-
-The mode-structure side of this discriminator now has an explicit fixture and
-gate contract.  A per-\(k_y\) fixture stores \(k_y\), the parallel grid \(z_j\),
-complex \(\phi_{k_y}(z_j)\), growth rate, real frequency, normalization label,
-source, and metadata.  The comparison gate matches \(k_y\), verifies the
-parallel grid, row-normalizes each complex profile, removes a single complex
-phase/amplitude per \(k_y\), and reports
-\[
-  \epsilon_\phi(k_y)
-  =
-  \max_j
-  \left|
-  \widehat{\phi}^{\rm obs}_{k_y}(z_j)
-  -
-  c_{k_y}\widehat{\phi}^{\rm ref}_{k_y}(z_j)
-  \right|,
-  \qquad
-  c_{k_y}
-  =
-  \frac{\langle \widehat{\phi}^{\rm ref}_{k_y},
-  \widehat{\phi}^{\rm obs}_{k_y}\rangle}
-  {\langle \widehat{\phi}^{\rm ref}_{k_y},
-  \widehat{\phi}^{\rm ref}_{k_y}\rangle}.
-\]
-This \(\epsilon_\phi\) is the complex-profile error used by the multi-\(k_y\)
-scan gate when an external eigenfunction or selected-state fixture is
-available.  The implementation now provides both sides of the interface: the
-solver can emit a per-\(k_y\) complex fixture from the same single-mode scan
-path used for growth and frequency diagnostics, and the fixture comparison can
-drive the scan-gate profile metric directly.  Existing patched-GKW
-selected-state dumps can also be converted into this format.  The executable
-gate accepts this portable CSV fixture contract, a native GX \texttt{.big.nc}
-full-field file, or an in-place reduced moment-RHS reference selected by
-\texttt{--reference-moment-rhs}; it requires the reference source to be chosen
-explicitly.  The companion
-\texttt{examples/export\_gx\_moment\_rhs\_fixture.py} command writes the same
-reduced moment-RHS fixture to CSV when a reusable artifact is useful.  What
-remains for full reference parity is a true external multi-\(k_y\) fixture for
-the weak low-\(k_y\) branch, especially \(k_y=0.3\).
-
-The preferred external path is now GX's full-field diagnostic stream.  When
-GX is run with \texttt{fields=true}, it writes
-\(\Phi(t,k_y,k_x,z,\mathrm{ri})\) to the \texttt{.big.nc} file as
-\texttt{Diagnostics/Phi}.  The loader maps a selected \(k_x\) and time index
-into the per-\(k_y\) fixture above and attaches growth/frequency from the
-compact \texttt{.out.nc} \texttt{omega\_kxkyt} diagnostic.  The local GX
-benchmark artifacts include the compact \texttt{.out.nc} spectra but not the
-corresponding \texttt{.big.nc} full-field file, so the remaining external
-action is to retain or obtain that full-field artifact for
-\(k_y=(0.3,0.5)\).  This external action is now reproducible from
-\texttt{scripts/prepare\_gx\_mode\_structure\_run.py}, which writes a patched
-GX s-alpha input with \texttt{omega=true}, \texttt{fields=true},
-\texttt{moments=true}, \texttt{nwrite\_big=1000}, and companion export/gate
-commands in \texttt{fixtures/gx\_cyclone\_mode\_structure\_run/}.  The
-executable gate makes the coordinate convention explicit: GX \(\theta\) may be
-compared as raw \(\theta\) or as \(\theta/(2\pi)\), and any
-edge-to-cell-center interpolation is requested as a declared resampling step
-rather than hidden inside the profile comparison.
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.92\textwidth]{figures/validation_gate_status.pdf}
-  \caption{Reduced validation-gate demonstration from the current solver.
-  Left: short-window Rosenbluth--Hinton plateau metric compared with the
-  GKW/Gyaradax reference residual.  Right: normalized gate residuals, where
-  values below one pass the tolerance.  The GX/GS2 imported eik metric, DESC
-  geometry eik-export, DESC/GX block-eik, independent GX/VMEC GIST external
-  eik-producer suite, and
-  true RH late-plateau contracts pass.  The CBC term audit also passes, while
-  the production-control Cyclone selected-\(k_y\) growth gate passes and the
-  short RH endpoint smoke gate remains deliberately open.  The companion CSV
-  \texttt{figures/cyclone\_trace\_reduced.csv} stores the selected-\(k_y\)
-  amplitude, growth, norm, and normalization history; the Gyaradax companion
-  CSVs pass the reduced, production-control-smoke, and full
-  production-control physical trace comparisons.  The matched GKW
-  \texttt{parallel\_phi.dat} comparison is retained as a mode-structure
-  regression artifact, while the full selected-state and velocity-slice
-  comparisons remain the sharper open GKW diagnostics.}
-  \label{fig:validation-gate-status}
-\end{figure}
-
-\begin{table}[htbp]
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{0.07\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.34\textwidth}p{0.10\textwidth}}
-\toprule
-Case & \(k_y\rho_{\mathrm{ref}}\) grid & Objective \(J\) & Initial geometry/profile & Step size \(\eta\) \\
-\midrule
-A & \(\{0,0.35\}\) & \(\frac12|\gamma(k_y=0.35)|^2\) & \(q=1.25,\hat s=0.45,R/L_T=2.10,R/L_n=0.80\) & \(10^{-3}\) \\
-B & \(\{0,0.25,0.50\}\) & \(\frac12|\gamma(k_y=0.50)|^2\) & \(q=1.35,\hat s=0.65,R/L_T=2.49,R/L_n=0.80\) & \(10^{-3}\) \\
-C & \(\{0,0.25,0.50\}\) & \(\frac12|\max_{k_y>0}\gamma(k_y)|^2\) & \(q=1.45,\hat s=0.75,R/L_T=2.30,R/L_n=0.70\) & \(10^{-3}\) \\
-\bottomrule
-\end{tabular}
-\caption{Reduced optimization examples generated from the current fixed-topology solver.}
-\label{tab:optimization-cases}
-\end{table}
-
-\subsection{Optimization traces}
-
-Figure~\ref{fig:optimization-objectives} shows the absolute objective error
-\(|J(u)-J_\ast|\) with \(J_\ast=0\) on a logarithmic scale.  Cases B and C
-reach exact zero objective error in the current reduced model during the
-1000-step demonstration, while Case A is driven close to zero.  This is a
-numerical plumbing result for the toy analytic geometry, not a validated
-stellarator design claim.
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.86\textwidth]{figures/optimization_objectives.pdf}
-  \caption{Absolute zero-target objective error,
-  \(|J(u^{(m)})-J_\ast|\) with \(J_\ast=0\), for the three fixed-topology
-  examples in Table~\ref{tab:optimization-cases}.  The optimized cost is
-  \(J=\frac12|r|^2\), so convergence corresponds to the curves reaching zero.
-  Exact zeros are drawn at a small plotting floor on the logarithmic axis.}
-  \label{fig:optimization-objectives}
-\end{figure}
-
-Figure~\ref{fig:optimization-growth-rates} shows the change in the growth-rate
-diagnostics used to form the objectives.  Plotting
-\(\gamma^{(m)}-\gamma^{(0)}\) avoids hiding the optimization signal behind the
-large offset between initially positive and initially negative cases.  For
-cases A and B, the selected and maximum nonzonal rates coincide for the chosen
-\(k_y\) grids, so each is shown as a single selected=max curve.  Case C
-optimizes the maximum over the two nonzonal modes, while the selected
-\(k_y=0.25\) diagnostic is also recorded.
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.86\textwidth]{figures/optimization_growth_rates.pdf}
-  \caption{Selected and maximum nonzonal growth-rate changes during the
-  reduced optimization runs.  The diagnostic is computed from the potential
-  amplitude over the connected \(k_x\)-chain, as in
-  Eq.~\eqref{eq:growth-rate}.}
-  \label{fig:optimization-growth-rates}
-\end{figure}
-
-Figure~\ref{fig:optimization-geometry-knobs} shows the changes in the
-continuous geometry knobs \(q\) and \(\hat s\) during the same optimization
-runs.  The integer grid, Fourier topology, and mode connectivity are held
-fixed; only continuous parameters are differentiated and updated.
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.86\textwidth]{figures/optimization_geometry_knobs.pdf}
-  \caption{Changes in \(q\) and magnetic shear \(\hat s\) under the toy
-  gradient-descent updates.  Plotting increments relative to the initial values
-  makes the small continuous updates visible while the integer grid and
-  mode-connectivity maps remain static.}
-  \label{fig:optimization-geometry-knobs}
-\end{figure}
-
-The current result should be interpreted narrowly: it is evidence that the
-optimization interface is wired through the solver and differentiates through a
-fixed number of time steps.  DESC-generated flux-tube fixtures can now enter
-through the imported-array path and the DESC/GX eik contract, but optimization
-examples should remain labeled reduced because they are fixed-topology,
-reduced-grid demonstrations rather than full DESC optimization campaigns,
-even though the RH plateau, production-control Cyclone selected-\(k_y\), and
-available eik parity gates now pass.
 
 \section{Nonlinear and Extended Physics Roadmap}
 \label{sec:nonlinear-extension}
@@ -2580,69 +1294,56 @@ Other extensions should be added only after the linear electrostatic baseline is
   \item nonlinear heat-flux objectives.
 \end{itemize}
 
-\section{Implementation and Test Plan}
 
-Every public function in \path{src/} must have a matching unit test.  The intended order is:
-\begin{enumerate}
-  \item Package skeleton and immutable PyTree parameter types.
-  \item Perpendicular Fourier grids plus spectral \(z,\vpar,\mu\) collocation, quadrature, derivative matrices, and filters.
-  \item Optional GKW finite-difference backend behind the same derivative interface.
-  \item Mode connectivity and static topology maps.
-  \item Circular and \(s\)-alpha analytic geometry.
-  \item Boozer/stellarator geometry adapter, including DESC-style sampled arrays.
-  \item Bessel, \(\Gzero\), Maxwellian, and drive factors.
-  \item Adiabatic \(\phi\) solve with separate zonal tests.
-  \item Individual RHS term functions.
-  \item Full residual \(\RHS\).
-  \item RK4 step and growth-rate diagnostics.
-  \item Quasilinear objective and gradient checks.
-\end{enumerate}
+\section{Testing and Benchmark Contract}
 
-\subsection{Unit tests}
+Every public function in \path{src/} should have focused tests.  For a narrow
+change, update the smallest relevant unit or fixture test; for a change that
+alters shared physics, geometry, time advancement, or validation contracts, run
+the corresponding focused gate plus the broader suite.
+
+\subsection{Required unit-test coverage}
 
 \begin{longtable}{p{0.28\textwidth}p{0.62\textwidth}}
 \toprule
 Component & Required tests \\
 \midrule
-Parameter PyTrees & flatten/unflatten, static/dynamic field behavior, JIT compatibility. \\
-Grids & shapes, centering, spectral quadrature weights, \(k_x=0\), \(k_y=0\), Parseval weights. \\
-Spectral operators & manufactured derivative convergence in \(z\), \(\vpar\), and \(\mu\); modal filter behavior; finite-difference fallback parity on small grids. \\
-Mode connectivity & zonal periodic identity, nonzonal chain labels, invalid open ends, GKW sample parity. \\
-Geometry & finite values, \(\kperp^2\ge0\), circular/Gyaradax parity, AD gradients vs finite differences. \\
-Bessel/polarization & small-argument limits, finite large-argument behavior, AD gradients. \\
-Maxwellian/drive & normalization shape, positivity, gradient-drive broadcasting. \\
-Phi solve & zero-input invariance, quasineutrality residual, no-zonal and zonal paths, Gyaradax parity. \\
-RHS terms & zero-input behavior, linearity in \(f\) where applicable, spectral and fallback manufactured derivative tests. \\
-RK4 & scalar ODE order test, zero-input invariance, short-run JIT and gradient checks. \\
-Diagnostics & amplitude chain selection, growth-rate recovery, frequency sign convention. \\
-Objectives & finite values, smooth gradients, finite-difference agreement on tiny grids. \\
+Parameter PyTrees & flatten/unflatten, static/dynamic fields, JIT behavior. \\
+Grids and topology & shapes, centering, quadrature weights, Parseval weights, mode labels, linked/open boundary maps. \\
+Derivative backends & manufactured derivative checks, finite-difference parity, filter behavior. \\
+Geometry & finite fields, \(B>0\), \(k_\perp^2\ge0\), eik/DESC/stella adapter contracts, differentiability of continuous arrays. \\
+Physics primitives & Bessel/FLR limits, Maxwellian and drive factors, mirror/drift/streaming coefficients, broadcasting, AD checks. \\
+Field solve & zero-input behavior, zonal and nonzonal paths, quasineutrality residuals. \\
+RHS terms & zero-input behavior, linearity, isolated term formulas, full residual reconstruction, JIT compatibility. \\
+Time advance & RK4 order, fixed-step scans, growth/frequency recovery, phase-unwrapped frequency on long windows. \\
+Objectives & finite values, gradients, finite-difference checks on reduced fixed-topology problems. \\
+Validation scripts & committed fixture schemas, status JSON contracts, failure states, and command-line smoke paths. \\
 \bottomrule
 \end{longtable}
 
 \subsection{Benchmark ladder}
 
+The benchmark order should remain:
 \begin{enumerate}
-  \item Tiny manufactured cases: no physics, known derivative, known ODE.
-  \item Reduced GKW samples: \path{simple_example}, \path{simple_itg}, and selected \path{cyclone} inputs.
-  \item Gyaradax circular and \(s\)-alpha parity tests.
-  \item Rosenbluth-Hinton zonal-flow residual.
-  \item Cyclone Base Case linear ITG growth rate.
-  \item GX NetCDF growth/frequency curves and GX/GS2 eik geometry-table parity.
-  \item Boozer/DESC geometry fixture: compare \(B\), metric, drift coefficients, and \(\avg{\kperp^2}\).
-  \item Stellarator ITG scans over \(\rho,\alpha,k_y\), compared to available GS2/GX/GKW-style references.
+  \item manufactured derivatives, field solves, and scalar ODE tests;
+  \item Gyaradax circular and s-alpha parity;
+  \item GKW simple/Cyclone fixtures and selected-mode RHS/action traces;
+  \item Rosenbluth-Hinton late plateau;
+  \item Cyclone selected-\(k_y\) scalar and mode-structure diagnostics;
+  \item DESC/GX/GS2/stella eik and geometry contracts;
+  \item matched W7-X stella growth, frequency, and complex \(\phi(z)\) parity;
+  \item production-control W7-X convergence and CPU timing;
+  \item only then DESC optimization campaigns and nonlinear extensions.
 \end{enumerate}
 
-\subsection{Done criteria for first solver}
+\subsection{First trusted solver milestone}
 
-The first solver milestone is complete when:
-\begin{itemize}
-  \item \(\Phi(f)\), \(\RHS(f)\), RK4 stepping, \(\gamma\), \(\omega\), and \(Q_{\mathrm{QL}}\) are implemented;
-  \item all public functions have tests;
-  \item a circular/s-alpha ITG benchmark matches the selected reference tolerance;
-  \item a Boozer/stellarator geometry fixture runs through the residual and diagnostics;
-  \item gradients of \(Q_{\mathrm{QL}}\) with respect to at least \(\omega_T,\omega_n,q,\hat s\), and continuous geometry arrays are finite and finite-difference checked on a reduced grid;
-  \item \path{STATUS.md} records commands, tolerances, and remaining caveats.
-\end{itemize}
+The first trusted solver milestone is complete when \(\Phi(f)\), \(\RHS(f)\),
+RK4 stepping, \(\gamma\), \(\omega\), and \(Q_{\mathrm{QL}}\) are implemented,
+the reduced RH/Cyclone/GKW/DESC/eik guardrails pass, a matched W7-X stella
+mode-structure gate passes, production-control convergence and CPU timing are
+recorded, and \path{STATUS.md} states the remaining caveats without using
+reduced examples as production evidence.
 
 \begin{thebibliography}{9}
 
