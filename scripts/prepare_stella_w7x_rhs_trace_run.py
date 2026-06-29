@@ -11,7 +11,8 @@ explicit RHS path by default.  The production stella W7-X comparison input keeps
 those two terms implicit, so it cannot expose their deltas inside
 ``add_explicit_gyrokinetic_terms``.  stella's explicit RHS is native ``rhs*dt``;
 the trace preserves that unit so the Python comparator can decide when to
-divide by ``code_dt``.
+divide by ``code_dt``.  Trace format v2 also records stella's velocity
+quadrature weights for direct array-weighted parity checks.
 """
 
 from __future__ import annotations
@@ -410,7 +411,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
       use parallelisation_layouts, only: iv_idx, imu_idx, is_idx
       use grids_z, only: nzgrid, ntubes
       use grids_kxky, only: naky, nakx
-      use grids_velocity, only: vpa, mu
+      use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu
 
       implicit none
 
@@ -430,7 +431,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
          do it = 1, ntubes
             do iz = -nzgrid, nzgrid
                call stellarator_gk_write_trace_row(record_type, term_name, istep, iz, it, &
-                    ivmu, iv, imu, is, vpa(iv), mu(imu), &
+                    ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
                     values(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, it, ivmu))
             end do
          end do
@@ -458,7 +459,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
       do it = 1, ntubes
          do iz = -nzgrid, nzgrid
             call stellarator_gk_write_trace_row('phi', 'field_phi', istep, iz, it, &
-                 0, 0, 0, 0, 0.0, 0.0, &
+                 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, &
                  phi(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, it))
          end do
       end do
@@ -474,7 +475,8 @@ STELLA_RHS_TRACE_HELPERS = r"""
          open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
               status='replace', action='write')
          write (stellarator_gk_trace_unit, '(A)') &
-              'record step term iky ikx iz it ivmu iv imu is vpa mu code_time code_dt real imag'
+              'record step term iky ikx iz it ivmu iv imu is vpa mu ' // &
+              'wgts_vpa wgts_mu code_time code_dt real imag'
          stellarator_gk_trace_file_initialised = .true.
       else
          open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
@@ -484,7 +486,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
    end subroutine stellarator_gk_open_trace_file
 
    subroutine stellarator_gk_write_trace_row(record_type, term_name, istep, iz, it, &
-        ivmu, iv, imu, is, vpa_value, mu_value, value)
+        ivmu, iv, imu, is, vpa_value, mu_value, wgts_vpa_value, wgts_mu_value, value)
 
       use grids_time, only: code_dt, code_time
 
@@ -492,16 +494,17 @@ STELLA_RHS_TRACE_HELPERS = r"""
 
       character(len=*), intent(in) :: record_type, term_name
       integer, intent(in) :: istep, iz, it, ivmu, iv, imu, is
-      real, intent(in) :: vpa_value, mu_value
+      real, intent(in) :: vpa_value, mu_value, wgts_vpa_value, wgts_mu_value
       complex, intent(in) :: value
 
       write (stellarator_gk_trace_unit, &
            '(A,1X,I0,1X,A,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,' // &
            '1X,ES24.16E3,1X,ES24.16E3,1X,ES24.16E3,1X,ES24.16E3,' // &
+           '1X,ES24.16E3,1X,ES24.16E3,' // &
            '1X,ES24.16E3,1X,ES24.16E3)') &
            trim(record_type), istep, trim(term_name), stellarator_gk_trace_iky, &
            stellarator_gk_trace_ikx, iz, it, ivmu, iv, imu, is, vpa_value, &
-           mu_value, code_time, code_dt, real(value), aimag(value)
+           mu_value, wgts_vpa_value, wgts_mu_value, code_time, code_dt, real(value), aimag(value)
 
    end subroutine stellarator_gk_write_trace_row
 

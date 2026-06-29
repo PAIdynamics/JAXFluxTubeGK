@@ -54,9 +54,19 @@
       "sum_imag": -1.3068801337419714e-06,
       "sum_real": -1.070366808105211e-07,
       "term": "input_pdf",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -95,9 +105,19 @@
       "sum_imag": -1.092365682493453e-08,
       "sum_real": -5.676791488654657e-11,
       "term": "field_phi",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         0.0,
         0.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -136,9 +156,19 @@
       "sum_imag": -1.497742673323175e-10,
       "sum_real": -1.7376538628778026e-09,
       "term": "equilibrium_drive_wstar",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -177,9 +207,19 @@
       "sum_imag": 0.0,
       "sum_real": 0.0,
       "term": "magnetic_drift_x",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -218,9 +258,19 @@
       "sum_imag": -1.3172781081975576e-09,
       "sum_real": -1.1020944717799065e-09,
       "term": "magnetic_drift_y",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -259,9 +309,19 @@
       "sum_imag": 3.701005933499669e-13,
       "sum_real": 4.288888872317442e-15,
       "term": "mirror_force",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -300,9 +360,19 @@
       "sum_imag": 4.116759208107224e-10,
       "sum_real": -5.103031228896362e-10,
       "term": "parallel_streaming",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     },
     {
@@ -341,13 +411,24 @@
       "sum_imag": -1.0550063541257915e-09,
       "sum_real": -3.350047168658567e-09,
       "term": "total",
+      "velocity_weight_columns_present": false,
       "vpa_range": [
         -3.0,
         3.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        null,
+        null
+      ],
+      "wgts_vpa_range": [
+        null,
+        null
       ]
     }
   ],
   "total_rows": 1382403,
   "trace_format": "stellarator_gk_stella_rhs_trace_v1",
-  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat"
+  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "velocity_weight_columns_present": false
 }

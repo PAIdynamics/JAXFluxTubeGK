@@ -492,6 +492,8 @@ def _load_stella_geometry(args):
         rows[:, STELLA_GEOMETRY_COLUMNS.index("b_cross_kappa_dot_grad_alpha")],
         dtype=float,
     )
+    flux_fac = float(global_header[STELLA_GLOBAL_COLUMNS.index("flux_fac")])
+    drive_prefactor = np.full(n_z, flux_fac, dtype=float)
     geometry = FluxTubeGeometry(
         z=parallel.z,
         w_z=parallel.w_z,
@@ -501,7 +503,7 @@ def _load_stella_geometry(args):
         B=jnp.asarray(B, dtype=jnp.float64),
         F=jnp.asarray(F, dtype=jnp.float64),
         G=jnp.asarray(G, dtype=jnp.float64),
-        E_y=jnp.asarray(bxgb_gy, dtype=jnp.float64),
+        E_y=jnp.asarray(drive_prefactor, dtype=jnp.float64),
         D_x=jnp.asarray(
             rows[:, STELLA_GEOMETRY_COLUMNS.index("B_cross_gradB_dot_grad_psi")],
             dtype=jnp.float64,
@@ -535,6 +537,7 @@ def _load_stella_geometry(args):
         "sampled_zeta_turns": sampled_zeta_turns,
         "field_line_periods": field_line_turns,
         "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
+        "equilibrium_drive_scaling": "E_y = stella flux_fac",
         "global_header": {
             name: float(value)
             for name, value in zip(STELLA_GLOBAL_COLUMNS, global_header, strict=True)

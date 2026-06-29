@@ -1,0 +1,117 @@
+{
+  "array_parity_blockers": [
+    "stella trace includes the duplicate periodic z endpoint; drop iz=max before array comparison",
+    "stella and committed solver balance use different n_vpar",
+    "stella and committed solver balance use different vpar ranges",
+    "stella and committed solver balance use different mu grids/ranges",
+    "committed solver balance fixture stores scalar term summaries, not full term arrays",
+    "stella trace currently stores vpa/mu coordinates but not velocity quadrature weights",
+    "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
+  ],
+  "direct_array_parity_ready": false,
+  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "raw_trace_used": true,
+  "solver_case": {
+    "case": "gkw_fd_16x8",
+    "dominant_rhs_terms": [
+      {
+        "projection_imag": -0.14901027861041238,
+        "projection_real": 0.6617238928258995,
+        "rhs_fraction_of_total_l2": 1.025496413478766,
+        "term": "parallel_streaming"
+      },
+      {
+        "projection_imag": 0.10882082710860805,
+        "projection_real": 0.3739232334587812,
+        "rhs_fraction_of_total_l2": 0.6145983268791836,
+        "term": "equilibrium_drive"
+      },
+      {
+        "projection_imag": 0.019936630648215357,
+        "projection_real": -0.05420963418308981,
+        "rhs_fraction_of_total_l2": 0.5071044096465919,
+        "term": "magnetic_drift"
+      },
+      {
+        "projection_imag": -0.0005075078930672237,
+        "projection_real": 0.0028389777475387092,
+        "rhs_fraction_of_total_l2": 0.24474079576398658,
+        "term": "mirror_force"
+      }
+    ],
+    "dt": 0.02,
+    "estimated_cfl_dt": 0.1773798134085247,
+    "final_frequency": 0.03402234365722446,
+    "final_growth_rate": 0.01891601735193212,
+    "final_log_normalization": -1.386387114666568,
+    "final_raw_amplitude": 1.0023998379278982,
+    "geometry_source": "stella-geometry",
+    "n_mu": 8,
+    "n_vpar": 16,
+    "n_windows": 2000,
+    "parallel_derivative_model": "matrix",
+    "quasineutrality_residual_rms": 1.0328158654060863e-16,
+    "rhs_reconstruction_max_abs_error": 0.0,
+    "stella_geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+    "stella_tend": 200.0,
+    "steps_per_window": 5,
+    "total_rhs_rms": 0.035687906850676215,
+    "total_time": 200.0,
+    "velocity_backend": "finite_difference",
+    "wall_seconds": 80.08467837492935
+  },
+  "solver_n_z": 256,
+  "solver_terms_available": [
+    "dissipation",
+    "drift_field_drive",
+    "equilibrium_drive",
+    "magnetic_drift",
+    "mirror_force",
+    "parallel_field_drive",
+    "parallel_recurrence",
+    "parallel_streaming",
+    "velocity_recurrence"
+  ],
+  "solver_velocity_contract": {
+    "backend": "finite_difference",
+    "mu_max_parameter": 1.5,
+    "mu_range": [
+      0.005859374999999999,
+      1.3183593749999998
+    ],
+    "n_mu": 8,
+    "n_vpar": 16,
+    "vpar_max_parameter": 2.0,
+    "vpar_range": [
+      -1.875,
+      1.875
+    ]
+  },
+  "stella_code_dt": 0.1,
+  "stella_mu_range": [
+    0.03662129632879369,
+    4.917073821493017
+  ],
+  "stella_n_mu": 8,
+  "stella_n_vpar": 32,
+  "stella_n_z_after_endpoint_drop": 256,
+  "stella_n_z_raw": 257,
+  "stella_rhs_units": "stella_native_rhs_times_code_dt",
+  "stella_step": 2000,
+  "stella_total_rhs_rows": 197376,
+  "stella_total_rows": 1382403,
+  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v1",
+  "stella_velocity_weight_columns_present": false,
+  "stella_vpa_range": [
+    -3.0,
+    3.0
+  ],
+  "stella_wgts_mu_range": [
+    null,
+    null
+  ],
+  "stella_wgts_vpa_range": [
+    null,
+    null
+  ]
+}

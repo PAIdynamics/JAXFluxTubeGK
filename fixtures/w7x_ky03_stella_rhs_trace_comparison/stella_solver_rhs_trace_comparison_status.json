@@ -1,0 +1,24 @@
+{
+  "array_parity_blockers": [
+    "stella trace includes the duplicate periodic z endpoint; drop iz=max before array comparison",
+    "stella and committed solver balance use different n_vpar",
+    "stella and committed solver balance use different vpar ranges",
+    "stella and committed solver balance use different mu grids/ranges",
+    "committed solver balance fixture stores scalar term summaries, not full term arrays",
+    "stella trace currently stores vpa/mu coordinates but not velocity quadrature weights",
+    "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
+  ],
+  "benchmark_name": "w7x_ky03_stella_rhs_trace_comparison",
+  "comparison_kind": "stella_trace_vs_solver_scalar_term_balance",
+  "direct_array_parity_ready": false,
+  "interpretation": "The raw stella term trace is now ingested and its rhs*dt records are converted to continuous-time RHS norms.  The current committed solver fixture only supports scale-free term-norm comparison; direct array parity requires a solver-side full-array trace on the stella velocity grid or a documented interpolation/weighting contract.",
+  "max_scale_free_fraction_delta": 0.26434373310974457,
+  "next_action": "emit a solver-side selected-mode full-array trace on a stella-compatible z/vpa/mu grid, or add a stella velocity-grid adapter plus velocity weights to make direct term-array comparison meaningful",
+  "passed": false,
+  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "raw_trace_used": true,
+  "rhs_units_after_conversion": "continuous_time_rhs_l2_for_stella_rhs_records",
+  "solver_balance_status": "solver_side_rhs_balance_ready",
+  "status": "blocked_array_contract_mismatch",
+  "stella_required_record_terms_present": true
+}

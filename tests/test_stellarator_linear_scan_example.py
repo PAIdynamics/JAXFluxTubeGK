@@ -117,10 +117,15 @@ def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():
     assert np.isclose(z[-1], 0.5 - 1.0 / 256.0)
     assert metadata["field_line_periods"] > 6.9
     assert metadata["b_dot_grad_z_scaling"] == "F = stella b.Gz / (2*pi)"
+    assert metadata["equilibrium_drive_scaling"] == "E_y = stella flux_fac"
     assert geometry.source == "stella-geometry"
     assert np.all(np.isfinite(np.asarray(geometry.B)))
     assert np.all(np.isfinite(np.asarray(geometry.F)))
     assert np.all(np.isfinite(np.asarray(geometry.G)))
+    np.testing.assert_allclose(
+        np.asarray(geometry.E_y, dtype=float),
+        metadata["global_header"]["flux_fac"],
+    )
 
 
 def test_late_window_frequency_uses_unaliased_short_phase_increments():

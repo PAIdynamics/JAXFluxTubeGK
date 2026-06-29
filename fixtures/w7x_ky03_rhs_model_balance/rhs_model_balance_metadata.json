@@ -5,50 +5,50 @@
       "case": "gkw_fd_16x8",
       "dominant_rhs_terms": [
         {
-          "projection_imag": -0.0010715835716158845,
-          "projection_real": 0.914735762235828,
-          "rhs_fraction_of_total_l2": 1.113240064720198,
+          "projection_imag": -0.14901027861041238,
+          "projection_real": 0.6617238928258995,
+          "rhs_fraction_of_total_l2": 1.025496413478766,
           "term": "parallel_streaming"
         },
         {
-          "projection_imag": 0.00479716908022009,
-          "projection_real": 0.042314461836274846,
-          "rhs_fraction_of_total_l2": 0.5307304661068116,
+          "projection_imag": 0.10882082710860805,
+          "projection_real": 0.3739232334587812,
+          "rhs_fraction_of_total_l2": 0.6145983268791836,
+          "term": "equilibrium_drive"
+        },
+        {
+          "projection_imag": 0.019936630648215357,
+          "projection_real": -0.05420963418308981,
+          "rhs_fraction_of_total_l2": 0.5071044096465919,
           "term": "magnetic_drift"
         },
         {
-          "projection_imag": 0.0014975745051568152,
-          "projection_real": 0.014540950325947415,
-          "rhs_fraction_of_total_l2": 0.32597146833944524,
+          "projection_imag": -0.0005075078930672237,
+          "projection_real": 0.0028389777475387092,
+          "rhs_fraction_of_total_l2": 0.24474079576398658,
           "term": "mirror_force"
-        },
-        {
-          "projection_imag": -0.0025910017456497346,
-          "projection_real": 0.021032753487971977,
-          "rhs_fraction_of_total_l2": 0.1398516993536452,
-          "term": "parallel_field_drive"
         }
       ],
       "dt": 0.02,
       "estimated_cfl_dt": 0.1773798134085247,
-      "final_frequency": -0.11340257633385897,
-      "final_growth_rate": 0.0012482718253991072,
-      "final_log_normalization": -3.184395842175535,
-      "final_raw_amplitude": 1.0006061502352785,
+      "final_frequency": 0.03402234365722446,
+      "final_growth_rate": 0.01891601735193212,
+      "final_log_normalization": -1.386387114666568,
+      "final_raw_amplitude": 1.0023998379278982,
       "geometry_source": "stella-geometry",
       "n_mu": 8,
       "n_vpar": 16,
       "n_windows": 2000,
       "parallel_derivative_model": "matrix",
-      "quasineutrality_residual_rms": 1.075384823136963e-16,
+      "quasineutrality_residual_rms": 1.0328158654060863e-16,
       "rhs_reconstruction_max_abs_error": 0.0,
       "stella_geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
       "stella_tend": 200.0,
       "steps_per_window": 5,
-      "total_rhs_rms": 0.07107096757395463,
+      "total_rhs_rms": 0.035687906850676215,
       "total_time": 200.0,
       "velocity_backend": "finite_difference",
-      "wall_seconds": 71.85660424991511
+      "wall_seconds": 80.08467837492935
     }
   ],
   "density_balance_csv": "fixtures/w7x_ky03_rhs_model_balance/rhs_density_balance.csv",

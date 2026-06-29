@@ -49,12 +49,45 @@ def test_summarize_trace_counts_terms_and_norms(tmp_path: Path):
     assert summary["iky_values"] == [4]
     assert summary["ikx_values"] == [1]
     assert summary["required_record_terms_present"] is True
+    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v1"
+    assert summary["velocity_weight_columns_present"] is False
     assert terms[("pdf_g", "input_pdf")]["rows"] == 1
     assert terms[("pdf_g", "input_pdf")]["l2_norm"] == pytest.approx(5.0)
+    assert terms[("pdf_g", "input_pdf")]["velocity_weight_columns_present"] is False
     assert terms[("rhs_delta", "mirror_force")]["rows"] == 2
     assert terms[("rhs_delta", "mirror_force")]["l2_norm"] == pytest.approx(2.0**1.5)
     assert terms[("rhs_delta", "mirror_force")]["iz_range"] == [-1, 1]
     assert terms[("rhs_delta", "mirror_force")]["ivmu_range"] == [0, 1]
+
+
+def test_summarize_trace_accepts_v2_velocity_weight_columns(tmp_path: Path):
+    module = _load_module()
+    trace = tmp_path / "trace_v2.dat"
+    trace.write_text(
+        "\n".join(
+            (
+                "record step term iky ikx iz it ivmu iv imu is vpa mu "
+                "wgts_vpa wgts_mu code_time code_dt real imag",
+                "pdf_g 20 input_pdf 4 1 -1 1 0 1 1 1 -3.0 0.1 "
+                "0.25 2.0 2.0 0.1 3.0 4.0",
+                "pdf_g 20 input_pdf 4 1 0 1 1 2 1 1 -2.0 0.1 "
+                "0.5 3.0 2.0 0.1 0.0 2.0",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    summary = module.summarize_trace(trace, required_record_terms=(("pdf_g", "input_pdf"),))
+    term = summary["term_summaries"][0]
+
+    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v2"
+    assert summary["velocity_weight_columns_present"] is True
+    assert term["velocity_weight_columns_present"] is True
+    assert term["wgts_vpa_range"] == [0.25, 0.5]
+    assert term["wgts_mu_range"] == [2.0, 3.0]
+    assert term["l2_norm"] == pytest.approx((25.0 + 4.0) ** 0.5)
+    assert term["weighted_velocity_l2_norm"] == pytest.approx((0.25 * 2.0 * 25.0 + 0.5 * 3.0 * 4.0) ** 0.5)
 
 
 def test_summarize_trace_reports_missing_required_terms(tmp_path: Path):
@@ -89,6 +122,8 @@ def test_committed_w7x_rhs_trace_summary_contract():
     assert summary["steps"] == [2000]
     assert summary["iky_values"] == [4]
     assert summary["ikx_values"] == [1]
+    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v1"
+    assert summary.get("velocity_weight_columns_present", False) is False
     assert summary["rhs_units"] == "stella_native_rhs_times_code_dt"
     assert terms[("rhs_delta", "mirror_force")]["l2_norm"] > 0.0
     assert terms[("rhs_delta", "parallel_streaming")]["l2_norm"] > 0.0

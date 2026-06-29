@@ -46,6 +46,7 @@ def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Pat
     assert "integer, parameter :: stellarator_gk_trace_step = 123" in text
     assert "integer, parameter :: stellarator_gk_trace_iky = 4" in text
     assert "integer, parameter :: stellarator_gk_trace_ikx = 1" in text
+    assert "use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu" in text
     assert "call stellarator_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)" in text
     assert "call stellarator_gk_write_phi_trace(istep, phi)" in text
     assert "call stellarator_gk_write_rhs_delta('mirror_force'" in text
@@ -54,6 +55,8 @@ def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Pat
     assert "call stellarator_gk_write_rhs_delta('equilibrium_drive_wstar'" in text
     assert "call stellarator_gk_write_rhs_delta('parallel_streaming'" in text
     assert "call stellarator_gk_write_complex_state('rhs_total', 'total', istep, rhs)" in text
+    assert "wgts_vpa wgts_mu code_time code_dt real imag" in text
+    assert "wgts_vpa(iv), wgts_mu(1, iz, imu)" in text
     assert "rhs*dt" in text
 
 

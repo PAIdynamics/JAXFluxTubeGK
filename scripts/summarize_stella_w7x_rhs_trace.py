@@ -19,7 +19,7 @@ from typing import Iterable, TypeVar
 T = TypeVar("T", int, float)
 
 
-TRACE_COLUMNS = (
+TRACE_COLUMNS_V1 = (
     "record",
     "step",
     "term",
@@ -33,6 +33,27 @@ TRACE_COLUMNS = (
     "is",
     "vpa",
     "mu",
+    "code_time",
+    "code_dt",
+    "real",
+    "imag",
+)
+TRACE_COLUMNS_V2 = (
+    "record",
+    "step",
+    "term",
+    "iky",
+    "ikx",
+    "iz",
+    "it",
+    "ivmu",
+    "iv",
+    "imu",
+    "is",
+    "vpa",
+    "mu",
+    "wgts_vpa",
+    "wgts_mu",
     "code_time",
     "code_dt",
     "real",
@@ -74,6 +95,11 @@ class _Accumulator:
     vpa_max: float | None = None
     mu_min: float | None = None
     mu_max: float | None = None
+    wgts_vpa_min: float | None = None
+    wgts_vpa_max: float | None = None
+    wgts_mu_min: float | None = None
+    wgts_mu_max: float | None = None
+    weighted_velocity_l2_square: float = 0.0
 
     def add(
         self,
@@ -86,6 +112,8 @@ class _Accumulator:
         species: int,
         vpa: float,
         mu: float,
+        wgts_vpa: float | None,
+        wgts_mu: float | None,
         real: float,
         imag: float,
     ) -> None:
@@ -103,6 +131,18 @@ class _Accumulator:
         self.is_min, self.is_max = _minmax(self.is_min, self.is_max, species)
         self.vpa_min, self.vpa_max = _minmax(self.vpa_min, self.vpa_max, vpa)
         self.mu_min, self.mu_max = _minmax(self.mu_min, self.mu_max, mu)
+        if wgts_vpa is not None and wgts_mu is not None:
+            self.wgts_vpa_min, self.wgts_vpa_max = _minmax(
+                self.wgts_vpa_min,
+                self.wgts_vpa_max,
+                wgts_vpa,
+            )
+            self.wgts_mu_min, self.wgts_mu_max = _minmax(
+                self.wgts_mu_min,
+                self.wgts_mu_max,
+                wgts_mu,
+            )
+            self.weighted_velocity_l2_square += wgts_vpa * wgts_mu * value_abs * value_abs
 
     def as_dict(self, record: str, term: str) -> dict[str, object]:
         return {
@@ -121,6 +161,10 @@ class _Accumulator:
             "species_range": [self.is_min, self.is_max],
             "vpa_range": [self.vpa_min, self.vpa_max],
             "mu_range": [self.mu_min, self.mu_max],
+            "velocity_weight_columns_present": self.wgts_vpa_min is not None,
+            "wgts_vpa_range": [self.wgts_vpa_min, self.wgts_vpa_max],
+            "wgts_mu_range": [self.wgts_mu_min, self.wgts_mu_max],
+            "weighted_velocity_l2_norm": sqrt(self.weighted_velocity_l2_square),
         }
 
 
@@ -141,11 +185,17 @@ def summarize_trace(
     rows = 0
     with trace_path.open(encoding="utf-8") as handle:
         header = tuple(handle.readline().strip().split())
-        if header != TRACE_COLUMNS:
+        if header == TRACE_COLUMNS_V1:
+            trace_format = "stellarator_gk_stella_rhs_trace_v1"
+            has_velocity_weights = False
+        elif header == TRACE_COLUMNS_V2:
+            trace_format = "stellarator_gk_stella_rhs_trace_v2"
+            has_velocity_weights = True
+        else:
             raise ValueError(f"unexpected trace header in {trace_path}: {header}")
         for line_number, line in enumerate(handle, start=2):
             parts = line.split()
-            if len(parts) != len(TRACE_COLUMNS):
+            if len(parts) != len(header):
                 raise ValueError(f"malformed trace row {line_number} in {trace_path}")
             record = parts[0]
             term = parts[2]
@@ -160,10 +210,20 @@ def summarize_trace(
             species = int(parts[10])
             vpa = float(parts[11])
             mu = float(parts[12])
-            code_time = float(parts[13])
-            code_dt = float(parts[14])
-            real = float(parts[15])
-            imag = float(parts[16])
+            if has_velocity_weights:
+                wgts_vpa = float(parts[13])
+                wgts_mu = float(parts[14])
+                code_time = float(parts[15])
+                code_dt = float(parts[16])
+                real = float(parts[17])
+                imag = float(parts[18])
+            else:
+                wgts_vpa = None
+                wgts_mu = None
+                code_time = float(parts[13])
+                code_dt = float(parts[14])
+                real = float(parts[15])
+                imag = float(parts[16])
 
             rows += 1
             steps.add(step)
@@ -180,6 +240,8 @@ def summarize_trace(
                 species=species,
                 vpa=vpa,
                 mu=mu,
+                wgts_vpa=wgts_vpa,
+                wgts_mu=wgts_mu,
                 real=real,
                 imag=imag,
             )
@@ -193,8 +255,9 @@ def summarize_trace(
     ]
     return {
         "trace_path": str(trace_path),
-        "trace_format": "stellarator_gk_stella_rhs_trace_v1",
+        "trace_format": trace_format,
         "rhs_units": "stella_native_rhs_times_code_dt",
+        "velocity_weight_columns_present": has_velocity_weights,
         "total_rows": rows,
         "steps": sorted(steps),
         "iky_values": sorted(iky_values),
