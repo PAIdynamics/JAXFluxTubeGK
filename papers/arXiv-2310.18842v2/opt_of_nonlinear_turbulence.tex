@@ -1,0 +1,680 @@
+% This is file JFM2esam.tex
+% first release v1.0, 20th October 1996
+%       release v1.01, 29th October 1996
+%       release v1.1, 25th June 1997
+%       release v2.0, 27th July 2004
+%       release v3.0, 16th July 2014
+%       release v4.0, 15th June 2017
+%   (based on JFMsampl.tex v1.3 for LaTeX2.09)
+% Copyright (C) 1996, 1997, 2014, 2017 Cambridge University Press
+
+\documentclass{jpp}
+\usepackage{graphicx}
+% \usepackage{epstopdf, epsfig}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{verbatim}
+\usepackage{soul,xcolor}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\shorttitle{Optimization of Nonlinear Turbulence in Stellarators}
+\shortauthor{P.Kim et al.}
+
+\title{Optimization of Nonlinear Turbulence in Stellarators}
+
+\author{P. Kim\aff{1,3}
+  \corresp{\email{pk2354@princeton.edu}},
+  S. Buller \aff{2}
+  R. Conlin\aff{1},
+  W. Dorland\aff{2, 3},
+  D. W. Dudt\aff{1},
+  R. Gaur\aff{1},
+  R. Jorge\aff{4,5}.
+  E. Kolemen\aff{1,6},
+  M. Landreman\aff{2},
+  N. R. Mandell\aff{6},
+  \and D. Panici\aff{1}
+  }
+
+\affiliation{\aff{1}Princeton University, Princeton, New Jersey 08544, USA
+\aff{2} Institute for Research in Electronics and Applied Physics, University of Maryland, College Park, MD 20742, USA
+\aff{3}Department of Physics, University of Maryland, College Park, MD 20742, USA
+\aff{4}Instituto de Plasmas e Fusão Nuclear, Instituto Superior Técnico, Universidade de Lisboa, 1049-001 Lisboa, Portugal
+\aff{5}Department of Physics, University of Wisconsin-Madison, Madison, Wisconsin 53706, United States of America
+\aff{6}Princeton Plasma Physics Laboratory, PO Box 541, Princeton NJ 08543, USA
+
+}
+
+\begin{document}
+\setstcolor{red}
+\maketitle
+
+\begin{abstract}
+We present new stellarator equilibria that have been optimized for reduced turbulent transport using nonlinear gyrokinetic simulations within the optimization loop. The optimization routine involves coupling the pseudo-spectral GPU-native gyrokinetic code {\tt GX} with the stellarator equilibrium and optimization code {\tt DESC}. Since using {\tt GX} allows for fast nonlinear simulations, we directly optimize for reduced nonlinear heat fluxes. To handle the noisy heat flux traces returned by these simulations, we employ the simultaneous perturbation stochastic approximation (SPSA) method that only uses two objective function evaluations for a simple estimate of the gradient. We show several examples that optimize for both reduced heat fluxes and good quasisymmetry as a proxy for low neoclassical transport. Finally, we run full transport simulations using the {\tt T3D} stellarator transport code to evaluate the changes in the macroscopic profiles.
+\end{abstract}
+
+
+
+\section{Introduction}
+Stellarators are one of the most promising designs for magnetic confinement fusion as they are inherently steady-state and are less susceptible to current-driven instabilities \citep{Helander2014TheoryFields}. However, stellarators have historically been plagued by large collisionally-induced losses of particles and energy, associated with cross-field drifts of particles caused by the inhomogeneity and curvature of the magnetic field. In principle, stellarators can be optimized to reduce these collisional losses. In practice, impressive improvements in plasma confinement have been obtained. For example, experiments at the W7-X stellarator have shown greatly reduced neoclassical transport \citep{Beidler2021Demonstration7-X}. Furthermore, advances in stellarator optimization techniques have led to designs with precise quasisymmetry (QS) \citep{Landreman2022MagneticConfinement, Landreman2022OptimizationConfinement} and quasi-isodynamicity (QI) \citep{Goodman2022ConstructingFields}.
+
+After neoclassical losses are minimized, confinement is limited by the anomalous transport of heat and particles by turbulence. This turbulence is driven by plasma microinstabilities on length scales of the gyroradius. For example, the ion-temperature gradient (ITG) instability is believed to be a major cause for ion-temperature clamping in W7-X, preventing heating of ions above 2 keV \citep{Beurskens2021IonPlasmas} (along with weak energy exchange between electrons and ions). While there have been recent attempts to optimize stellarators to reduce turbulence-induced transport, they have mainly relied on proxies based solely on the magnetic geometry \citep{Mynick2010OptimizingTransport, Proll2016TEMStellarators, Roberg-Clark2022ReductionOptimization} or linear simulations \citep{Jorge2023DirectDevices}. However, linear physics may not accurately predict nonlinear saturation mechanisms that ultimately determine the rate of heat and particle loss \citep{McKinney2019AQuasi-axisymmetricstellarator}. Unfortunately, using nonlinear analysis for optimization is usually very challenging. Gyrokinetics \citep{AntonsenJr.1980KineticPlasmas, Catto1978LinearizedGyro-kinetics, Frieman1982NonlinearEquilibria} is one of the most commonly-used models to study turbulence in magnetic confinement fusion devices, and is also the model used for this paper. Typical nonlinear gyrokinetics simulations usually require hundreds to thousands of CPU hours, making them infeasible to use within an optimization loop.
+
+In this work, we demonstrate the ability to reduce turbulent losses by optimizing stellarator configurations using nonlinear turbulence simulations directly rather than  relying on proxies. In order to run nonlinear simulations inside the optimization loop, we use the new GPU-native gyrokinetic code {\tt GX} \citep{Mandell2018Laguerre-HermiteGyrokinetics,Mandell2022GX:Design}. {\tt GX} utilizes pseudo-spectral methods in velocity space. GPU acceleration combined with flexible velocity resolution allows for nonlinear {\tt GX} simulations that only take minutes to run. For this work, we focus on ITG turbulence, which contributes to major energy losses that limit plasma confinement, and so is one of the most important microinstabilities to consider for reactor design \citep{Kotschenreuther1995ComparisonInstabilities,Horton1999DriftTransport, Helander2013CollisionlessModes}. To that end, we will be running  electrostatic simulations with a Boltzmann (adiabatic) response assumed for the electrons.
+
+The optimization is performed using the stellarator equilibrium and optimization code {\tt DESC} \citep{Dudt2020DESC:Solver,Panici2023TheComputations,Conlin2023TheMethods,Dudt2023TheOptimization}. {\tt DESC} also uses pseudo-spectral methods and directly solves the ideal MHD force-balance equation to compute the magnetic equilibrium. The quantities computed from the resulting magnetic fields are used as input for {\tt GX}. Stochastic optimization methods are used to robustly handle the noisy landscape of turbulent heat fluxes.
+
+The paper is organized as follows. The stochastic optimization method used in this work is described in Section \ref{Optimization Methods}. Results are shown in Section \ref{Results}, with analysis on the effects of global magnetic shear for reduced turbulence explored in Section \ref{Mechanisms for Reduced Turbulence}. Transport simulations using the {\tt T3D} stellarator transport code \citep{Qian2022StellaratorGX} are shown in Section \ref{trinity sim}. Finally, the conclusions follow in Section \ref{Conclusions}. 
+
+\section{Optimization Methods}\label{Optimization Methods}
+In this optimization routine, we seek to minimize the nonlinear heat flux returned by {\tt GX}. Specifically, {\tt GX} returns as output the time-trace of the heat flux (normalized to gyro-Bohm units). An example of some heat traces is shown in Figure \ref{heat flux trace}. At the beginning of the simulation, linear growth of the fastest-growing instability dominates. However, eventually nonlinear effects cause the heat flux to decrease and saturate to a statistical steady-state. We use the time-average of this steady-state flux as our heat flux objective $f_Q$. To take the time-average, we take the second half of the time-trace and compute the weighted Birkoff average
+\begin{equation}
+    f_Q = \frac{1}{I}\sum_i^N e^{-i/\left(N\left(1-i/N\right)\right)}q_i  
+\end{equation}
+where the sum is over each point in the trace (with $N$ total points) and $I = \sum_i^N e^{-i/\left(N\left(1-i/N\right)\right)}$ is a normalization factor. This gives greater weight to values in the middle of the trace.
+
+Since {\tt GX} is a local flux-tube gyrokinetic code, each simulation is on a single field line on a single surface specified by the field line label $\alpha$ and the radial coordinate $\rho = \sqrt{\psi/\psi_b}$ (where $B = \nabla \psi \times \nabla \alpha$ and $\psi$ is the toroidal magnetic flux). Therefore, $f_Q$ is also computed for only a single field line and surface. For all of the optimization examples, we only simulate on the $\rho = \sqrt{\psi/\psi_b} = \sqrt{0.5}$ surface. and the $\alpha = 0$ (except for the multiple field line examples in Section \ref{multiple alpha case}) field line. However, we will run post-processing simulations across different surfaces and field lines.
+
+To run these simulations, {\tt GX} requires a set of geometric quantities that can be computed from numerical equilibria. Given that the magnetic field is written in Clebsch form $\mathbf{B} = \nabla \psi \times \nabla \alpha$, the set of quantities needed are
+    \begin{align}\label{geo quantitities}
+    \begin{split}
+    \mathcal{G} &= \{B, \mathbf{b \cdot \nabla z}, |\nabla \psi|^2, |\nabla \alpha|^2, \nabla \psi \cdot \nabla \alpha, \\ &(\mathbf{B} \times \nabla B) \cdot \nabla \psi, (\mathbf{B} \times \nabla B) \cdot \nabla \alpha, (\mathbf{b} \times \mathbf{\kappa}) \cdot \nabla \alpha\},
+    \end{split}
+\end{align}
+where $\mathbf{b} = \mathbf{B}/B$, $\alpha$ is the straight field line label, $\kappa = \mathbf{b} \cdot \nabla \mathbf{b}$ is the curvature, and $z$ is some coordinate representing the distance along the field line. For these simulations, the geometric toroidal angle $\phi$ is used for $z$. All of these quantities are easily computed using utility functions in {\tt DESC}. 
+
+One issue with directly minimizing nonlinear heat fluxes is that their time-traces are often very noisy. Even the resulting time averages are usually very noisy in parameter space. This can be seen in Fig. \ref{fig:boundary scan} showing the time-averaged nonlinear heat flux when scanning over the $Z_{m,n} = Z_{0,-1}$ boundary mode of the initial equilibrium used in this study. Optimizers designed for smooth objectives may easily get stuck in local minima and make very little progress.
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.5]{initial_boundary_scan.png}
+    \caption{The time-averaged nonlinear heat flux computed by {\tt GX} when scanning across the $Z_{0,-1}$ boundary mode.}
+    \label{fig:boundary scan}
+\end{figure}
+To help with this issue, we use the simultaneous perturbation stochastic approximation (SPSA) method \citep{Spall1987AEstimates} to minimize the heat fluxes. In this algorithm, the $i^{th}$ component of the gradient at point $\mathbf{x_n}$ is approximated as
+\begin{equation}
+    \mathbf{\hat{g}_n\left(x_n\right)}_i = \frac{f\left(\mathbf{x_n} + k\mathbf{c_n}\right) - f\left(\mathbf{x_n} - k\mathbf{c_n}\right)}{2kc_{ni}},
+\end{equation}
+where $\mathbf{c_n}$ is a random perturbation vector whose components are sampled from a Rademacher distribution, and $k$ is a finite-difference step-size. Therefore, we are effectively using the finite difference method in all directions at once. Finally, for this method, rather than specifying stopping tolerances, we instead specify a maximum number of iterations.
+
+The main feature of the SPSA method is that it only requires two objective function measurements per iteration. This makes it suitable for high-dimensional optimization problems whose objective functions are expensive to compute. SPSA can also robustly handle noisy objective functions, and so has been used for simulation optimization, including Monte-Carlo simulations \citep{Chan2003OptimisationApproximation}.
+
+
+In order to still use automatic differentiation and smooth optimization methods for other objectives like quasisymmetry residuals, we split the optimization routine into two parts. We first minimize the turbulent heat flux using stochastic gradient descent. Next, we minimize the quasisymmetry residuals using a least-squares method that utilizes automatic differentiation. This order is chosen arbitrarily, but the reverse ordering can also work. The two objectives are thus
+\begin{align}
+    f_1 &= f_{Q}^2 + \left(A - A_{target}\right)^2 \\
+    f_2 &= f_{QS}^2 + \left(A - A_{target}\right)^2,
+\end{align}
+where $f_Q$ is the heat flux from {\tt GX}, and $A$ is the aspect ratio. For these optimizations we target an aspect ratio of $A_{target} = 8$. We use the two-term quasisymmetry objective, where a magnetic field is quasisymmetric if the quantity
+\begin{equation}
+    C = \frac{\left(\mathbf{B} \times \nabla \psi\right) \cdot \nabla B}{\mathbf{B} \cdot \nabla B}
+\end{equation}
+is a flux function. Computationally, we evaluate the equivalent form
+\begin{equation}
+    f_{QS} = \left(M - \iota N\right)\left(\mathbf{B} \times \nabla \psi\right)\cdot \nabla B - \left(MG + NI\right)\mathbf{B} \cdot \nabla B,
+\end{equation}
+at several different flux surfaces and try to minimize the resulting values. For this study, we always choose flux surfaces at $\rho = 0.6, \ 0.8, \text{and} \ 1$. We target quasi-helical (QH) symmetry, so that the helicity is $(M, N) = (1, 4)$.
+
+The {\tt GX} simulation parameters used in the optimization loop and for post-processing, along with their justification, are in Appendix \ref{app sim param}.
+
+Finally, the optimization routine is performed in stages. Each stage increments the maximum boundary Fourier mode being optimized over. For example in the first stage only boundary modes with modes $m,n$ satisfying $|m| \leq 1$ and $|n| \leq 1$ are used as optimization variables. In the next stage boundary modes with $|m| \leq 2$ and $|n| \leq 2$ are used. The $m=0,n=0$ mode is excluded to prevent the major radius from changing. This reduces the number of optimization variables at the beginning of the optimization and "warm-starts" each successive stage. This type of method has been used with great success for previous stellarator optimization results, including for optimizing quasisymmetry \citep{Landreman2022MagneticConfinement}. After each stage, we start the next stage with an equilibrium chosen from the previous stage that had achieved both low heat flux and low quasisymmetry error. No strict rule is used, and the choice depended on several factors like the value of the gradient estimate, and the $\iota$ profile.
+
+\section{Results}\label{Results}
+\subsection{Turbulence Optimization}\label{turbulence only opt}
+As an initial test of our stochastic optimization method, we begin by solely optimizing for turbulence. The optimization routine is the same as described in the previous section, except instead of optimizing for both quasisymmetry and aspect ratio in the second half of each iteration, we only optimize for the target aspect ratio. Usually, combining the turbulence and aspect ratio objectives as is done in the first part is insufficient to reach our target aspect ratio. We have to force the optimizer to take more aggressive steps due to the simulation noise, which makes it more difficult to maintain the desired aspect ratio. For this optimization (and all of the examples in this work), the initial equilibrium is an approximately quasi-helically symmetric equilibrium with an aspect ratio of 8 and 4 field-periods.
+
+Figure \ref{fig:qflux iteration} shows the normalized nonlinear heat flux across each iteration of the optimization process. Due to the stochastic nature of optimization routine, the initial gradient estimates are very poor, leading to an increase in the heat flux in the first several iterations. However, as the optimization continued, there is eventually a rapid decrease in the heat flux as the gradient approximation begins to track the true gradient. The optimizer continues to steadily decrease the heat flux for most of the remaining iterations. Note that since we specify a maximum number of iterations rather than stopping tolerances, the optimization ends even when the heat flux had increased slightly at the end.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.5]{Figures_Turbulence_Only/qflux_iterations_turbulence_only.png}
+    \caption{The normalized heat flux across each iteration. The dashed lines represent an increase in the maximum boundary mode number being optimized.}
+    \label{fig:qflux iteration}
+\end{figure}
+
+A scan of the nonlinear heat fluxes across $\rho$ and optimized cross-sections of the flux surfaces are shown in Fig. \ref{turbulence only}. For this simulation (and all of the simulations in this section), the resolution is increased to the values in Table \ref{sim table post}. As seen in those plots, some surfaces see moderate to drastic improvements to the nonlinear heat flux. In particular, the $\rho = 0.4$ surfaces has a reduction of about an order of magnitude. However, other surfaces see much less improvement, such as at $\rho = 0.2$ and $\rho = 0.8$. It is not completely well-understood why that is, but it could be related to the fact that only the $\rho = \sqrt{0.5}$ surface is being optimized. This does, reveal a potential weakness in the optimization strategy that will be addressed in future work. Nevertheless, the following sections show much more uniform improvement. Interestingly, based off of the surface boundary plots, the cross-sections of the optimized equilibria seem much less strongly-shaped than in the initial equilibrium. Instead, the magnetic axis has significantly more torsion.
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+%         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Only/qflux_rho_scan_notitle.png}
+         \caption{}
+         \label{heat flux trace}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+%         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Only/boundaries_comp_case61.png}
+         \caption{}
+         \label{cross sections}
+     \end{subfigure}
+     \caption{(a) A scan of the nonlinear heat flux for the initial (red) and optimized (blue) equilibria across different flux surfaces. (b) The cross-sections of the boundary magnetic flux surface of the initial (red) and optimized (blue) configurations. The star in (a) indicates the $\rho = \sqrt{0.5}$ surface that was chosen for the optimization loop.}
+     \label{turbulence only}
+\end{figure}
+
+The contours of $|\mathbf{B}|$ in Boozer coordinates are plotted in Fig. \ref{fig:|B| turbulence only}. Surprisingly, the contours seem to resemble those from quasi-isodynamic equilibria despite not including a QI term in the objective functions. This may be related to the fact that it seems like the optimizer favored a high mirror ratio. Additionally, it is well-known that QI stellarators can be optimized to have the maximum-J property, which has numerous benefits including improved confinement of fast ions, neoclassical confinement of thermal ions \citep{Sanchez2023A,Velasco2023RobustFields} and enhanced stabilization against trapped-electron modes (TEM) \citep{Proll2012ResilienceInstabilities,Helander2013CollisionlessModes, Helander2014TheoryFields}. It's been further theorized and shown in gyrokinetic simulations of W7-X that possessing the maximum-J property can also be beneficial for ITG turbulence as well \citep{Proll2022TurbulenceGradient}. However, the TEM studies required modeling the full kinetic electron dynamics. In this study, we only use a Boltzmann response for the electrons.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.4]{Figures_Turbulence_Only/modB_case61.png}
+    \caption{The $|\mathbf{B}|$ contours in Boozer coordinates, which resemble contours of a QI equilibrium.}
+    \label{fig:|B| turbulence only}
+\end{figure}
+
+\subsection{Combined Turbulence-Quasisymmetry Optimization}\label{turbulence-qs}
+Next, we include the two-term quasisymmetry objective in the second part of the optimization loop. The final heat flux traces and optimized cross-sections of the flux surfaces are shown in Fig. \ref{turbulence-qs trace and boundaries}.  The cross sections in Fig. \ref{cross sections} show relatively modest changes in the shape of optimized stellarator. However, the time-trace (simulated at the $\psi/\psi_b = 0.5$ surface) in Fig. \ref{heat flux trace} shows about a factor of 3 decrease in the nonlinear heat flux.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/qflux_trace_notitle.png}
+         \caption{}
+         \label{heat flux trace}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/plot_boundaries_case23.png}
+         \caption{}
+         \label{cross sections}
+     \end{subfigure}
+     \caption{(a) The time-traces of the nonlinear heat fluxes of the initial (red) and optimized (blue) configurations. (b) The cross-sections of the magnetic flux surfaces of the initial (red) and optimized (blue) configurations.}
+     \label{turbulence-qs trace and boundaries}
+\end{figure}
+
+% \begin{figure}
+%      \centering
+%      \begin{subfigure}[b]{0.45\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{Figures_Turbulence_QS/3d_boundary_initial.png}
+%          \caption{}
+%          \label{3D initial}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.45\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{Figures_Turbulence_QS/3d_boundary_case23.png}
+%          \caption{}
+%          \label{3D optimized}
+%      \end{subfigure}
+%      \caption{The 3D $|\mathbf{B}|$ contours for the initial (a) and optimized (b) equilibria.}
+%      \label{3D plots}
+% \end{figure}
+
+To ensure that the nonlinear heat flux was reduced throughout the plasma volume, we again ran simulations at radial locations of $\rho = 0.2$, $0.4$, $0.6$, and $0.8$. The resulting heat fluxes as well as the maximum symmetry breaking residuals across $\rho$ are plotted in Fig. \ref{turbulence qs rho scan}. As seen in the plots, despite optimizing only for the $\rho = \sqrt{0.5}$ surface, the heat flux is reduced throughout the plasma volume. With regard to quasisymmetry, for $\rho < 0.5$, the optimized equilibrium has smaller maximum symmetry-breaking modes than the initial equilibrium. However, this reverses in the outer surfaces. This is unexpected considering that the quasisymmetry residuals were computed at $\rho = 0.6, \ 0.8 \ $ and $1$. Nevertheless, the degree of symmetry-breaking is still comparable to WISTELL-A \citep{Bader2020AdvancingStellarators}, another optimized QH stellarator. Indeed, the $|\mathbf{B}|$ plots in Fig. \ref{|B| plots} show contours characteristic of a quasi-helically symmetric stellarator (plotted at the $\psi = 0.5$ surface).
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/qflux_scan_notitle.png}
+         \caption{}
+         \label{heat flux rho scan}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/max_symmetry_breaking_case23.png}
+         \caption{}
+         \label{qs rho scan}
+     \end{subfigure}
+     \caption{Scans of the nonlinear heat flux (a) and maximum symmetry breaking modes (b) across different radial locations. The star in (a) indicates the $\rho = \sqrt{0.5}$ surface that was chosen for the optimization loop.}
+     \label{turbulence qs rho scan}
+\end{figure}
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/mod_B_initial.png}
+         \caption{}
+         \label{|B| contours initial}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/modB_case23.png}
+         \caption{}
+         \label{|B| contours final}
+     \end{subfigure}
+     \caption{The $|\mathbf{B}|$ contours in Boozer coordinates for the initial (a) and final (b) equilibria.}
+     \label{|B| plots}
+\end{figure}
+
+Unlike in tokamaks, different field lines in stellarators experience different curvatures, magnetic fields, etc. and so may have very different fluxes \citep{Dewar1983BallooningSystems, Faber2015GyrokineticStellarator}. Therefore, we also run simulations across $\alpha$ at the radial location $\rho = \sqrt{0.5}$. The resulting scan is shown in Fig. \ref{turbulence qs alpha scan}. At each $\alpha$ simulated, the optimized stellarator has a lower heat flux, indicating that the heat flux has been reduced across the entire flux surface.
+
+It is interesting to see that, for the initial geometry, there are large variations in the heat flux. This might indicate that some flux tubes are too short to sample enough area on the flux surface or that there is some coupling between the flux tubes. However, it should be noted that the $\iota$ of this equilibrium (plotted in Fig. \ref{fig:iota scan}) is close to $5/4$. Recent work has shown a very large variation across $\alpha$ on low-order rational surfaces \citep{Buller2023LinearStellarators}. In comparison, the optimized equilibrium has an $\iota$ that is slightly above 0.9. This could have negative impacts on the optimization routine as the optimizer may choose to approach equilibria with $\iota$ near low-order rationals. This could then lead to not only misleading heat fluxes, but also poor MHD stability. More work is needed to investigate the limitations of flux-tube codes, the effects of rational surfaces, and the resulting consequences for optimization.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/alpha_scan_notitle.png}
+         \caption{}
+         \label{turbulence qs alpha scan}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_QS/aLt_scan_notitle.png}
+         \caption{}
+         \label{a/Lt scan}
+     \end{subfigure}
+     \caption{The heat fluxes across different field lines $\alpha$ (a) and $a/L_T$ (b) for the initial (red) and optimized (blue) configurations. The star indicates the $\alpha = 0$ field line and the $a/L_T = 3$ temperature gradient that were chosen for the optimization loop.}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.75]{Figures_Turbulence_QS/iota_scan.png}
+    \caption{The $\iota$ profiles for the initial (red) and optimized (blue) equilibria.}
+    \label{fig:iota scan}
+\end{figure}
+
+In a fusion reactor, since the transport is very stiff, the temperature profiles may evolve to approach the critical temperature gradient (the temperature gradient at which the heat flux is zero). Therefore, a decrease in the heat flux is less useful if the critical temperature gradient also decreases significantly. To verify that the critical temperature gradient did not decrease, we also ran several nonlinear simulations with different temperature gradients at $\rho = \sqrt{0.5}$. The results are shown in Fig. \ref{a/Lt scan} which shows that the critical temperature gradient does not seem to change significantly. It would be more beneficial if the critical temperature gradient had also increased. Specifically targeting the critical temperature gradient will be the focus of future work.
+
+We also run linear simulations for the initial and optimized equilibria, with the growth rates shown in Fig. \ref{linear kx0} at $k_x = 0$ and Fig. \ref{linear kx0.4} at $k_x = 0.4$. Although the optimized equilibria have lower heat fluxes, they have a significantly higher peak growth rate at $k_x = 0$. On the other hand, it has lower growth rates at lower $k_y$, and one would expect that the nonlinear heat flux scales like $\gamma/\langle k_{\perp}^2\rangle$ (where the angle brackets indicate a flux-surface average) \citep{Mariani2018IdentifyingFluxes}. Therefore, this might result in the observed lower nonlinear heat fluxes. However, this trend reverses for the simulations at $k_x = 0$. Furthermore, recent work has shown that both peak growth rates and the quasilinear $\gamma/\langle k_{\perp}^2\rangle$ estimate are both poor proxies for the nonlinear heat flux \citep{Buller2023LinearStellarators}.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering    \includegraphics[width=\textwidth]{QL_Tests/linear_case23_kx_0.png}
+         \caption{}
+         \label{linear kx0}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering       \includegraphics[width=\textwidth]{QL_Tests/linear_case23_kx_0_4.png}
+         \caption{}
+         \label{linear kx0.4}
+     \end{subfigure}
+     \caption{The linear growth rates across different $k_y$ at $k_x = 0$ (a) and $k_x = 0.4$ (b)}
+     \label{linear sim}
+\end{figure}
+
+As a preliminary example, we replicate the plots from Fig. \ref{linear sim} but with a quasi-linear estimate of the form
+\begin{equation}
+    f_{QL}(k_y) = \frac{\gamma(k_y)}{\langle k_{\perp}^2 \rangle}
+\end{equation}
+where $\langle k_{\perp}^2 \rangle$ is
+\begin{equation}
+    \langle k_{\perp}^2 \rangle = \frac{\int dz k_{\perp}^2 \phi^2 \sqrt{g}}{\int dz \phi^2 \sqrt{g}}
+\end{equation}
+Here, $\phi$ is the electrostatic potential, $\sqrt{g}$ is the Jacobian, and the integration is along the simulated field line. This expression is similar to the one used in \cite{Mariani2018IdentifyingFluxes}. The resulting plots are shown in Fig. \ref{ql sim}. We have enforced that $\min(f_{QL}) = 0$, which assumes that only growing modes contribute to the flux. As seen in the plots, while the optimized configuration has a smaller $f_{QL}$ at smaller $k_y$ at $k_x = 0$, it has a much larger $f_{QL}$ at $k_x = 0.4$. This makes it challenging to use such a quasilinear estimate of the heat flux as a proxy, necessitating our approach of directly computing the nonlinear heat flux.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering    \includegraphics[width=\textwidth]{QL_Tests/ql_estimate_kx_0.png}
+         \caption{}
+         \label{linear kx0}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering       \includegraphics[width=\textwidth]{QL_Tests/ql_estimate_kx_0_4.png}
+         \caption{}
+         \label{linear kx0.4}
+     \end{subfigure}
+     \caption{The quasilinear estimate for the initial (red) and optimized (blue) configurations at $k_x = 0$ (left) and $k_x = 0.4$ (right).}
+     \label{ql sim}
+\end{figure}
+
+
+Finally, we compare the optimized stellarator to another configuration solely optimized for quasisymmetry. The plot of the heat fluxes across different surfaces is shown in Fig \ref{qflux precise}. The heat fluxes for the precise QH equilibrium are higher than those from the approximately QH equilibrium used as the initial point. This shows that just optimizing for quasisymmetry can be detrimental for turbulence, and stresses the need to optimize for both.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.5]{Figures_Turbulence_QS/qflux_scan_precise.png}
+    \caption{The heat fluxes across $\rho$ for a precise QH equilibrium (red) and the turbulence optimized equilibrium (blue).}
+    \label{qflux precise}
+\end{figure}
+
+\subsection{Optimization with Multiple field lines}\label{multiple alpha case}
+As described in the previous section, several physical and computational factors can lead to large variations in the heat fluxes at different $\alpha$. To avoid this issue, we rerun the optimization loop but simulate on field lines of both $\alpha = 0$ and $\alpha = \pi \iota/4$. This makes the new objective function
+
+\begin{equation}
+    f_Q = f_{Q,\alpha=0}^2 + f_{Q,\alpha=\pi \iota/4}^2 + (A - A_{target})^2.
+\end{equation}
+
+This new objective function serves both as a way of reducing the heat flux across multiple field lines while also testing our stochastic optimizer against additional objectives. Similar situations include trying to optimize across different flux surfaces, different temperature/density gradients, etc.
+
+The plots in Fig. \ref{multiple alpha} show the cross-sections, maximum symmetry breaking modes, and heat fluxes across $\rho$ and $\alpha$ for the initial equilibrium and the final optimized equilibria after optimizing at one and two field lines. While this new equilibrium has higher heat fluxes than when optimizing for just a single field line, it instead has a lower maximum symmetry breaking modes and better quasisymmetry.
+
+The scans across multiple $\alpha$ in Fig. \ref{alpha scan} show about a 50$\%$ variation in the heat flux compared to the $\alpha = 0$ point. Unfortunately, this is larger than the approximately 30$\%$ variation in the single-field line case, and comparable to the relative variation in the initial equilibrium. Nevertheless, the heat fluxes across each $\alpha$ are still 2-3x smaller than in the initial equilibrium and this shows that the stochastic optimizer is still effective with additional terms in the objective function. More investigation is needed to more effectively and precisely optimize with multiple field lines.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Multiple_Alpha/boundary_comp_case52_all_legend.png}
+         \caption{}
+         \label{}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Multiple_Alpha/max_symmetry_case52_all_legend.png}
+         \caption{}
+         \label{}
+     \end{subfigure}
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Multiple_Alpha/qflux_rho_scan_legend.png}
+         \caption{}
+         \label{}
+     \end{subfigure}
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Multiple_Alpha/qflux_alpha_scan_all_legend.png}
+         \caption{}
+         \label{alpha scan}
+     \end{subfigure}
+     \caption{(a) The cross sections for the initial equilibrium (red), the single field line optimized equilibrium (blue)from Section \ref{turbulence-qs}, and the new two field line optimized equilibrium. (b) The maximum symmetry-breaking modes for all three equilibria and WISTELL-A. (c) The heat flux scans across $\rho$. (d) The heat flux scans across $\alpha$. The stars in (c) and (d) indicate parameters that were chosen for optimization.}
+     \label{multiple alpha}
+\end{figure}
+
+\subsection{Fluid Approximation}\label{fluid opt}
+In this final case, we change the simulation parameters within the optimization loop to approach the fluid limit in {\tt GX}. This is based off of previous work that showed a fluid approximation with only a few velocity moments can accurately match the true heat fluxes at higher velocity resolution at moderate collision frequencies \citep{Buck2022AGX}. That study was motivated by a recently developed three-field model for the density, temperature, and momentum to approximate growth rates and nonlinear heat fluxes \citep{Hegna2018TheoryTransport}.
+
+To approximate this model, we reduce the velocity resolution to 4 Hermite moments and 2 Laguerre moments, as in the gyrofluid model. While normally this requires closure relations like in \citep{Beer1995GyrofluidTokamaks,Mandell2018Laguerre-HermiteGyrokinetics}, we instead increase the collisionality to damp the high wavenumber modes and increase the temperature gradient to $a/L_T = 5$. We employ a Dougherty collision operator \citep{Dougherty1964ModelSolution}.
+
+The plots of the maximum-symmetry breaking modes and the heat flux across $\rho$ for the kinetic and fluid cases are shown in Fig. \ref{fluid}. While the new equilibrium does not achieve lower heat fluxes than in the kinetic case, it still achieves about a factor of 2 reduction compared to the initial equilibrium except at $\rho = 0.8$ despite using very different physical parameters. The fluid case retains comparable levels of quasisymmetry as well. These results indicate that the optimization routine is robust against varying levels of fidelity. This opens new possibilities of potentially varying the fidelity across iterations. This can either decrease the computational cost further or allow us to increase other resolution parameters.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Fluid/max_symmetry_case50_all_legend.png}
+         \caption{}
+         \label{}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{Figures_Turbulence_Fluid/qflux_rho_scan_legend.png}
+         \caption{}
+         \label{alpha scan psi = 0.5}
+     \end{subfigure}
+     \caption{The maximum symmetry-breaking modes (a) and the heat flux scan across $\rho$ (b) for the initial equilibrium, the kinetic case from Section \ref{turbulence-qs}, and the fluid case (as well as WISTELL-A for the left plot). The star in (b) indicates the $\rho = \sqrt{0.5}$ surface that was chosen for the optimization loop.}
+     \label{fluid}
+\end{figure}
+
+\section{Effects of Magnetic Shear on Reduced Turbulence}\label{Mechanisms for Reduced Turbulence}
+% To better understand how the changes in the geometry affected the resulting heat flux, we perform additional nonlinear simulations using the results from Section \ref{turbulence-qs}. In these simulations, we take the geometry files of the initial and optimized equilibria and swap individual geometric quantities (the quantities in Eq. \eqref{geo quantitities}). While we do not self-consistently resolve for the changes in the equilibrium, this may give insight into which quantity was most responsible for the reduction in heat flux.
+
+% The bar graph in Fig. \ref{fig:geo swap} shows the resulting heat fluxes for different combinations of swaps. The bitmasks on the x-axis indicate which quantity was swapped (1 indicates a swap). From left to right, the order of the bits correspond to $B$, $\mathbf{B} \times \nabla B \cdot \nabla \alpha$, $\mathbf{B} \times \nabla \kappa \cdot \nabla \psi$, $|\nabla \alpha| ^2$, $\nabla \psi \cdot \nabla \alpha$, and $|\nabla \psi| ^2$. Therefore, the bits $010000$ indicates only swapping $\mathbf{B} \times \nabla B \cdot \nabla \alpha$. Note that the complete set of all possible swaps are not shown, as several simulations failed. Given that we do not self-consistently resolve the equilibrium, it is unclear if these simulations should necessarily succeed.
+
+% Surprisingly, most of the swaps did not decrease the heat flux significantly. Some cases even increased the heat flux. The only combination that reduced the heat flux substantially was swapping the global magnetic shear $\hat{s} = \frac{x}{\iota}\frac{d\iota}{dx}$, where $x = a\rho$. While it is known that larger shear can stabilize against microinstabilities, these results are still surprising given that the shear is very small in both cases ($\hat{s} < 0.1$ for both equilibria).
+
+% \begin{figure}
+%     \centering
+%     \includegraphics[scale=0.5]{geometry_swap.png}
+%     \caption{The resulting nonlinear heat fluxes after swapping different geometric quantities.}
+%     \label{fig:geo swap}
+% \end{figure}
+
+It is well-known since \citet{Greene1981TheModes} that sufficient positive global magnetic shear can be destabilizing for intermediate to high wavenumber instabilities like the ballooning mode. An analogous relationship for transport was investigated in \citet{Kotschenreuther1995QuantitativeEffects}, where it was found that while increased shear can reduce thermal transport, it can also negatively impact the critical gradient.
+
+To further investigate these effects, we optimized for several more precisely quasisymmetric equilibria, but with different target shears. The nonlinear heat flux traces are shown in Fig. \ref{fig:shear scan}. The shear = 0.01 case is when there is no shear target. While increasing the shear slightly does reduce the heat flux, continuing to increase it eventually increases the heat flux again, consistent with the findings in \citet{Kotschenreuther1995QuantitativeEffects}. It is somewhat surprising that the heat flux is this sensitive to the shear since the shear is very small. For comparison, the global magnetic shear for W7-X in these units is approximately 0.16. Future work will better address the relationship between shear and turbulence in stellarators. This relationship can be very important as very low global magnetic shear is characteristic of vacuum quasisymmetric stellarators \citep{Landreman2022MagneticConfinement}. While the shear increases for finite $\beta$ QS stellarators \citep{Landreman2022OptimizationConfinement}, it is still small compared to shear in tokamaks.
+
+\begin{figure}
+    \centering
+    \includegraphics[scale=0.5]{shear_scan.png}
+    \caption{Nonlinear heat flux traces for quasisymmetric equilibria with different shear targets.}
+    \label{fig:shear scan}
+\end{figure}
+
+%@inproceedings{Qian2022,
+%author = {Qian, Tony and Buck, Braden and Gaur, Rahul and Mandell, Noah and Kim, Patrick and Dorland, William},
+%booktitle = {Bull. Am. Phys. Soc.},
+%publisher = {American Physical Society},
+%title = {{Stellarator profile predictions using Trinity3D and GX}},
+%year = {2022}
+%}
+
+\section{Transport Simulations}\label{trinity sim}
+To study how the changes in nonlinear heat fluxes affected the macroscopic profiles, we use the {\tt T3D} transport code \citep{Qian2022StellaratorGX}. {\tt T3D} uses the same algorithm as {\tt Trinity} \citep{Barnes2010DirectCodes}, but is written in Python and adapted to work with stellarator geometries. {\tt T3D} takes advantage of the separation of scales in the local $\delta f$ gyrokinetic model where the distribution function is written as $F = F_{0s} + \delta f_s$. It can be shown that $F_{0s}$ is a Maxwellian and it is assumed that the perturbation $\delta f$ scales like $\delta f \sim \epsilon F_{0s}$ where $\epsilon = \rho/a$. The Maxwellian $F_{0s}$ evolves slower than the perturbation $\partial F_{0s}/\partial t \sim \epsilon^2 \partial \delta f_s/\partial t$. This allows for {\tt T3D} to evolve the macroscopic density, pressure, and temperature profiles using heat and particle fluxes computed by gyrokinetic codes like {\tt GX}.
+
+We run {\tt T3D} simulations for the initial approximately QH equilibrium and optimized equilibrium from Section \ref{turbulence-qs}. Both equilibria were scaled to the same major radius and on-axis magnetic field as W7-X. An adiabatic response is still assumed for the electrons, and neoclassical contributions are ignored to isolate the effects from turbulence. The plots of the final steady-state temperature profiles for both equilibria are shown in Figure \ref{trinity}.
+
+\begin{figure}
+     \centering
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{trinity/temp_comp.png}
+         \label{temp_comp}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[c]{0.45\textwidth}
+         \centering
+         \includegraphics[width=\textwidth]{trinity/temp_grad_comp.png}
+         \label{temp_grad_comp}
+     \end{subfigure}
+     \caption{The final temperature (left) and temperature gradient (right) profiles for the initial and optimized equilibria.}
+     \label{trinity}
+\end{figure}
+
+From the plot of the temperature profiles, there is a clear increase in the temperature for the optimized equilibrium. The temperature at the innermost simulated point increased by approximately 10$\%$. This seems lower than expected considering that the optimized equilibrium had lower heat fluxes by about a factor of 3. The true heat flux scales like $Q \sim Q_{sim} n T v_{th} (\rho/a)^2$, where $Q_{sim}$ is the heat flux from the simulation. Since $v_{th} \sim T^{1/2}$ and $\rho \sim v_{th}$, the heat flux scales like $Q \sim Q_{sim} T^{5/2}$. For equivalent sources, $T \sim Q_{sim}^{2/5}$. Therefore, we would expect the temperature to increase by a factor of $Q^{0.4} \sim 1.55$. However, the simulations from Section \ref{turbulence-qs} assumed a temperature gradient of $a/L_{Ti} = 3$. From the plot of the temperature gradients, most points are simulated with lower gradients, and the equilibria have the same critical temperature gradient (as seen in Figure \ref{a/Lt scan}). Nevertheless, the improvement is still very encouraging. Future work will investigate using simulations to optimize for a higher critical gradient or for specific target profiles.
+
+\section{Conclusions}\label{Conclusions}
+In this work, we directly optimized stellarators for reduced nonlinear heat fluxes and good quasisymmetry by coupling {\tt GX} and {\tt DESC}. By directly running nonlinear simulations we include the nonlinear saturation mechanisms that determine the steady-state heat flux, and so avoid potential limitations of linear or quasilinear models. The SPSA method is used to handle the noisy heat flux objective and to cheaply estimate the gradient. The newly optimized equilibria show factors of 2-4 improvement in the nonlinear heat flux across several flux surfaces and multiple field lines while also having comparable or improved quasisymmetry. We also investigated how global magnetic shear affects the nonlinear heat flux and found that slightly increasing it can significantly reduce the flux. However, increasing the shear too much led to increases in the heat flux. Our {\tt T3D} simulations showed that by reducing the heat fluxes, the steady-state temperature profiles did increase slightly. Unfortunately, the transport is sufficiently stiff so that macroscopic profiles will approach the critical gradient. Since the initial and optimized equilibria have similar critical gradients, this limits the improvements in the temperature profile. Nevertheless, these results demonstrate that we can efficiently include nonlinear gyrokinetic simulations within the optimization loop. Future work will include adding an objective for MHD stability, optimizing for the nonlinear critical gradient and also directly optimize for desired macroscopic profiles. More improvements will also be made to the SPSA optimizer to make it more effective near minima. Currently, near the minima the true gradient is small enough to be comparable to the simulation noise. This leads to poorer convergence near the minima, and so requires more sophisticated optimization methods. Consequently, we will implement other optimization methods that have been effective for stochastic optimization, such as Bayesian optimization.
+
+\section{Acknowledgements}
+The authors thank M. Zarnstoff and B. Buck for insightful and fruitful conversations. Research support came from the U.S Department of Energy (DOE). P.K and colleagues at UMD were supported by the DOE via the Scientific Discovery Through Advanced Computing Program under award number DE-SC0018429 as well as under award number DE-FG0293ER54197. P.K has also been supported through the DOE CSGF Program under award number DE-SC0024386 (while at Princeton University). R.C., D.W.D., E.K., and D.P. were supported by the U.S. Department of Energy under contract numbers DE-AC02-09CH11466,
+DE-SC0022005 and Field Work Proposal No. 1019. This work started as part of P.K.'s Summer 2022 DOE SULI internship under award number DE-AC02-09CH11466. 
+
+N.R.M was supported by the DOE Fusion Energy Sciences Postdoctoral Research Program administered by the Oak Ridge Institute for Science and Education (ORISE) for the DOE via Oak Ridge
+Associated Universities (ORAU) under DOE contract number DE-SC0014664, and by the Laboratory Directed Research and Development Program of the Princeton Plasma Physics Laboratory under U.S. Department of Energy contract number DE-AC02-09CH11466.
+
+R J is supported by the Portuguese FCT—Fundação para a Ciência e Tecnologia, under Grant 2021.02213.CEECIND. This work has been carried out within the framework of the EUROfusion Consortium, funded by the European Union via the Euratom Research and Training Programme (Grant Agreement No 101052200 — EUROfusion). Views and opinions expressed are however those of the author(s) only and do not necessarily reflect those of the European Union or the European Commission. Neither the European Union nor the European Commission can be held responsible for them. Instituto Superior Técnico activities also received financial support from FCT through Projects UIDB/50010/2020 and UIDP/50010/2020.
+
+Computations were performed on the Traverse and Stellar clusters at Princeton/PPPL as well as the Perlmutter cluster at NERSC.
+\appendix
+\section{Codes}\label{Codes}
+\subsection{{\tt GX}}
+{\tt GX} employs the radially-local $\delta\!f$ approach to solve the gyrokinetic equation. In this approximation, the distribution function $F_s$ is represented as $F_s = F_{0s} + \delta\! f_s = F_{Ms}\left(1 - Z_s \Phi/\tau_s\right) + h_s$, where $F_{0s}$ is Maxwellian and $\delta \! f_s$ is a perturbation consisting of a Boltzmann part proprtional to the electrostatic potential $\Phi$ and a general perturbation $h_s$. The subscript $s$ labels species. Assuming electrostatic fluctuations, the gyroaveraged perturbation $g_s = \langle f_s \rangle$ then obeys the electrostatic gyrokinetic equation
+
+\begin{align}\label{gyrokinetic eq}
+   \frac{\partial g_s}{\partial t} + & v_{\parallel} \mathbf{b} \cdot \nabla z \left(\frac{\partial g_s}{\partial t} + \frac{q_s}{T_s}\frac{\partial \langle \phi \rangle}{\partial t} F_s\right) - \frac{\mu}{m_s} \mathbf{b}\cdot \nabla z \frac{\partial B}{\partial z}\frac{\partial g_s}{\partial v_{\parallel}} \\
+   &+ \mathbf{v}_{Ms} \cdot \left(\nabla_{\perp} g_s + \frac{q_s}{T_s} \nabla_{\perp} \langle \phi \rangle F_s\right)\\
+   &+ \langle \mathbf{v}_E \rangle \cdot \nabla_{\perp} g_s + \langle \mathbf{v}_E \rangle \cdot \nabla F_s = \langle C\left(\delta f_s\right)\rangle,
+\end{align}
+where $v_{\parallel}$ is the velocity parallel to the magnetic field, $\mathbf{b} = \mathbf{B}/B$, $\mu$ is the magnetic moment, $z$ is some coordinate along the field line, $\kappa$ is the field line curvature, $\mathbf{v}_{Ms}$ is the sum of the magnetic and curvature drift velocities, and $\mathbf{v_E}$ is the $\mathbf{E} \times \mathbf{B}$ velocity. For this work, electromagnetic effects are ignored and a Boltzmann response is used to model the perturbed electron distribution.
+
+In {\tt GX}, Eq. \eqref{gyrokinetic eq} is projected onto the Hermite and Laguerre basis functions
+\begin{align}
+    \psi^l(\mu B) &= (-1)^l e^{-\mu B} \mathrm{L}_l(\mu B), \\
+    \phi^m(v_{\parallel}) &= \frac{e^{-v_{\parallel}^2/2}\mathrm{He}_m(v_{\parallel})}{\sqrt{(2 \pi)^3 m!}},
+\end{align}
+where $\mathrm{He}_m(x)$ and $\mathrm{L}_l(x)$ are the (probabilist's) Hermite and Laguerre polynomials, respectively. More details on the expansion and numerical algorithm can be found in \citet{Mandell2018Laguerre-HermiteGyrokinetics} and \citet{Mandell2022GX:Design}.
+
+By choosing a Hermite-Laguerre basis, the resulting equations for the spectral coefficients reduce to the gyrofluid equations at low resolution \citep{Dorland1993GyrofluidEffects,Beer1995GyrofluidTokamaks}. Particle number, momentum, and energy are also conserved at low resolution. Overall, any inaccuracies are due to the closure or dissipation model used. Therefore, {\tt GX} allows for lower velocity resolution than other similar codes like {\tt GS2} \citep{Kotschenreuther1995ComparisonInstabilities,Dorland2000ElectronTurbulence} and {\tt stella} \citep{Barnes2019Stella:Configurations} that use finite-difference methods in velocity space.  Flexible velocity resolution combined with a GPU implementation allows {\tt GX} to run nonlinear (electrostatic with adiabatic electrons) gyrokinetic simulations in minutes rather than hours or days.
+\subsection{{\tt DESC}}
+{\tt DESC} \citep{Dudt2020DESC:Solver,Panici2023TheComputations,Conlin2023TheMethods,Dudt2023TheOptimization} is a new stellarator equilibrium and optimization code. Two of the main features of {\tt DESC} are its pseudo-spectral representation of the magnetic geometry and the use of automatic differentiation to compute exact derivatives.
+
+{\tt DESC} directly solves the ideal MHD force balance equation
+\begin{equation}
+    \mathbf{J} \times \mathbf{B} = \nabla p.
+\end{equation}
+{\tt DESC} uses as its computational domain the coordinates $(\rho,\theta,\zeta)$, defined as
+\begin{subequations}
+    \begin{align}
+    \rho &= \sqrt{\frac{\psi}{\psi_a}} \\
+    \theta &= \theta^* - \lambda(\rho,\theta,\zeta) \\
+    \zeta &= \phi,
+\end{align}
+\end{subequations}
+where $\psi$ is the enclosed toroidal flux, $\psi_a$ is the total enclosed toroidal flux in the plasma, $\theta^*$ is a straight field line poloidal angle, $\lambda$ is a stream function, and $\phi$ is the geometric toroidal angle. It then expands $\lambda$, and the cylindrical coordinates $R$ and $Z$ in terms of a Fourier-Zernike basis.
+
+\begin{subequations}
+\begin{equation}
+    R(\rho,\theta,\zeta) = \sum_{m=-M,n=-N,l=0}^{M,N,L} R_{lmn} \mathcal{Z}_l^m (\rho,\theta) \mathcal{F}^n(\zeta)
+\end{equation}
+\begin{equation}
+    \lambda(\rho,\theta,\zeta) = \sum_{m=-M,n=-N,l=0}^{M,N,L} \lambda_{lmn} \mathcal{Z}_l^m (\rho,\theta) \mathcal{F}^n(\zeta)
+\end{equation}
+\begin{equation}
+Z(\rho,\theta,\zeta) = \sum_{m=-M,n=-N,l=0}^{M,N,L} Z_{lmn} \mathcal{Z}_l^m (\rho,\theta) \mathcal{F}^n(\zeta)
+\end{equation}
+\end{subequations}
+where $\mathcal{R}_l^{|m|}$, $\mathcal{Z}_l^m$, and $\mathcal{F}$ are the shifted Jacobi polynomials, Zernike polynomials, and Fourier series, respectively.
+
+It can be shown that the force error $\mathbf{J} \times \mathbf{B} - \nabla p$ has only two independent components
+\begin{align}
+    F_\rho &= \sqrt{g}\left(J^{\zeta}B^{\theta} - J^{\theta}B^{\zeta}\right) + p' \\
+    F_\beta &= \sqrt{g}J^{\rho},
+\end{align}
+where $\sqrt{g}$ is the Jacobian, and the superscripts indicate the contravariant components. {\tt DESC} then solves for the spectral coefficients $R_{lmn}$, $Z_{lmn}$, and $\lambda_{lmn}$ that minimize this force error.
+
+{\tt DESC} also utilizes automatic differentiation through JAX \citep{jax2018github} in its optimization routines. Briefly, in automatic differentiation, the chain rule is applied through the code, allowing {\tt DESC} to compute exact derivatives faster and more accurately than derivatives from finite differencing routines. However, at the time of this writing this requires writing the objective function in native Python, and {\tt GX} is written in C++/CUDA. Furthermore, it is unclear how effective it would be to differentiate through the timestepping of such a noisy system. Therefore, this would require extensive code developments for both {\tt DESC} and {\tt GX}, and so AD will not be used when optimizing for reduced turbulence.
+% We could not use automatic differentiation for this purpose even if GX were written in Python. We should talk about this. 
+\section{Simulation Parameters used in Optimization}\label{app sim param}
+\subsection{Turbulence, Turbulence-QS, and Multiple $\alpha$ Optimization}
+For the {\tt GX} simulations within the optimization loop, we use the simulation parameters listed in Table \ref{sim table}.
+\begin{table}
+\centering
+    \begin{tabular}{cc}
+     \hline
+ Parameter & Value\\ [0.5ex] 
+ \hline\hline
+ Normalized Toroidal Flux (s) & 0.5\\
+ \hline
+ field line label ($\alpha$) & 0.0 (and $\pi \iota/4)$ for multiple $\alpha$\\
+ \hline
+Number of Poloidal Turns (npol) & 1\\
+\hline
+Parallel Resolution (ntheta) & 64 \\
+\hline
+Radial resolution (nx)& 64 \\
+\hline
+field line label resolution (ny) & 64 \\
+\hline
+Hermite Resolution (nhermite) & 8 \\
+\hline
+Laguerre Resolution (nlaguerre) & 4\\
+\hline
+Normalized Temperature Gradient (tprim) & 3.0 \\
+\hline
+Normalized Density Gradient (fprim) & 1.0 \\
+\hline
+    \end{tabular}
+\caption{The simulation parameters used for the {\tt GX} simulations within the optimization loop for Sections \ref{turbulence only opt}-\ref{multiple alpha case}.}
+\label{sim table}
+\end{table}
+
+The number of poloidal turns, parallel resolution, and number of simulated modes (proportional to $n_x$ and $n_y$) are chosen to enable cheaper simulations. However, one poloidal turn has been used in previous nonlinear W7-X gyrokinetic benchmark studies \citep{Gonzalez-Jerez2022ElectrostaticGENEb}. Furthermore, from a quasilinear estimate the heat flux scales like $1/\langle k_{\perp}^2\rangle$ (where the angle brackets indicate a flux-surface average) \citep{Mariani2018IdentifyingFluxes}. Consequently, higher wave number modes contribute less to the heat flux. The gradients are typical for experimental profiles for W7-X \citep{Beurskens2021IonPlasmas} and have been previously used for benchmark, transport, and optimization studies \citep{Gonzalez-Jerez2022ElectrostaticGENE, BanonNavarro2023First-principlesStellarators, Roberg-Clark2022ReductionOptimization}. Finally, it's been demonstrated that {\tt GX} simulations can yield accurate heat flux traces using the specified number of Hermite and Laguerre polynomials \citep{Mandell2022GX:Design}. To check our results, the post-processing simulations are run at higher resolution.
+
+\subsection{Fluid Approximation Optimization}
+When running the optimization at fluid resolution, the simulation parameters are identical except those listed in Table \ref{sim table fluid}.
+\begin{table}
+\centering
+    \begin{tabular}{cc}
+     \hline
+ Parameter & Value\\ [0.5ex] 
+ \hline\hline
+Hermite Resolution (nhermite) & 4 \\
+\hline
+Laguerre Resolution (nlaguerre) & 2\\
+\hline
+Collision Frequency (vnewk) & 2.0\\
+\hline
+Normalized Temperature Gradient (tprim) & 5.0 \\
+\hline
+Normalized Density Gradient (fprim) & 1.0 \\
+\hline
+    \end{tabular}
+\caption{The simulation parameters used for the {\tt GX} simulations within the optimization loop for the fluid case in Section \ref{fluid opt}}
+\label{sim table fluid}
+\end{table}
+The velocity resolution is decreased to that of the gyrofluid model, and the collision frequency is increased. Since there is far greater dissipation in the model, we also increase the temperature gradient.
+
+\subsection{Post-processing Simulations}
+To ensure our final results are well-converged, we increase the resolution of the post-processing simulations to those listed in Table \ref{sim table post}.
+\begin{table}
+\centering
+    \begin{tabular}{cc}
+     \hline
+ Parameter & Value\\ [0.5ex] 
+ \hline\hline
+Number of Poloidal Turns (npol) & 2\\
+\hline
+Parallel Resolution (ntheta) & 128 \\
+\hline
+Radial resolution (nx)& 128 \\
+\hline
+field line label resolution (ny) & 128 \\
+\hline
+Hermite Resolution (nhermite) & 16 \\
+\hline
+Laguerre Resolution (nlaguerre) & 8\\
+\hline
+    \end{tabular}
+\caption{The simulation parameters used for the {\tt GX} simulations for post-processing.}
+\label{sim table post}
+\end{table}
+The scans over $\rho$, $\alpha$, and $a/L_T$ of course include additional values.
+
+\subsection{{\tt DESC} Equilibria Parameters}
+The parameters used for the equilibria are shown in this table. These are considered "moderate" resolution, and are typical values used for optimization. This is a vacuum case, so both the pressure and current are zero. When optimized for precise QH symmetry, the resulting equilibrium is similar to the QH equilibirum in \citep{Landreman2022MagneticConfinement}.
+\begin{table}
+\centering
+    \begin{tabular}{cc}
+     \hline
+ Parameter & Value\\ [0.5ex] 
+ \hline\hline
+Spectral Resolution (M, N, L) & (8, 8, 8)\\
+\hline
+Grid Resolution (M$_{grid}$, L$_{grid}$, N$_{grid}$) & (16, 16, 16) \\
+\hline
+Total Toroidal Flux (Psi) & 0.03817902 \\
+\hline
+Major Radius (R0) & 1.0 \\
+\hline
+Aspect Ratio (R0/a) & 8.0 \\
+\hline
+    \end{tabular}
+\caption{The resolution parameters for the {\tt DESC} equilibria in this study.}
+\label{desc parameters}
+\end{table}
+
+% \subsection{{\tt T3D} Simulation Parameters}
+% The table shows the resolution parameters used for the {\tt T3D} simulations. Similar parameters have been used to simulate the profiles of W7-X and recovered the experimentally observed ion-temperature clamping.
+
+\subsection{Optimization Timings}
+The table below shows the approximate timings of different parts of the optimization loop using a single Tesla V100 GPU on the Princeton Traverse cluster. All values are in minutes. In total, each optimization completed in about 20 hours. It takes slightly more than 12 hours on a single NVIDIA A100 GPU on the NERSC Perlmutter cluster. The "optimization" timings are for a single iteration.
+\begin{table}
+\centering
+    \begin{tabular}{cc}
+     \hline
+ Parameter & Value\\ [0.5ex] 
+ \hline\hline
+{\tt GX} Evaluation & 3\\
+\hline
+{\tt GX} Optimization & 10 \\
+\hline
+Quasisymmetry Optimization & 4 \\
+\hline
+    \end{tabular}
+\caption{The approximate timings for different parts of the optimization loop.}
+\label{timings}
+\end{table}
+\bibliographystyle{jpp}
+% Note the spaces between the initials
+
+\newpage
+
+\section{DESC Input Files}
+\subsection{Initial Equilibrium}
+\verbatiminput{DESC_Input_Files/initial_input}
+
+\subsection{Optimized Equilibrium from Section \ref{turbulence-qs}}
+\verbatiminput{DESC Input Files/final_input}
+\bibliography{references}
+
+\end{document}

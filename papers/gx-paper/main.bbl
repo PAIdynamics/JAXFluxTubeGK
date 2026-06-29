@@ -1,0 +1,533 @@
+\begin{thebibliography}{83}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\def\au#1{#1} \def\ed#1{#1} \def\yr#1{#1}\def\at#1{#1}\def\jt#1{\textit{#1}}
+  \def\bt#1{#1}\def\bvol#1{\textbf{#1}} \def\vol#1{#1} \def\pg#1{#1}
+  \def\publ#1{#1}\def\arxiv#1{#1}\def\org#1{#1}\def\st#1{\textit{#1}}
+
+\bibitem[Abel {\em et~al.\/}(2008)Abel, Barnes, Cowley, Dorland \&
+  Schekochihin]{Abel2008}
+{\sc \au{Abel, I}, \au{Barnes, M}, \au{Cowley, S}, \au{Dorland, W} \&
+  \au{Schekochihin, A}} \yr{2008}  \at{Linearized model {{Fokker-Planck}}
+  collision operators for gyrokinetic simulations. {{I}}. {{Theory}}}.
+  \jt{Physics of Plasmas}  \bvol{15}~(12),  \pg{122509}.
+
+\bibitem[Abel \& Cowley(2013)]{Abel2013a}
+{\sc \au{Abel, I} \& \au{Cowley, S}} \yr{2013}  \at{Multiscale gyrokinetics for
+  rotating tokamak plasmas: {{II}}. {{Reduced}} models for electron dynamics}.
+  \jt{New Journal of Physics}  \bvol{15}.
+
+\bibitem[Abel {\em et~al.\/}(2013)Abel, Plunk, Wang, Barnes, Cowley, Dorland \&
+  Schekochihin]{Abel2013}
+{\sc \au{Abel, I}, \au{Plunk, G}, \au{Wang, E}, \au{Barnes, M}, \au{Cowley, S},
+  \au{Dorland, W} \& \au{Schekochihin, A}} \yr{2013}  \at{Multiscale
+  gyrokinetics for rotating tokamak plasmas: {{Fluctuations}}, transport and
+  energy flows}.  \jt{Reports on Progress in Physics}  \bvol{76}~(11).
+
+\bibitem[Antonsen \& Lane(1980)]{Antonsen1980}
+{\sc \au{Antonsen, T} \& \au{Lane, B}} \yr{1980}  \at{Kinetic equations for low
+  frequency instabilities in inhomogeneous plasmas}.  \jt{Physics of Fluids}
+  \bvol{23}~(6),  \pg{1205--1214}.
+
+\bibitem[Ball \& Brunner(2021)]{Ball2021}
+{\sc \au{Ball, J} \& \au{Brunner, S}} \yr{2021}  \at{A non-twisting flux tube
+  for local gyrokinetic simulations}.  \jt{Plasma Physics and Controlled
+  Fusion}  \bvol{63}~(6).
+
+\bibitem[Barbour {\em et~al.\/}(2021)Barbour, Dorland, Barbour \&
+  Dorland]{barbour2021}
+{\sc \au{Barbour, N}, \au{Dorland, W}, \au{Barbour, N} \& \au{Dorland, W}}
+  \yr{2021} Subgrid {{Modeling}} of {{Gyrokinetic Turbulence}} using {{Machine
+  Learning}}.  \bt{In {\em Bulletin of the {{American Physical Society}}\/}}.
+
+\bibitem[Barbour {\em et~al.\/}(2022)Barbour, Dorland, Mandell, Gaur,
+  {McGrae-Menge}, Pierce, Almanza, Chou, Alves, Fiuza \& Loureiro]{barbour2022}
+{\sc \au{Barbour, N}, \au{Dorland, W}, \au{Mandell, N}, \au{Gaur, R},
+  \au{{McGrae-Menge}, M}, \au{Pierce, J}, \au{Almanza, M}, \au{Chou, J},
+  \au{Alves, E}, \au{Fiuza, F} \& \au{Loureiro, N}} \yr{2022}
+  Machine-{{Learning Closures}} of the {{Kinetic Moment Hierarchy}} in the
+  {{Context}} of {{Landau Damping}}.  \bt{In {\em Bulletin of the {{American
+  Physical Society}}\/}}.
+
+\bibitem[Barnes {\em et~al.\/}(2009)Barnes, Abel, Dorland, Ernst, Hammett,
+  Ricci, Rogers, Schekochihin \& Tatsuno]{Barnes2009}
+{\sc \au{Barnes, M}, \au{Abel, I}, \au{Dorland, W}, \au{Ernst, D}, \au{Hammett,
+  G}, \au{Ricci, P}, \au{Rogers, B}, \au{Schekochihin, A} \& \au{Tatsuno, T}}
+  \yr{2009}  \at{Linearized model fokker-planck collision operators for
+  gyrokinetic simulations. {{II}}. {{Numerical}} implementation and tests}.
+  \jt{Physics of Plasmas}  \bvol{16}~(7),  \pg{72107}.
+
+\bibitem[Barnes {\em et~al.\/}(2010)Barnes, Abel, Dorland, G{\"o}rler, Hammett
+  \& Jenko]{Barnes2010}
+{\sc \au{Barnes, M}, \au{Abel, I}, \au{Dorland, W}, \au{G{\"o}rler, T},
+  \au{Hammett, G} \& \au{Jenko, F}} \yr{2010}  \at{Direct multiscale coupling
+  of a transport code to gyrokinetic turbulence codes}.  \jt{Physics of
+  Plasmas}  \bvol{17}~(5),  \pg{969}.
+
+\bibitem[Barnes {\em et~al.\/}(2019)Barnes, Parra \& Landreman]{Barnes2019}
+{\sc \au{Barnes, M}, \au{Parra, F} \& \au{Landreman, M}} \yr{2019}  \at{stella:
+  {{An}} operator-split, implicit--explicit {$\delta$}f-gyrokinetic code for
+  general magnetic field configurations}.  \jt{Journal of Computational
+  Physics}  \bvol{391},  \pg{365--380}.
+
+\bibitem[Beer(1995)]{beer1995a}
+{\sc \au{Beer, M}} \yr{1995}  \at{Gyrofluid models of turbulent transport in
+  tokamaks}. PhD thesis, Princeton University.
+
+\bibitem[Beer {\em et~al.\/}(1995)Beer, Cowley \& Hammett]{Beer1995}
+{\sc \au{Beer, M}, \au{Cowley, S} \& \au{Hammett, G}} \yr{1995}
+  \at{Field--aligned coordinates for nonlinear simulations of tokamak
+  turbulence}.  \jt{Phys. Plasmas}  \bvol{2}~(7),  \pg{2687--2700}.
+
+\bibitem[Beer \& Hammett(1996)]{Beer1996}
+{\sc \au{Beer, M} \& \au{Hammett, G}} \yr{1996}  \at{Toroidal gyrofluid
+  equations for simulations of tokamak turbulence}.  \jt{Physics of Plasmas}
+  \bvol{3}~(11),  \pg{4046--4064}.
+
+\bibitem[Belli {\em et~al.\/}(2022)Belli, Candy, Sfiligoi \&
+  W{\"u}rthwein]{Belli2022}
+{\sc \au{Belli, E}, \au{Candy, J}, \au{Sfiligoi, I} \& \au{W{\"u}rthwein, F}}
+  \yr{2022} Comparing single-node and multi-node performance of an important
+  fusion {{HPC}} code benchmark.  \bt{In {\em {{PEARC}} 2022 {{Conference
+  Series}} - {{Practice}} and {{Experience}} in {{Advanced Research Computing}}
+  2022 - {{Revolutionary}}: {{Computing}}, {{Connections}}, {{You}}\/}}.
+
+\bibitem[Belli {\em et~al.\/}(2008)Belli, Hammett \& Dorland]{Belli2008}
+{\sc \au{Belli, E}, \au{Hammett, G} \& \au{Dorland, W}} \yr{2008}  \at{Effects
+  of plasma shaping on nonlinear gyrokinetic turbulence}.  \jt{Physics of
+  Plasmas}  \bvol{15}~(9),  \pg{92303}.
+
+\bibitem[Candy {\em et~al.\/}(2016)Candy, Belli \& Bravenec]{Candy2016}
+{\sc \au{Candy, J}, \au{Belli, E} \& \au{Bravenec, R}} \yr{2016}  \at{A
+  high-accuracy {{Eulerian}} gyrokinetic solver for collisional plasmas}.
+  \jt{Journal of Computational Physics}  \bvol{324},  \pg{73--93}.
+
+\bibitem[Candy {\em et~al.\/}(2009)Candy, Holland, Waltz, Fahey \&
+  Belli]{Candy2009}
+{\sc \au{Candy, J}, \au{Holland, C}, \au{Waltz, R}, \au{Fahey, M} \& \au{Belli,
+  E}} \yr{2009}  \at{Tokamak profile prediction using direct gyrokinetic and
+  neoclassical simulation}.  \jt{Physics of Plasmas}  \bvol{16}~(6),
+  \pg{060704}.
+
+\bibitem[Candy \& Waltz(2003)]{Candy2003}
+{\sc \au{Candy, J} \& \au{Waltz, R}} \yr{2003}  \at{An {{Eulerian}}
+  gyrokinetic-{{Maxwell}} solver}.  \jt{Journal of Computational Physics}
+  \bvol{186}~(2),  \pg{545--581}.
+
+\bibitem[D'Azevedo {\em et~al.\/}(2018)D'Azevedo, Abbott, Koskela, Worley, Ku,
+  Ethier, Yoon, Shephard, Hager, Lang, Choi, Podhorszki, Klasky, Parashar \&
+  Chang]{DAzevedo2018}
+{\sc \au{D'Azevedo, E}, \au{Abbott, S}, \au{Koskela, T}, \au{Worley, P},
+  \au{Ku, S}, \au{Ethier, S}, \au{Yoon, E}, \au{Shephard, M}, \au{Hager, R},
+  \au{Lang, J}, \au{Choi, J}, \au{Podhorszki, N}, \au{Klasky, S}, \au{Parashar,
+  M} \& \au{Chang, C}} \yr{2018}  \at{The {{Fusion Code XGC}}}.  \bt{In {\em
+  Exascale {{Scientific Applications}}\/}},  \pg{pp. 529--552}.  \publ{{Chapman
+  and Hall/CRC}}.
+
+\bibitem[D'haeseleer {\em et~al.\/}(1991)D'haeseleer, Hitchon, Callen \&
+  Shohet]{Dhaeseleer1991}
+{\sc \au{D'haeseleer, W}, \au{Hitchon, W}, \au{Callen, J} \& \au{Shohet, J}}
+  \yr{1991} {\em Flux {{Coordinates}} and {{Magnetic Field Structure}}\/}.
+  \publ{Springer-Verlag}.
+
+\bibitem[Dimits {\em et~al.\/}(2000)Dimits, Bateman, Beer, Cohen, Dorland,
+  Hammett, Kim, Kinsey, Kotschenreuther, Kritz, Lao, Mandrekas, Nevins, Parker,
+  Redd, Shumaker, Sydora \& Weiland]{Dimits2000}
+{\sc \au{Dimits, A}, \au{Bateman, G}, \au{Beer, M}, \au{Cohen, B}, \au{Dorland,
+  W}, \au{Hammett, G}, \au{Kim, C}, \au{Kinsey, J}, \au{Kotschenreuther, M},
+  \au{Kritz, A}, \au{Lao, L}, \au{Mandrekas, J}, \au{Nevins, W}, \au{Parker,
+  S}, \au{Redd, A}, \au{Shumaker, D}, \au{Sydora, R} \& \au{Weiland, J}}
+  \yr{2000}  \at{Comparisons and physics basis of tokamak transport models and
+  turbulence simulations}.  \jt{Physics of Plasmas}  \bvol{7}~(3),
+  \pg{969--983}.
+
+\bibitem[Dorland \& Hammett(1993)]{Dorland1993}
+{\sc \au{Dorland, W} \& \au{Hammett, G}} \yr{1993}  \at{Gyrofluid turbulence
+  models with kinetic effects}.  \jt{Physics of Fluids B}  \bvol{5}~(3),
+  \pg{812--835}.
+
+\bibitem[Dorland {\em et~al.\/}(2000)Dorland, Jenko, Kotschenreuther \&
+  Rogers]{dorland2000}
+{\sc \au{Dorland, W}, \au{Jenko, F}, \au{Kotschenreuther, M} \& \au{Rogers, B}}
+  \yr{2000}  \at{Electron {{Temperature Gradient Turbulence}}}.  \jt{Physical
+  Review Letters}  \bvol{85}~(26),  \pg{5579--5582}.
+
+\bibitem[Dougherty(1964)]{Dougherty1964}
+{\sc \au{Dougherty, J}} \yr{1964}  \at{Model {{Fokker-Planck Equation}} for a
+  {{Plasma}} and {{Its Solution}}}.  \jt{Physics of Fluids}  \bvol{7}~(11),
+  \pg{1788}.
+
+\bibitem[Dudt {\em et~al.\/}(2022)Dudt, Conlin, Panici \& Kolemen]{dudt2022}
+{\sc \au{Dudt, D}, \au{Conlin, R}, \au{Panici, D} \& \au{Kolemen, E}} \yr{2022}
+   \at{The {{DESC Stellarator Code Suite Part III}}: {{Quasi-symmetry}}
+  optimization}.  \jt{Journal of Plasma Physics}  \bvol{89}~(2),
+  \pg{955890201}.
+
+\bibitem[Durran(2010)]{durran2010a}
+{\sc \au{Durran, D}} \yr{2010}  \at{Nonreflecting {{Boundary Conditions}}}.
+  \bt{In {\em Numerical methods for fluid dynamics: {{With}} applications to
+  geophysics\/}},  \pg{pp. 453--495}.  \publ{Springer, New York, NY}.
+
+\bibitem[Fok {\em et~al.\/}(2001)Fok, Guo \& Tang]{Fok2001}
+{\sc \au{Fok, J}, \au{Guo, B} \& \au{Tang, T}} \yr{2001}  \at{Combined
+  {{Hermite}} spectral-finite difference method for the {{Fokker-Planck}}
+  equation}.  \jt{Mathematics of Computation}  \bvol{71}~(240),
+  \pg{1497--1529}.
+
+\bibitem[Francisquez {\em et~al.\/}(2022)Francisquez, Juno, Hakim, Hammett \&
+  Ernst]{Francisquez2022}
+{\sc \au{Francisquez, M}, \au{Juno, J}, \au{Hakim, A}, \au{Hammett, G} \&
+  \au{Ernst, D}} \yr{2022}  \at{Improved multispecies {{Dougherty}}
+  collisions}.  \jt{Journal of Plasma Physics}  \bvol{88}~(3),  \pg{905880303}.
+
+\bibitem[Frei {\em et~al.\/}(2021)Frei, Ball, Hoffmann, Jorge, Ricci \&
+  Stenger]{Frei2021}
+{\sc \au{Frei, B}, \au{Ball, J}, \au{Hoffmann, A}, \au{Jorge, R}, \au{Ricci, P}
+  \& \au{Stenger, L}} \yr{2021}  \at{Development of advanced linearized
+  gyrokinetic collision operators using a moment approach}.  \jt{Journal of
+  Plasma Physics}  \bvol{87}~(5),  \pg{905870501}.
+
+\bibitem[Frei {\em et~al.\/}(2022{\natexlab{{\em a\/}}})Frei, Ernst \&
+  Ricci]{Frei2022a}
+{\sc \au{Frei, B}, \au{Ernst, S} \& \au{Ricci, P}} \yr{2022{\natexlab{{\em
+  a\/}}}}  \at{Numerical implementation of the improved {{Sugama}} collision
+  operator using a moment approach}.  \jt{Physics of Plasmas}  \bvol{29}~(9),
+  \pg{093902}.
+
+\bibitem[Frei {\em et~al.\/}(2022{\natexlab{{\em b\/}}})Frei, Hoffmann \&
+  Ricci]{Frei2022}
+{\sc \au{Frei, B}, \au{Hoffmann, A} \& \au{Ricci, P}} \yr{2022{\natexlab{{\em
+  b\/}}}}  \at{Local gyrokinetic collisional theory of the ion-temperature
+  gradient mode}.  \jt{Journal of Plasma Physics}  \bvol{88}~(3),
+  \pg{905880304}.
+
+\bibitem[Frei {\em et~al.\/}(2023)Frei, Hoffmann, Ricci, Brunner \&
+  Tecchioll]{Frei2023}
+{\sc \au{Frei, B}, \au{Hoffmann, A}, \au{Ricci, P}, \au{Brunner, S} \&
+  \au{Tecchioll, Z}} \yr{2023}  \at{Moment-based approach to the flux-tube
+  linear gyrokinetic model}.  \jt{Journal of Plasma Physics}  \bvol{89}~(4),
+  \pg{905890414}.
+
+\bibitem[Frei {\em et~al.\/}(2020)Frei, Jorge \& Ricci]{Frei2020}
+{\sc \au{Frei, B}, \au{Jorge, R} \& \au{Ricci, P}} \yr{2020}  \at{A gyrokinetic
+  model for the plasma periphery of tokamak devices}.  \jt{Journal of Plasma
+  Physics}  \bvol{86}.
+
+\bibitem[Frei {\em et~al.\/}(2024)Frei, Mencke \& Ricci]{Frei2024}
+{\sc \au{Frei, B}, \au{Mencke, J} \& \au{Ricci, P}} \yr{2024}  \at{Full-{{F}}
+  turbulent simulation in a linear plasma device using a gyro-moment approach}.
+   \jt{Physics of Plasmas}  \bvol{31}~(1),  \pg{012301}.
+
+\bibitem[Frieman \& Chen(1982)]{Frieman1982}
+{\sc \au{Frieman, E} \& \au{Chen, L}} \yr{1982}  \at{Nonlinear gyrokinetic
+  equations for low-frequency electromagnetic waves in general plasma
+  equilibria}.  \jt{Physics of Fluids}  \bvol{25}~(3),  \pg{502--508}.
+
+\bibitem[Germaschewski {\em et~al.\/}(2021)Germaschewski, Allen, Dannert,
+  Hrywniak, Donaghy, Merlo, Ethier, D'Azevedo, Jenko \&
+  Bhattacharjee]{Germaschewski2021}
+{\sc \au{Germaschewski, K}, \au{Allen, B}, \au{Dannert, T}, \au{Hrywniak, M},
+  \au{Donaghy, J}, \au{Merlo, G}, \au{Ethier, S}, \au{D'Azevedo, E}, \au{Jenko,
+  F} \& \au{Bhattacharjee, A}} \yr{2021}  \at{Toward exascale whole-device
+  modeling of fusion devices: {{Porting}} the {{GENE}} gyrokinetic
+  microturbulence code to {{GPU}}}.  \jt{Physics of Plasmas}  \bvol{28}~(6).
+
+\bibitem[{Gonz{\'a}lez-Jerez} {\em et~al.\/}(2022){Gonz{\'a}lez-Jerez},
+  Xanthopoulos, {Garc{\'i}a-Rega{\~n}a}, Calvo, Alcus{\'o}n,
+  Ba{\~n}{\'o}n~Navarro, Barnes, Parra \& Geiger]{Gonzalez-Jerez2022}
+{\sc \au{{Gonz{\'a}lez-Jerez}, A}, \au{Xanthopoulos, P},
+  \au{{Garc{\'i}a-Rega{\~n}a}, J}, \au{Calvo, I}, \au{Alcus{\'o}n, J},
+  \au{Ba{\~n}{\'o}n~Navarro, A}, \au{Barnes, M}, \au{Parra, F} \& \au{Geiger,
+  J}} \yr{2022}  \at{Electrostatic gyrokinetic simulations in {{Wendelstein}}
+  7-{{X}} geometry: benchmark between the codes stella and {{GENE}}}.
+  \jt{Journal of Plasma Physics}  \bvol{88}~(3),  \pg{905880310}.
+
+\bibitem[Gottlieb {\em et~al.\/}(2001)Gottlieb, Shu \& Tadmor]{Gottlieb2001}
+{\sc \au{Gottlieb, S}, \au{Shu, C} \& \au{Tadmor, E}} \yr{2001}  \at{Strong
+  stability--preserving high--order time discretization methods}.  \jt{SIAM
+  Rev.}  \bvol{43}~(1),  \pg{89--112}.
+
+\bibitem[Hammett \& Perkins(1990)]{Hammett1990}
+{\sc \au{Hammett, G} \& \au{Perkins, F}} \yr{1990}  \at{Fluid moment models for
+  {{Landau}} damping with application to the ion-temperature-gradient
+  instability}.  \jt{Physical Review Letters}  \bvol{64}~(25),
+  \pg{3019--3022}.
+
+\bibitem[Highcock {\em et~al.\/}(2018)Highcock, Mandell, Barnes \&
+  Dorland]{Highcock2018}
+{\sc \au{Highcock, E}, \au{Mandell, N}, \au{Barnes, M} \& \au{Dorland, W}}
+  \yr{2018}  \at{Optimisation of confinement in a fusion reactor using a
+  nonlinear turbulence model}.  \jt{Journal of Plasma Physics}  \bvol{84}~(2),
+  \pg{905840208}.
+
+\bibitem[Hirshman \& Whitson(1983)]{Hirshman1983}
+{\sc \au{Hirshman, S} \& \au{Whitson, J}} \yr{1983}  \at{Steepest-descent
+  moment method for three-dimensional magnetohydrodynamic equilibria}.
+  \jt{Physics of Fluids}  \bvol{26}~(12),  \pg{3553--3568}.
+
+\bibitem[Hoffmann {\em et~al.\/}(2023{\natexlab{{\em a\/}}})Hoffmann, Frei \&
+  Ricci]{Hoffmann2023a}
+{\sc \au{Hoffmann, A}, \au{Frei, B} \& \au{Ricci, P}} \yr{2023{\natexlab{{\em
+  a\/}}}}  \at{Gyrokinetic moment-based simulations of the {{Dimits}} shift}.
+  \jt{Journal of Plasma Physics}  \bvol{89}~(6),  \pg{905890611}.
+
+\bibitem[Hoffmann {\em et~al.\/}(2023{\natexlab{{\em b\/}}})Hoffmann, Frei \&
+  Ricci]{Hoffmann2023}
+{\sc \au{Hoffmann, A}, \au{Frei, B} \& \au{Ricci, P}} \yr{2023{\natexlab{{\em
+  b\/}}}}  \at{Gyrokinetic simulations of plasma turbulence in a {{Z-pinch}}
+  configuration using a moment approach and advanced collision operators}.
+  \jt{Journal of Plasma Physics}  \bvol{89}~(2),  \pg{905890214}.
+
+\bibitem[Idomura {\em et~al.\/}(2008)Idomura, Ida, Kano, Aiba \&
+  Tokuda]{idomura2008}
+{\sc \au{Idomura, Y}, \au{Ida, M}, \au{Kano, T}, \au{Aiba, N} \& \au{Tokuda,
+  S}} \yr{2008}  \at{Conservative global gyrokinetic toroidal full-f
+  five-dimensional {{Vlasov}} simulation}.  \jt{Computer Physics
+  Communications}  \bvol{179}~(6),  \pg{391--403}.
+
+\bibitem[Idomura {\em et~al.\/}(2003)Idomura, Tokuda \& Kishimoto]{idomura2003}
+{\sc \au{Idomura, Y}, \au{Tokuda, S} \& \au{Kishimoto, Y}} \yr{2003}
+  \at{Global gyrokinetic simulation of ion temperature gradient driven
+  turbulence in plasmas using a canonical {{Maxwellian}} distribution}.
+  \jt{Nuclear Fusion}  \bvol{43}~(4),  \pg{234--243}.
+
+\bibitem[Jenko(2000)]{jenko2000}
+{\sc \au{Jenko, F}} \yr{2000}  \at{Massively parallel {{Vlasov}} simulation of
+  electromagnetic drift-wave turbulence}.  \jt{Computer Physics Communications}
+   \bvol{125}~(1),  \pg{196--209}.
+
+\bibitem[Jenko \& Dorland(2001)]{jenko2001}
+{\sc \au{Jenko, F} \& \au{Dorland, W}} \yr{2001}  \at{Nonlinear electromagnetic
+  gyrokinetic simulations of tokamak plasmas}.  \jt{Plasma Phys. Control.
+  Fusion}  \bvol{43}~(12A),  \pg{A141}.
+
+\bibitem[Jolliet {\em et~al.\/}(2007)Jolliet, Bottino, Angelino, Hatzky, Tran,
+  Mcmillan, Sauter, Appert, Idomura \& Villard]{jolliet2007}
+{\sc \au{Jolliet, S}, \au{Bottino, A}, \au{Angelino, P}, \au{Hatzky, R},
+  \au{Tran, T}, \au{Mcmillan, B}, \au{Sauter, O}, \au{Appert, K}, \au{Idomura,
+  Y} \& \au{Villard, L}} \yr{2007}  \at{A global collisionless {{PIC}} code in
+  magnetic coordinates}.  \jt{Computer Physics Communications}  \bvol{177}~(5),
+   \pg{409--425}.
+
+\bibitem[Jorge {\em et~al.\/}(2019)Jorge, Frei \& Ricci]{Jorge2019}
+{\sc \au{Jorge, R}, \au{Frei, B} \& \au{Ricci, P}} \yr{2019}  \at{Nonlinear
+  gyrokinetic {{Coulomb}} collision operator}.  \jt{Journal of Plasma Physics}
+  \bvol{85}~(6),  \pg{905850604}.
+
+\bibitem[Jorge {\em et~al.\/}(2017)Jorge, Ricci \& Loureiro]{Jorge2017}
+{\sc \au{Jorge, R}, \au{Ricci, P} \& \au{Loureiro, N}} \yr{2017}  \at{A
+  drift-kinetic analytical model for scrape-off layer plasma dynamics at
+  arbitrary collisionality}.  \jt{Journal of Plasma Physics}  \bvol{83}~(6).
+
+\bibitem[Jost {\em et~al.\/}(2001)Jost, Tran, Cooper, Villard \&
+  Appert]{jost2001}
+{\sc \au{Jost, G}, \au{Tran, T}, \au{Cooper, W}, \au{Villard, L} \& \au{Appert,
+  K}} \yr{2001}  \at{Global linear gyrokinetic simulations in quasi-symmetric
+  configurations}.  \jt{Physics of Plasmas}  \bvol{8}~(7),  \pg{3321--3333}.
+
+\bibitem[Ketcheson(2008)]{Ketcheson2008}
+{\sc \au{Ketcheson, D}} \yr{2008}  \at{Highly efficient strong
+  stability-preserving {{Runge-Kutta}} methods with low-storage
+  implementations}.  \jt{SIAM Journal on Scientific Computing}  \bvol{30}~(4),
+  \pg{2113--2136}.
+
+\bibitem[Kim {\em et~al.\/}(2024)Kim, Buller, Conlin, Dorland, Dudt, Gaur,
+  Jorge, Kolemen, Landreman, Mandell \& Panici]{Kim2024}
+{\sc \au{Kim, P}, \au{Buller, S}, \au{Conlin, R}, \au{Dorland, W}, \au{Dudt,
+  D}, \au{Gaur, R}, \au{Jorge, R}, \au{Kolemen, E}, \au{Landreman, M},
+  \au{Mandell, N} \& \au{Panici, D}} \yr{2024}  \at{Optimization of {{Nonlinear
+  Turbulence}} in {{Stellarators}}}.  \jt{Journal of Plasma Physics}
+  \bvol{90}~(2),  \pg{905900210}.
+
+\bibitem[Kotschenreuther {\em et~al.\/}(1995)Kotschenreuther, Rewoldt \&
+  Tang]{kotschenreuther1995}
+{\sc \au{Kotschenreuther, M}, \au{Rewoldt, G} \& \au{Tang, W}} \yr{1995}
+  \at{Comparison of initial value and eigenvalue codes for kinetic toroidal
+  plasma instabilities}.  \jt{Comp. Phys. Comm.}  \bvol{88}~(2-3),
+  \pg{128--140}.
+
+\bibitem[Landreman {\em et~al.\/}(2021)Landreman, Medasani, Wechsung, Giuliani,
+  Jorge \& Zhu]{Landreman2021}
+{\sc \au{Landreman, M}, \au{Medasani, B}, \au{Wechsung, F}, \au{Giuliani, A},
+  \au{Jorge, R} \& \au{Zhu, C}} \yr{2021}  \at{{{SIMSOPT}}: {{A}} flexible
+  framework for stellarator optimization}.  \jt{Journal of Open Source
+  Software}  \bvol{6}~(65),  \pg{3525}.
+
+\bibitem[Lanti {\em et~al.\/}(2019)Lanti, Ohana, Tronko, {Hayward-Schneider},
+  Bottino, McMillan, Mishchenko, Scheinberg, Biancalani, Angelino \&
+  Brunner]{lanti2019}
+{\sc \au{Lanti, E}, \au{Ohana, N}, \au{Tronko, N}, \au{{Hayward-Schneider}, T},
+  \au{Bottino, A}, \au{McMillan, B}, \au{Mishchenko, A}, \au{Scheinberg, A},
+  \au{Biancalani, A}, \au{Angelino, P} \& \au{Brunner, S}} \yr{2019}
+  \at{{{ORB5}}: a global electromagnetic gyrokinetic code using the {{PIC}}
+  approach in toroidal geometry}.  \jt{Computer Physics Communications}  \pg{p.
+  107072}.
+
+\bibitem[Lee(1987)]{lee1987}
+{\sc \au{Lee, W}} \yr{1987}  \at{Gyrokinetic particle simulation model}.
+  \jt{Journal of Computational Physics}  \bvol{72}~(1),  \pg{243--269}.
+
+\bibitem[Lin {\em et~al.\/}(2000)Lin, Hahm, Lee, Tang \& White]{lin2000}
+{\sc \au{Lin, Z}, \au{Hahm, T}, \au{Lee, W}, \au{Tang, W} \& \au{White, R}}
+  \yr{2000}  \at{Gyrokinetic simulations in general geometry and applications
+  to collisional damping of zonal flows}.  \jt{Phys. Plasmas}  \bvol{7}~(5),
+  \pg{1857--1862}.
+
+\bibitem[Loureiro {\em et~al.\/}(2016)Loureiro, Dorland, Fazendeiro, Kanekar,
+  Mallet, Vilelas \& Zocco]{Loureiro2016}
+{\sc \au{Loureiro, N}, \au{Dorland, W}, \au{Fazendeiro, L}, \au{Kanekar, A},
+  \au{Mallet, A}, \au{Vilelas, M} \& \au{Zocco, A}} \yr{2016}  \at{Viriato: {{A
+  Fourier-Hermite}} spectral code for strongly magnetized fluid-kinetic plasma
+  dynamics}.  \jt{Computer Physics Communications}  \bvol{206},  \pg{45--63}.
+
+\bibitem[Madduri {\em et~al.\/}(2011)Madduri, Ibrahim, Williams, Im, Ethier,
+  Shalf \& Oliker]{Madduri2011}
+{\sc \au{Madduri, K}, \au{Ibrahim, K}, \au{Williams, S}, \au{Im, E},
+  \au{Ethier, S}, \au{Shalf, J} \& \au{Oliker, L}} \yr{2011} Gyrokinetic
+  toroidal simulations on leading multi- and manycore {{HPC}} systems.  \bt{In
+  {\em Proceedings of 2011 {{SC}} - {{International Conference}} for {{High
+  Performance Computing}}, {{Networking}}, {{Storage}} and {{Analysis}}\/}}.
+
+\bibitem[Mandell {\em et~al.\/}(2018)Mandell, Dorland \&
+  Landreman]{Mandell2018}
+{\sc \au{Mandell, N}, \au{Dorland, W} \& \au{Landreman, M}} \yr{2018}
+  \at{Laguerre-{{Hermite}} pseudo-spectral velocity formulation of
+  gyrokinetics}.  \jt{Journal of Plasma Physics}  \bvol{84}~(1),
+  \pg{905840108}.
+
+\bibitem[Marinoni {\em et~al.\/}(2009)Marinoni, Brunner, Camenen, Coda, Graves,
+  Lapillonne, Pochelon, Sauter \& Villard]{Marinoni2009}
+{\sc \au{Marinoni, A}, \au{Brunner, S}, \au{Camenen, Y}, \au{Coda, S},
+  \au{Graves, J}, \au{Lapillonne, X}, \au{Pochelon, A}, \au{Sauter, O} \&
+  \au{Villard, L}} \yr{2009}  \at{The effect of plasma triangularity on
+  turbulent transport: {{Modeling TCV}} experiments by linear and non-linear
+  gyrokinetic simulations}.  \jt{Plasma Physics and Controlled Fusion}
+  \bvol{51}~(5),  \pg{55016}.
+
+\bibitem[Martin {\em et~al.\/}(2018)Martin, Landreman, Xanthopoulos, Mandell \&
+  Dorland]{Martin2018}
+{\sc \au{Martin, M}, \au{Landreman, M}, \au{Xanthopoulos, P}, \au{Mandell, N}
+  \& \au{Dorland, W}} \yr{2018}  \at{The parallel boundary condition for
+  turbulence simulations in low magnetic shear devices}.  \jt{Plasma Physics
+  and Controlled Fusion}  \bvol{60}~(9),  \pg{95008}.
+
+\bibitem[Maurer {\em et~al.\/}(2020)Maurer, Ba{\~n}{\'o}n~Navarro, Dannert,
+  Restelli, Hindenlang, G{\"o}rler, Told, Jarema, Merlo \& Jenko]{Maurer2020}
+{\sc \au{Maurer, M}, \au{Ba{\~n}{\'o}n~Navarro, A}, \au{Dannert, T},
+  \au{Restelli, M}, \au{Hindenlang, F}, \au{G{\"o}rler, T}, \au{Told, D},
+  \au{Jarema, D}, \au{Merlo, G} \& \au{Jenko, F}} \yr{2020}  \at{{{GENE-3D}}:
+  {{A}} global gyrokinetic turbulence code for stellarators}.  \jt{Journal of
+  Computational Physics}  \bvol{420},  \pg{109694}.
+
+\bibitem[Miller {\em et~al.\/}(1998)Miller, Chu, Greene, {Lin-Liu} \&
+  Waltz]{Miller1998}
+{\sc \au{Miller, R}, \au{Chu, M}, \au{Greene, J}, \au{{Lin-Liu}, Y} \&
+  \au{Waltz, R}} \yr{1998}  \at{Noncircular, finite aspect ratio, local
+  equilibrium model}.  \jt{Physics of Plasmas}  \bvol{5}~(4),  \pg{973--978}.
+
+\bibitem[Mynick {\em et~al.\/}(2009)Mynick, Xanthopoulos \& Boozer]{Mynick2009}
+{\sc \au{Mynick, H}, \au{Xanthopoulos, P} \& \au{Boozer, A}} \yr{2009}
+  \at{Geometry dependence of stellarator turbulence}.  \jt{Physics of Plasmas}
+  \bvol{16}~(11),  \pg{110702}.
+
+\bibitem[Ohana {\em et~al.\/}(2021)Ohana, Gheller, Lanti, Jocksch, Brunner \&
+  Villard]{Ohana2021}
+{\sc \au{Ohana, N}, \au{Gheller, C}, \au{Lanti, E}, \au{Jocksch, A},
+  \au{Brunner, S} \& \au{Villard, L}} \yr{2021}  \at{Gyrokinetic simulations on
+  many- and multi-core architectures with the global electromagnetic
+  {{Particle-In-Cell Code ORB5}}}.  \jt{Computer Physics Communications}
+  \bvol{262},  \pg{107208}.
+
+\bibitem[Parker(2015)]{Parker2015a}
+{\sc \au{Parker, J}} \yr{2015}  \at{Gyrokinetic simulations of fusion plasmas
+  using a spectral velocity space representation}. PhD thesis, University of
+  Oxford.
+
+\bibitem[Parker \& Dellar(2015)]{Parker2015}
+{\sc \au{Parker, J} \& \au{Dellar, P}} \yr{2015}  \at{Fourier-{{Hermite}}
+  spectral representation for the {{Vlasov-Poisson}} system in the weakly
+  collisional limit}.  \jt{Journal of Plasma Physics}  \bvol{81}~(2).
+
+\bibitem[Parker {\em et~al.\/}(1993)Parker, Lee \& Santoro]{parker1993a}
+{\sc \au{Parker, S}, \au{Lee, W} \& \au{Santoro, R}} \yr{1993}  \at{Gyrokinetic
+  simulation of ion temperature gradient driven turbulence in {{3D}} toroidal
+  geometry}.  \jt{Physical Review Letters}  \bvol{71}~(13),  \pg{2042--2045}.
+
+\bibitem[Parra \& Barnes(2015)]{Parra2015}
+{\sc \au{Parra, F} \& \au{Barnes, M}} \yr{2015}  \at{Equivalence of two
+  different approaches to global {$\delta$}f gyrokinetic simulations}.
+  \jt{Plasma Physics and Controlled Fusion}  \bvol{57}~(5),  \pg{054003}.
+
+\bibitem[Peeters {\em et~al.\/}(2009)Peeters, Camenen, Casson, Hornsby, Snodin,
+  Strintzi \& Szepesi]{peeters2009}
+{\sc \au{Peeters, A}, \au{Camenen, Y}, \au{Casson, F}, \au{Hornsby, W},
+  \au{Snodin, A}, \au{Strintzi, D} \& \au{Szepesi, G}} \yr{2009}  \at{The
+  nonlinear gyro--kinetic flux tube code {{GKW}}}.  \jt{Comp. Phys. Comm.}
+  \bvol{180}~(12),  \pg{2650--2672}.
+
+\bibitem[Qian {\em et~al.\/}(2022)Qian, Buck, Gaur, Mandell, Kim \&
+  Dorland]{Qian2022}
+{\sc \au{Qian, T}, \au{Buck, B}, \au{Gaur, R}, \au{Mandell, N}, \au{Kim, P} \&
+  \au{Dorland, W}} \yr{2022} Stellarator profile predictions using
+  {{Trinity3D}} and {{GX}}.  \bt{In {\em Bulletin of the {{American Physical
+  Society}}\/}}.  \publ{American Physical Society}.
+
+\bibitem[{Rodriguez-Fernandez} {\em et~al.\/}(2022){Rodriguez-Fernandez},
+  Howard \& Candy]{Rodriguez-Fernandez2022}
+{\sc \au{{Rodriguez-Fernandez}, P}, \au{Howard, N} \& \au{Candy, J}} \yr{2022}
+  \at{Nonlinear gyrokinetic predictions of {{SPARC}} burning plasma profiles
+  enabled by surrogate modeling}.  \jt{Nuclear Fusion}  \bvol{62}~(7),
+  \pg{076036}.
+
+\bibitem[Sfiligoi {\em et~al.\/}(2018)Sfiligoi, Candy \& Kostuk]{Sfiligoi2018}
+{\sc \au{Sfiligoi, I}, \au{Candy, J} \& \au{Kostuk, M}} \yr{2018} {{CGYRO
+  Performance}} on {{Power9 CPUs}} and {{Volta GPUs}}.  \bt{In {\em
+  International {{Conference}} in {{High Performance Computing}}\/}},
+  \st{Lecture {{Notes}} in {{Computer Science}}},  \vol{vol. 11203},  \pg{pp.
+  365--372}.  \publ{Springer Verlag}.
+
+\bibitem[Smith(1997)]{Smith1997}
+{\sc \au{Smith, S}} \yr{1997}  \at{Dissipative closures for statistical
+  moments, fluid moments, and subgrid scales in plasma turbulence}. PhD thesis,
+  Princeton University.
+
+\bibitem[Snyder \& Hammett(2001)]{Snyder2001}
+{\sc \au{Snyder, P} \& \au{Hammett, G}} \yr{2001}  \at{A {{Landau}} fluid model
+  for electromagnetic plasma microturbulence}.  \jt{Physics of Plasmas}
+  \bvol{8}~(7),  \pg{3199--3216}.
+
+\bibitem[{St-Onge} {\em et~al.\/}(2022){St-Onge}, Barnes \& Parra]{St-Onge2022}
+{\sc \au{{St-Onge}, D}, \au{Barnes, M} \& \au{Parra, F}} \yr{2022}  \at{A novel
+  approach to radially global gyrokinetic simulation using the flux-tube code
+  stella}.  \jt{Journal of Computational Physics}  \bvol{468},  \pg{111498}.
+
+\bibitem[Strohmaier {\em et~al.\/}(2022)Strohmaier, Dongarra, Simon \&
+  Meuer]{Strohmaier2022}
+{\sc \au{Strohmaier, E}, \au{Dongarra, J}, \au{Simon, H} \& \au{Meuer, M}}
+  \yr{2022} 60th edition of the {{TOP500}} ({{November}}, 2022).
+  https://www.top500.org/lists/top500/2022/11/.
+
+\bibitem[Wang {\em et~al.\/}(2006)Wang, Lin, Tang, Lee, Ethier, Lewandowski,
+  Rewoldt, Nahm \& Manickam]{wang2006}
+{\sc \au{Wang, W}, \au{Lin, Z}, \au{Tang, W}, \au{Lee, W}, \au{Ethier, S},
+  \au{Lewandowski, J}, \au{Rewoldt, G}, \au{Nahm, T} \& \au{Manickam, J}}
+  \yr{2006}  \at{Gyro-kinetic simulation of global turbulent transport
+  properties in tokamak experiments}.  \jt{Physics of Plasmas}  \bvol{13}~(9),
+  \pg{969}.
+
+\bibitem[Watanabe \& Sugama(2005)]{watanabe2005}
+{\sc \au{Watanabe, T} \& \au{Sugama, H}} \yr{2005}  \at{Velocity--space
+  structures of distribution function in toroidal ion temperature gradient
+  turbulence}.  \jt{Nucl. Fusion}  \bvol{46}~(1),  \pg{24}.
+
+\bibitem[White(2019)]{White2019}
+{\sc \au{White, A}} \yr{2019}  \at{Validation of nonlinear gyrokinetic
+  transport models using turbulence measurements}.  \jt{Journal of Plasma
+  Physics}  \bvol{85}~(1).
+
+\bibitem[Zocco {\em et~al.\/}(2015)Zocco, Helander \& Connor]{Zocco2015}
+{\sc \au{Zocco, A}, \au{Helander, P} \& \au{Connor, J}} \yr{2015}  \at{Magnetic
+  compressibility and ion-temperature-gradient-driven microinstabilities in
+  magnetically confined plasmas}.  \jt{Plasma Physics and Controlled Fusion}
+  \bvol{57}~(8).
+
+\end{thebibliography}

@@ -1,0 +1,258 @@
+\begin{thebibliography}{10}
+
+\bibitem{Helander2014}
+P.~Helander.
+\newblock {Theory of plasma confinement in non-axisymmetric magnetic fields}.
+\newblock {\em Reports on Progress in Physics\/}, 77(8):087001, 2014.
+
+\bibitem{Geiger2015}
+J.~Geiger, C.~D. Beidler, Y.~Feng, H.~Maassberg, N.~B. Marushchenko, et~al.
+\newblock {Physics in the magnetic configuration space of W7-X}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 57(1):014004, 2015.
+
+\bibitem{Anderson1995}
+F.~S.~B. Anderson, A.~F. Almagri, D.~T. Anderson, P.~G. Matthews, J.~N.
+  Talmadge, et~al.
+\newblock {The Helically Symmetric Experiment, (HSX) Goals, Design and Status}.
+\newblock {\em Fusion Technology\/}, 27(3T):273, 1995.
+
+\bibitem{Jenko2005}
+F.~Jenko, T.~Dannert, and C.~Angioni.
+\newblock {Heat and particle transport in a tokamak: advances in nonlinear
+  gyrokinetics}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 47(12B):B195, 2005.
+
+\bibitem{Beidler2021}
+C.~D. Beidler, H.~M. Smith, A.~Alonso, T.~Andreeva, J.~Baldzuhn, et~al.
+\newblock {Demonstration of reduced neoclassical energy transport in
+  Wendelstein 7-X}.
+\newblock {\em Nature 2021 596:7871\/}, 596(7871):221--226, 2021.
+
+\bibitem{Holland2011}
+C.~Holland, L.~Schmitz, T.~L. Rhodes, W.~A. Peebles, J.~C. Hillesheim, et~al.
+\newblock {Advances in validating gyrokinetic turbulence models against L- and
+  H-mode plasmas a)}.
+\newblock {\em Physics of Plasmas\/}, 18(5):056113, 2011.
+
+\bibitem{Mynick2010}
+H.~E. Mynick, N.~Pomphrey, and P.~Xanthopoulos.
+\newblock {Optimizing stellarators for turbulent transport}.
+\newblock {\em Physical Review Letters\/}, 105(9):095004, 2010.
+
+\bibitem{Xanthopoulos2014}
+P.~Xanthopoulos, H.~E. Mynick, P.~Helander, Y.~Turkin, G.~G. Plunk, et~al.
+\newblock {Controlling turbulence in present and future stellarators}.
+\newblock {\em Physical Review Letters\/}, 113(15):155001, 2014.
+
+\bibitem{Roberg-Clark2022}
+G.~T. Roberg-Clark, P.~Xanthopoulos, and G.~G. Plunk.
+\newblock {Reduction of electrostatic turbulence in a quasi-helically symmetric
+  stellarator via critical gradient optimization}.
+\newblock {\em arXiv preprint\/}, arXiv:2210, 2022.
+
+\bibitem{Catto1978a}
+P.~J. Catto.
+\newblock {Linearized gyro-kinetics}.
+\newblock {\em Plasma Physics\/}, 20(7):719, 1978.
+
+\bibitem{Antonsen1980}
+T.~M. Antonsen and B.~Lane.
+\newblock {Kinetic equations for low frequency instabilities in inhomogeneous
+  plasmas}.
+\newblock {\em The Physics of Fluids\/}, 23(6):1205, 1980.
+
+\bibitem{Frieman1980}
+E.~A. Frieman, G.~Rewoldt, W.~M. Tang, and A.~H. Glasser.
+\newblock {General theory of kinetic ballooning modes}.
+\newblock {\em Physics of Fluids\/}, 23(9):1750, 1980.
+
+\bibitem{Helander2021a}
+P.~Helander and G.~G. Plunk.
+\newblock {Upper Bounds on Gyrokinetic Instabilities in Magnetized Plasmas}.
+\newblock {\em Physical Review Letters\/}, 127(15):155001, 2021.
+
+\bibitem{Horton1999}
+W.~Horton.
+\newblock {Drift waves and transport}.
+\newblock {\em Reviews of Modern Physics\/}, 71(3):735, 1999.
+
+\bibitem{Helander2013}
+P.~Helander, J.~H.E. Proll, and G.~G. Plunk.
+\newblock {Collisionless microinstabilities in stellarators. I. Analytical
+  theory of trapped-particle modes}.
+\newblock {\em Physics of Plasmas\/}, 20(12), 2013.
+
+\bibitem{Garbet2004}
+X.~Garbet, P.~Mantica, C.~Angioni, E.~Asp, Y.~Baranov, et~al.
+\newblock {Physics of transport in tokamaks}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 46(12B):B557, 2004.
+
+\bibitem{Hahm1998}
+T.~S. Hahm and W.~M. Tang.
+\newblock {Properties of ion temperature gradient drift instabilities in
+  H‐mode plasmas}.
+\newblock {\em Physics of Fluids B: Plasma Physics\/}, 1(6):1185, 1989.
+
+\bibitem{Romanelli1998}
+F.~Romanelli.
+\newblock {Ion temperature‐gradient‐driven modes and anomalous ion
+  transport in tokamaks}.
+\newblock {\em Physics of Fluids B: Plasma Physics\/}, 1(5):1018, 1989.
+
+\bibitem{Plunk2014}
+G.~G. Plunk, P.~Helander, P.~Xanthopoulos, and J.~W. Connor.
+\newblock {Collisionless microinstabilities in stellarators. III. the
+  ion-temperature-gradient mode}.
+\newblock {\em Physics of Plasmas\/}, 21(3):032112, 2014.
+
+\bibitem{Beurskens2021}
+M.~N.A. Beurskens, S.~A. Bozhenkov, O.~Ford, P.~Xanthopoulos, A.~Zocco, et~al.
+\newblock {Ion temperature clamping in Wendelstein 7-X electron cyclotron
+  heated plasmas}.
+\newblock {\em Nuclear Fusion\/}, 61(11):116072, 2021.
+
+\bibitem{Ryter2019}
+F.~Ryter, C.~Angioni, M.~Dunne, R.~Fischer, B.~Kurzan, et~al.
+\newblock {Heat transport driven by the ion temperature gradient and electron
+  temperature gradient instabilities in ASDEX Upgrade H-modes}.
+\newblock {\em Nuclear Fusion\/}, 59(9):096052, 2019.
+
+\bibitem{Fable2009}
+E.~Fable, C.~Angioni, and O.~Sauter.
+\newblock {The role of ion and electron electrostatic turbulence in
+  characterizing stationary particle transport in the core of tokamak plasmas}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 52(1):015007, 2009.
+
+\bibitem{Proll2015b}
+J.~H.E. Proll, H.~E. Mynick, P.~Xanthopoulos, S.~A. Lazerson, and B.~J. Faber.
+\newblock {TEM turbulence optimisation in stellarators}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 58(1):014006, 2015.
+
+\bibitem{Pueschel2016}
+M.~J. Pueschel, B.~J. Faber, J.~Citrin, C.~C. Hegna, P.~W. Terry, et~al.
+\newblock {Stellarator Turbulence: Subdominant Eigenmodes and Quasilinear
+  Modeling}.
+\newblock {\em Physical Review Letters\/}, 116(8):085001, 2016.
+
+\bibitem{Nuhrenberg1988a}
+J.~Nuhrenberg and R.~Zille.
+\newblock {Quasi-helically symmetric toroidal stellarators}.
+\newblock {\em Physics Letters A\/}, 129(2):113--117, 1988.
+
+\bibitem{Landreman2022}
+M.~Landreman and E.~Paul.
+\newblock {Magnetic Fields with Precise Quasisymmetry for Plasma Confinement}.
+\newblock {\em Physical Review Letters\/}, 128(3):035001, 2022.
+
+\bibitem{Boozer1981}
+A.~H. Boozer.
+\newblock {Plasma equilibrium with rational magnetic surfaces}.
+\newblock {\em Physics of Fluids\/}, 24(11):1999, 1981.
+
+\bibitem{Kotschenreuther1995}
+M.~Kotschenreuther, G.~Rewoldt, and W.~M. Tang.
+\newblock {Comparison of initial value and eigenvalue codes for kinetic
+  toroidal plasma instabilities}.
+\newblock {\em Computer Physics Communications\/}, 88(2):128, 1995.
+
+\bibitem{Dorland2000a}
+W.~Dorland, F.~Jenko, M.~Kotschenreuther, and B.~N. Rogers.
+\newblock {Electron Temperature Gradient Turbulence}.
+\newblock {\em Physical Review Letters\/}, 85(26):5579, 2000.
+
+\bibitem{Baumgaertel2011}
+J.~A. Baumgaertel, E.~A. Belli, W.~Dorland, W.~Guttenfelder, G.~W. Hammett,
+  et~al.
+\newblock {Simulating gyrokinetic microinstabilities in stellarator geometry
+  with GS2}.
+\newblock {\em Physics of Plasmas\/}, 18(12):122301, 2011.
+
+\bibitem{Landreman2019b}
+M.~Landreman and W.~Sengupta.
+\newblock {Constructing stellarators with quasisymmetry to high order}.
+\newblock {\em Journal of Plasma Physics\/}, 85(6):815850601, 2019.
+
+\bibitem{Dimits2000}
+A.~M. Dimits, G.~Bateman, M.~A. Beer, B.~I. Cohen, W.~Dorland, et~al.
+\newblock {Comparisons and physics basis of tokamak transport models and
+  turbulence simulations}.
+\newblock {\em Physics of Plasmas\/}, 7(3):969, 2000.
+
+\bibitem{Jorge2021}
+R.~Jorge and M.~Landreman.
+\newblock {Ion-temperature-gradient stability near the magnetic axis of
+  quasisymmetric stellarators}.
+\newblock {\em Plasma Physics and Controlled Fusion\/}, 63(7):074002, 2021.
+
+\bibitem{Mariani2018}
+A.~Mariani, S.~Brunner, J.~Dominski, A.~Merle, G.~Merlo, et~al.
+\newblock {Identifying microturbulence regimes in a TCV discharge making use of
+  physical constraints on particle and heat fluxes}.
+\newblock {\em Physics of Plasmas\/}, 25(1):012313, 2018.
+
+\bibitem{Hirshman1983}
+S.~P. Hirshman and J.~C. Whitson.
+\newblock {Steepest-descent moment method for three-dimensional
+  magnetohydrodynamic equilibria}.
+\newblock {\em Physics of Fluids\/}, 26(12):3553, 1983.
+
+\bibitem{Dewar1998}
+R.~L. Dewar and S.~R. Hudson.
+\newblock {Stellarator symmetry}.
+\newblock {\em Physica D: Nonlinear Phenomena\/}, 112(1-2):275, 1998.
+
+\bibitem{Landreman2021b}
+M.~Landreman, B.~Medasani, F.~Wechsung, A.~Giuliani, R.~Jorge, et~al.
+\newblock {SIMSOPT: A flexible framework for stellarator optimization}.
+\newblock {\em Journal of Open Source Software\/}, 6(65):3525, 2021.
+
+\bibitem{Virtanen2020}
+Pauli Virtanen, Ralf Gommers, Travis~E. Oliphant, Matt Haberland, Tyler Reddy,
+  et~al.
+\newblock {SciPy 1.0: fundamental algorithms for scientific computing in
+  Python}.
+\newblock {\em Nature Methods 2020 17:3\/}, 17(3):261--272, 2020.
+
+\bibitem{Xanthopoulos2016}
+P.~Xanthopoulos, G.~G. Plunk, A.~Zocco, and P.~Helander.
+\newblock {Intrinsic turbulence stabilization in a stellarator}.
+\newblock {\em Physical Review X\/}, 6(2):021033, 2016.
+
+\bibitem{Plunk2017}
+G.~G. Plunk, P.~Xanthopoulos, and P.~Helander.
+\newblock {Distinct Turbulence Saturation Regimes in Stellarators}.
+\newblock {\em Physical Review Letters\/}, 118(10):105002, 3 2017.
+
+\bibitem{Faber2018}
+B.~J. Faber, M.~J. Pueschel, P.~W. Terry, C.~C. Hegna, and J.~E. Roman.
+\newblock {Stellarator microinstabilities and turbulence at low magnetic
+  shear}.
+\newblock {\em Journal of Plasma Physics\/}, 84(5):905840503, 2018.
+
+\bibitem{Beidler1990}
+C.~Beidler, G.~Grieger, F.~Herrnegger, E.~Harmeyer, J.~Kisslinger, et~al.
+\newblock {Physics and engineering design for Wendelstein VII-X}, 1990.
+
+\bibitem{vmec_equilibria}
+M.~Landreman.
+\newblock {github.com/landreman/vmec{\_}equilibria}.
+\newblock {\em GitHub\/}, vmec{\_}equilibria, 2024.
+
+\bibitem{Nemov1999}
+V.~V. Nemov, S.~V. Kasilov, W.~Kernbichler, and M.~F. Heyn.
+\newblock {Evaluation of 1/v neoclassical transport in stellarators}.
+\newblock {\em Physics of Plasmas\/}, 6(12):4622, 1999.
+
+\bibitem{Albert2020}
+C.~G. Albert, S.~V. Kasilov, and W.~Kernbichler.
+\newblock {Accelerated methods for direct computation of fusion alpha particle
+  losses within, stellarator optimization}.
+\newblock {\em Journal of Plasma Physics\/}, 86(2):815860201, 2020.
+
+\bibitem{Bader2019}
+A.~Bader, M.~Drevlak, D.~T. Anderson, B.~J. Faber, C.~C. Hegna, et~al.
+\newblock {Stellarator equilibria with reactor relevant energetic particle
+  losses}.
+\newblock {\em Journal of Plasma Physics\/}, 85(5):905850508, 2019.
+
+\end{thebibliography}

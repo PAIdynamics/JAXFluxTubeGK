@@ -1,0 +1,275 @@
+\begin{thebibliography}{10}
+\expandafter\ifx\csname url\endcsname\relax
+  \def\url#1{\texttt{#1}}\fi
+\expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
+\expandafter\ifx\csname href\endcsname\relax
+  \def\href#1#2{#2} \def\path#1{#1}\fi
+
+\bibitem{ikeda2007}
+K.~Ikeda, Progress in the iter physics basis, Nuclear Fusion 47~(6) (2007) E01.
+
+\bibitem{zohm2013}
+H.~Zohm, C.~Angioni, E.~Fable, G.~Federici, G.~Gantenbein, T.~Hartmann,
+  K.~Lackner, E.~Poli, L.~Porte, O.~Sauter, et~al., On the physics guidelines
+  for a tokamak demo, Nuclear Fusion 53~(7) (2013) 073019.
+
+\bibitem{litaudon2022}
+X.~Litaudon, F.~Jenko, D.~Borba, D.~V. Borodin, B.~J. Braams, S.~Brezinsek,
+  I.~Calvo, R.~Coelho, A.~J.~H. Donn{\'e}, O.~Embr{\'e}us, et~al.,
+  Eurofusion-theory and advanced simulation coordination (e-tasc): programme
+  and the role of high performance computing, Plasma Physics and Controlled
+  Fusion 64~(3) (2022) 034005.
+
+\bibitem{goerler2011}
+T.~Goerler, X.~Lapillonne, S.~Brunner, T.~Dannert, F.~Jenko, F.~Merz, D.~Told,
+  The global version of the gyrokinetic turbulence code {GENE}, Journal of
+  Computational Physics 230~(18) (2011) 7053.
+
+\bibitem{grandgirard2016}
+V.~Grandgirard, J.~Abiteboul, J.~Bigot, T.~Cartier-Michaud, N.~Crouseilles,
+  G.~Dif-Pradalier, C.~Ehrlacher, D.~Esteve, X.~Garbet, P.~Ghendrih, G.~Latu,
+  M.~Mehrenberger, C.~Norscini, C.~Passeron, F.~Rozar, Y.~Sarazin,
+  E.~Sonnendrücker, A.~Strugarek, D.~Zarzoso, A {5D} gyrokinetic full-f global
+  semi-lagrangian code for flux-driven ion turbulence simulations, Computer
+  Physics Communications 207 (2016) 35.
+\newblock \href {https://doi.org/10.1016/j.cpc.2016.05.007}
+  {\path{doi:10.1016/j.cpc.2016.05.007}}.
+
+\bibitem{lanti2020}
+E.~Lanti, N.~Ohana, N.~Tronko, T.~Hayward-Schneider, A.~Bottino, B.~F.
+  McMillan, A.~Mishchenko, A.~Scheinberg, A.~Biancalani, P.~Angelino, et~al.,
+  Orb5: a global electromagnetic gyrokinetic code using the pic approach in
+  toroidal geometry, Computer Physics Communications 251 (2020) 107072.
+
+\bibitem{jenko2000}
+F.~Jenko, W.~Dorland, M.~Kotschenreuther, B.~N. Rogers, Electron temperature
+  gradient driven turbulence, Physics of plasmas 7~(5) (2000) 1904.
+
+\bibitem{candy2016}
+J.~Candy, E.~A. Belli, R.~V. Bravenec, A high-accuracy eulerian gyrokinetic
+  solver for collisional plasmas, Journal of Computational Physics 324 (2016)
+  73.
+
+\bibitem{peeters2009}
+A.~G. Peeters, Y.~Camenen, F.~J. Casson, W.~A. Hornsby, A.~P. Snodin,
+  D.~Strintzi, G.~Szepesi, The nonlinear gyro-kinetic flux tube code gkw,
+  Computer physics communications 180~(12) (2009) 2650.
+
+\bibitem{giacomin2021}
+M.~Giacomin, P.~Ricci, A.~Coroado, G.~Fourestey, D.~Galassi, E.~Lanti,
+  D.~Mancini, N.~Richart, L.~Stenger, N.~Varini, The {GBS} code for the
+  self-consistent simulation of plasma turbulence and kinetic neutral dynamics
+  in the tokamak boundary, J. Comput. Phys. 463 (2021) 111294.
+
+\bibitem{tamain2016}
+P.~Tamain, H.~Bufferand, G.~Ciraolo, C.~Colin, D.~Galassi, P.~Ghendrih,
+  F.~Schwander, E.~Serre, The tokam3x code for edge turbulence fluid
+  simulations of tokamak plasmas in versatile magnetic geometries, Journal of
+  Computational Physics 321 (2016) 606.
+
+\bibitem{stegmeir2019}
+A.~Stegmeir, A.~Ross, T.~Body, M.~Francisquez, W.~Zholobenko, D.~Coster,
+  O.~Maj, P.~Manz, F.~Jenko, B.~N. Rogers, et~al., Global turbulence
+  simulations of the tokamak edge region with {GRILLIX}, Physics of Plasmas
+  26~(5) (2019) 052517.
+
+\bibitem{hariri2013}
+F.~Hariri, M.~Ottaviani, A flux-coordinate independent field-aligned approach
+  to plasma turbulence simulations, Computer Physics Communications 184~(11)
+  (2013) 2419.
+
+\bibitem{stegmeir2016}
+A.~Stegmeir, D.~Coster, O.~Maj, K.~Hallatschek, K.~Lackner, The field line map
+  approach for simulations of magnetically confined plasmas, Computer Physics
+  Communications 198 (2016) 139.
+
+\bibitem{zholobenko2021}
+W.~Zholobenko, T.~Body, P.~Manz, A.~Stegmeir, B.~Zhu, M.~Griener, G.~D. Conway,
+  D.~Coster, F.~Jenko, A.~U. Team, et~al., Electric field and turbulence in
+  global braginskii simulations across the asdex upgrade edge and scrape-off
+  layer, Plasma Physics and Controlled Fusion 63~(3) (2021) 034001.
+
+\bibitem{stegmeir2023}
+A.~Stegmeir, T.~Body, W.~Zholobenko, Analysis of locally-aligned and
+  non-aligned discretisation schemes for reactor-scale tokamak edge turbulence
+  simulations, Computer Physics Communications 290 (2023) 108801.
+
+\bibitem{body2020}
+T.~Body, A.~Stegmeir, W.~Zholobenko, D.~Coster, F.~Jenko, Treatment of advanced
+  divertor configurations in the flux-coordinate independent turbulence code
+  {GRILLIX}, Contributions to Plasma Physics 60~(5) (2020) e201900139.
+
+\bibitem{michels2021}
+D.~Michels, A.~Stegmeir, P.~Ulbl, D.~Jarema, F.~Jenko, {GENE-X}: {A} full-f
+  gyrokinetic turbulence code based on the flux-coordinate independent
+  approach, Comput. Phys. Commun. 264 (2021) 107986.
+
+\bibitem{shi2017}
+E.~L. Shi, G.~W. Hammett, T.~Stoltzfus-Dueck, A.~Hakim, Gyrokinetic continuum
+  simulation of turbulence in a straight open-field-line plasma, Journal of
+  Plasma Physics 83~(3) (2017) 905830304.
+
+\bibitem{boesl2019}
+M.~Boesl, A.~Bergmann, A.~Bottino, D.~Coster, E.~Lanti, N.~Ohana, F.~Jenko,
+  {G}yrokinetic full-f particle-in-cell simulations on open field lines with
+  {PICLS}, Physics of Plasmas 26~(12) (2019) 122302.
+
+\bibitem{ku2009}
+S.~Ku, C.-S. Chang, P.~H. Diamond, Full-f gyrokinetic particle simulation of
+  centrally heated global itg turbulence from magnetic axis to edge pedestal
+  top in a realistic tokamak geometry, Nuclear Fusion 49~(11) (2009) 115021.
+
+\bibitem{hager2022}
+R.~Hager, S.~Ku, A.~Y. Sharma, C.~S. Chang, R.~M. Churchill, A.~Scheinberg,
+  Electromagnetic total-f algorithm for gyrokinetic particle-in-cell
+  simulations of boundary plasma in {XGC}, Physics of Plasmas 29~(11) (2022)
+  112308.
+
+\bibitem{dorf2021}
+M.~Dorf, M.~Dorr, Continuum gyrokinetic simulations of edge plasmas in
+  single-null geometries, Physics of Plasmas 28~(3) (2021) 032508.
+
+\bibitem{michels2022}
+D.~Michels, P.~Ulbl, W.~Zholobenko, T.~Body, A.~Stegmeir, T.~Eich, M.~Griener,
+  G.~Conway, F.~Jenko, {F}ull-f electromagnetic gyrokinetic turbulence
+  simulations of the edge and scrape-off layer of {ASDEX} upgrade with
+  {GENE-X}, Physics of Plasmas 29~(3) (2022) 032307.
+
+\bibitem{ulbl2023}
+P.~Ulbl, T.~Body, W.~Zholobenko, A.~Stegmeir, J.~Pfennig, F.~Jenko, Influence
+  of collisions on the validation of global gyrokinetic simulations in the edge
+  and scrape-off layer of {TCV}, Physics of Plasmas 30~(5) (2023) 107986.
+
+\bibitem{oliveira2022}
+D.~S. Oliveira, T.~Body, D.~Galassi, C.~Theiler, E.~Laribi, P.~Tamain,
+  A.~Stegmeir, M.~Giacomin, W.~Zholobenko, P.~Ricci, et~al., Validation of edge
+  turbulence codes against the {TCV-X21} diverted {L}-mode reference case,
+  Nuclear Fusion 62~(9) (2022) 096001.
+
+\bibitem{roache2002}
+P.~J. Roache, Code verification by the method of manufactured solutions, J.
+  Fluids Eng. 124~(1) (2002) 4.
+
+\bibitem{frei2023}
+B.~J. Frei, A.~Hoffmann, P.~Ricci, S.~Brunner, Z.~Tecchioll, Moment-based
+  approach to the flux-tube linear gyrokinetic model, Journal of Plasma Physics
+  89~(4) (2023) 905890414.
+
+\bibitem{lenard1958}
+A.~Lenard, I.~B. Bernstein, Plasma oscillations with diffusion in velocity
+  space, Physical Review 112~(5) (1958) 1456.
+
+\bibitem{dougherty1964}
+J.~P. Dougherty, {Model Fokker-Planck equation for a plasma and its solution},
+  The Physics of Fluids 7~(11) (1964) 1788.
+
+\bibitem{ulbl2022}
+P.~Ulbl, D.~Michels, F.~Jenko, Implementation and verification of a
+  conservative, multi-species, gyro-averaged, full-f,
+  {L}enard-{B}ernstein/{D}ougherty collision operator in the gyrokinetic code
+  {GENE-X}, Contributions to Plasma Physics 62~(5) (2022) e202100180.
+
+\bibitem{mandell2020}
+N.~R. Mandell, A.~Hakim, G.~W. Hammett, M.~Francisquez, Electromagnetic
+  full-gyrokinetics in the tokamak edge with discontinuous galerkin methods,
+  Journal of Plasma Physics 86~(1) (2020) 905860109.
+
+\bibitem{scott2021}
+B.~Scott, Turbulence and Instabilities in Magnetised Plasmas, Volume 2:
+  Gyrokinetic theory and gyrofluid turbulence, IOP Publishing, 2021.
+
+\bibitem{frei2023b}
+B.~J. Frei, J.~Mencke, P.~Ricci, Full-f turbulent simulation in a linear plasma
+  device using a gyro-moment approach, Physics of Plasmas 31 (2023) 012301.
+
+\bibitem{frei2020}
+B.~J. Frei, R.~Jorge, P.~Ricci, A gyrokinetic model for the plasma periphery of
+  tokamak devices, Journal of Plasma Physics 86~(2) (2020) 905860205.
+
+\bibitem{gradshteyn2014}
+I.~S. Gradshteyn, I.~M. Ryzhik, Table of integrals, series, and products,
+  Academic press, 2014.
+
+\bibitem{landau1936}
+L.~D. Landau, Kinetic equation for the coulomb effect, Phys. Z. Sowjetunion 10
+  (1936) 154.
+
+\bibitem{jorge2019}
+R.~Jorge, B.~J. Frei, P.~Ricci, Nonlinear gyrokinetic coulomb collision
+  operator, Journal of Plasma Physics 85~(6) (2019) 905850604.
+
+\bibitem{frei2021d}
+B.~J. Frei, J.~Ball, A.~C.~D. Hoffmann, R.~Jorge, P.~Ricci, L.~Stenger,
+  Development of advanced linearized gyrokinetic collision operators using a
+  moment approach, Journal of Plasma Physics 87~(5) (2021) 905870501.
+
+\bibitem{arakawa1997}
+A.~Arakawa, {Computational design for long-term numerical integration of the
+  equations of fluid motion: Two-dimensional incompressible flow. Part I},
+  Journal of computational physics 135~(2) (1997) 103.
+
+\bibitem{michelsphd2021}
+D.~Michels, Development of a high-performance gyrokinetic turbulence code for
+  the edge and scrape-off layer of magnetic confinement fusion devices, Ph.D.
+  thesis, Technische Universit{\"a}t M{\"u}nchen (2021).
+
+\bibitem{courant1928}
+R.~Courant, K.~Friedrichs, H.~Lewy, {\"U}ber die partiellen
+  differenzengleichungen der mathematischen physik, Mathematische annalen
+  100~(1) (1928) 32.
+
+\bibitem{loizu2012}
+J.~Loizu, P.~Ricci, F.~D. Halpern, S.~Jolliet, Boundary conditions for plasma
+  fluid models at the magnetic presheath entrance, Physics of plasmas 19~(12)
+  (2012).
+
+\bibitem{riva2014}
+F.~Riva, P.~Ricci, F.~D. Halpern, S.~Jolliet, J.~Loizu, A.~Mosetto,
+  Verification methodology for plasma simulations and application to a
+  scrape-off layer turbulence code, Physics of Plasmas 21~(6) (2014).
+
+\bibitem{coda2019}
+S.~Coda, M.~Agostini, R.~Albanese, S.~Alberti, E.~Alessi, S.~Allan, J.~Allcock,
+  R.~Ambrosino, H.~Anand, Y.~Andrebe, et~al., Physics research on the {TCV}
+  tokamak facility: from conventional to alternative scenarios and beyond,
+  Nuclear Fusion 59~(11) (2019) 112023.
+
+\bibitem{tcvx21zenodo}
+P.~Ulbl, T.~Body, W.~Zholobenko, A.~Stegmeir, J.~Pfennig, F.~Jenko,
+  \href{https://zenodo.org/record/7894731}{{TCV-X21-GENEX}: influence of
+  collisions on the validation of global gyrokinetic simulations} (2023).
+\newblock \href {https://doi.org/10.5281/ZENODO.7894731}
+  {\path{doi:10.5281/ZENODO.7894731}}.
+\newline\urlprefix\url{https://zenodo.org/record/7894731}
+
+\bibitem{ulbl2023phd}
+P.~Ulbl, Collision models for gyrokinetic simulations of edge turbulence in
+  fusion plasmas, Ph.D. thesis, Technische Universit{\"a}t M{\"u}nchen (2023).
+
+\bibitem{ross2018}
+A.~Ross, A.~Stegmeir, D.~Coster, Effect of the boussinesq approximation:
+  Turbulence studies with {GRILLIX} in slab geometry, Contributions to Plasma
+  Physics 58~(6) (2018) 478.
+
+\bibitem{tcvx21zenodoOliveira}
+D.~S.~D.~Oliveira, T.~Body, D.~Galassi, C.~Theiler,
+  \href{https://doi.org/10.5281/zenodo.10841179}{{TCV-X21: an open dataset for
+  the validation of edge turbulence models}} (Mar. 2024).
+\newblock \href {https://doi.org/10.5281/zenodo.10841179}
+  {\path{doi:10.5281/zenodo.10841179}}.
+\newline\urlprefix\url{https://doi.org/10.5281/zenodo.10841179}
+
+\bibitem{zholobenko2021b}
+W.~Zholobenko, A.~Stegmeir, M.~Griener, G.~D. Conway, T.~Body, D.~Coster,
+  F.~Jenko, A.~U. Team, et~al., The role of neutral gas in validated global
+  edge turbulence simulations, Nuclear Fusion 61~(11) (2021) 116015.
+
+\bibitem{williams2009}
+S.~Williams, A.~Waterman, D.~Patterson, Roofline: an insightful visual
+  performance model for multicore architectures, Communications of the ACM
+  52~(4) (2009) 65.
+
+\bibitem{madsen2013}
+J.~Madsen, Full-{F} gyrofluid model, Physics of Plasmas 20~(7) (2013) 072301.
+
+\end{thebibliography}
