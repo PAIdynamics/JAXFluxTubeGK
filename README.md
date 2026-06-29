@@ -14,6 +14,17 @@ checks.  Full nonlinear turbulence, production DESC shape optimization,
 kinetic-electron TEM validation, collisions, and electromagnetic effects are
 explicitly deferred.
 
+## Example Geometry
+
+![W7-X VMEC stellarator geometry](figures/w7x_vmec_geometry.png)
+
+This figure is generated from the GX W7-X VMEC equilibrium used by the
+stella/GX reference fixtures:
+
+```bash
+uv run python scripts/visualize_w7x_vmec_geometry.py
+```
+
 ## Repository Map
 
 ```text
