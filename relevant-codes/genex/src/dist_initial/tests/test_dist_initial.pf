@@ -1,0 +1,652 @@
+module test_dist_initial
+    !! Contains tests for the different dist_initial_i types
+    !!
+    !! These tests compare the implementations with analytic expressions
+    !! evaluated at specific points. We do not care about the profiles,
+    !! thus we take any specific spatial point. We also choose parameter
+    !! values for each distribution that give simpler analytic expressions.
+    use mpi
+    use pfunit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: almost_equal, PI
+    use params_mesh_m, only: get_n_points_sp
+    use params_species_m, only: get_charge, get_mass, get_temp_scaling, &
+                                n_spec_supported
+    use profiles_m, only: profile_cbc_cpu_t
+    use profile_container_m, only: profile_container_t
+    use dcomm_handler_m, only: dcomm_handler_t
+    use mesh_5d_m, only: mesh_5d_t
+    use dist_initial_container_m, only: dist_initial_container_t
+    use dist_initial_m, only: dist_initial_t, &
+                              dist_initial_maxw_cpu_t, &
+                              dist_initial_double_maxw_cpu_t, &
+                              dist_initial_ring_cpu_t, &
+                              dist_initial_slowing_down_cpu_t, &
+                              dist_initial_bi_maxw_cpu_t
+    use params_profile_cbc_m, only: params_profile_cbc_t, &
+                                    get_params_profile_cbc_dens, &
+                                    get_params_profile_cbc_temp
+    use params_dist_initial_m, only : params_dist_initial_t
+    use params_dist_initial_double_maxw_m, only: &
+                                        params_dist_initial_double_maxw_t
+    use params_dist_initial_ring_m, only: &
+                                        params_dist_initial_ring_t
+    use params_dist_initial_slowing_down_m, only: &
+                                        params_dist_initial_slowing_down_t
+    use params_dist_initial_bi_maxw_m, only: &
+                                        params_dist_initial_bi_maxw_t
+
+    ! Unit test helpers
+    use test_params_m
+
+    ! From PARALLAX
+    use equilibrium_factory_m, only: CIRCULAR
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    subroutine initialize_test(this, is_isotropic, dist_type, &
+                               profile_container, dist_initial_container, &
+                               mesh, params_dist)
+        class(MpiTestMethod), intent(inout) :: this
+        logical, dimension(:), intent(in) :: is_isotropic
+        character(len=*), intent(in) :: dist_type
+        type(profile_container_t), allocatable, intent(out) :: &
+                                                       profile_container(:)
+        type(dist_initial_container_t), allocatable, intent(out) :: &
+                                                       dist_initial_container(:)
+        type(mesh_5d_t), allocatable, intent(out) :: mesh
+        class(params_dist_initial_t), allocatable, intent(inout), optional :: &
+                                                                  params_dist(:)
+
+        integer :: comm, rank
+        type(profile_cbc_cpu_t) :: profile_dens, profile_temp
+        type(params_profile_cbc_t) :: params_profile
+
+        type(dist_initial_maxw_cpu_t), allocatable :: &
+                                                  dist_initial_maxw
+        type(dist_initial_double_maxw_cpu_t), allocatable :: &
+                                                  dist_initial_double_maxw
+        type(dist_initial_ring_cpu_t), allocatable :: dist_initial_ring
+        type(dist_initial_slowing_down_cpu_t), allocatable :: &
+                                                   dist_initial_slowing_down
+        type(dist_initial_bi_maxw_cpu_t), allocatable :: &
+                                                    dist_initial_bi_maxw
+
+        type(params_dist_initial_double_maxw_t), allocatable :: &
+                                                params_dist_initial_double_maxw
+        type(params_dist_initial_ring_t), allocatable :: &
+                                                params_dist_initial_ring
+        type(params_dist_initial_slowing_down_t), allocatable :: &
+                                                params_dist_initial_slowing_down
+        type(params_dist_initial_bi_maxw_t), allocatable :: &
+                                                params_dist_initial_bi_maxw
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        integer :: n, nspec
+        real(kind=GP), dimension(n_spec_supported) :: temp_scalings
+
+        comm = this%getMpiCommunicator()
+        rank = this%getProcessRank()
+
+        ! Setup mesh
+        call setup_test_mesh(comm, rank, &
+                             equilibrium_type=CIRCULAR, &
+                             spacing_RZ=0.05_GP, &
+                             n_points_phi=16, &
+                             n_points_vp=32, &
+                             n_points_mu=16, &
+                             use_vspectral=.false.)
+
+        call dcomm_handler%initialize(comm, 1, 1, 1, 1)
+        dcomm_handler_ptr => dcomm_handler
+
+        allocate(mesh)
+        call mesh%initialize(dcomm_handler_ptr)
+
+        nspec = get_n_points_sp()
+        allocate(profile_container(nspec))
+        do n = 1, nspec
+            params_profile = get_params_profile_cbc_dens(n)
+            call profile_dens%initialize(params_profile)
+            params_profile = get_params_profile_cbc_temp(n)
+            call profile_temp%initialize(params_profile)
+            ! Initialize isotropic profile with dens and temp
+            call profile_container(n)%initialize(is_isotropic(n), &
+                                                 profile_dens, &
+                                                 profile_temp, &
+                                                 profile_temp, &
+                                                 profile_temp)
+        end do
+        allocate(dist_initial_container(nspec))
+        do n = 1, nspec
+            select case(dist_type)
+                case("maxw")
+                    allocate(dist_initial_maxw)
+                    call dist_initial_maxw%initialize(profile_container, n)
+                    call dist_initial_container(n)%initialize(dist_initial_maxw)
+                    deallocate(dist_initial_maxw)
+                case("double_maxw")
+                    allocate(dist_initial_double_maxw)
+                    allocate(params_dist_initial_double_maxw)
+                    select type(param_dist => params_dist(n))
+                        type is(params_dist_initial_double_maxw_t)
+                            params_dist_initial_double_maxw = param_dist
+                    end select
+                    call setup_test_dist_initial(comm, rank, &
+                                           n, params_dist_initial_double_maxw)
+                    call dist_initial_double_maxw%initialize( &
+                                                       profile_container, n)
+                    call dist_initial_container(n)%initialize( &
+                                             dist_initial_double_maxw)
+                    deallocate(dist_initial_double_maxw)
+                    deallocate(params_dist_initial_double_maxw)
+                case("ring")
+                    allocate(dist_initial_ring)
+                    allocate(params_dist_initial_ring)
+                    select type(param_dist => params_dist(n))
+                        type is(params_dist_initial_ring_t)
+                            params_dist_initial_ring = param_dist
+                    end select
+                    call setup_test_dist_initial(comm, rank, &
+                                                 n, params_dist_initial_ring)
+                    call dist_initial_ring%initialize(profile_container, n)
+                    call dist_initial_container(n)%initialize( &
+                                               dist_initial_ring)
+                    deallocate(dist_initial_ring)
+                    deallocate(params_dist_initial_ring)
+                case("slowing_down")
+                    allocate(dist_initial_slowing_down)
+                    allocate(params_dist_initial_slowing_down)
+                    select type(param_dist => params_dist(n))
+                        type is(params_dist_initial_slowing_down_t)
+                            params_dist_initial_slowing_down = param_dist
+                    end select
+                    call setup_test_dist_initial(comm, rank, &
+                                     n, params_dist_initial_slowing_down)
+                    call dist_initial_slowing_down%initialize( &
+                                                    profile_container, n)
+                    call dist_initial_container(n)%initialize( &
+                                               dist_initial_slowing_down)
+                    deallocate(dist_initial_slowing_down)
+                    deallocate(params_dist_initial_slowing_down)
+                case("bi_maxw")
+                    allocate(dist_initial_bi_maxw)
+                    allocate(params_dist_initial_bi_maxw)
+                    select type(param_dist => params_dist(n))
+                        type is(params_dist_initial_bi_maxw_t)
+                            params_dist_initial_bi_maxw = param_dist
+                    end select
+                    call setup_test_dist_initial(comm, rank, &
+                                     n, params_dist_initial_bi_maxw)
+                    call dist_initial_bi_maxw%initialize(profile_container, n)
+                    call dist_initial_container(n)%initialize( &
+                                      dist_initial_bi_maxw)
+                    deallocate(dist_initial_bi_maxw)
+                    deallocate(params_dist_initial_bi_maxw)
+            end select
+        end do
+
+        temp_scalings  = [0.5_GP, 1.3_GP, 1.1_GP, 0.7_GP, &
+                          1.2_GP, 0.6_GP, 0.8_GP, 0.9_GP]
+        call setup_test_species(this%getMpiCommunicator(), &
+                                this%getProcessRank(), &
+                                temp_scalings=temp_scalings)
+
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_dist_initial_maxw(this)
+        !! Tests the Maxwellian distribution
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        logical, dimension(:), allocatable :: is_isotropic
+        type(mesh_5d_t), allocatable :: mesh
+
+        integer :: nspec, i, ierr
+        real(kind=GP) :: rho, theta, phi, dens, temp, norm, res, vp, muB
+
+        nspec = get_n_points_sp()
+
+        ! Set isotropic to true
+        allocate(is_isotropic(nspec))
+        do i = 1, nspec
+            is_isotropic(i) = .true.
+        end do
+
+        ! Call initialize subroutine from this test
+        call initialize_test(this, is_isotropic, "maxw", &
+                             profile_container, dist_initial_container, &
+                             mesh)
+
+        ! Choose any position
+        rho = 0.43_GP
+        theta = 1.98_GP
+        phi = 4.28_GP
+
+        ! Evaluate dens, temp and norm for reference
+        call profile_container(1)%eval_dens(rho, theta, phi, dens, ierr)
+        call profile_container(1)%eval_temp(rho, theta, phi, temp, ierr)
+        temp = temp / get_temp_scaling(1)
+        norm = dens / (PI * temp)**(1.5_GP)
+
+        ! Check at point 0,0 in vspace
+        vp = 0.0_GP
+        muB = 0.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        @assertEqual(res, norm, GP_EPS)
+
+        ! Check at point 1,-1 in vspace (expected = same)
+        vp = 1.0_GP
+        muB = -1.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        @assertEqual(res, norm, GP_EPS)
+
+        ! Check other point in vspace
+        vp = sqrt(log(2.0_GP) * temp)
+        muB = log(2.0_GP) * temp
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        @assertEqual(res, norm / 4.0_GP, GP_EPS)
+
+        ! Check other point in vspace
+        vp = sqrt(log(2.0_GP) * temp)
+        muB = -log(2.0_GP) * temp / 2.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        @assertEqual(res, norm / sqrt(2.0_GP), GP_EPS)
+
+        ! Check other point in vspace
+        vp = sqrt(temp)
+        muB = temp
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        @assertEqual(res, norm / exp(2.0_GP), GP_EPS)
+
+        deallocate(profile_container, dist_initial_container, mesh)
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_dist_initial_double_maxw(this)
+        !! Tests the double Maxwellian distribution
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        class(params_dist_initial_t), allocatable :: params_dist(:)
+        logical, dimension(:), allocatable :: is_isotropic
+        type(mesh_5d_t), allocatable :: mesh
+
+        integer :: nspec, n, ierr
+        real(kind=GP) :: rho, theta, phi, dens, temp, norm, res, vp, muB, &
+            expected
+        real(kind=GP), parameter :: amp1 = 2.0_GP, amp2 = 0.5_GP
+
+        nspec = get_n_points_sp()
+
+        ! Set isotropic to true. Initialize parameter with correct type
+        allocate(is_isotropic(nspec))
+        allocate(params_dist_initial_double_maxw_t :: params_dist(nspec))
+        do n = 1, nspec
+            is_isotropic(n) = .true.
+
+            select type(p => params_dist(n))
+                type is(params_dist_initial_double_maxw_t)
+                    p%drift_par1 = 1.0_GP
+                    p%drift_par2 = -1.0_GP
+                    p%amp1       = amp1
+                    p%amp2       = amp2
+            end select
+        end do
+
+        ! Call initialize subroutine from this test
+        call initialize_test(this, is_isotropic, "double_maxw", &
+                             profile_container, dist_initial_container, &
+                             mesh, params_dist=params_dist)
+
+        ! Choose any position
+        rho = 0.88_GP
+        theta = 0.752_GP
+        phi = 2.95_GP
+
+        ! Evaluate dens, temp and norm for reference
+        call profile_container(1)%eval_dens(rho, theta, phi, dens, ierr)
+        call profile_container(1)%eval_temp(rho, theta, phi, temp, ierr)
+        temp = temp / get_temp_scaling(1)
+        norm = dens * (PI * temp)**(-1.5_GP) / (amp1 + amp2)
+
+        ! Check at point 0,0 in vspace
+        vp = 0.0_GP
+        muB = 0.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * exp(-1.0_GP / temp) * (amp1 + amp2)
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 1,0 in vspace
+        vp = 1.0_GP
+        muB = 0.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * (amp1 + amp2 * exp(-4.0_GP / temp))
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point -1,0 in vspace
+        vp = -1.0_GP
+        muB = 0.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * (amp2 + amp1 * exp(-4.0_GP / temp))
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point -1,1 in vspace
+        vp = -1.0_GP
+        muB = 1.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * (amp1 * exp(-5.0_GP / temp) + amp2 &
+                 * exp(-1.0_GP / temp))
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 1,1 in vspace (same expected as before)
+        vp = 1.0_GP
+        muB = 1.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * (amp2 * exp(-5.0_GP / temp) + amp1 &
+                 * exp(-1.0_GP / temp))
+        @assertEqual(res, expected, GP_EPS)
+
+        deallocate(profile_container, dist_initial_container, params_dist, mesh)
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_dist_initial_ring(this)
+        !! Tests the ring distribution
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        class(params_dist_initial_t), allocatable :: params_dist(:)
+        logical, dimension(:), allocatable :: is_isotropic
+        type(mesh_5d_t), allocatable :: mesh
+
+        integer :: nspec, n, ierr
+        real(kind=GP) :: rho, theta, phi, dens, temp, norm, res, vp, muB, &
+            expected
+
+        nspec = get_n_points_sp()
+
+        ! Set isotropic to true. Initialize parameter with correct type
+        allocate(is_isotropic(nspec))
+        allocate(params_dist_initial_ring_t :: params_dist(nspec))
+        do n = 1, nspec
+            is_isotropic(n) = .true.
+
+            select type (p => params_dist(n))
+                type is (params_dist_initial_ring_t)
+                    p%drift_par = 1.0_GP
+                    p%drift_perp = 2.0_GP
+                    p%width_par = 3.0_GP
+                    p%width_perp = 2.0_GP
+            end select
+        end do
+
+        ! Call initialize subroutine from this test
+        call initialize_test(this, is_isotropic, "ring", &
+                             profile_container, dist_initial_container, &
+                             mesh, params_dist=params_dist)
+
+        ! Choose any position
+        rho = 0.45_GP
+        theta = 1.257_GP
+        phi = 1.33_GP
+
+        ! Evaluate dens, temp and norm for reference
+        call profile_container(1)%eval_dens(rho, theta, phi, dens, ierr)
+        call profile_container(1)%eval_temp(rho, theta, phi, temp, ierr)
+        ! Calculate norm
+        norm = dens / (6.0_GP * PI**2 * (1.0_GP + erf(1.0_GP)))
+
+        ! Check at point 0,4 in vspace
+        vp = 0.0_GP
+        muB = 4.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm / sqrt(muB) / exp(1.0_GP / 9.0_GP)
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 1,4 in vspace
+        vp = 1.0_GP
+        muB = 4.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm / sqrt(muB)
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point -1,1 in vspace
+        vp = -1.0_GP
+        muB = 1.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm / sqrt(muB) / exp(25.0_GP / 36.0_GP)
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 4,16 in vspace
+        vp = 4.0_GP
+        muB = 16.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm / sqrt(muB) / exp(2.0_GP)
+        @assertEqual(res, expected, GP_EPS)
+
+        deallocate(profile_container, dist_initial_container, params_dist, mesh)
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_dist_initial_slowing_down(this)
+        !! Tests the slowing down distribution
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        class(params_dist_initial_t), allocatable :: params_dist(:)
+        logical, dimension(:), allocatable :: is_isotropic
+        type(mesh_5d_t), allocatable :: mesh
+
+        integer :: nspec, n, ierr, i
+        real(kind=GP) :: rho, theta, phi, dens, temp, norm, res, vp, muB, &
+            expected, vth, vcross, vfrac
+
+        nspec = get_n_points_sp()
+
+        ! Set isotropic to true. Initialize parameter with correct type
+        allocate(is_isotropic(nspec))
+        allocate(params_dist_initial_slowing_down_t :: params_dist(nspec))
+        do i = 1, nspec ! Keep this loop index different from the others
+            ! otherwise you get segfault with gnu debug
+            is_isotropic(i) = .true.
+
+            select type (p => params_dist(i))
+                type is (params_dist_initial_slowing_down_t)
+                    p%vbirth = 5.0_GP
+            end select
+        end do
+
+        ! Call initialize subroutine from this test
+        call initialize_test(this, is_isotropic, "slowing_down", &
+                             profile_container, dist_initial_container, &
+                             mesh, params_dist=params_dist)
+
+        ! Choose any position
+        rho = 0.93_GP
+        theta = 5.942_GP
+        phi = 3.21_GP
+
+        block ! Calc vcross
+
+            real(kind=GP) :: dens_e, temp_e, vth_e, alpha, Z1, dens_i
+            integer :: ne
+
+            do ne = 1, nspec
+                if(get_charge(ne) == -1.0_GP) exit
+            end do
+
+            ! Evaluate density and temperature of electrons
+            call profile_container(ne)%eval_dens(rho, theta, phi, dens_e, ierr)
+            call profile_container(ne)%eval_temp(rho, theta, phi, temp_e, ierr)
+            temp_e = temp_e / get_temp_scaling(ne)
+            vth_e = sqrt(2.0_GP * temp_e / get_mass(ne))
+
+            ! Calculate effective charge
+            Z1 = 0.0_GP
+            do n = 1, nspec
+                if(n == ne) cycle
+                call profile_container(n)%eval_dens(rho, theta, &
+                                                    phi, dens_i, ierr)
+                Z1 = Z1 + dens_i * get_charge(n)**2 / get_mass(n)
+            end do
+
+            ! Calculate cross prefactor
+            alpha = (3.0_GP * PI * get_mass(ne) * Z1 / &
+                     (4.0_GP * dens_e))**(1.0_GP / 3.0_GP)
+
+            vcross = alpha * vth_e
+        end block
+
+        ! For this distribution we also test other species as well
+        do n = 1, nspec
+            ! Evaluate dens, temp and norm for reference
+            call profile_container(n)%eval_dens(rho, theta, phi, dens, ierr)
+            call profile_container(n)%eval_temp(rho, theta, phi, temp, ierr)
+            temp = temp / get_temp_scaling(n)
+            ! Calculate vth, vfrac, norm
+            vth = sqrt(2.0_GP * temp / get_mass(n))
+            vfrac = (vcross / vth)**3
+            norm = dens / (2.0_GP * PI * log(1.0_GP + (5.0_GP * vth / vcross)))
+
+            ! Check at point 0,0 in vspace
+            vp = 0.0_GP
+            muB = 0.0_GP
+            res = dist_initial_container(n)%eval(rho, theta, phi, vp, muB)
+            expected = norm / vfrac
+            @assertEqual(res, expected, GP_EPS)
+
+            ! Check at point 0,1 in vspace
+            vp = 0.0_GP
+            muB = 1.0_GP
+            res = dist_initial_container(n)%eval(rho, theta, phi, vp, muB)
+            expected = norm / (1.0_GP + vfrac)
+            @assertEqual(res, expected, GP_EPS)
+
+            ! Check at point 0,25 in vspace
+            vp = 0.0_GP
+            muB = 25.0_GP
+            res = dist_initial_container(n)%eval(rho, theta, phi, vp, muB)
+            expected = norm / (125.0_GP + vfrac)
+            @assertEqual(res, expected, GP_EPS)
+
+            ! Check at point 5,0 in vspace (expected same as before)
+            vp = 5.0_GP
+            muB = 0.0_GP
+            res = dist_initial_container(n)%eval(rho, theta, phi, vp, muB)
+            @assertEqual(res, expected, GP_EPS)
+
+            ! Check at point 3,7 in vspace
+            vp = 3.0_GP
+            muB = 7.0_GP
+            res = dist_initial_container(n)%eval(rho, theta, phi, vp, muB)
+            expected = norm / (64.0_GP + vfrac)
+            @assertEqual(res, expected, GP_EPS)
+        end do
+
+        deallocate(profile_container, dist_initial_container, params_dist, mesh)
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_dist_initial_bi_maxw(this)
+        !! Tests the bi Maxwellian distribution
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        class(params_dist_initial_t), allocatable :: params_dist(:)
+        logical, dimension(:), allocatable :: is_isotropic
+        type(mesh_5d_t), allocatable :: mesh
+
+        integer :: nspec, n, ierr
+        real(kind=GP) :: rho, theta, phi, dens, temp, norm, res, vp, muB, &
+            expected, tau_par, tau_perp
+
+        nspec = get_n_points_sp()
+
+        tau_par = 1.5_GP
+        tau_perp = 2.5_GP
+
+        ! Set isotropic to true. Initialize parameter with correct type
+        ! In this test we use isotropic temp but different tau parameter
+        ! to get different temps in par and perp by flat factors
+        allocate(is_isotropic(nspec))
+        allocate(params_dist_initial_bi_maxw_t :: params_dist(nspec))
+        do n = 1, nspec
+            is_isotropic(n) = .true.
+
+            select type (p => params_dist(n))
+                type is (params_dist_initial_bi_maxw_t)
+                    p%drift_vpar = 1.0_GP
+                    p%tau_par = tau_par
+                    p%tau_perp = tau_perp
+            end select
+        end do
+
+        ! Call initialize subroutine from this test
+        call initialize_test(this, is_isotropic, "bi_maxw", &
+                             profile_container, dist_initial_container, &
+                             mesh, params_dist=params_dist)
+
+        ! Choose any position
+        rho = 0.653_GP
+        theta = 3.111_GP
+        phi = 1.542_GP
+
+        ! Evaluate dens, temp and norm for reference
+        call profile_container(1)%eval_dens(rho, theta, phi, dens, ierr)
+        call profile_container(1)%eval_temp(rho, theta, phi, temp, ierr)
+        temp = temp / get_temp_scaling(1)
+        ! Calculate norm
+        norm = dens / (PI**(1.5_GP) * sqrt(temp * tau_par) * temp * tau_perp)
+
+        ! Check at point 0,0 in vspace
+        vp = 0.0_GP
+        muB = 0.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * exp(-1.0_GP / (temp * tau_par))
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 1,1 in vspace
+        vp = 1.0_GP
+        muB = 1.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * exp(-1.0_GP / (temp * tau_perp))
+        @assertEqual(res, expected, GP_EPS)
+
+        ! Check at point 3,4 in vspace
+        vp = 3.0_GP
+        muB = 4.0_GP
+        res = dist_initial_container(1)%eval(rho, theta, phi, vp, muB)
+        expected = norm * exp(-4.0_GP / temp &
+                 * (1.0_GP / tau_par + 1.0_GP / tau_perp))
+        @assertEqual(res, expected, GP_EPS)
+
+        deallocate(profile_container, dist_initial_container, params_dist, mesh)
+    end subroutine
+
+end module

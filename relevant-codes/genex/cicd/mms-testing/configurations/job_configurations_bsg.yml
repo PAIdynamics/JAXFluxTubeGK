@@ -1,0 +1,33 @@
+################################################################################
+## Options and configurations for job submission of every case in
+## the BSG MMS testing
+## Array format:
+## geometryN: [resolution1, resolution2, ..., resolutionN]
+################################################################################
+job_configurations:
+  general:
+    job_name: genex
+    output_file: job.out
+    runtime_modes: [cpu]
+    environment_commands:
+      - BUILD_DIR=<GENEX_BUILD_DIR>
+      - module purge
+      - source ${BUILD_DIR}/toolchain.sh
+      - ''
+      - export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
+      - export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+      - export OMP_PLACES=cores
+      - export OMP_PROC_BIND=close
+      - export KMP_AFFINITY=noverbose
+
+    execution_commands:
+      - srun -Q ${BUILD_DIR}/bin/genex <GPU_FLAG> -o <OUT_DIR> <PARAMS_IN_FILE>
+
+  cpu:
+    partition_type: cpu
+
+    n_procs:
+      circular : [1, 4, 64, 256]
+
+    time_limits:
+      circular : [00:30:00, 00:30:00, 00:30:00, 05:00:00]

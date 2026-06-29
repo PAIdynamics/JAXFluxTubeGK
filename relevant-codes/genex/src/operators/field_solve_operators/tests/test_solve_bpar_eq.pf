@@ -1,0 +1,251 @@
+module test_solve_bpar_eq
+    !! Contains tests for the bpar field solver
+!$  use omp_lib
+    use pfunit
+    use mpi
+    use, intrinsic :: iso_fortran_env
+    use math_m, only: PI
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use mesh_5d_m, only: mesh_5d_t
+    use op_solve_bpar_eq_m, only: op_solve_bpar_eq_t
+    use data_storage_m, only: data_storage_2d_t, data_storage_cpu_2d_t
+    use data_array_m, only: data_array_2d_t
+    use params_normalization_m, only: get_L_ref, get_rho_ref
+    use params_species_m, only: get_mass
+
+    ! Unit test helpers
+    use test_params_m
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SLAB, CIRCULAR, SALPHA
+
+    implicit none
+
+    real(kind=GP) :: absolute_tolerance = 1e-3_GP
+    real(kind=GP) :: l2_tolerance       = 5e-2_GP
+    real(kind=GP) :: linf_tolerance     = 1e-1_GP
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes = [4])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    real(kind=GP) function get_npol(mesh)
+        !! Returns the poloidal mode number dependent on the equilibrium
+        type(mesh_5d_t), intent(inout) :: mesh
+        real(kind=GP), parameter :: npol = 1.0_GP
+
+        select case(mesh%equi_type())
+        case(SLAB)
+            ! In SLAB geometry the poloidal angle theta corresponds to the
+            ! coordinate Z. By default the maximum Z value is set to 64 which
+            ! results in fast oscillating poloidal waves that require a high
+            ! resolution to resolve. In order to save computational cost we
+            ! renormalize the poloidal angle to 2 * PI by adjusting the
+            ! poloidal mode number.
+            get_npol = npol / mesh%rho_max() * 2 * PI
+        case default
+            get_npol = npol
+        end select
+    end function
+
+    real(kind=GP) function get_nrad(mesh)
+        !! Returns the radial mode number dependent on the equilibrium
+        type(mesh_5d_t), intent(inout) :: mesh
+        real(kind=GP), parameter :: nrad = 1.0_GP
+
+        get_nrad = nrad
+    end function
+
+    real(kind=GP) function test_func(mesh, i, k)
+        type(mesh_5d_t), intent(inout) :: mesh
+        integer, intent(in) :: i, k
+
+        real(kind=GP) :: R, Z, phi, rhomin, rhomax, npol, nrad, minorr
+
+        npol = get_npol(mesh)
+        nrad = get_nrad(mesh)
+        rhomin = mesh%rho_min()
+        rhomax = mesh%rho_max()
+        call mesh%RZphi(i, k, R, Z, phi)
+
+        select case(mesh%equi_type())
+        case(SLAB)
+            include "res/test_func_slab.txt"
+        case(CIRCULAR)
+            include "res/test_func_circular.txt"
+        case(SALPHA)
+            minorr = 0.365_GP
+            include "res/test_func_salpha.txt"
+        case default
+            @assertTrue(.false.)
+        end select
+    end function
+
+    function get_b_bpar_eq(mesh, i, k) result(b_bpar_eq)
+        type(mesh_5d_t), intent(inout) :: mesh
+        integer, intent(in) :: i, k
+        real(kind=GP) :: b_bpar_eq
+
+        real(kind=GP) :: R, Z, phi, rhomin, rhomax, npol, nrad, rhoref, &
+                         Lref, minorr
+
+        npol = get_npol(mesh)
+        nrad = get_nrad(mesh)
+        rhoref = get_rho_ref()
+        Lref = get_L_ref()
+        rhomin = mesh%rho_min()
+        rhomax = mesh%rho_max()
+        call mesh%RZphi(i, k, R, Z, phi)
+
+        select case(mesh%equi_type())
+        case(SLAB)
+            include "res/b_bpar_eq_slab.txt"
+        case(CIRCULAR)
+            include "res/b_bpar_eq_circular.txt"
+        case(SALPHA)
+            minorr = 0.365_GP
+            include "res/b_bpar_eq_salpha.txt"
+        case default
+            @assertTrue(.false.)
+        end select
+    end function
+
+    subroutine test_op_solve_bpar_eq_core(dcomm_handler, mesh)
+        type(dcomm_handler_t), pointer, intent(in) :: dcomm_handler
+        type(mesh_5d_t), target, intent(inout) :: mesh
+
+        class(data_storage_2d_t), target, allocatable :: solution
+        class(data_array_2d_t), pointer :: da_solution
+        class(data_array_2d_t), allocatable :: da_b_bpar_eq
+        type(op_solve_bpar_eq_t) :: op_solve
+
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: solution_ptr, &
+                                                              b_bpar_eq
+        real(kind=GP), pointer, dimension(:,:) :: not_ghost
+        integer, pointer, dimension(:,:) :: not_in_target
+        real(kind=GP) :: expected, l2_err, linf_err, l2_norm
+        integer :: i, k
+        integer, dimension(2) :: lb_stripped, ub_stripped, lb, ub
+
+        allocate(data_storage_cpu_2d_t :: solution)
+        call solution%initialize(dcomm_handler)
+        da_solution => Solution%get_data_pointer()
+        solution_ptr => da_solution%get_pointer()
+        lb = da_solution%get_lbound()
+        ub = da_solution%get_ubound()
+        lb_stripped = da_solution%get_lbound_stripped()
+        ub_stripped = da_solution%get_ubound_stripped()
+        solution_ptr = 1.0_GP
+
+        allocate(da_b_bpar_eq)
+        call da_b_bpar_eq%initialize([lb(1), lb_stripped(2)], &
+                                     [ub(1), ub_stripped(2)])
+        b_bpar_eq => da_b_bpar_eq%get_pointer()
+
+        not_ghost => mesh%get_not_ghost_pointer()
+        not_in_target => mesh%get_not_in_target_pointer()
+
+        do k = lb_stripped(2), ub_stripped(2)
+        do i = lb(1), ub(1)
+            ! Set the rhs to the expected solution for points in the boundary
+            ! and the target
+            if(not_ghost(i, k) == 0.0_GP .or. &
+               not_in_target(i, k) == 0) then
+                b_bpar_eq(i, k) = test_func(mesh, i, k)
+            else
+                b_bpar_eq(i, k) = get_b_bpar_eq(mesh, i, k)
+            endif
+        end do
+        end do
+
+        call da_b_bpar_eq%update_device()
+        call da_solution%update_device()
+
+        call op_solve%initialize(dcomm_handler, mesh)
+
+        call op_solve%apply(da_b_bpar_eq, da_solution)
+
+        call da_solution%update_host()
+
+        linf_err = 0.0_GP
+        l2_err = 0.0_GP
+        l2_norm = 0.0_GP
+
+        do k = lb_stripped(2), ub_stripped(2)
+        do i = lb_stripped(1), ub_stripped(1)
+            expected = test_func(mesh, i, k)
+
+            if(not_ghost(i, k) == 1.0_GP) then
+                linf_err = max(linf_err, abs(expected - solution_ptr(i, k)))
+                l2_err = l2_err + (expected - solution_ptr(i,k))**2
+                l2_norm = l2_norm + expected**2
+            ! Check for no change on ghost points
+            elseif(not_ghost(i, k) == 0.0_GP) then
+                @assertEqual(expected, solution_ptr(i, k), absolute_tolerance)
+            endif
+        end do
+        end do
+
+        l2_norm = sqrt(l2_norm)
+        l2_err  = sqrt(l2_err) / (l2_norm + GP_EPS)
+        @assertLessThanOrEqual(linf_err, linf_tolerance)
+        @assertLessThanOrEqual(l2_err, l2_tolerance)
+
+        deallocate(da_b_bpar_eq)
+        deallocate(solution)
+    end subroutine
+
+    @test(npes = [2])
+    subroutine test_op_solve_bpar_eq(this)
+        !! Tests the op_solve_bpar_eq_t operator
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), target, allocatable :: mesh
+        integer :: n_procs
+
+        ! SLAB
+        allocate(mesh)
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=2.0_GP, &
+                             n_points_phi=2, &
+                             n_points_vp=2, &
+                             n_points_mu=1, &
+                             quad_type_vp="trapezoidal")
+
+        ! Setup MPI communication
+        n_procs = this%getNumProcesses()
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                      n_procs, 1, 1, 1)
+
+        call mesh%initialize(dcomm_handler_ptr)
+        call test_op_solve_bpar_eq_core(dcomm_handler_ptr, mesh)
+        deallocate(mesh)
+    end subroutine
+
+end module

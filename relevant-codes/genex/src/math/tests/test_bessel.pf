@@ -1,0 +1,100 @@
+module test_bessel
+    !! Contains test for some routines from bessel_m
+    use funit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use bessel_m
+    use math_m, only: almost_equal, PI
+
+    implicit none
+
+    real(kind=GP), parameter :: xto0   = 1.0e-15_GP
+    real(kind=GP), parameter :: xtoinf = 500_GP
+
+contains
+
+    @test
+    subroutine test_bessel_i0()
+        integer :: i
+        integer, parameter :: n = 7
+        real(kind=GP) :: sol, expected_lim
+        real(kind=GP), dimension(n) :: x
+        real(kind=GP), parameter :: xl = 0.0_GP, xstep = 3.0_GP, &
+                                    xerr = 750.0_GP, &
+                                    eps = 1e-9_GP, eps_percentage = 5.0e-3_GP
+        real(kind=GP), parameter :: expected(n) = [     1.0000000000000000_GP, &
+                                                        4.8807925858650236_GP, &
+                                                       67.2344069764779704_GP, &
+                                                     1093.5883545113745186_GP, &
+                                                    18948.9253492963107419_GP, &
+                                                   339649.3732979138148949_GP, &
+                                                  6218412.4207810033112764_GP]
+
+        x(1) = xl
+        do i = 2, n
+            x(i) = x(i-1) + xstep
+        enddo
+
+        do i = 1, n
+            sol = bessel_i0(x(i))
+            @assertTrue(almost_equal(sol, expected(i), eps))
+        enddo
+
+        ! Limit I0(x) -> 1 when x -> 0
+        sol = bessel_i0(xto0)
+        expected_lim = 1.0_GP
+        @assertTrue(almost_equal(sol, expected_lim, eps))
+
+        ! Limit I0(x) -> e^x / sqrt(2*pi*x) when x -> inf
+        sol = bessel_i0(xtoinf)
+        expected_lim = exp(xtoinf) / sqrt(2*PI*xtoinf)
+        @assertTrue((abs(sol - expected_lim) / expected_lim) < eps_percentage)
+
+        ! Invalid argument x > xmax
+        sol = bessel_i0(xerr)
+        @assertTrue(almost_equal(sol, err_val_i0, eps))
+    end subroutine
+
+    @test
+    subroutine test_bessel_k0()
+        integer :: i
+        integer, parameter :: n = 10
+        real(kind=GP) :: sol, expected_lim
+        real(kind=GP), dimension(n) :: x
+        real(kind=GP), parameter :: xl = 0.001_GP, xstep = 0.250_GP, &
+                                    xerr1 = 0.0_GP, xerr2 = -5.0_GP, &
+                                    eps = 1e-10_GP, eps_percentage = 5.0e-3_GP
+        real(kind=GP), parameter :: expected(n) = [7.0236888005623825_GP, &
+                                                   1.5377679685070167_GP, &
+                                                   0.9227647459696003_GP, &
+                                                   0.6096337791385236_GP, &
+                                                   0.4204230421054917_GP, &
+                                                   0.2972012744631253_GP, &
+                                                   0.2135283741014252_GP, &
+                                                   0.1551844684051135_GP, &
+                                                   0.1137540987366846_GP, &
+                                                   0.0839419601564098_GP]
+
+        x(1) = xl
+        do i = 2, n
+            x(i) = x(i-1) + xstep
+        enddo
+
+        do i = 1, n
+            sol = bessel_k0(x(i))
+            @assertTrue(almost_equal(sol, expected(i), eps))
+        enddo
+
+        ! Limit K0(x) -> -ln(z) when x -> 0
+        sol = bessel_k0(xto0)
+        expected_lim = -log(xto0)
+        @assertTrue((abs(sol - expected_lim) / expected_lim) < eps_percentage)
+
+        ! Invalid argument x = 0
+        sol = bessel_k0(xerr1)
+        @assertTrue(almost_equal(sol, err_val_k0, eps))
+        ! Invalud argument x < 0
+        sol = bessel_k0(xerr2)
+        @assertTrue(almost_equal(sol, err_val_k0, eps))
+    end subroutine
+
+end module

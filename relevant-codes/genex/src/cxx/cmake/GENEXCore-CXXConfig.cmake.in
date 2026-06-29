@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/GENEXCore-CXXTargets.cmake")
+
+check_required_components(
+  "GENEXCore-CXX-Library"
+  )
+
+if(NOT WIN32)
+  if(NOT TARGET OpenMP::OpenMP_CXX)
+    find_package(OpenMP REQUIRED QUIET COMPONENTS CXX)
+  endif()
+endif()

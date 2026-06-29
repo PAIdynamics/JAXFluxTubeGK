@@ -1,0 +1,9 @@
+[submodule "parallax"]
+    path = parallax
+    url = https://gitlab.mpcdf.mpg.de/phoenix-public/parallax.git
+[submodule "confix"]
+    path = confix
+    url = https://gitlab.mpcdf.mpg.de/phoenix-public/confix.git
+[submodule "reax"]
+    path = reax
+    url = https://gitlab.mpcdf.mpg.de/phoenix-public/reax.git

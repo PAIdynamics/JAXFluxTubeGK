@@ -1,0 +1,39 @@
+absB = Sqrt(1 + ((-1 + R)**2 + Z**2)/(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2)/R
+dabsBdR = ((-4*(-1.D0 + R)*shear*((-1 + R)**2 + Z**2))/(minorr**2*(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**3) + (2*(-1 + R))/(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2)/(2.D0*R*Sqrt(1 + ((-1 + R)**2 + Z**2)/( &
+q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)) - Sqrt(1 + (( &
+-1 + R)**2 + Z**2)/(q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)/R**2
+dabsBdphi = 0
+dabsBdZ = ((-4*shear*Z*((-1 + R)**2 + Z**2))/(minorr**2*(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**3) + (2*Z)/(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2)/(2.D0*R*Sqrt(1 + ((-1 + R)**2 + Z**2)/( &
+q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2))
+bR = -(Z/Sqrt((-1 + R)**2 + Z**2 + (q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2))
+bphi = (q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)/Sqrt((-1 + R)**2 + Z**2 + (q + ( &
+shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)
+bZ = (-1 + R)/Sqrt((-1 + R)**2 + Z**2 + (q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2)
+dbRdphi = 0
+dbRdZ = (Z*(2*Z + (4*shear*Z*(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2))/minorr**2))/(2.D0*((-1 + R)**2 + Z**2 + (q +  &
+(shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)**1.5D0) - 1/Sqrt(( &
+-1 + R)**2 + Z**2 + (q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)
+dbphidR = -5.D-1*((q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)*(2*(-1 + R) + (4*( &
+-1.D0 + R)*shear*(q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2))/minorr**2))/(( &
+-1 + R)**2 + Z**2 + (q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2)**1.5D0 + (2*(-1.D0 + R)*shear)/( &
+minorr**2*Sqrt((-1 + R)**2 + Z**2 + (q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2))
+dbphidZ = -5.D-1*((q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)*(2*Z + (4*shear*Z*(q + ( &
+shear*((-1.D0 + R)**2 + Z**2))/minorr**2))/minorr**2))/((-1 + R)**2 + Z**2 + ( &
+q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)**1.5D0 + (2*shear*Z)/( &
+minorr**2*Sqrt((-1 + R)**2 + Z**2 + (q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2))
+dbZdR = -5.D-1*((-1 + R)*(2*(-1 + R) + (4*(-1.D0 + R)*shear*(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2))/minorr**2))/((-1 + R)**2 + Z**2 + (q + ( &
+shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)**1.5D0 + 1/Sqrt(( &
+-1 + R)**2 + Z**2 + (q + (shear*((-1.D0 + R)**2 + Z**2))/minorr**2)**2)
+dbZdphi = 0

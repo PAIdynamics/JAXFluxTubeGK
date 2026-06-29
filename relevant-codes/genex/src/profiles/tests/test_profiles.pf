@@ -1,0 +1,129 @@
+module test_profiles
+    !! Contains tests for the different profile_t types
+    use mpi
+    use pfunit
+    use genex_fortran_env_m, only : GP, GP_EPS
+    use math_m, only: almost_equal
+    use params_mesh_m, only : get_n_points_sp
+    use profiles_m, only : profile_t, &
+                           profile_uniform_cpu_t, &
+                           profile_cbc_cpu_t, &
+                           profile_sine_cpu_t
+    use dcomm_handler_m, only : dcomm_handler_t
+    use mesh_5d_m, only: mesh_5d_t
+    ! Unit test helpers
+    use test_params_m, only: setup_test_mesh
+    ! From PARALLAX
+    use equilibrium_factory_m, only: CIRCULAR
+    use profile_container_m, only : profile_container_t
+
+    implicit none
+
+contains
+
+    @test(npes = [1])
+    subroutine test_profile_cbc(this)
+        !! Tests the cbc profile
+        use params_profile_cbc_m, only: params_profile_cbc_t, &
+                                        get_params_profile_cbc_dens
+        class(MpiTestMethod), intent(inout) :: this
+        type(profile_cbc_cpu_t) :: profile_cbc
+        type(params_profile_cbc_t) :: params
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(mesh_5d_t), target, allocatable :: mesh
+
+        integer :: i, k, n_points_RZ, n_points_phi
+        real(kind = GP) :: expected, res
+        real(kind = GP), pointer, contiguous, dimension(:) ::  phi
+        real(kind = GP), pointer, contiguous, dimension(:,:) :: rho, theta
+
+        call dcomm_handler%initialize(this%getMpiCommunicator(), 1, 1, 1, 1)
+        dcomm_handler_ptr => dcomm_handler
+        allocate(mesh)
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=CIRCULAR, &
+                             spacing_RZ=0.05_GP, &
+                             n_points_phi=16, &
+                             n_points_vp=32, &
+                             n_points_mu=16)
+        call mesh%initialize(dcomm_handler_ptr)
+
+        ! Get density parameters of first species
+        params = get_params_profile_cbc_dens(1)
+        call profile_cbc%initialize(params)
+
+        n_points_RZ = mesh%size_RZ()
+        n_points_phi = mesh%size_phi()
+        phi => mesh%get_phi_pointer()
+        rho => mesh%get_rho_pointer()
+        theta => mesh%get_theta_pointer()
+
+        do k = 1, n_points_phi
+        do i = 1, n_points_RZ
+            ! Compare internal evaluation of cbc prof with explicit function
+            ! defined here
+            expected = cbc_prof_function(rho(i, k), params%kappa, &
+                                         params%delta, params%center)
+            res = profile_cbc%eval(rho(i, k), theta(i, k), phi(k))
+            @assertEqual(res, expected, 10 * GP_EPS)
+        enddo
+        enddo
+
+        deallocate(mesh)
+    contains
+        real(kind = GP) function cbc_prof_function(rho, kappa, delta, center)
+            real(kind = GP), intent(in) :: rho, kappa, delta, center
+
+            cbc_prof_function = exp(-kappa*delta*tanh((rho - center) / delta))
+        end function
+    end subroutine
+
+    @test(npes = [1])
+    subroutine test_profile_sine(this)
+        !! Tests the sine profile
+        use params_profile_sine_m, only: params_profile_sine_t, &
+                                         get_params_profile_sine_dens
+        class(MpiTestMethod), intent(inout) :: this
+        type(profile_sine_cpu_t) :: profile_sine
+        type(params_profile_sine_t) :: params
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(mesh_5d_t), target, allocatable :: mesh
+        real(kind = GP) :: res
+        real(kind = GP), parameter :: prec = 10 * GP_EPS
+
+        call dcomm_handler%initialize(this%getMpiCommunicator(), 1, 1, 1, 1)
+        dcomm_handler_ptr => dcomm_handler
+        allocate(mesh)
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=CIRCULAR, &
+                             spacing_RZ=0.05_GP, &
+                             n_points_phi=16, &
+                             n_points_vp=32, &
+                             n_points_mu=16)
+        call mesh%initialize(dcomm_handler_ptr)
+
+        ! Get density parameters of first species
+        params = get_params_profile_sine_dens(1)
+        call profile_sine%initialize(params)
+
+        ! The sine profile is equal to amp_max at rho 0
+        res = profile_sine%eval(0.0_GP, 0.0_GP, 0.0_GP)
+        @assertEqual(params%amp_max, res, prec)
+
+        ! The sine profile is equal to amp_min at rho 1
+        res = profile_sine%eval(1.0_GP, 0.0_GP, 0.0_GP)
+        @assertEqual(params%amp_min, res, prec)
+
+        ! The sine profile is equal to (amp_max + amp_min) / 2
+        ! at rho = (rho_max + rho_min) / 2
+        res = profile_sine%eval((params%rho_min + params%rho_max) / 2, &
+                                                                0.0_GP, 0.0_GP)
+        @assertEqual((params%amp_min + params%amp_max) / 2, res, prec)
+
+        deallocate(mesh)
+    end subroutine
+end module

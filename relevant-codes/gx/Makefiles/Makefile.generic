@@ -1,0 +1,72 @@
+# Template Makefile for a generic system 
+# Maintainer: Noah Mandell (nmandell@pppl.gov)
+#
+# NOTE: To use this Makefile as is, the following environment variables must be set or defined below:
+# NETCDF_ROOT (path to parallel netcdf)
+# HDF5_ROOT   (path to parallel hdf5)
+# MPI_ROOT    (path to mpi, e.g. mpich, openmpi, etc)
+# NVHPC_ROOT  (path to NVIDIA HPC SDK)
+# GSL_ROOT    (path to gsl)
+
+# On many HPC systems, there will be modules corresponding to many of these dependencies.
+# The module show [module name] command can be useful for finding environment variables corresponding to the ROOT directories above.
+# For an example see Makefile.perlmutter.
+#
+# You must also set the CUDAARCH variable below. If you will be using NVIDIA V100 GPUs, use
+# CUDAARCH = 70
+# If you will be using NVIDIA A100 GPUs, use
+# CUDAARCH = 80
+#
+# Add the following to your .bashrc (or equivalent, depending on preferred shell; for csh, need to use setenv instead of export, etc):
+#
+# export GK_SYSTEM=generic
+#
+
+# Uncomment the following line if using NVIDIA V100 GPUs
+#CUDAARCH=70
+# Uncomment the following line if using NVIDIA A100 GPUs
+#CUDAARCH=80
+
+# paths to netcdf
+# make sure NETCDF_ROOT and HDF5_ROOT environment variables are set, or define them here
+# NETCDF_ROOT = 
+# HDF5_ROOT = 
+NETCDF_INC = -I ${NETCDF_ROOT}/include
+NETCDF_LIB = -L ${NETCDF_ROOT}/lib -lnetcdf -lnetcdff -L${HDF5_ROOT}/lib -lhdf5 
+
+# paths to mpi
+# make sure MPI_ROOT environment variable is set, or define it here
+# MPI_ROOT =
+MPI_INC = -I ${MPI_ROOT}/include
+MPI_LIB = -L ${MPI_ROOT}/lib -lmpi
+
+# paths to cuda 
+# make sure NVHPC_ROOT enviroment variable is set, or define it here
+# NVHPC_ROOT =
+# on some systems, there will be an alternative NCCL installation (see e.g. Makefile.perlmutter)
+NCCL_ROOT = ${NVHPC_ROOT}/comm_libs/nccl
+CUDA_INC = -I ${NVHPC_ROOT}/math_libs/include -I ${NCCL_ROOT}/include
+CUDA_LIB = -L ${NVHPC_ROOT}/math_libs/lib64 -lcufft_static -lcublas -lcusolver -lgomp -lcutensor -L ${NCCL_ROOT}/lib -lnccl -L ${NVHPC_ROOT}/cuda/lib64 -lcudart -lculibos -lnvToolsExt
+
+# paths to gsl
+# make sure GSL_ROOT environment variable is set, or define it here
+# GSL_ROOT = 
+GSL_INC = -I ${GSL_ROOT}/include
+GSL_LIB = -L ${GSL_ROOT}/lib -lgsl -lgslcblas
+
+# additional c libraries required for linking. hopefully these are already in LD_LIBRARY_PATH
+C_LIB = -lm -lpthread -ldl
+
+# compilers and flags
+CXX = g++
+NVCC = ${NVHPC_ROOT}/compilers/bin/nvcc
+CFLAGS = -fPIC
+NVCCFLAGS = --forward-unknown-to-host-compiler -arch=compute_$(CUDAARCH) -code=sm_$(CUDAARCH) -use_fast_math -fPIC -rdc=true
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif
+
+

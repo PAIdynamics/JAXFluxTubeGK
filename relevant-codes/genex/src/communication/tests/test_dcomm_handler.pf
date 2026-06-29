@@ -1,0 +1,474 @@
+module test_dcomm_handler
+    !! Contains tests for the dcomm_handler_m module
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env, only: INT64
+    use dcomm_handler_m, only: dcomm_handler_t
+    use helpers_dcomm_handler_m, only: test_rank_configuration
+    use params_gpu_offload_m, only: get_use_gpu_offload
+    use file_handling_m, only: file_exists
+    use logger_m, only: logger_set_debug_channel
+
+    implicit none
+
+contains
+
+    @test(npes = [1, 2])
+    subroutine test_single_dimension_communicators(this)
+        !! Tests the initialization of the dcomm_handler_m module and the
+        !! functionality of the communicators
+
+        class (MpiTestMethod), intent(inout) :: this
+
+        logical :: fine
+        integer :: rank, n_procs, comm_world, n_procs_phi, n_procs_vp, &
+            n_procs_mu, n_procs_sp
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        ! test different parallelization configurations
+        ! configuration 1
+        n_procs_phi = n_procs
+        n_procs_vp = 1
+        n_procs_sp = 1
+        n_procs_mu = 1
+        fine = test_rank_configuration(comm_world, rank, n_procs, n_procs_phi, &
+                                       n_procs_vp, n_procs_mu, n_procs_sp)
+        @assertTrue(fine)
+
+        ! configuration 2
+        n_procs_phi = 1
+        n_procs_vp = n_procs
+        n_procs_sp = 1
+        n_procs_mu = 1
+        fine = test_rank_configuration(comm_world, rank, n_procs, n_procs_phi, &
+                                       n_procs_vp, n_procs_mu, n_procs_sp)
+        @assertTrue(fine)
+
+        ! configuration 3
+        n_procs_phi = 1
+        n_procs_vp = 1
+        n_procs_sp = n_procs
+        n_procs_mu = 1
+        fine = test_rank_configuration(comm_world, rank, n_procs, n_procs_phi, &
+                                       n_procs_vp, n_procs_mu, n_procs_sp)
+        @assertTrue(fine)
+
+        ! configuration 4
+        n_procs_phi = 1
+        n_procs_vp = 1
+        n_procs_sp = 1
+        n_procs_mu = n_procs
+        fine = test_rank_configuration(comm_world, rank, n_procs, n_procs_phi, &
+                                       n_procs_vp, n_procs_mu, n_procs_sp)
+        @assertTrue(fine)
+
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_multi_dimension_communicators(this)
+        !! Tests the initialization of the dcomm_handler_m module and the
+        !! functionality of the communicators
+
+        class (MpiTestMethod), intent(inout) :: this
+
+        logical :: fine
+        integer :: rank, n_procs, comm_world, n_procs_phi, n_procs_vp, &
+            n_procs_mu, n_procs_sp
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        n_procs_phi = 1
+        n_procs_vp = 2
+        n_procs_sp = 2
+        n_procs_mu = 2
+        fine = test_rank_configuration(comm_world, rank, n_procs, n_procs_phi, &
+                                       n_procs_vp, n_procs_mu, n_procs_sp)
+        @assertTrue(fine)
+    end subroutine
+
+    @test(npes=[2])
+    subroutine test_rank(this)
+        !! Tests the rank function of the dcomm_handler
+
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t) :: dcomm_handler
+        integer :: rank, comm_world, n_procs_phi, n_procs_vp, n_procs_mu, &
+                   n_procs_sp
+
+        rank = this%getProcessRank()
+        comm_world = this%getMpiCommunicator()
+
+        n_procs_phi = 1
+        n_procs_vp = 2
+        n_procs_sp = 1
+        n_procs_mu = 1
+        call dcomm_handler%initialize(comm_world, n_procs_phi, n_procs_vp, &
+                                     n_procs_mu, n_procs_sp)
+
+        if(rank == 0 .and. .not. dcomm_handler%is_master()) then
+            @assertTrue(.false.)
+        endif
+        @assertEqual(5, dcomm_handler%get_n_dims())
+        @assertEqual(rank, dcomm_handler%get_rank())
+    end subroutine
+
+    @test(npes=[2])
+    subroutine test_processes_and_coords(this)
+        !! Tests the whether the number of processes and the topology
+        !! coordinates are correct
+
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable :: dcomm_handler
+        integer :: rank, n_procs, comm_world, n_procs_phi, n_procs_vp, &
+            n_procs_mu, n_procs_sp, coords(5)
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        ! phi procs
+        n_procs_phi = 2
+        n_procs_vp = 1
+        n_procs_sp = 1
+        n_procs_mu = 1
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, n_procs_phi, n_procs_vp, &
+                                     n_procs_mu, n_procs_sp)
+
+        coords = dcomm_handler%get_cart_coords()
+        @assertEqual(0, coords(1))
+        @assertEqual(rank, coords(2))
+        @assertEqual(0, coords(3))
+        @assertEqual(0, coords(4))
+        @assertEqual(0, coords(5))
+
+        call test_get_n_procs()
+        deallocate(dcomm_handler)
+
+        ! vp procs
+        n_procs_phi = 1
+        n_procs_vp = 2
+        n_procs_sp = 1
+        n_procs_mu = 1
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, n_procs_phi, n_procs_vp, &
+                                     n_procs_mu, n_procs_sp)
+
+        coords = dcomm_handler%get_cart_coords()
+        @assertEqual(0, coords(1))
+        @assertEqual(0, coords(2))
+        @assertEqual(rank, coords(3))
+        @assertEqual(0, coords(4))
+        @assertEqual(0, coords(5))
+
+        call test_get_n_procs()
+        deallocate(dcomm_handler)
+
+        ! mu procs
+        n_procs_phi = 1
+        n_procs_vp = 1
+        n_procs_sp = 1
+        n_procs_mu = 2
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, n_procs_phi, n_procs_vp, &
+                                     n_procs_mu, n_procs_sp)
+
+        coords = dcomm_handler%get_cart_coords()
+        @assertEqual(0, coords(1))
+        @assertEqual(0, coords(2))
+        @assertEqual(0, coords(3))
+        @assertEqual(rank, coords(4))
+        @assertEqual(0, coords(5))
+
+        call test_get_n_procs()
+        deallocate(dcomm_handler)
+
+        ! sp procs
+        n_procs_phi = 1
+        n_procs_vp = 1
+        n_procs_sp = 2
+        n_procs_mu = 1
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, n_procs_phi, n_procs_vp, &
+                                     n_procs_mu, n_procs_sp)
+
+        coords = dcomm_handler%get_cart_coords()
+        @assertEqual(0, coords(1))
+        @assertEqual(0, coords(2))
+        @assertEqual(0, coords(3))
+        @assertEqual(0, coords(4))
+        @assertEqual(rank, coords(5))
+
+        call test_get_n_procs()
+        deallocate(dcomm_handler)
+
+    contains
+
+        subroutine test_get_n_procs()
+            @assertEqual(1, dcomm_handler%get_n_procs_RZ())
+            @assertEqual(n_procs_phi, dcomm_handler%get_n_procs_phi())
+            @assertEqual(n_procs_vp, dcomm_handler%get_n_procs_vp())
+            @assertEqual(n_procs_mu, dcomm_handler%get_n_procs_mu())
+            @assertEqual(n_procs_sp, dcomm_handler%get_n_procs_sp())
+        end subroutine
+    end subroutine
+
+    @test(npes=[2])
+    subroutine test_domain_decomposition(this)
+        !! Tests the domain decomposition part of the dcomm_handler for
+        !! different domain decompositions
+
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable :: dcomm_handler
+        integer :: rank, n_procs, comm_world, shift_p, shift_n
+        integer, dimension(5) :: ref_dim_permut, ref_n_data_elem, ref_n_elem, &
+                                 ref_n_ghost_elem, ref_lb, ref_ub, &
+                                 ref_lb_stripped, ref_ub_stripped
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        ref_dim_permut = [1, 2, 3, 4, 5]
+
+        ! Check species parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=1, &
+                                      n_procs_mu=1, n_procs_sp=2)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=11)
+
+        ref_n_data_elem  = [11, 16, 32, 16, 1]
+        ref_n_elem       = [11, 20, 36, 16, 1]
+        ref_n_ghost_elem = [0,   2,  2,  0, 0]
+        ref_lb           = [1,  -1, -1,  1, 1 + rank]
+        ref_ub           = [11, 18, 34, 16, 1 + rank]
+        ref_lb_stripped  = [1,   1,  1,  1, 1 + rank]
+        ref_ub_stripped  = [11, 16, 32, 16, 1 + rank]
+
+        call test_domain()
+        deallocate(dcomm_handler)
+
+        ! Check mu parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=1, &
+                                      n_procs_mu=2, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=13)
+
+        shift_p = 8 * rank
+        shift_n = 8 - 8 * rank
+        ref_n_data_elem  = [13, 16, 32,            8, 2]
+        ref_n_elem       = [13, 20, 36,            8, 2]
+        ref_n_ghost_elem = [0,   2,  2,            0, 0]
+        ref_lb           = [1,  -1, -1,  1 + shift_p, 1]
+        ref_ub           = [13, 18, 34, 16 - shift_n, 2]
+        ref_lb_stripped  = [1,   1,  1,  1 + shift_p, 1]
+        ref_ub_stripped  = [13, 16, 32, 16 - shift_n, 2]
+
+        call test_domain()
+        deallocate(dcomm_handler)
+
+        ! Check vp parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=2, &
+                                      n_procs_mu=1, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=15)
+
+        shift_p = 16 * rank
+        shift_n = 16 - 16 * rank
+        ref_n_data_elem  = [15, 16,           16, 16, 2]
+        ref_n_elem       = [15, 20,           20, 16, 2]
+        ref_n_ghost_elem = [0,   2,            2,  0, 0]
+        ref_lb           = [1,  -1, -1 + shift_p,  1, 1]
+        ref_ub           = [15, 18, 34 - shift_n, 16, 2]
+        ref_lb_stripped  = [1,   1,  1 + shift_p,  1, 1]
+        ref_ub_stripped  = [15, 16, 32 - shift_n, 16, 2]
+
+        call test_domain()
+        deallocate(dcomm_handler)
+
+        ! Check phi parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=2, n_procs_vp=1, &
+                                      n_procs_mu=1, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=15)
+
+        shift_p = 8 * rank
+        shift_n = 8 - 8 * rank
+        ref_n_data_elem  = [15,            8, 32, 16, 2]
+        ref_n_elem       = [15,           12, 36, 16, 2]
+        ref_n_ghost_elem = [0,             2,  2,  0, 0]
+        ref_lb           = [1,  -1 + shift_p, -1,  1, 1]
+        ref_ub           = [15, 18 - shift_n, 34, 16, 2]
+        ref_lb_stripped  = [1,   1 + shift_p,  1,  1, 1]
+        ref_ub_stripped  = [15, 16 - shift_n, 32, 16, 2]
+
+        call test_domain()
+        deallocate(dcomm_handler)
+
+    contains
+        subroutine test_domain()
+            integer :: ind_dim, dim_permut, n_data_elem, n_elem, &
+                       n_ghost_elem, lb, ub, lb_stripped, ub_stripped
+            integer, dimension(5) :: lb_arr, ub_arr, &
+                                     lb_stripped_arr, ub_stripped_arr
+            integer(kind=INT64) :: size, size_stripped, &
+                                   ref_size, ref_size_stripped
+
+            lb_arr = dcomm_handler%get_lbound()
+            @assertEqual(lb_arr, ref_lb)
+            ub_arr = dcomm_handler%get_ubound()
+            @assertEqual(ub_arr, ref_ub)
+            lb_stripped_arr = dcomm_handler%get_lbound_stripped()
+            @assertEqual(lb_stripped_arr, ref_lb_stripped)
+            ub_stripped_arr = dcomm_handler%get_ubound_stripped()
+            @assertEqual(ub_stripped_arr, ref_ub_stripped)
+
+            do ind_dim = 1, 5
+                dim_permut = dcomm_handler%get_dim_permut(ind_dim)
+                @assertEqual(dim_permut, ref_dim_permut(ind_dim))
+                n_data_elem = dcomm_handler%get_number_of_data_elements(ind_dim)
+                @assertEqual(n_data_elem, ref_n_data_elem(ind_dim))
+                n_elem = dcomm_handler%get_number_of_elements(ind_dim)
+                @assertEqual(n_elem, ref_n_elem(ind_dim))
+                n_ghost_elem = dcomm_handler%get_number_of_ghosts(ind_dim)
+                @assertEqual(n_ghost_elem, ref_n_ghost_elem(ind_dim))
+                lb = dcomm_handler%get_lbound(ind_dim)
+                @assertEqual(lb, ref_lb(ind_dim))
+                ub = dcomm_handler%get_ubound(ind_dim)
+                @assertEqual(ub, ref_ub(ind_dim))
+                lb_stripped = dcomm_handler%get_lbound_stripped(ind_dim)
+                @assertEqual(lb_stripped, ref_lb_stripped(ind_dim))
+                ub_stripped = dcomm_handler%get_ubound_stripped(ind_dim)
+                @assertEqual(ub_stripped, ref_ub_stripped(ind_dim))
+            end do
+
+            size = dcomm_handler%get_size()
+            ref_size = product(ref_ub(:) - ref_lb(:) + 1)
+            @assertEqual(size, ref_size)
+            size_stripped = dcomm_handler%get_size_stripped()
+            ref_size_stripped = product( ref_ub_stripped(:) &
+                                       - ref_lb_stripped(:) + 1)
+            @assertEqual(size_stripped, ref_size_stripped)
+        end subroutine
+    end subroutine
+
+    @test(npes=[1, 2, 4, 8])
+    subroutine test_print_info(this)
+        !! Tests the print_mesh_size subroutine of the dcomm_handler for
+        !! different numbers of process
+
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable :: dcomm_handler
+        integer :: rank, n_procs, comm_world, debug_channel, read_channel, &
+                   ierr, idx
+        character(len=256) :: lines
+        integer :: ind
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        ! Set debug log
+        open(newunit=debug_channel, file='debug_log.txt', &
+             status='replace', action='write', iostat=ierr)
+
+        call logger_set_debug_channel(debug_channel)
+
+        ! Initialize for 1, 2, 4, 8 processes respectively
+        allocate(dcomm_handler)
+        if (n_procs == 1 .or. n_procs == 2) then
+            call dcomm_handler%initialize(comm_world, &
+                                        n_procs_phi=1, n_procs_vp=1, &
+                                        n_procs_mu=1, n_procs_sp=n_procs)
+        else if (n_procs == 4) then
+            call dcomm_handler%initialize(comm_world, &
+                                        n_procs_phi=1, n_procs_vp=1, &
+                                        n_procs_mu=2, n_procs_sp=2)
+        else if (n_procs == 8) then
+            call dcomm_handler%initialize(comm_world, &
+                                        n_procs_phi=1, n_procs_vp=2, &
+                                        n_procs_mu=2, n_procs_sp=2)
+        else
+            ! If other number of process is to be tested, please add the
+            ! corresponding parallelization configuration here,
+            ! for now this branch will never be reached
+            @assertTrue(.false.)
+        endif
+
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=11)
+
+        call dcomm_handler%print_mesh_info()
+
+        close(unit=debug_channel)
+
+        @assertTrue(file_exists('debug_log.txt'))
+
+        ! Load file, read individual lines and check for substrings in each line
+        if(dcomm_handler%is_master()) then
+            open(newunit=read_channel, file='debug_log.txt', action='read')
+            read(read_channel, '(A)') lines
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Global problem size:")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "dimension    |       DIM_RZ |      DIM_PHI &
+                        &|       DIM_VP |       DIM_MU |       DIM_SP")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            read(read_channel, '(A)') lines
+            @assertTrue( index(lines, "------") /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Global number of points (total):")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Global number of points (non-ghost):")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Global number of points (ghost):")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Local number of points for each dimension:")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "total        |")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "non-ghost    |")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "ghost        |")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            @assertTrue( index(lines, "-----") /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Local number of points (total):")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Local number of points (non-ghost):")
+            @assertTrue(idx /= 0)
+            read(read_channel, '(A)') lines
+            idx = index(lines, "Local number of points (ghost):")
+            @assertTrue(idx /= 0)
+
+            close(unit=read_channel)
+        endif
+
+        deallocate(dcomm_handler)
+
+    end subroutine
+
+end module test_dcomm_handler

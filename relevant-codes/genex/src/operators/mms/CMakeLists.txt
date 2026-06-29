@@ -1,0 +1,15 @@
+target_sources(GENEXCore-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_error_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_error_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_source_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_source_vlasov_eq_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_source_maxwells_eq_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_source_ohms_law_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_solution_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_solution_vlasov_eq_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_solution_maxwells_eq_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_mms_solution_ohms_law_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_bnd_cond_mms_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_set_initial_condition_mms_cpu_s.f90
+)

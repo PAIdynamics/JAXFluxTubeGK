@@ -1,0 +1,15 @@
+mms_source_es_pot = 0.D0 - (7.5008993448279115D1*npol**2*rhoref**2*Cos(ntor*phi)**4*Cos( &
+omega*t)**4*Cos(npol*Pi*Z)*Cos(2*npol*Pi*Z)*Sin((nrad*Pi*(R - rhomin))/( &
+rhomax - rhomin))**2*Sin((2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*Sin( &
+npol*Pi*Z))/Lref**2 - (7.5008993448279115D1*nrad**2*rhoref**2*Cos( &
+ntor*phi)**4*Cos((nrad*Pi*(R - rhomin))/(rhomax - rhomin))*Cos((2*nrad*Pi*( &
+R - rhomin))/(rhomax - rhomin))*Cos(omega*t)**4*Sin((nrad*Pi*(R - rhomin))/( &
+rhomax - rhomin))*Sin(npol*Pi*Z)**2*Sin(2*npol*Pi*Z))/(Lref**2*( &
+rhomax - rhomin)**2) + (4*npol**2*Pi**2*rhoref**2*Cos(ntor*phi)**2*Cos( &
+omega*t)**2*Sin((2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*(1.D-1 + 1.9D0*Cos( &
+ntor*phi)**2*Cos(omega*t)**2*Sin((nrad*Pi*(R - rhomin))/( &
+rhomax - rhomin))**2*Sin(npol*Pi*Z)**2)*Sin(2*npol*Pi*Z))/Lref**2 + ( &
+4*nrad**2*Pi**2*rhoref**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*( &
+R - rhomin))/(rhomax - rhomin))*(1.D-1 + 1.9D0*Cos(ntor*phi)**2*Cos( &
+omega*t)**2*Sin((nrad*Pi*(R - rhomin))/(rhomax - rhomin))**2*Sin( &
+npol*Pi*Z)**2)*Sin(2*npol*Pi*Z))/(Lref**2*(rhomax - rhomin)**2)

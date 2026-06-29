@@ -1,0 +1,71 @@
+# This is a secondary instability calculation. For details, see Rogers, Dorland, & Kotschenreuther, PRL (2000).
+
+ debug = false
+
+[Dimensions]
+ ntheta = 8		# number of points along field line (theta) per 2pi segment    
+ ny = 4			# number of real-space grid points in y
+ nx = 4			# number of real-space grid points in x
+ nperiod = 1		# number of 2pi segments along field line
+ 
+ nhermite = 8		# number of hermite moments (v_parallel resolution)
+ nlaguerre = 3		# number of laguerre moments (mu B resolution)
+ nspecies = 1		# number of evolved kinetic species
+
+[Domain]
+ y0 = 10.0		# controls box length in y (in units of rho_ref) and minimum ky, so that ky_min*rho_ref = 1/y0 
+ x0 = 20.0		# controls box length in x (in units of rho_ref) and minimum kx, so that kx_min*rho_ref = 1/x0 
+ boundary = "periodic"	# use periodic boundary conditions along field line
+
+[Physics]
+ beta = 0.0		# reference normalized pressure, beta = n_ref T_ref / ( B_ref^2 / (8 pi))
+ nonlinear_mode = true		# this is a nonlinear calculation
+
+[Time]
+ dt = 0.01		# timestep size (in units of L_ref/vt_ref)
+ nstep = 10000		# number of timesteps
+ scheme = "sspx3"	# use SSPx3 timestepping scheme
+ cfl = 1.0		# fraction of CFL condition
+
+[Geometry]
+ geo_option = "slab"    # use slab geometry
+ shat = 1.0e-8		# magnetic shear
+
+[Boltzmann]
+ add_Boltzmann_species = true	# use a Boltzmann species
+ Boltzmann_type = "electrons"	# the Boltzmann species will be electrons
+ tau_fac = 1.0			# temperature ratio, T_i/T_e
+
+[Initialization]
+ ikpar_init = 0			# parallel wavenumber of initial perturbation
+ init_field = "density"		# initial condition set in density
+ init_amp = 1.0e-5		# amplitude of initial condition
+
+[Restart]
+ restart = true				# initialize simulation from restart data
+ restart_from_file = "kh01_restart.nc"	# filename to read restart data from
+ save_for_restart = false		# don't write restart data
+ scale = 500.0				# scale restart data by this factor on initialization
+ append_on_restart = false
+ restart_with_perturb = true
+
+[Diagnostics]
+ nwrite = 100			# number of timesteps between diagnostic writes
+ omega = true			# compute and write growth rates and frequencies
+ 
+[Expert]
+ eqfix = true			# keep some Fourier modes fixed (constant in time)
+ iky_fixed = 1			# ky index of Fourier mode to keep fixed
+ ikx_fixed = 0			# kx index of Fourier mode to keep fixed
+
+# it is okay to have extra species data here; only the first nspecies elements of each item are used
+
+[species]
+ z     = [ 1.0,      -1.0     ]		# charge (normalized to Z_ref)
+ mass  = [ 1.0,       2.7e-4  ]		# mass (normalized to m_ref)
+ dens  = [ 1.0,       1.0     ]		# density (normalized to dens_ref)
+ temp  = [ 1.0,       1.0     ]		# temperature (normalized to T_ref)
+ tprim = [ 0.0,	      0.0     ]		# temperature gradient, L_ref/L_T
+ fprim = [ 0.0,       0.0     ]		# density gradient, L_ref/L_n
+ vnewk = [ 0.0,       0.0     ]		# collision frequency
+ type  = [ "ion",  "electron" ]		# species type

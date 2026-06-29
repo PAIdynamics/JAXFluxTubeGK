@@ -1,0 +1,4 @@
+mms_solution_b_par = 1.D-1*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin(2*npol*atan(Z,-1.D0 + R))*Sin(( &
+2*nrad*Pi*(-rhomin + Sqrt((-(Z*Cos(2.5D0*phi)) + (-9.99D-1 + R)*Sin( &
+2.5D0*phi))**2/ellax2**2 + ((-9.99D-1 + R)*Cos(2.5D0*phi) + Z*Sin( &
+2.5D0*phi))**2/ellax1**2)))/(rhomax - rhomin))

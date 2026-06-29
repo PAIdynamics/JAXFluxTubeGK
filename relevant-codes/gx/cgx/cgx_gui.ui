@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+  <class>MainWindow</class>
+  <widget class="QMainWindow" name="MainWindow">
+    <property name="geometry"><rect><x>0</x><y>0</y><width>1145</width><height>682</height></rect></property>
+    <property name="windowTitle"><string>GX Plot Creation Tools</string></property>
+    
+    <widget class="QWidget" name="centralwidget">
+      <layout class="QHBoxLayout" name="horizontalLayout">
+	
+	<item>
+	  <widget class="QWidget" name="settingsWindow" native="true">
+	    <property name="sizePolicy">
+	      <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+		<horstretch>0</horstretch><verstretch>0</verstretch>
+	      </sizepolicy>
+	    </property>	    
+	    <property name="minimumSize"><size><width>220</width><height>0</height></size></property>	    
+	    <property name="maximumSize"><size><width>200</width><height>16777215</height></size></property>
+	    
+	    <layout class="QVBoxLayout" name="verticalLayout">
+
+	      <item>
+		<widget class="QToolBox" name="toolBox">
+
+		  <property name="sizePolicy">
+		    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+		      <horstretch>0</horstretch>
+		      <verstretch>0</verstretch>
+		    </sizepolicy>
+		  </property>
+		  <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+		  <property name="frameShadow"><enum>QFrame::Raised</enum></property>
+		  <property name="currentIndex"><number>0</number></property>
+		  
+		  <widget class="QWidget" name="DataTab">
+		    <property name="geometry">
+		      <rect><x>0</x><y>0</y><width>204</width><height>438</height></rect>
+		    </property>
+		    <attribute name="label"><string>Data </string></attribute>
+
+		    <layout class="QFormLayout" name="formLayout">
+		      <property name="fieldGrowthPolicy"><enum>QFormLayout::AllNonFixedFieldsGrow</enum></property>
+
+		      <item row="0" column="0">
+			<widget class="QLabel" name="fileLabel">
+			  <property name="minimumSize"><size><width>175</width><height>0</height></size></property>
+			  <property name="layoutDirection"><enum>Qt::LeftToRight</enum></property>
+			  <property name="text"><string>Current File(s):</string></property>
+			  <property name="textFormat"><enum>Qt::RichText</enum></property>
+			  <property name="alignment"><set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set></property>
+			  <property name="wordWrap"> <bool>true</bool> </property>
+			</widget>
+		      </item>
+
+		      <item row="1" column="0">
+			<widget class="QListWidget" name="fileListDisplay">
+			  <property name="maximumSize"><size><width>175</width><height>100</height></size></property>
+			</widget>
+		      </item>
+
+		      <item row="2" column="0">
+			<widget class="QPushButton" name="chooseFileButton">
+			  <property name="text"><string>Choose File(s)</string></property>
+			</widget>
+		      </item>
+
+		      <item row="3" column="0">
+			<widget class="QCheckBox" name="combineDataCheckBox">
+			  <property name="text"><string>Combine Data</string></property>
+			  <property name="checked"><bool>false</bool></property>
+			</widget>
+		      </item>
+
+		      <item row="4" column="0">
+			<widget class="QCheckBox" name="selectedDataCheckBox">
+			  <property name="text"><string>Selected Data Only</string></property>
+			  <property name="checked"><bool>true</bool></property>
+			</widget>
+		      </item>
+
+		      <item row="5" column="0">
+			<widget class="QLabel" name="label_2">
+			  <property name="text"><string>Select Desired Averaging:</string></property>
+			</widget>
+		      </item>
+
+		      <item row="6" column="0" colspan="2">
+			<widget class="QComboBox" name="averageTypeComboBox">
+			  <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+			  <property name="sizePolicy">
+			    <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+			      <horstretch>0</horstretch><verstretch>0</verstretch>
+			    </sizepolicy>
+			  </property>
+
+			  <item><property name="text"><string>&quot;Standard&quot;</string></property></item>
+			  <item><property name="text"><string>Time Weighted</string></property></item>	     
+
+			</widget>
+		      </item>
+		    </layout>
+		  </widget>
+		  
+		  <widget class="QWidget" name="SpectraTab">
+		    <property name="geometry"><rect><x>0</x><y>0</y><width>198</width><height>459</height></rect></property>
+		    <attribute name="label"><string>Plots</string></attribute>
+		    <layout class="QFormLayout" name="formLayout_2">
+
+		      <item row="0" column="0">
+			<widget class="QLabel" name="label">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Particular k or m
+
+			    &lt; /span
+			    &gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>			  
+			</widget>
+		      </item>
+
+		      <item row="1" column="0">
+			<widget class="QCheckBox" name="plotKSpecFixedMCheckBox">
+			  <property name="text"><string>K spectrum (fixed l and m)</string></property>
+			</widget>
+		      </item>
+
+		      <item row="2" column="0">
+			<widget class="QSpinBox" name="fixedMSpinBox">
+			  <property name="minimum"><number>-1</number></property>
+			  <property name="value"><number>1</number></property>
+			</widget>
+		      </item>
+
+		      <item row="4" column="0">
+			<widget class="QCheckBox" name="plotMSpecFixedKCheckBox">
+			  <property name="text"><string>M spectrum (Fixed k)</string></property>
+			</widget>
+		      </item>
+
+		      <item row="4" column="0">
+			<widget class="QSpinBox" name="fixedKSpinBox">
+			  <property name="minimum"><number>0</number></property>
+			</widget>
+		      </item>
+
+		      <item row="5" column="0">
+			<widget class="QLabel" name="label_3">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Integrated Spectra
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="6" column="0">
+			<widget class="QCheckBox" name="plotKSpecCheckBox">
+			  <property name="text"><string>K spectrum</string></property>
+			</widget>
+		      </item>
+
+		      <item row="7" column="0">
+			<widget class="QCheckBox" name="plotMSpecCheckBox">
+			  <property name="text"><string>M spectrum</string></property>
+			</widget>
+		      </item>
+
+		      <item row="8" column="0">
+			<widget class="QLabel" name="label_3">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Spectra as functions of time
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="9" column="0">
+			<widget class="QCheckBox" name="plotKSpecVsTimeCheckBox">
+			  <property name="text"><string>K spectrum </string></property>
+			</widget>
+		      </item>
+
+		      <item row="10" column="0">
+			<widget class="QCheckBox" name="plotMSpecVsTimeCheckBox">
+			  <property name="text"><string>M spectrum</string></property>
+			</widget>
+		      </item>
+
+		      <item row="11" column="0">
+			<widget class="QLabel" name="label_4">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    2D Spectra
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="12" column="0">
+			<widget class="QCheckBox" name="plot2DG2CheckBox">
+			  <property name="text"><string>Free energy</string></property>
+			</widget>
+		      </item>
+
+		      <item row="13" column="0">
+			<widget class="QLabel" name="label_7">			  
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Time Plots
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="14" column="0">
+			<widget class="QCheckBox" name="Phi2VsTimeCheckBox">
+			  <property name="text"><string>Phi**2 vs Time</string></property>
+			</widget>
+		      </item>
+
+		      <item row="15" column="0">
+			<widget class="QCheckBox" name="E2VsTimeCheckBox">
+			  <property name="text"><string>E**2 vs Time</string></property>
+			</widget>
+		      </item>
+
+		      <item row="16" column="0">
+			<widget class="QPushButton" name="selectAllButton">
+			  <property name="text"><string>Select All</string></property>
+			</widget>
+		      </item>
+		      
+		    </layout>
+		  </widget>
+
+		  <widget class="QWidget" name="PlotToolsTab">
+		    <attribute name="label"><string>Plot Tools</string></attribute>
+
+		    <layout class="QFormLayout" name="formLayout_3">
+		      <property name="fieldGrowthPolicy"><enum>QFormLayout::AllNonFixedFieldsGrow</enum></property>
+		      <item row="0" column="0">
+			<widget class="QLabel" name="label_5">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Display Settings
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="1" column="0">
+			<widget class="QCheckBox" name="gridLinesMajorCheckBox">
+			  <property name="text"><string>Major Grid Lines</string></property>
+			</widget>
+		      </item>
+
+		      <item row="2" column="0">
+			<widget class="QCheckBox" name="gridLinesMinorCheckBox">
+			  <property name="text"><string>Minor Grid Lines</string></property>
+			</widget>
+		      </item>
+
+		      <item row="3" column="0">
+			<widget class="QCheckBox" name="legendCheckBox">
+			  <property name="text"><string>Legend</string></property>
+			  <property name="checked"><bool>true</bool></property>
+			</widget>
+		      </item>
+
+		      <item row="4" column="0">
+			<widget class="QLabel" name="label_6">
+			  <property name="text">
+			    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;
+			    span style=&quot; text-decoration: underline;&quot;&gt;
+
+			    Data to Show:
+
+			    &lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+			  </property>
+			</widget>
+		      </item>
+
+		      <item row="5" column="0">
+			<widget class="QCheckBox" name="G2CheckBox">
+			  <property name="text"><string>Free Energy</string></property>
+			  <property name="checked"><bool>true</bool></property>
+			</widget>
+		      </item>
+
+		      <item row="8" column="0">
+			<widget class="QCheckBox" name="MSlopeCheckBox">
+			  <property name="text"><string>Spectral slopes</string></property>
+			  <property name="checked"><bool>true</bool></property>
+			</widget>
+		      </item>
+
+		      <item row="9" column="0">
+			<widget class="QPushButton" name="updatePlotsButton">
+			  <property name="text"><string>Update Plots</string></property>
+			</widget>
+		      </item>
+
+		    </layout>
+		  </widget>
+		</widget>
+	      </item>
+
+	      <item>
+		<widget class="QPushButton" name="createPlotsButton">
+		  <property name="text"><string>Create Plots</string></property>
+		</widget>
+	      </item>
+
+	    </layout>
+	  </widget>
+	</item>
+
+	<item>
+	  <widget class="QWidget" name="mplwindow" native="true">
+	    <property name="layoutDirection"><enum>Qt::LeftToRight</enum></property>
+	    <layout class="QVBoxLayout" name="mplvl"/>
+	  </widget>
+	</item>
+
+	<item>
+	  <widget class="QListWidget" name="figList">
+	    <property name="sizePolicy">
+	      <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
+		<horstretch>0</horstretch><verstretch>0</verstretch>
+	      </sizepolicy>
+	    </property>
+	    <property name="maximumSize"><size><width>200</width><height>16777215</height></size></property>
+	    <property name="resizeMode"><enum>QListView::Fixed</enum></property>
+	    <property name="wordWrap"><bool>true</bool></property>
+	  </widget>
+	</item>
+
+      </layout>
+    </widget>
+
+    <widget class="QMenuBar" name="menubar">
+      <property name="geometry"><rect><x>0</x><y>0</y><width>1145</width><height>26</height></rect></property>
+    </widget>
+
+    <widget class="QStatusBar" name="statusbar"/></widget>
+  <resources/>
+  <connections/>
+</ui>

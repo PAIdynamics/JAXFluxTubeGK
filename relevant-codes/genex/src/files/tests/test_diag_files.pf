@@ -1,0 +1,748 @@
+module test_diag_files
+    !! Contains tests for checkpoint, em_fields, moments and mesh files
+    use mpi
+    use pfunit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_ERR_UTESTS
+    use math_m, only: almost_equal
+    use type_converters_m, only: string
+    use dimensions_m, only: DIM_PHI, DIM_SP
+    use dcomm_handler_m, only: dcomm_handler_t
+    use params_species_m, only: n_spec_supported
+    use params_mesh_m, only: get_n_points_sp, get_n_points_phi, &
+                             get_n_points_mu, get_n_points_vp
+    use op_diag_mom_0d_m, only: op_diag_mom_0d_t, &
+                                op_diag_mom_0d_cpu_t
+    use diag_files_m, only: checkpoint_file_t, em_fields_file_t, &
+                            mom_0d_file_t, mom_2d_file_t, mesh_file_t
+    use data_storage_m, only: data_storage_cpu_5d_t, data_storage_cpu_2d_t
+    ! Unit test helpers
+    use test_params_m, only: setup_test_mesh, setup_test_diagnostics, &
+                               setup_test_gyrokinetic_system
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SLAB
+
+    use helpers_files_m, only: choose_mpi_ranks, check_dim_records, &
+                               check_global_records, check_val_records
+
+    implicit none
+
+contains
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_checkpoint_file(this)
+        !! Tests the checkpoint_file_t type
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+        type(dcomm_handler_t), pointer:: dcomm_handler_ptr
+        type(checkpoint_file_t), allocatable :: checkpoint_file
+        integer :: n_ranks, n_ranks_phi, n_ranks_vp, n_ranks_mu, n_ranks_sp
+        type(data_storage_cpu_5d_t), target, allocatable :: &
+            strg1, strg2, strg3
+        real(kind = GP), dimension(:, :, :, :, :), pointer :: &
+            test_data1, test_data2, read_data
+        integer :: n_points(5)
+        real(kind = GP) :: read_time
+        integer, dimension(5) :: test_lb, test_ub
+
+        n_ranks = this%getNumProcesses()
+        ! test different parallelization configurations
+        ! configuration 1
+        call choose_mpi_ranks(n_ranks, n_ranks_phi, n_ranks_vp, n_ranks_mu, &
+                              n_ranks_sp)
+
+        n_points = [2, 4, 4, 4, 2]
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=64.0_GP/n_points(1), &
+                             n_levels=1, &
+                             n_points_phi=n_points(2), &
+                             n_points_vp=n_points(3), &
+                             n_points_mu=n_points(4))
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(this%getMpiCommunicator(), n_ranks_phi, &
+                                     n_ranks_vp, n_ranks_mu, n_ranks_sp)
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize_RZ_domain(n_points(1))
+
+        allocate(strg1, strg2, strg3)
+        call strg1%initialize(dcomm_handler_ptr)
+        call strg2%initialize(dcomm_handler_ptr)
+        call strg3%initialize(dcomm_handler_ptr)
+
+        test_data1 => strg1%get_pointer_stripped()
+        call random_number(test_data1)
+        test_data2 => strg2%get_pointer_stripped()
+        call random_number(test_data2)
+
+        test_lb = strg1%lbound_stripped()
+        test_ub = strg1%ubound_stripped()
+
+        ! Initial write of test_data1
+        allocate(checkpoint_file)
+        call checkpoint_file%initialize(dcomm_handler, &
+            "checkpoint_nprocs_" // string(n_ranks) // ".nc", n_points(1), &
+            n_points(2), n_points(3), n_points(4), n_points(5), &
+            from_existing = .false.)
+        call checkpoint_file%write(0.0_GP, test_data1)
+        call checkpoint_file%write(1.0_GP, test_data1)
+        call checkpoint_file%write(2.0_GP, test_data1)
+        call checkpoint_file%write(4.0_GP, test_data1)
+        deallocate(checkpoint_file)
+
+        read_data => strg3%get_pointer_stripped()
+        ! Reinitalize checkpoint file in append mode and read, the read data
+        ! has to be equal to test_data1
+        allocate(checkpoint_file)
+        call checkpoint_file%initialize(dcomm_handler, &
+            "checkpoint_nprocs_" // string(n_ranks) // ".nc", n_points(1), &
+            n_points(2), n_points(3), n_points(4), n_points(5), &
+            from_existing = .true.)
+        call checkpoint_file%read(read_time, read_data)
+        @assertEqual(4.0_GP, read_time, GP_EPS)
+        @assertEqual(test_lb, lbound(read_data))
+        @assertEqual(test_ub, ubound(read_data))
+        @assertEqual(test_data1, read_data, GP_EPS)
+
+        ! Write test_data2 to file an read again, the read data should be equal
+        ! to test_data2
+        call checkpoint_file%write(5.0_GP, test_data2)
+        call checkpoint_file%read(read_time, read_data)
+        @assertEqual(5.0_GP, read_time, GP_EPS)
+        @assertEqual(test_lb, lbound(read_data))
+        @assertEqual(test_ub, ubound(read_data))
+        @assertEqual(test_data2, read_data, GP_EPS)
+
+        deallocate(checkpoint_file)
+
+        deallocate(strg1, strg2, strg3)
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_em_fields_file(this)
+        !! Tests the em_fields_file type
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+        type(dcomm_handler_t), pointer:: dcomm_handler_ptr
+        type(em_fields_file_t), allocatable :: em_fields_file
+        type(data_storage_cpu_2d_t), target, allocatable :: strg1, strg2, &
+                                                            strg3
+        real(kind=GP), dimension(:,:), pointer :: write_data1, write_data2, &
+                                                  write_data3
+        real(kind=GP), dimension(:,:), allocatable :: test_data1, &
+                                                      test_data2, test_data3
+        integer :: n_ranks, n_points(2), lb_stripped(2), ub_stripped(2)
+        character(len = :), allocatable :: filename
+
+        n_points = [8, 4]
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=64.0_GP/n_points(1), &
+                             n_levels=1, &
+                             n_points_phi=n_points(2))
+
+        call setup_test_gyrokinetic_system(this%getMpicommunicator(), &
+                                           this%getProcessRank(), &
+                                           with_bpar=.true.)
+
+        block ! Initialize dcomm_handler
+            integer :: n_ranks_phi, n_ranks_vp, n_ranks_mu, n_ranks_sp
+            n_ranks = this%getNumProcesses()
+            call choose_mpi_ranks(n_ranks, n_ranks_phi, n_ranks_vp, &
+                                  n_ranks_mu, n_ranks_sp)
+
+            allocate(dcomm_handler)
+            call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                          n_ranks_phi, n_ranks_vp, n_ranks_mu, &
+                                          n_ranks_sp)
+            dcomm_handler_ptr => dcomm_handler
+        end block
+        call dcomm_handler_ptr%initialize_RZ_domain(n_points(1))
+
+        allocate(strg1, strg2, strg3)
+        call strg1%initialize(dcomm_handler_ptr)
+        call strg2%initialize(dcomm_handler_ptr)
+        call strg3%initialize(dcomm_handler_ptr)
+        lb_stripped = strg1%lbound_stripped()
+        ub_stripped = strg1%ubound_stripped()
+
+        allocate(test_data1(lb_stripped(1):ub_stripped(1), &
+                            lb_stripped(2):ub_stripped(2)))
+        allocate(test_data2, mold=test_data1)
+        allocate(test_data3, mold=test_data1)
+
+        block ! Initialize the test data
+            integer :: idx, i, k
+            idx = 1
+            do k = lb_stripped(2), ub_stripped(2)
+            do i = lb_stripped(1), ub_stripped(1)
+                test_data1(i, k) = idx
+                test_data2(i, k) = idx + 100
+                test_data3(i, k) = idx + 200
+                idx = idx + 1
+            enddo
+            enddo
+        end block
+
+        write_data1 => strg1%get_pointer_stripped()
+        write_data2 => strg2%get_pointer_stripped()
+        write_data3 => strg3%get_pointer_stripped()
+        write_data1 = test_data1(lb_stripped(1):ub_stripped(1), &
+                                 lb_stripped(2):ub_stripped(2))
+        write_data2 = test_data2(lb_stripped(1):ub_stripped(1), &
+                                 lb_stripped(2):ub_stripped(2))
+        write_data3 = test_data3(lb_stripped(1):ub_stripped(1), &
+                                 lb_stripped(2):ub_stripped(2))
+
+        allocate(em_fields_file)
+        filename = "em_fields_nprocs_" // string(n_ranks) // ".nc"
+        call em_fields_file%initialize(dcomm_handler, filename, &
+                                       n_points(1), n_points(2))
+
+        block ! Write the file and check the result
+            integer :: idx
+            logical :: all_fine
+            real(kind = GP) :: time(4) = [1.0_GP, 2.0_GP, 3.0_GP, 4.0_GP]
+
+            do idx = 1, 4
+                call em_fields_file%write(real(idx, kind=GP), &
+                                          lb_stripped, ub_stripped, &
+                                          write_data1, write_data2, write_data3)
+            enddo
+            deallocate(em_fields_file)
+
+            ! Check time
+            all_fine = check_dim_records(filename, "dim_time", 4, &
+                                         dcomm_handler%is_master())
+            @assertTrue(all_fine)
+            all_fine = check_val_records(filename, "time", time, &
+                                         dcomm_handler%is_master())
+            @assertTrue(all_fine)
+            ! Check fields
+            do idx = 1, 4
+                all_fine = check_val_records(filename, "es_pot", test_data1, &
+                                             dcomm_handler%is_master(), &
+                                             time=idx)
+                @assertTrue(all_fine)
+
+                all_fine = check_val_records(filename, "A_par", test_data2, &
+                                             dcomm_handler%is_master(), &
+                                             time=idx)
+                @assertTrue(all_fine)
+
+                all_fine = check_val_records(filename, "B_par", test_data3, &
+                                             dcomm_handler%is_master(), &
+                                             time=idx)
+                @assertTrue(all_fine)
+            enddo
+        end block
+
+        deallocate(strg1, strg2, strg3)
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_mom_0d_file(this)
+        !! Tests the mom_0d_file_t type
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+        type(dcomm_handler_t), pointer:: dcomm_handler_ptr
+        type(mom_0d_file_t), allocatable :: mom_0d_file
+        integer :: i, j, n_spec
+        integer :: size_sp, lb_sp, ub_sp, coords(5), ierr
+        integer :: rank, n_ranks, comm_world, n_ranks_phi, n_ranks_vp, &
+            n_ranks_mu, n_ranks_sp
+        real(kind = GP), allocatable :: test_data(:, :), write_data(:, :)
+        character(len = :), allocatable :: filename
+        logical :: all_fine
+
+        n_ranks = this%getNumProcesses()
+        rank = this%getProcessRank()
+        comm_world = this%getMpiCommunicator()
+
+        call choose_mpi_ranks(n_ranks, n_ranks_phi, n_ranks_vp, n_ranks_mu, &
+                              n_ranks_sp)
+
+        n_spec = get_n_points_sp()
+        size_sp = n_spec / n_ranks_sp
+        allocate(test_data(6, n_spec))
+        allocate(write_data(6, size_sp))
+        ! Init test data
+        do i = 1, 6
+        do j = 1, n_spec
+            test_data(i, j) = i * j
+        enddo
+        enddo
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(this%getMpiCommunicator(), n_ranks_phi, &
+                                      n_ranks_vp, n_ranks_mu, n_ranks_sp)
+        dcomm_handler_ptr => dcomm_handler
+
+        ! Choose portion of test data to write for each mpi proc
+        call MPI_Cart_coords(dcomm_handler%get_comm_cart(), rank, &
+                             dcomm_handler%get_n_dims(), coords, ierr)
+        lb_sp = coords(DIM_SP) * size_sp + 1
+        ub_sp = (coords(DIM_SP) + 1) * size_sp
+        write_data(:, :) = test_data(:, lb_sp:ub_sp)
+
+        filename = "mom_0d_n_procs_" // string(n_ranks) // ".nc"
+        ! Initial write of test_data
+        allocate(mom_0d_file)
+        call mom_0d_file%initialize(dcomm_handler_ptr, filename)
+        call mom_0d_file%write(0.0_GP, write_data)
+        call mom_0d_file%write(1.0_GP, write_data)
+        call mom_0d_file%write(2.0_GP, write_data)
+        call mom_0d_file%write(4.0_GP, write_data)
+        deallocate(mom_0d_file)
+
+        all_fine = check_dim_records(filename, "dim_time", 4, &
+                        dcomm_handler%is_master())
+        @assertTrue(all_fine)
+
+        deallocate(test_data)
+        deallocate(write_data)
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_mom_2d_file(this)
+        !! Tests the mom_2d_file_t type
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+        type(dcomm_handler_t), pointer:: dcomm_handler_ptr
+        type(mom_2d_file_t), allocatable :: mom_2d_file
+        type(data_storage_cpu_5d_t), target, allocatable :: strg
+        integer :: n_ranks, n_points(5), lb_stripped(5), ub_stripped(5)
+        character(len = :), allocatable :: filename
+        real(kind = GP), allocatable, dimension(:, :, :, :) :: test_data, &
+            write_data
+
+        n_points = [2, 4, 2, 2, 2]
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=64.0_GP/n_points(1), &
+                             n_levels=1, &
+                             n_points_phi=n_points(2), &
+                             n_points_vp=n_points(3), &
+                             n_points_mu=n_points(4))
+
+        block ! Initialize dcomm_handler
+            integer :: n_ranks_phi, n_ranks_vp, n_ranks_mu, n_ranks_sp
+            n_ranks = this%getNumProcesses()
+            call choose_mpi_ranks(n_ranks, n_ranks_phi, n_ranks_vp, &
+                                  n_ranks_mu, n_ranks_sp)
+
+            allocate(dcomm_handler)
+            call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                         n_ranks_phi, n_ranks_vp, n_ranks_mu, &
+                                         n_ranks_sp)
+            dcomm_handler_ptr => dcomm_handler
+        end block
+        call dcomm_handler_ptr%initialize_RZ_domain(n_points(1))
+
+        allocate(strg)
+        call strg%initialize(dcomm_handler_ptr)
+
+        lb_stripped = strg%lbound_stripped()
+        ub_stripped = strg%ubound_stripped()
+        deallocate(strg)
+
+        allocate(write_data(lb_stripped(1):ub_stripped(1), &
+                            lb_stripped(2):ub_stripped(2), 1:8, &
+                            lb_stripped(5):ub_stripped(5)))
+        allocate(test_data, mold=write_data)
+
+        block ! Init test data
+            integer :: n, mom, k, i, idx
+            idx = 1
+            do n = lb_stripped(5), ub_stripped(5)
+            do mom = 1, 8
+            do k = lb_stripped(2), ub_stripped(2)
+            do i = lb_stripped(1), ub_stripped(1)
+                test_data(i, k, mom, n) = idx
+                idx = idx + 1
+            enddo
+            enddo
+            enddo
+            enddo
+        end block
+
+        write_data = test_data(lb_stripped(1):ub_stripped(1), &
+                               lb_stripped(2):ub_stripped(2), 1:8, &
+                               lb_stripped(5):ub_stripped(5))
+
+        allocate(mom_2d_file)
+        filename = "mom_2d_n_procs_" // string(n_ranks) // ".nc"
+        call mom_2d_file%initialize(dcomm_handler_ptr, filename, &
+                                    n_points(1), n_points(2), n_points(5))
+
+        ! Initial write of test_data
+
+        block ! Write the file an check the result
+            integer :: idx, mom, n
+            logical :: all_fine
+            real(kind = GP) :: time(4) = [1.0_GP, 2.0_GP, 3.0_GP, 4.0_GP]
+            character(len = 16) :: fields(8), species(2)
+
+            do idx = 1, 4
+                call mom_2d_file%write(real(idx, kind = GP), &
+                                       lb_stripped, ub_stripped, write_data)
+            enddo
+            deallocate(mom_2d_file)
+
+            ! Check time
+            all_fine = check_dim_records(filename, "dim_time", 4, &
+                                         dcomm_handler%is_master())
+            @assertTrue(all_fine)
+            all_fine = check_val_records(filename, "time", time, &
+                                         dcomm_handler%is_master())
+            @assertTrue(all_fine)
+            ! Check fields
+            fields = [character(len=16) :: "n", "u_par", "E_par", "E_perp", &
+                      "Q_par", "Q_perp", "K_par", "K_perp"]
+            species = [character(len=16) :: "protons", "electrons"]
+            do n = lb_stripped(5), ub_stripped(5)
+            do idx = 1, 4
+            do mom = 1, 8
+                all_fine = check_val_records(filename, &
+                    trim(fields(mom)), &
+                    test_data(:, :, mom, n), &
+                    dcomm_handler%is_master(), &
+                    groupname = trim(species(n)), &
+                    time = idx)
+                @assertTrue(all_fine)
+            enddo
+            enddo
+            enddo
+        end block
+
+        deallocate(write_data)
+        deallocate(test_data)
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_mesh_file(this)
+        !! Test of the mesh_file_t type
+        class (MpiTestMethod), intent(inout) :: this
+
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(dcomm_handler_t), pointer:: dcomm_handler_ptr
+        type(mesh_file_t) :: mesh_file
+
+        integer, parameter :: dim_RZ = 6, dim_phi = 9, &
+                              shp(2) = [dim_RZ, dim_phi], &
+                              dim_polar_theta = 10, dim_polar_rho = 4, &
+                              shp_polar(3) = [dim_polar_theta, dim_polar_rho, &
+                                              dim_phi], &
+                              shp_polar_theta(2) = [dim_polar_theta, dim_phi], &
+                              shp_polar_rho(2)   = [dim_polar_rho,   dim_phi]
+
+        integer :: n_ranks, n_ranks_phi, n_ranks_vp, n_ranks_mu, n_ranks_sp, i
+        integer, dimension(dim_RZ, dim_phi) :: base_array
+        integer, dimension(dim_polar_theta, dim_polar_rho, dim_phi) :: &
+                                                                base_array_polar
+        real(kind=GP), dimension(dim_polar_theta, dim_phi) :: &
+                                                          base_array_polar_theta
+        real(kind=GP), dimension(dim_polar_rho,   dim_phi) :: &
+                                                            base_array_polar_rho
+        integer :: equi_type, size_RZ_max
+        real(kind=GP), dimension(dim_RZ, dim_phi) :: not_ghost, not_filler, &
+                                                     R, Z, RZw, jacobian
+        real(kind=GP), dimension(dim_polar_theta, dim_phi) :: polar_theta
+        real(kind=GP), dimension(dim_polar_rho,   dim_phi) :: polar_rho
+        integer, dimension(dim_RZ, dim_phi) :: x_ind, z_ind, RZ_ind, buf_zone
+        real(kind=GP), dimension(:) :: phi(dim_phi), mu(6), vp(7)
+        real(kind=GP) :: psi_norm_fac, psi_lo, psi_up, absB_max
+        real(kind=GP), dimension(dim_RZ, dim_phi) :: absB, normb_R, normb_Z, &
+            normb_tor, curl_normb_y, dgyxdy_over_g, dgyzdy_over_g, &
+            dgyxdz_over_g, dgyzdx_over_g, inv_g, dabsBdx, dabsBdz, dabsBdy, &
+            rho, theta, psi, loss_cone
+        real(kind=GP), dimension(dim_polar_theta, dim_polar_rho, dim_phi) :: &
+                                                                      polar_absB
+        real(kind=GP), dimension(dim_RZ, dim_phi) :: &
+            maps_on_mesh, fll_positive1, fll_positive2, fll_negative1, &
+            fll_negative2
+        integer, dimension(dim_RZ, dim_phi) :: not_in_target, &
+            parcon_positive1, &
+            parcon_positive2, parcon_negative1, parcon_negative2
+        character(len = :), allocatable :: filename
+        logical :: is_master, all_fine
+
+        ! Init test data to write
+        base_array = reshape([(i, i = 1, dim_RZ * dim_phi)], shape=shp)
+        base_array_polar = reshape([(i, i = 1, dim_polar_theta * dim_polar_rho &
+                                               * dim_phi)], shape=shp_polar)
+        base_array_polar_theta = reshape([(i, i = 1, dim_polar_theta &
+                                           * dim_phi)], shape=shp_polar_theta)
+        base_array_polar_rho   = reshape([(i, i = 1, dim_polar_rho    &
+                                           * dim_phi)], shape=shp_polar_rho)
+
+        ! Mesh data
+        equi_type   = 8
+        size_RZ_max = dim_RZ
+        not_ghost   = base_array * 8.9_GP
+        not_filler  = base_array * 0.3_GP
+        buf_zone    = base_array * 23
+        R           = base_array * 6.1_GP
+        Z           = base_array * 6.0_GP
+        RZw         = base_array * 6.2_GP
+        x_ind       = base_array * 8
+        z_ind       = base_array * 2
+        RZ_ind      = base_array * 13
+        jacobian    = base_array * 34.1_GP
+        phi         = [(i, i = 1, size(phi))] * 0.9_GP
+        mu          = [(i, i = 1, size(mu))] * 3.7_GP
+        vp          = [(i, i = 1, size(vp))] * 12.0_GP
+        polar_theta = base_array_polar_theta * 3.4_GP
+        polar_rho   = base_array_polar_rho   * 1.2_GP
+
+        ! Magnetic field data
+        psi_norm_fac  = 2.7_GP
+        psi_lo        = 17.8_GP
+        psi_up        = 0.87_GP
+        absB_max      = 4.2_GP
+        absB          = base_array * 0.2_GP
+        polar_absB    = base_array_polar * 0.5_GP
+        loss_cone     = base_array * 2.4_GP
+        normb_R       = base_array * 9.4_GP
+        normb_Z       = base_array * 2.7_GP
+        normb_tor     = base_array * 7.2_GP
+        curl_normb_y  = base_array * 5.1_GP
+        dgyxdy_over_g = base_array * 8.2_GP
+        dgyzdy_over_g = base_array * 7.1_GP
+        dgyxdz_over_g = base_array * 5.2_GP
+        dgyzdx_over_g = base_array * 1.6_GP
+        inv_g         = base_array * 2.98_GP
+        dabsBdx       = base_array * 0.87_GP
+        dabsBdz       = base_array * 3.14_GP
+        dabsBdy       = base_array * 7.3_GP
+        rho           = base_array * 2.2_GP
+        theta         = base_array * 2.5_GP
+        psi           = base_array * 9.2_GP
+
+        ! Parcon data
+        not_in_target    = base_array * (-2)
+        maps_on_mesh     = base_array * 2.255_GP
+        fll_positive1    = base_array * 5.2_GP
+        fll_positive2    = base_array * 8.44_GP
+        fll_negative1    = base_array * 7.13_GP
+        fll_negative2    = base_array * (-5.18_GP)
+        parcon_positive1 = base_array * 12
+        parcon_positive2 = base_array * (-4)
+        parcon_negative1 = base_array * 11
+        parcon_negative2 = base_array * 6
+
+        ! Set mpi ranks
+        n_ranks = this%getNumProcesses()
+        call choose_mpi_ranks(n_ranks, n_ranks_phi, n_ranks_vp, n_ranks_mu, &
+                              n_ranks_sp)
+
+        call dcomm_handler%initialize(this%getMpiCommunicator(), n_ranks_phi, &
+                                     n_ranks_vp, n_ranks_mu, n_ranks_sp)
+        dcomm_handler_ptr => dcomm_handler
+
+        filename = "mesh_"//string(n_ranks)//".nc"
+
+        ! Init file and write
+        call mesh_file%initialize(dcomm_handler_ptr, filename, dim_phi, &
+                                  is_axisymmetric=.false.)
+        call mesh_file%write_mesh(equi_type, size_RZ_max, not_ghost, &
+            not_filler, buf_zone, R, Z, RZw, x_ind, z_ind, RZ_ind, jacobian, &
+            phi, mu, vp)
+        call mesh_file%write_polar_mesh(polar_theta, polar_rho, phi)
+        call mesh_file%write_magnetic_field(psi_norm_fac, psi_lo, psi_up, &
+            absB_max, absB, normb_R, normb_Z, normb_tor, curl_normb_y, &
+            dgyxdy_over_g, dgyzdy_over_g, dgyxdz_over_g, dgyzdx_over_g, &
+            inv_g, dabsBdx, dabsBdz, dabsBdy, rho, theta, psi)
+        call mesh_file%write_polar_magnetic_field(polar_absB, loss_cone)
+        call mesh_file%write_parcon(not_in_target, maps_on_mesh, &
+            fll_positive1, fll_positive2, fll_negative1, fll_negative2, &
+            parcon_positive1, parcon_positive2, parcon_negative1, &
+            parcon_negative2)
+
+        ! Buffer var is needed for calls that go over multiple lines
+        ! because you cannot break in an assertTrue
+        is_master = dcomm_handler%is_master()
+
+        ! Mesh data
+        all_fine = check_global_records(filename, "equi_type", equi_type, &
+                                        is_master)
+        @assertTrue(all_fine)
+        all_fine = check_global_records(filename, "size_RZ_max", &
+                                        size_RZ_max, is_master)
+        @assertTrue(all_fine)
+
+        all_fine = check_dim_records(filename, "dim_RZ", dim_RZ, is_master)
+        @assertTrue(all_fine)
+        all_fine = check_dim_records(filename, "dim_phi", dim_phi, is_master)
+        @assertTrue(all_fine)
+        all_fine = check_dim_records(filename, "dim_vp_grid", size(vp), &
+                                     is_master, groupname="vp_grid")
+        @assertTrue(all_fine)
+        all_fine = check_dim_records(filename, "dim_mu_grid", size(mu), &
+                                     is_master, groupname="mu_grid")
+        @assertTrue(all_fine)
+
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "not_ghost", not_ghost, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "not_filler", not_filler, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "buf_zone", buf_zone, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "R", R, &
+                                     is_master, groupname="RZ_grid")
+        @asserttrue(all_fine)
+        all_fine = check_val_records(filename, "Z", Z, &
+                                     is_master, groupname="RZ_grid")
+        @asserttrue(all_fine)
+        all_fine = check_val_records(filename, "RZw", RZw, &
+                                     is_master, groupname="RZ_grid")
+        @asserttrue(all_fine)
+        all_fine = check_val_records(filename, "x_ind", x_ind, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "z_ind", z_ind, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "RZ_ind", RZ_ind, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "jacobian", jacobian, &
+                                     is_master, groupname="RZ_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "phi", phi, &
+                                     is_master, groupname="phi_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "vp", vp, &
+                                     is_master, groupname="vp_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "mu", mu, &
+                                     is_master, groupname="mu_grid")
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "polar_theta", polar_theta, &
+                                     is_master, groupname='polar_grid')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "polar_rho", polar_rho, &
+                                     is_master, groupname='polar_grid')
+        @assertTrue(all_fine)
+
+        ! Magnetic field data
+        all_fine = check_global_records(filename, "psi_norm_fac", &
+                                        psi_norm_fac, &
+                                        is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_global_records(filename, "psi_lo", psi_lo, &
+                                        is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_global_records(filename, "psi_up", psi_up, &
+                                        is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_global_records(filename, "absB_max", absB_max, &
+                                        is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+
+        all_fine = check_val_records(filename, "absB", absB, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "polar_absB", polar_absB, &
+                                     is_master,groupname='magnetic_field_polar')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "loss_cone", loss_cone, &
+                                     is_master,groupname='magnetic_field_polar')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "normb_R", normb_R, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "normb_Z", normb_Z, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "normb_tor", normb_tor, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "curl_normb_y", curl_normb_y, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dgyxdy_over_g", dgyxdy_over_g, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dgyzdy_over_g", dgyzdy_over_g, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dgyxdz_over_g", dgyxdz_over_g, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dgyzdx_over_g", dgyzdx_over_g, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "inv_g", inv_g, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dabsBdx", dabsBdx, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dabsBdz", dabsBdz, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "dabsBdy", dabsBdy, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "rho", rho, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "theta", theta, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "psi", psi, &
+                                     is_master, groupname='magnetic_field')
+        @assertTrue(all_fine)
+
+        ! Parcon data
+        all_fine = check_val_records(filename, "not_in_target", not_in_target, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "maps_on_mesh", maps_on_mesh, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "fll_positive1", fll_positive1, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "fll_positive2", fll_positive2, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "fll_negative1", fll_negative1, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "fll_negative2", fll_negative2, &
+                                     is_master, groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "parcon_positive1", &
+                                     parcon_positive1, is_master, &
+                                     groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "parcon_positive2", &
+                                     parcon_positive2, is_master, &
+                                     groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "parcon_negative1", &
+                                     parcon_negative1, is_master, &
+                                     groupname='parcon')
+        @assertTrue(all_fine)
+        all_fine = check_val_records(filename, "parcon_negative2", &
+                                     parcon_negative2, is_master, &
+                                     groupname='parcon')
+        @assertTrue(all_fine)
+    end subroutine
+
+end module

@@ -1,0 +1,176 @@
+module test_timestep
+    !! Contains tests for the timestepping schemes
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use genex_status_codes_m, only: GENEX_SUCCESS
+    use params_time_loop_m, only: get_dt, get_n_timesteps
+    use dcomm_handler_m, only: dcomm_handler_t
+    use state_vector_m, only: state_vector_t
+    use timestep_m, only: euler_t
+    use mesh_5d_m, only: mesh_5d_t
+    use params_gpu_offload_m, only: get_use_gpu_offload
+    ! Unit test helpers
+    use helpers_timestep_m, only: test_timestep_core
+    use test_params_m, only: setup_test_params, &
+                             teardown_test_params, &
+                             setup_test_mesh, &
+                             setup_test_neutrals_config, &
+                             setup_test_gpu_offload
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SLAB
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_euler(this)
+        class(MpiTestMethod), intent(inout) :: this
+        logical :: passed
+
+        call test_timestep_core(this, "euler", dt=1e-5_GP, tol=1e-8_GP, &
+                                passed=passed)
+        @assertTrue(passed)
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_rk4(this)
+        class(MpiTestMethod), intent(inout) :: this
+        logical :: passed
+
+        call test_timestep_core(this, "rk4", dt=1e-5_GP, tol=GP_EPS, &
+                                passed=passed)
+        @assertTrue(passed)
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_strang(this)
+        class(MpiTestMethod), intent(inout) :: this
+        logical :: passed
+
+        call test_timestep_core(this, "strang", dt=1e-5_GP, tol=10*GP_EPS, &
+                                passed=passed)
+        @assertTrue(passed)
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_strang_rkc(this)
+        class(MpiTestMethod), intent(inout) :: this
+        logical :: passed
+
+        call test_timestep_core(this, "strang-rkc", dt=1e-5_GP, &
+                                tol=100*GP_EPS, passed=passed)
+        @assertTrue(passed)
+    end subroutine
+
+    @test(npes = [1, 2])
+    subroutine test_timestep_initialize(this)
+        !! Tests time step initialization for execution and memory leaks
+        !! Uses non-test mode to test code that is accessed in production
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(euler_t), allocatable :: euler
+        type(mesh_5d_t), target, allocatable :: mesh
+
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=8.0_GP, &
+                             n_points_phi=2, &
+                             n_points_vp=2, &
+                             n_points_mu=2, &
+                             quad_type_vp="trapezoidal")
+
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+                                          this%getNumProcesses(), 1, 1, 1)
+        allocate(mesh)
+        call mesh%initialize(dcomm_handler_ptr)
+        allocate(euler)
+        call euler%initialize(dcomm_handler_ptr, mesh, 0.0_GP, "./", &
+                              run_test=.false.)
+        deallocate(mesh, euler)
+
+    end subroutine
+
+    @test(npes = [1, 2])
+    subroutine test_timestep_functions(this)
+        !! Tests time step functions such as the getter for the current time
+        !! and the logicals that indicate the first/last time step
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(state_vector_t), pointer:: state
+        type(euler_t) :: euler
+        type(mesh_5d_t), target, allocatable :: mesh
+        integer :: t, n_t, ierr
+        real(kind=GP) :: dt
+
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=8.0_GP, &
+                             n_points_phi=2, &
+                             n_points_vp=2, &
+                             n_points_mu=2, &
+                             quad_type_vp="trapezoidal")
+
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+                                          this%getNumProcesses(), 1, 1, 1)
+        allocate(mesh)
+        call mesh%initialize(dcomm_handler_ptr)
+
+        call setup_test_neutrals_config(this%getMpiCommunicator(), &
+                                        this%getProcessRank(), &
+                                        neutrals_evolve_type="dummy", &
+                                        neutrals_coupling_type="dummy")
+
+        ! Need to be set by parameter to check final_time_reached
+        n_t = get_n_timesteps()
+        dt  = get_dt()
+
+        call euler%initialize(dcomm_handler_ptr, mesh, dt, "./", &
+                              run_test=.true.)
+        state => euler%get_state_pointer()
+        call state%set_uniform(1.0_GP)
+
+        @assertEqual(0.0_GP, euler%get_t(), tolerance=GP_EPS)
+        do t = 1, n_t
+            @assertFalse(euler%final_time_reached())
+            call euler%step(ierr)
+            @assertEqual(t*dt, euler%get_t(), tolerance=10*GP_EPS)
+        enddo
+        @assertTrue(euler%final_time_reached())
+        @assertEqual(GENEX_SUCCESS, ierr)
+
+        deallocate(mesh)
+    end subroutine
+end module

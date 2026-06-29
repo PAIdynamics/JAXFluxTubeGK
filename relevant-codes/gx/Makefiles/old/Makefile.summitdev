@@ -1,0 +1,31 @@
+define STANDARD_SYSTEM_CONFIGURATION
+export PYTHONPATH=${PWD}/src;\
+module reset ;\
+module load hsi/5.0.2.p5 xalt/0.7.5 DefApps;\
+module load cuda;\
+module load gcc;\
+module load python/2.7.12 py-numpy py-scipy;\
+export PYTHONPATH=${OLCF_PY_SCIPY_ROOT}/lib/python2.7/site-packages:${PYTHONPATH};\
+echo Module configuration complete ;\
+export MAKEFLAGS='-j -I Makefiles' ;\
+echo
+endef
+
+CUDAARCH=60
+
+NVCC      = nvcc
+CUDA_INC  = -I ${CUDA_DIR}/include
+CUDA_LIB  = -L ${CUDA_DIR}/lib -lcufft_static -lculibos -lnvToolsExt -lcublas -lcusolver -lgomp
+MPI_INC = -I ${OMPI_DIR}/include
+MPI_LIB= -L ${OMPI_DIR}/lib -lmpi_ibm
+PYTHON_INC = -I ${OLCF_PYTHON_ROOT}/include/python2.7 -I ${OLCF_PY_NUMPY_ROOT}/lib/python2.7/site-packages/numpy-1.11.2-py2.7-linux-ppc64le.egg/numpy/core/include/
+PYTHON_LIB = -L ${OLCF_PYTHON_ROOT}/lib -lpython2.7
+NVCCFLAGS = -arch=compute_$(CUDAARCH) -code=sm_$(CUDAARCH) -use_fast_math -prec-sqrt=true 
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif
+
+

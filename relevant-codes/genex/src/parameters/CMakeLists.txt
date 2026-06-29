@@ -1,0 +1,36 @@
+target_sources(GENEXCore-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/error_params_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_collisions_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_devtools_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_field_solve_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_gpu_offload_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_gyrokinetic_system_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_initial_condition_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_mesh_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_bsg_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_mms_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_normalization_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_bnd_cond_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_numerical_scheme_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_parallelization_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_set_blob_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_set_mode_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_species_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_species_config_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_time_loop_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_time_split_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_diagnostics_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/interop_params_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/interop_params_s.f90
+)
+
+add_subdirectory(dist_initial)
+add_subdirectory(profiles)
+add_subdirectory(neutrals)
+add_subdirectory(sources)
+
+if(ENABLE_UTESTS)
+    add_subdirectory(tests)
+endif()

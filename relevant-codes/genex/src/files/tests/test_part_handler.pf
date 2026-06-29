@@ -1,0 +1,163 @@
+module test_part_handler
+    use mpi
+    use pfunit
+    use dcomm_handler_m, only: dcomm_handler_t
+    use part_handler_m, only: inquire_part, create_part
+    use system_calls_m, only: mkdir, rm_rf
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_SUCCESS, GENEX_ERR_UTESTS
+
+    implicit none
+
+contains
+
+    subroutine touch_mom_0d(dcomm_handler, path)
+        !! Creates the mom_0d.nc file in the path directory. Creating the
+        !! mom_0d.nc is necessary because part_handler_m determines whether
+        !! a part is present by looking for the mom_0d.nc file in the part
+        !! folder.
+        type(dcomm_handler_t), intent(in) :: dcomm_handler
+        character(len=*), intent(in) :: path
+        integer :: tmp_unit, ierr
+
+        if(dcomm_handler%is_master()) then
+            open(newunit=tmp_unit, file=trim(path) // "/mom_0d.nc", &
+                 status="new", action="write")
+            close(tmp_unit)
+        endif
+        call mpi_barrier(dcomm_handler%get_comm_cart(), ierr)
+    end subroutine
+
+    subroutine create_dir(dcomm_handler, path)
+        !! Creates the directory specified by path
+        type(dcomm_handler_t), intent(in) :: dcomm_handler
+        character(len=*), intent(in) :: path
+        integer :: tmp_unit, ierr
+
+        if(dcomm_handler%is_master()) then
+            call mkdir(path, ierr)
+            @assertEqual(ierr, GENEX_SUCCESS)
+        endif
+        call mpi_barrier(dcomm_handler%get_comm_cart(), ierr)
+    end subroutine
+
+    subroutine setup(comm, n_ranks, dcomm_handler)
+        !! Setups the dcomm_handler_t type
+        integer, intent(in) :: comm, n_ranks
+        type(dcomm_handler_t), allocatable, intent(out) :: dcomm_handler
+        integer :: n_ranks_phi, n_ranks_vp, n_ranks_mu, n_ranks_sp
+        integer :: ierr
+
+        select case (n_ranks)
+        case (1)
+          n_ranks_phi = 1
+          n_ranks_vp = 1
+          n_ranks_mu = 1
+          n_ranks_sp = 1
+        case (2)
+          n_ranks_phi = 2
+          n_ranks_vp = 1
+          n_ranks_mu = 1
+          n_ranks_sp = 1
+        case (4)
+          n_ranks_phi = 1
+          n_ranks_vp = 2
+          n_ranks_mu = 2
+          n_ranks_sp = 1
+        case (8)
+          n_ranks_phi = 1
+          n_ranks_vp = 2
+          n_ranks_mu = 2
+          n_ranks_sp = 2
+        case default
+            call handle_error("Unsupported n_procs in unit test!", &
+                              GENEX_ERR_UTESTS, __LINE__, __FILE__)
+        end select
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm, n_ranks_phi, n_ranks_vp, &
+                                     n_ranks_mu, n_ranks_sp)
+
+        if(dcomm_handler%is_master()) then
+            call rm_rf("part_*", ierr)
+            @assertEqual(ierr, GENEX_SUCCESS)
+        endif
+    end subroutine
+
+    subroutine teardown(dcomm_handler)
+        type(dcomm_handler_t), allocatable, intent(inout) :: dcomm_handler
+        integer :: ierr
+
+        if(dcomm_handler%is_master()) then
+            call rm_rf("part_*", ierr)
+            @assertEqual(ierr, GENEX_SUCCESS)
+        endif
+
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_empty_directory(this)
+        class (MpiTestMethod), intent(inout) :: this
+        character(len=:), allocatable :: inquiry
+        type(dcomm_handler_t), allocatable :: dcomm_handler
+
+        call setup(this%getMpiCommunicator(), this%getNumProcesses(), &
+                   dcomm_handler)
+
+        inquiry = inquire_part(dcomm_handler, "./")
+        @assertEqual("", inquiry)
+
+        inquiry = create_part(dcomm_handler, "./")
+        @assertEqual("./part_1/", inquiry)
+
+        call teardown(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_full_directory(this)
+        class (MpiTestMethod), intent(inout) :: this
+        character(len=:), allocatable :: inquiry
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+
+        call setup(this%getMpiCommunicator(), this%getNumProcesses(), &
+                   dcomm_handler)
+
+        call create_dir(dcomm_handler, "part_9999")
+        call touch_mom_0d(dcomm_handler, "part_9999")
+        inquiry = inquire_part(dcomm_handler, "./")
+        @assertEqual("./part_9999/", inquiry)
+
+        inquiry = create_part(dcomm_handler, "./")
+        @assertEqual("", inquiry)
+
+        call teardown(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine test_intermediate_directory(this)
+        class (MpiTestMethod), intent(inout) :: this
+        character(len=:), allocatable :: inquiry
+        type(dcomm_handler_t), target, allocatable :: dcomm_handler
+
+        call setup(this%getMpiCommunicator(), this%getNumProcesses(), &
+                   dcomm_handler)
+
+        call create_dir(dcomm_handler, "part_1")
+        call touch_mom_0d(dcomm_handler, "part_1")
+        inquiry = inquire_part(dcomm_handler, "./")
+        @assertEqual("./part_1/", inquiry)
+
+        inquiry = create_part(dcomm_handler, "./")
+        @assertEqual("./part_2/", inquiry)
+
+        call touch_mom_0d(dcomm_handler, "part_2")
+        inquiry = inquire_part(dcomm_handler, "./")
+        @assertEqual("./part_2/", inquiry)
+
+        inquiry = create_part(dcomm_handler, "./")
+        @assertEqual("./part_3/", inquiry)
+
+        call teardown(dcomm_handler)
+    end subroutine
+end module

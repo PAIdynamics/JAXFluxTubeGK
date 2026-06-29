@@ -1,0 +1,63 @@
+# Makefile for summit (ORNL)
+# Maintainer: Noah Mandell (nmandell@pppl.gov)
+#
+# add and uncomment the following in your .profile (or equivalent, depending on preferred shell; for csh, need to use setenv instead of export, etc):
+#
+# export GK_SYSTEM=summit
+# export NVHPC_VERSION=23.9
+# export CUDA_VERSION=12.2
+# export OLCF_NVHPC_ROOT=/sw/summit/nvhpc_sdk/Linux_ppc64le/23.9
+# module load cuda/$CUDA_VERSION.0
+# export NVHPC_CUDA_HOME=$CUDA_PATH
+# export LD_LIBRARY_PATH=:/sw/summit/nvhpc_sdk/Linux_ppc64le/$NVHPC_VERSION/math_libs/$CUDA_VERSION/lib64:/sw/summit/nvhpc_sdk/Linux_ppc64le/22.9/math_libs/11.7/lib64:/sw/summit/nvhpc_sdk/Linux_ppc64le/$NVHPC_VERSION/comm_libs/$CUDA_VERSION/nccl/lib:$LD_LIBRARY_PATH
+# module load gcc/12.1.0
+# module load gsl/2.7.1
+# module load miniforge3
+# module load hdf5/1.14.3
+# module load netcdf-c/4.9.2
+#
+
+# paths to netcdf and hdf5
+NETCDF_ROOT = ${OLCF_NETCDF_C_ROOT}
+HDF5_ROOT = ${OLCF_HDF5_ROOT}
+NETCDF_INC = -I ${NETCDF_ROOT}/include
+NETCDF_LIB = -L ${NETCDF_ROOT}/lib -lnetcdf -L${HDF5_ROOT}/lib -lhdf5 -lhdf5_hl -lm -lz -lxml2 -lcurl
+
+# paths to mpi
+MPI_ROOT = ${OMPI_DIR}
+MPI_INC = -I ${MPI_ROOT}/include
+MPI_LIB = -L ${MPI_ROOT}/lib  -lmpi_ibm
+
+# paths to cuda 
+NVHPC_ROOT = ${OLCF_NVHPC_ROOT}
+NCCL_ROOT = ${NVHPC_ROOT}/comm_libs/${CUDA_VERSION}/nccl
+#MATH_ROOT = /sw/summit/nvhpc_sdk/Linux_ppc64le/23.9/math_libs/12.2# this causes a cufft error
+#MATH_ROOT = /sw/summit/nvhpc_sdk/Linux_ppc64le/23.9/math_libs/11.8# this causes slowdowns of the code and destroys parallel scaling
+MATH_ROOT = /sw/summit/nvhpc_sdk/Linux_ppc64le/22.9/math_libs/11.7
+CUDA_INC = -I ${MATH_ROOT}/include -I ${NCCL_ROOT}/include
+CUDA_LIB = -L ${MATH_ROOT}/lib64 -lcufft_static -lcublas -lcusolver -lgomp -lcutensor -L ${NCCL_ROOT}/lib -lnccl -L ${NVHPC_CUDA_HOME}/lib64 -lcudart -lculibos -lnvToolsExt
+
+# paths to gsl 
+# GSL_ROOT is defined by gsl module
+GSL_ROOT = ${OLCF_GSL_ROOT}
+GSL_INC = -I ${GSL_ROOT}/include
+GSL_LIB = -L ${GSL_ROOT}/lib -lgsl -lgslcblas
+
+# additional c libraries required for linking. these are already in LD_LIBRARY_PATH
+C_LIB = -lpthread -ldl
+
+# V100 is compute architecture 7.0
+CUDAARCH=70
+
+CXX = g++
+
+NVCC   = nvcc
+CFLAGS = -fPIC
+NVCCFLAGS = --forward-unknown-to-host-compiler -arch=compute_$(CUDAARCH) -code=sm_$(CUDAARCH) -use_fast_math -fPIC -rdc=true
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif
+

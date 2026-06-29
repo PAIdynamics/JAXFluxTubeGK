@@ -1,0 +1,10 @@
+target_sources(GENEXCore-CXX-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_collisions.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_devtools.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_gyrokinetic_system.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_gpu_offload.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_normalization.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_numerical_scheme.cxx
+        ${CMAKE_CURRENT_LIST_DIR}/helpers_params_species.cxx
+)

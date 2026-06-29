@@ -1,0 +1,3 @@
+lambda_ohms_law = 1.D0 + Cos((nrad*Pi*(-rhomin + Sqrt(R**2 + Z**2)))/(rhomax - rhomin))**2*Cos( &
+npol*atan(Z,R))**2 + Sin((nrad*Pi*(-rhomin + Sqrt(R**2 + Z**2)))/( &
+rhomax - rhomin))**2*Sin(npol*atan(Z,R))**2

@@ -1,0 +1,21 @@
+################################################################################
+## Parameters specific to the BSG MMS testing cases
+## which may overwrite the parameters prescribed previously
+## NOTE: "delete" keyword can be use here to remove existing entries.
+################################################################################
+common_parameters:
+  params_mesh:
+    use_bsg: .true.
+
+  params_bsg:
+    num_blocks: 3
+    vplen_markers: [3.5,3.4,3.3]
+    radial_markers: [0.2,0.4]
+
+geometric_parameters:
+  circular:
+    equi_circular_params:
+      rhomin: 0.05
+
+    params_mms:
+      rho_min: -0.4

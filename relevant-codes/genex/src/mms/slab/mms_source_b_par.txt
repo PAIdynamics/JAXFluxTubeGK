@@ -1,0 +1,4 @@
+mms_source_b_par = -(betaref*(-4.999999999999999D-2 - 9.499999999999998D-1*Cos(ntor*phi)**2*Cos( &
+omega*t)**2*Sin((nrad*Pi*(R - rhomin))/(rhomax - rhomin))**2*Sin( &
+npol*Pi*Z)**2)) + 1.D-1*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*( &
+R - rhomin))/(rhomax - rhomin))*Sin(2*npol*Pi*Z)

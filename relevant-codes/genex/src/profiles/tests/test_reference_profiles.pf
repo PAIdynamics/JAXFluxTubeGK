@@ -1,0 +1,150 @@
+module test_reference_profiles
+    !! Contains tests for reference profiles type
+    use mpi
+    use pfunit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: almost_equal
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_ERR_UTESTS
+    use params_mesh_m, only: get_n_points_sp
+    use params_profile_cbc_m, only: params_profile_cbc_t, &
+                                    get_params_profile_cbc_dens, &
+                                    get_params_profile_cbc_temp, &
+                                    get_params_profile_cbc_temp_par, &
+                                    get_params_profile_cbc_temp_perp
+    use params_species_config_m, only: get_params_species_config, &
+                                       params_species_config_t
+    use profiles_m, only: profile_cbc_cpu_t
+    use dcomm_handler_m, only: dcomm_handler_t
+    use mesh_5d_m, only: mesh_5d_t
+    use reference_profiles_m, only: reference_profiles_t
+    use profile_container_m, only: profile_container_t
+
+    ! Unit test helpers
+    use test_params_m, only: setup_test_mesh
+
+    implicit none
+
+contains
+
+    @test(npes = [1, 2, 4])
+    subroutine test_reference_prof(this)
+        !! Tests the reference profiles type
+
+        class(MpiTestMethod), intent(inout) :: this
+        type(reference_profiles_t), allocatable :: reference_profiles
+        type(profile_cbc_cpu_t), allocatable :: profile_dens, profile_temp, &
+                                                profile_temp_par, &
+                                                profile_temp_perp
+        type(params_profile_cbc_t) :: params
+        type(params_species_config_t) :: psc
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        type(mesh_5d_t), target, allocatable :: mesh
+        type(profile_container_t), allocatable, dimension(:) :: &
+                                                       profile_container
+
+        integer :: n, nspec
+        logical :: is_isotropic
+        integer :: i, k, n_points_RZ, n_points_phi
+        integer :: n_procs, n_procs_phi, n_procs_sp
+
+        real(kind=GP), pointer, contiguous, dimension(:) :: phi
+        real(kind=GP) :: expected, res
+        real(kind=GP), pointer, contiguous, dimension(:,:,:) :: temp_prf
+
+        n_procs = this%getNumProcesses()
+
+        select case (n_procs)
+            case (1)
+                n_procs_phi = 1
+                n_procs_sp  = 1
+            case (2)
+                n_procs_phi = 1
+                n_procs_sp  = 2
+            case (4)
+                n_procs_phi = 2
+                n_procs_sp  = 2
+            case default
+                call handle_error("Unsupported n_procs in unit test!", &
+                                  GENEX_ERR_UTESTS, __LINE__, __FILE__)
+         end select
+
+        ! Initialize mesh
+        allocate(mesh)
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=2, &
+                             spacing_RZ=0.05_GP, &
+                             n_points_phi=16, &
+                             n_points_vp=32, &
+                             n_points_mu=16, &
+                             use_vspectral = .true.)
+
+        call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                      n_procs_phi, 1, 1, n_procs_sp)
+        dcomm_handler_ptr => dcomm_handler
+
+        call mesh%initialize(dcomm_handler_ptr)
+
+        ! Allocate profile container
+        nspec = get_n_points_sp()
+        allocate(profile_container(nspec))
+        allocate(profile_dens)
+        allocate(profile_temp)
+        allocate(profile_temp_par)
+        allocate(profile_temp_perp)
+
+        do n = 1, nspec
+            ! Get parameter container for species config
+            psc = get_params_species_config(n)
+            is_isotropic = psc%is_isotropic
+
+            ! Get density parameters
+            params = get_params_profile_cbc_dens(n)
+            call profile_dens%initialize(params)
+
+            ! Get temperature parameters
+            params = get_params_profile_cbc_temp(n)
+            call profile_temp%initialize(params)
+
+            params = get_params_profile_cbc_temp_par(n)
+            call profile_temp_par%initialize(params)
+
+            params = get_params_profile_cbc_temp_perp(n)
+            call profile_temp_perp%initialize(params)
+
+            ! Initialize profile container
+            call profile_container(n)%initialize(is_isotropic, &
+                                                 profile_dens, &
+                                                 profile_temp, &
+                                                 profile_temp_par, &
+                                                 profile_temp_perp)
+        end do
+
+        ! Initialize initial profiles
+        allocate(reference_profiles)
+        call reference_profiles%initialize(dcomm_handler_ptr, &
+                                           mesh, &
+                                           profile_container)
+
+        n_points_RZ = mesh%size_RZ()
+        n_points_phi = mesh%size_phi()
+        phi => mesh%get_phi_pointer()
+
+        temp_prf => reference_profiles%get_temp_pointer()
+
+        do n = 1, nspec
+        do k = 1, n_points_phi
+        do i = 1, n_points_RZ
+            res = temp_prf(i, k, n)
+            expected = 1.0_GP
+            @assertEqual(expected, res, GP_EPS)
+        enddo
+        enddo
+        enddo
+
+    end subroutine
+
+end module

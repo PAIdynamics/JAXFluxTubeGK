@@ -1,0 +1,43 @@
+# Makefile for satori.mit.edu 
+# Maintainer: Noah Mandell (nrm@mit.edu)
+#
+# add the following to your .bash_profile (or equivalent, depending on preferred shell; for csh, need to use setenv instead of export, etc):
+#
+# export GK_SYSTEM=satori
+# module load spack-flat/0.1
+# module load nvhpc/21.5
+# module load anaconda3-2020.02-gcc-8.3.1-2ks5tch
+# module load openmpi-3.1.6-gcc-8.3.1-cuda-pmi-ucx-slurm-jhklron
+# module load netcdf-c-4.7.4-gcc-8.3.1-pxsrehp
+# module load hdf5-1.10.7-gcc-8.3.1-l3qeolo
+# module load gsl-2.5-gcc-8.3.1-5g2iioq
+#
+
+NETCDF_INC = 
+NETCDF_LIB = -lnetcdf -lhdf5 
+
+MPI_INC= 
+MPI_LIB= -lmpi
+
+GSL_INC = 
+GSL_LIB = -lgsl -lgslcblas 
+
+C_LIB = -ldl -lm -lpthread
+
+NVCC=nvcc
+CUDAARCH=70
+CUDA_LIB = -L${NVHPC_ROOT}/math_libs/lib64 -lcufft_static -lculibos -lnvToolsExt -lcublas -lcusolver -lcutensor -lcudart -L${NVHPC_ROOT}/comm_libs/nccl/lib -lnccl
+
+CXX = g++
+
+NVCC   = nvcc
+CFLAGS = -fPIC
+NVCCFLAGS = --forward-unknown-to-host-compiler -arch=compute_$(CUDAARCH) -code=sm_$(CUDAARCH) -use_fast_math -fPIC -rdc=true
+
+GS2_PATH = /home/nrm/gs2
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif

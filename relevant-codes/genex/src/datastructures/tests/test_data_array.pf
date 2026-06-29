@@ -1,0 +1,281 @@
+module test_data_array
+    !! Contains tests for the data_array_2d_t, data_array_4d_t, data_array_5d_t
+    !! in the case of non-distributed array
+    use funit
+    use, intrinsic :: iso_c_binding, only: c_loc
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use logger_m, only: logger_get_debug_channel
+    use data_array_m, only: data_array_t, data_array_2d_t, data_array_3d_t, &
+                            data_array_4d_t, data_array_5d_t
+
+    implicit none
+
+contains
+
+    subroutine assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+        !! Assert array properties from data_array_t getters
+        integer, intent(in) :: array_dim
+        integer, intent(in) :: lb_ref(array_dim)
+        integer, intent(in) :: ub_ref(array_dim)
+        class(data_array_t), intent(in) :: da
+
+        integer :: shp_ref(array_dim)
+        shp_ref = (ub_ref - lb_ref) + 1
+
+        @assertFalse(da%is_distributed())
+        @assertEqual(array_dim, da%get_dimension())
+        @assertEqual(product(shp_ref), da%get_size())
+        @assertEqual(product(shp_ref), da%get_size_stripped())
+        @assertEqual(shp_ref, da%get_shape())
+        @assertEqual(shp_ref, da%get_shape_stripped())
+        @assertEqual(lb_ref, da%get_lbound())
+        @assertEqual(ub_ref, da%get_ubound())
+        @assertEqual(lb_ref, da%get_lbound_stripped())
+        @assertEqual(ub_ref, da%get_ubound_stripped())
+    end subroutine
+
+    @test
+    subroutine test_data_array_2d()
+        !! Tests the bounds and other class members of data_array_2d_t
+        type(data_array_2d_t), allocatable :: da, da_mold
+        integer, parameter :: array_dim = 2
+        real(kind=GP), parameter :: initial_value = 2.71828_GP
+        integer :: lb_ref(array_dim), ub_ref(array_dim), shp_ref(array_dim)
+        real(kind=GP), dimension(:,:), pointer :: arr_ptr
+
+        lb_ref  = [1, 2]
+        ub_ref  = [2, 3]
+        shp_ref = (ub_ref - lb_ref) + 1
+
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref)
+
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+
+        ! Assert array properties from data_array_t array pointer
+        arr_ptr => da%get_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! NOTE: Stripped pointer is suppose to be same as the standard one here
+        arr_ptr => da%get_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! Assert array properties from data_array_t readonly pointer
+        arr_ptr => da%get_readonly_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        arr_ptr => da%get_readonly_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+        deallocate(da)
+
+        ! Test set initial value feature
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+        arr_ptr => da%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da)
+
+        ! Test mold feature
+        allocate(da_mold)
+        allocate(da)
+        call da_mold%initialize(lb_ref, ub_ref, val=initial_value)
+        call da%initialize(mold=da_mold, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da_mold)
+        arr_ptr => da_mold%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da, da_mold)
+    end subroutine
+
+    @test
+    subroutine test_data_array_3d()
+        !! Tests the bounds and other class members of data_array_3d_t
+        type(data_array_3d_t), allocatable :: da, da_mold
+        integer, parameter :: array_dim = 3
+        real(kind=GP), parameter :: initial_value = 2.71828_GP
+        integer :: lb_ref(array_dim), ub_ref(array_dim), shp_ref(array_dim)
+        real(kind=GP), dimension(:,:,:), pointer :: arr_ptr
+
+        lb_ref  = [1, 2, 3]
+        ub_ref  = [2, 3, 4]
+        shp_ref = (ub_ref - lb_ref) + 1
+
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref)
+
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+
+        ! Assert array properties from data_array_t array pointer
+        arr_ptr => da%get_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! NOTE: Stripped pointer is suppose to be same as the standard one here
+        arr_ptr => da%get_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! Assert array properties from data_array_t readonly pointer
+        arr_ptr => da%get_readonly_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        arr_ptr => da%get_readonly_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+        deallocate(da)
+
+        ! Test set initial value feature
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+        arr_ptr => da%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da)
+
+        ! Test mold feature
+        allocate(da_mold)
+        allocate(da)
+        call da_mold%initialize(lb_ref, ub_ref, val=initial_value)
+        call da%initialize(mold=da_mold, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da_mold)
+        arr_ptr => da_mold%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da, da_mold)
+    end subroutine
+
+    @test
+    subroutine test_data_array_4d()
+        !! Tests the bounds and other class members of data_array_4d_t
+        type(data_array_4d_t), allocatable :: da, da_mold
+        integer, parameter :: array_dim = 4
+        real(kind=GP), parameter :: initial_value = 2.71828_GP
+        integer :: lb_ref(array_dim), ub_ref(array_dim), shp_ref(array_dim)
+        real(kind=GP), dimension(:,:,:,:), pointer :: arr_ptr
+
+        lb_ref  = [1, 2, 3, 4]
+        ub_ref  = [2, 3, 4, 5]
+        shp_ref = (ub_ref - lb_ref) + 1
+
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref)
+
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+
+        ! Assert array properties from data_array_t array pointer
+        arr_ptr => da%get_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! NOTE: Stripped pointer is suppose to be same as the standard one here
+        arr_ptr => da%get_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! Assert array properties from data_array_t readonly pointer
+        arr_ptr => da%get_readonly_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        arr_ptr => da%get_readonly_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+        deallocate(da)
+
+        ! Test set initial value feature
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+        arr_ptr => da%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da)
+
+        ! Test mold feature
+        allocate(da_mold)
+        allocate(da)
+        call da_mold%initialize(lb_ref, ub_ref, val=initial_value)
+        call da%initialize(mold=da_mold, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da_mold)
+        arr_ptr => da_mold%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da, da_mold)
+    end subroutine
+
+    @test
+    subroutine test_data_array_5d()
+        !! Tests the bounds and other class members of data_array_5d_t
+        type(data_array_5d_t), allocatable :: da, da_mold
+        integer, parameter :: array_dim = 5
+        real(kind=GP), parameter :: initial_value = 2.71828_GP
+        integer :: lb_ref(array_dim), ub_ref(array_dim), shp_ref(array_dim)
+        real(kind=GP), dimension(:,:,:,:,:), pointer :: arr_ptr
+
+        lb_ref  = [1, 2, 3, 4, 5]
+        ub_ref  = [2, 3, 4, 5, 6]
+        shp_ref = (ub_ref - lb_ref) + 1
+
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref)
+
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+
+        ! Assert array properties from data_array_t array pointer
+        arr_ptr => da%get_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! NOTE: Stripped pointer is suppose to be same as the standard one here
+        arr_ptr => da%get_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        ! Assert array properties from data_array_t readonly pointer
+        arr_ptr => da%get_readonly_pointer()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+
+        arr_ptr => da%get_readonly_pointer_stripped()
+        @assertEqual(shp_ref, shape(arr_ptr))
+        @assertEqual(lb_ref, lbound(arr_ptr))
+        @assertEqual(ub_ref, ubound(arr_ptr))
+        deallocate(da)
+
+        ! Test set initial value feature
+        allocate(da)
+        call da%initialize(lb_ref, ub_ref, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da)
+        arr_ptr => da%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da)
+
+        ! Test mold feature
+        allocate(da_mold)
+        allocate(da)
+        call da_mold%initialize(lb_ref, ub_ref, val=initial_value)
+        call da%initialize(mold=da_mold, val=initial_value)
+        call assert_data_array_interface(array_dim, lb_ref, ub_ref, da_mold)
+        arr_ptr => da_mold%get_pointer()
+        @assertEqual(initial_value, arr_ptr, tolerance=GP_EPS)
+        deallocate(da, da_mold)
+    end subroutine
+
+end module

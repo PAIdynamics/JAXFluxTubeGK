@@ -1,0 +1,326 @@
+module test_dcomm_handler_gpu
+    !! Contains tests for C++ functionalities of the dcomm_handler_t type
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_c_binding, only: c_loc
+    use dcomm_handler_m, only: dcomm_handler_t
+    use dcomm_handler_gpu_m, only: dcomm_handler_data_t
+    use helpers_dcomm_handler_gpu_m, only: cbind_dcomm_handler_copy, &
+                                           cbind_dcomm_handler_domain_copy
+    ! Unit test helpers
+    use test_params_m, only: setup_test_gpu_offload
+
+    implicit none
+
+contains
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    @test(npes = [1, 2])
+    subroutine test_dcomm_handler_cxx_features(this)
+        !! Tests the data exposure of dcomm_handler_t to C++
+        class (MpiTestMethod), intent(inout) :: this
+
+        integer :: rank, comm_world, n_procs, n_procs_phi, n_procs_vp, &
+                   n_procs_mu, n_procs_sp
+
+        rank       = this%getProcessRank()
+        n_procs    = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        n_procs_phi = n_procs
+        n_procs_vp  = 1
+        n_procs_sp  = 1
+        n_procs_mu  = 1
+
+        call test_dcomm_handler_cxx_features_core(comm_world, rank, n_procs, &
+                 n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp)
+
+        n_procs_phi = 1
+        n_procs_vp  = n_procs
+        n_procs_sp  = 1
+        n_procs_mu  = 1
+
+        call test_dcomm_handler_cxx_features_core(comm_world, rank, n_procs, &
+                 n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp)
+
+        n_procs_phi = 1
+        n_procs_vp  = 1
+        n_procs_sp  = n_procs
+        n_procs_mu  = 1
+
+        call test_dcomm_handler_cxx_features_core(comm_world, rank, n_procs, &
+                 n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp)
+
+        n_procs_phi = 1
+        n_procs_vp  = 1
+        n_procs_sp  = 1
+        n_procs_mu  = n_procs
+
+        call test_dcomm_handler_cxx_features_core(comm_world, rank, n_procs, &
+                 n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp)
+
+    contains
+
+        subroutine test_dcomm_handler_cxx_features_core(comm_world, &
+                                                        rank, &
+                                                        n_procs, &
+                                                        n_procs_phi, &
+                                                        n_procs_vp, &
+                                                        n_procs_mu, &
+                                                        n_procs_sp)
+            !! Common routine to check the access of C++ features
+            integer, intent(in) :: comm_world
+            !! MPI_Comm_World from pFUnit
+            integer, intent(in) :: rank
+            !! Currenk rank
+            integer, intent(in) :: n_procs
+            !! Number of procs
+            integer, intent(in) :: n_procs_phi
+            !! Number of procs in phi direction
+            integer, intent(in) :: n_procs_vp
+            !! Number of procs in vp direction
+            integer, intent(in) :: n_procs_mu
+            !! Number of procs in mu direction
+            integer, intent(in) :: n_procs_sp
+            !! Number of procs in sp direction
+
+            type(dcomm_handler_t) :: dcomm_handler_src
+            type(dcomm_handler_data_t) :: dcomm_handler_data_tgt
+            integer :: istatus
+            logical :: equal
+
+            call dcomm_handler_src%initialize(comm_world, n_procs_phi, &
+                                             n_procs_vp, n_procs_mu, n_procs_sp)
+
+            ! Copy the dcomm handler class members from the source class
+            ! to the target class via C++
+            istatus = 0
+            istatus = cbind_dcomm_handler_copy( &
+                          dcomm_handler_src%get_cxx_pointer(), &
+                          dcomm_handler_data_tgt)
+            @assertEqual(0, istatus)
+            @assertEqual(comm_world, dcomm_handler_data_tgt%comm_base)
+
+            ! Assert the class members
+            equal = (dcomm_handler_src%get_comm_cart() == &
+                     dcomm_handler_data_tgt%comm_cart)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_phi() == &
+                     dcomm_handler_data_tgt%comm_phi)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_vp() == &
+                     dcomm_handler_data_tgt%comm_vp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_mu() == &
+                     dcomm_handler_data_tgt%comm_mu)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_sp() == &
+                     dcomm_handler_data_tgt%comm_sp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_phi_sp() == &
+                     dcomm_handler_data_tgt%comm_phi_sp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_vp_mu() == &
+                     dcomm_handler_data_tgt%comm_vp_mu)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_phi_vp_mu() == &
+                     dcomm_handler_data_tgt%comm_phi_vp_mu)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_vp_mu_sp() == &
+                     dcomm_handler_data_tgt%comm_vp_mu_sp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_mu_sp() == &
+                     dcomm_handler_data_tgt%comm_mu_sp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_comm_phi_mu_sp() == &
+                     dcomm_handler_data_tgt%comm_phi_mu_sp)
+            @assertTrue(equal)
+
+            equal = (dcomm_handler_src%get_n_dims() == &
+                     dcomm_handler_data_tgt%n_dims)
+            @assertTrue(equal)
+            @assertEqual(n_procs, dcomm_handler_data_tgt%n_procs_total)
+            equal = (dcomm_handler_src%get_n_procs_RZ() == &
+                     dcomm_handler_data_tgt%n_procs_RZ)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_n_procs_vp() == &
+                     dcomm_handler_data_tgt%n_procs_vp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_n_procs_mu() == &
+                     dcomm_handler_data_tgt%n_procs_mu)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_n_procs_sp() == &
+                     dcomm_handler_data_tgt%n_procs_sp)
+            @assertTrue(equal)
+            equal = (dcomm_handler_src%get_rank() == &
+                     dcomm_handler_data_tgt%rank)
+            @assertTrue(equal)
+
+        end subroutine
+
+    end subroutine
+
+    @test(npes=[2])
+    subroutine test_domain_decomposition_cxx(this)
+        !! Tests the domain decomposition part of the C++ dcomm_handler for
+        !! different domain decompositions
+
+        ! NOTE: Synchronize with test_domain_decomposition()
+        !       in test_dcomm_handler.pf
+
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable :: dcomm_handler
+        integer :: rank, n_procs, comm_world, shift_p, shift_n
+        integer, dimension(5) :: ref_dim_permut, ref_n_data_elem, ref_n_elem, &
+                                 ref_n_ghost_elem, ref_lb, ref_ub, &
+                                 ref_lb_stripped, ref_ub_stripped
+
+        rank = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+        comm_world = this%getMpiCommunicator()
+
+        ref_dim_permut = [1, 2, 3, 4, 5]
+
+        ! Check species parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=1, &
+                                      n_procs_mu=1, n_procs_sp=2)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=11)
+
+        ref_n_data_elem  = [11, 16, 32, 16, 1]
+        ref_n_elem       = [11, 20, 36, 16, 1]
+        ref_n_ghost_elem = [0,   2,  2,  0, 0]
+        ref_lb           = [1,  -1, -1,  1, 1 + rank]
+        ref_ub           = [11, 18, 34, 16, 1 + rank]
+        ref_lb_stripped  = [1,   1,  1,  1, 1 + rank]
+        ref_ub_stripped  = [11, 16, 32, 16, 1 + rank]
+
+        call test_domain_cxx()
+        deallocate(dcomm_handler)
+
+        ! Check mu parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=1, &
+                                      n_procs_mu=2, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=13)
+
+        shift_p = 8 * rank
+        shift_n = 8 - 8 * rank
+        ref_n_data_elem  = [13, 16, 32,            8, 2]
+        ref_n_elem       = [13, 20, 36,            8, 2]
+        ref_n_ghost_elem = [0,   2,  2,            0, 0]
+        ref_lb           = [1,  -1, -1,  1 + shift_p, 1]
+        ref_ub           = [13, 18, 34, 16 - shift_n, 2]
+        ref_lb_stripped  = [1,   1,  1,  1 + shift_p, 1]
+        ref_ub_stripped  = [13, 16, 32, 16 - shift_n, 2]
+
+        call test_domain_cxx()
+        deallocate(dcomm_handler)
+
+        ! Check vp parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=1, n_procs_vp=2, &
+                                      n_procs_mu=1, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=15)
+
+        shift_p = 16 * rank
+        shift_n = 16 - 16 * rank
+        ref_n_data_elem  = [15, 16,           16, 16, 2]
+        ref_n_elem       = [15, 20,           20, 16, 2]
+        ref_n_ghost_elem = [0,   2,            2,  0, 0]
+        ref_lb           = [1,  -1, -1 + shift_p,  1, 1]
+        ref_ub           = [15, 18, 34 - shift_n, 16, 2]
+        ref_lb_stripped  = [1,   1,  1 + shift_p,  1, 1]
+        ref_ub_stripped  = [15, 16, 32 - shift_n, 16, 2]
+
+        call test_domain_cxx()
+        deallocate(dcomm_handler)
+
+        ! Check phi parallelization
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(comm_world, &
+                                      n_procs_phi=2, n_procs_vp=1, &
+                                      n_procs_mu=1, n_procs_sp=1)
+        call dcomm_handler%initialize_RZ_domain(n_points_RZ=15)
+
+        shift_p = 8 * rank
+        shift_n = 8 - 8 * rank
+        ref_n_data_elem  = [15,            8, 32, 16, 2]
+        ref_n_elem       = [15,           12, 36, 16, 2]
+        ref_n_ghost_elem = [0,             2,  2,  0, 0]
+        ref_lb           = [1,  -1 + shift_p, -1,  1, 1]
+        ref_ub           = [15, 18 - shift_n, 34, 16, 2]
+        ref_lb_stripped  = [1,   1 + shift_p,  1,  1, 1]
+        ref_ub_stripped  = [15, 16 - shift_n, 32, 16, 2]
+
+        call test_domain_cxx()
+        deallocate(dcomm_handler)
+
+    contains
+        subroutine test_domain_cxx()
+            type(dcomm_handler_data_t) :: dcomm_handler_data_tgt
+            integer, contiguous, pointer, dimension(:) :: dim_permut_tgt, &
+                n_data_elem_tgt, n_elem_tgt, n_ghost_tgt, lb_tgt, ub_tgt, &
+                lb_stripped_tgt, ub_stripped_tgt
+            integer :: istatus
+
+            ! Allocate the target arrays related to the domain decomposition
+            allocate(dim_permut_tgt(5))
+            allocate(n_data_elem_tgt(5))
+            allocate(n_elem_tgt(5))
+            allocate(n_ghost_tgt(5))
+            allocate(lb_tgt(5))
+            allocate(ub_tgt(5))
+            allocate(lb_stripped_tgt(5))
+            allocate(ub_stripped_tgt(5))
+
+            dcomm_handler_data_tgt%dim_permut_ptr = c_loc(dim_permut_tgt)
+            dcomm_handler_data_tgt%number_of_data_elements_ptr = &
+                c_loc(n_data_elem_tgt)
+            dcomm_handler_data_tgt%number_of_elements_ptr = c_loc(n_elem_tgt)
+            dcomm_handler_data_tgt%number_of_ghosts_ptr = c_loc(n_ghost_tgt)
+            dcomm_handler_data_tgt%lb_ptr = c_loc(lb_tgt)
+            dcomm_handler_data_tgt%ub_ptr = c_loc(ub_tgt)
+            dcomm_handler_data_tgt%lb_stripped_ptr = c_loc(lb_stripped_tgt)
+            dcomm_handler_data_tgt%ub_stripped_ptr = c_loc(ub_stripped_tgt)
+
+            ! Copy the dcomm handler class members related to the domain
+            ! decomposition from the source class to the target class via C++
+            istatus = 0
+            istatus = cbind_dcomm_handler_domain_copy( &
+                          dcomm_handler%get_cxx_pointer(), &
+                          dcomm_handler_data_tgt)
+            @assertEqual(0, istatus)
+
+            @assertEqual(dim_permut_tgt, ref_dim_permut)
+            @assertEqual(n_data_elem_tgt, ref_n_data_elem)
+            @assertEqual(n_elem_tgt, ref_n_elem)
+            @assertEqual(n_ghost_tgt, ref_n_ghost_elem)
+            @assertEqual(lb_tgt, ref_lb)
+            @assertEqual(ub_tgt, ref_ub)
+            @assertEqual(lb_stripped_tgt, ref_lb_stripped)
+            @assertEqual(ub_stripped_tgt, ref_ub_stripped)
+
+            ! Deallocate memory
+            deallocate(dim_permut_tgt)
+            deallocate(n_data_elem_tgt)
+            deallocate(n_elem_tgt)
+            deallocate(n_ghost_tgt)
+            deallocate(lb_tgt)
+            deallocate(ub_tgt)
+            deallocate(lb_stripped_tgt)
+            deallocate(ub_stripped_tgt)
+        end subroutine
+    end subroutine
+
+end module

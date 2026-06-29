@@ -1,0 +1,20 @@
+target_sources(GENEXCore-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_test_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_init_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_init_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_init_gpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/timestep_init_vspec_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/euler_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/rk4_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/strang_splitting_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/strang_splitting_rkc_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/pirock_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/pirock_coefs_m.f90
+)
+
+if(ENABLE_UTESTS)
+  add_subdirectory(tests)
+endif()

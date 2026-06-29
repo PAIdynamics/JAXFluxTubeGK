@@ -1,0 +1,130 @@
+module test_devtools_gpu
+    !! Contains tests for the developer tools with the C++ layer
+    use pfunit
+    use devtools_m, only: initialize_devtools, finalize_devtools
+    use file_handling_m, only: file_exists
+    use type_converters_m, only: string
+    ! Unit test helpers
+    use test_params_m
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_devmem_tracer(this)
+        !! Tests the device memory tracer with the C++ layer
+        class(MpiTestMethod), intent(inout) :: this
+
+        integer :: i, comm, istat
+
+        comm = this%getMpiCommunicator()
+
+        ! Initial cleanup
+        call execute_command_line("rm -rf traces_dmem")
+
+        ! Set parameters
+        call setup_test_devtools(comm, this%getProcessRank(), &
+                                 trace_device_memory=.true.)
+
+        ! Check for the creation of traces_dmem during the tracer initialization
+        call initialize_devtools(comm, "./")
+
+        ! Check if the device memory tracer report folder exists
+        call execute_command_line("[ -d traces_dmem ]", exitstat=istat)
+        @assertTrue(istat == 0)
+
+        call finalize_devtools(comm)
+
+        ! Check for no error when the folder already exists
+        call initialize_devtools(comm, "./")
+
+        ! Check if the device memory tracer report folder exists
+        call execute_command_line("[ -d traces_dmem ]", exitstat=istat)
+        @assertTrue(istat == 0)
+
+        ! Check if all device memory tracer reports exist
+        do i = 0, this%getProcessRank() - 1
+            @assertTrue(file_exists("traces_dmem/report_"//string(i)//".csv"))
+        enddo
+
+        call finalize_devtools(comm)
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_rt_tracer(this)
+        !! Tests the runtime tracer with the C++ layer
+        class(MpiTestMethod), intent(inout) :: this
+
+        integer :: i, comm, istat
+
+        comm = this%getMpiCommunicator()
+
+        ! Initial cleanup
+        call execute_command_line("rm -rf traces_rt")
+
+        ! Set parameters
+        call setup_test_devtools(comm, this%getProcessRank(), &
+                                 trace_runtime=.true.)
+
+        ! Check for the creation of traces_rt during the tracer initialization
+        call initialize_devtools(comm, "./")
+
+        ! Check if the runtime tracer report folder exists
+        call execute_command_line("[ -d traces_rt ]", exitstat=istat)
+        @assertTrue(istat == 0)
+
+        call finalize_devtools(comm)
+
+        ! Check if the folder is removed upon finalization
+        call execute_command_line("[ -d traces_rt ]", exitstat=istat)
+        @assertTrue(istat /= 0)
+
+        ! Check for no error when the folder already exists
+        call initialize_devtools(comm, "./")
+
+        ! Check if the runtime tracer report folder exists
+        call execute_command_line("[ -d traces_rt ]", exitstat=istat)
+        @assertTrue(istat == 0)
+
+        ! Check if all runtime tracer reports exist
+        do i = 0, this%getProcessRank() - 1
+            @assertTrue(file_exists("traces_rt/report_"//string(i)//".csv"))
+        enddo
+
+        call finalize_devtools(comm)
+
+        ! Check if the folder is removed upon finalization
+        call execute_command_line("[ -d traces_rt ]", exitstat=istat)
+        @assertTrue(istat /= 0)
+
+        ! Check if the aggregated trace file exists
+        @assertTrue(file_exists("traces_runtime.csv"))
+
+    end subroutine
+
+end module

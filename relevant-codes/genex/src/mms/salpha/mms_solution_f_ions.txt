@@ -1,0 +1,6 @@
+mms_solution_f_ions = 8.979356106258328D-3*exp(-vp**2 - (mu*Sqrt(1 + ((-1 + R)**2 + Z**2)/(q + (shear* &
+((-1.D0 + R)**2 + Z**2))/minorr**2)**2))/R) + 1.7060776601890824D-1*exp( &
+-vp**2 - (mu*Sqrt(1 + ((-1 + R)**2 + Z**2)/(q + (shear*(( &
+-1.D0 + R)**2 + Z**2))/minorr**2)**2))/R)*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin(( &
+nrad*Pi*(-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/( &
+rhomax - rhomin))**2*Sin(npol*atan(Z,-1.D0 + R))**2

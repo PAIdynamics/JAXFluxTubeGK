@@ -1,0 +1,4 @@
+mms_source_a_par = 0.D0 + (4*npol**2*Pi**2*rhoref**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin(( &
+2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*Sin(2*npol*Pi*Z))/Lref**2 + ( &
+4*nrad**2*Pi**2*rhoref**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*( &
+R - rhomin))/(rhomax - rhomin))*Sin(2*npol*Pi*Z))/(Lref**2*(rhomax - rhomin)**2)

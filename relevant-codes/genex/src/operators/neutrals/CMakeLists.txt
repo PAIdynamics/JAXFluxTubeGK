@@ -1,0 +1,25 @@
+target_sources(GENEXCore-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_evolve_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_evolve_dummy_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_evolve_1mom_2cfd_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_evolve_1mom_4cfd_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_evolve_1mom_diff_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/neut_coupling_setup_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_np_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_np_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_np_none_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_np_krook_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_pn_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_pn_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_pn_none_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_pn_temp_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_coupling_pn_krook_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_mom_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_mom_cpu_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_set_initial_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/op_neut_set_initial_cpu_s.f90
+)
+
+if(ENABLE_UTESTS)
+endif()

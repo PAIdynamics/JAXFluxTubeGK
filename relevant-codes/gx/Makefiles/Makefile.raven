@@ -1,0 +1,67 @@
+# Makefile for raven (MPCDF)
+# Maintainer: Stefan Buller (sb0095@princeton.edu)
+#
+# add and uncomment the following in your .bashrc (or equivalent, depending on preferred shell; for csh, need to use setenv instead of export, etc):
+#
+# export GK_SYSTEM=raven
+# module load intel/21.2.0
+# module load nvhpcsdk/23
+# module load git
+# module load gsl/2.4
+# module load openmpi/4.1
+# module load hdf5-mpi/1.12.2
+# module load netcdf-mpi/4.8.1
+# LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$NVHPC_ROOT/comm_libs/nccl/lib:$OPENMPI_HOME/lib:$NETCDF_HOME/lib:$HDF5_HOME/lib:$GSL_HOME/lib:$NVHPC_ROOT:$NVHPC_CUDA_HOME/lib64
+
+
+# paths to netcdf
+# NETCDF_HOME is defined by netcdf-mpi module
+NETCDF_ROOT = ${NETCDF_HOME}
+# HDF5_HOME is defined by hdf5-mpi module
+HDF5_ROOT = ${HDF5_HOME}
+NETCDF_INC = -I ${NETCDF_ROOT}/include
+NETCDF_LIB = -L ${NETCDF_ROOT}/lib -lnetcdf -lnetcdff -L${HDF5_ROOT}/lib -lhdf5
+
+# paths to openmpi OPENMPI_HOME defined by openmpi module
+
+MPI_ROOT = ${OPENMPI_HOME}
+MPI_INC = -I ${MPI_ROOT}/include
+MPI_LIB = -L ${MPI_ROOT}/lib -lmpi
+
+# paths to cuda 
+# NVHPC_ROOT is defined by nvhpcsdk module
+# NCCL_ROOT is NOT defined by nccl module, but we've found it ourselves
+NCCL_ROOT = ${NVHPC_ROOT}/comm_libs/nccl/
+
+CUDA_INC = -I ${NVHPC_ROOT}/math_libs/include -I ${NCCL_ROOT}/include
+CUDA_LIB = -L ${NVHPC_ROOT}/math_libs/lib64 -lcufft_static -lcublas -lcusolver -lgomp -lcutensor -L ${NCCL_ROOT}/lib -lnccl -L ${NVHPC_CUDA_HOME}/lib64 -lcudart -lculibos -lnvToolsExt -lnvJitLink
+
+# paths to gsl 
+# GSL_HOME is defined by gsl module
+GSL_ROOT = ${GSL_HOME}
+GSL_INC = -I ${GSL_ROOT}/include
+GSL_LIB = -L ${GSL_ROOT}/lib -lgsl -lgslcblas
+
+# additional c libraries required for linking. these are already in LD_LIBRARY_PATH
+C_LIB = -lm -lpthread -ldl
+
+# A100 is compute architecture 8.0
+# and A100 is the architecture used by Raven's GPU nodes
+# https://docs.mpcdf.mpg.de/doc/computing/raven-user-guide.html#system-overview
+CUDAARCH=80
+
+# Intel names their C++ compiler icpc (C compiler is icc)
+CXX = icpc
+
+NVCC   = nvcc
+CFLAGS = -fPIC
+NVCCFLAGS = --forward-unknown-to-host-compiler -arch=compute_$(CUDAARCH) -code=sm_$(CUDAARCH) -use_fast_math -fPIC -rdc=true
+
+
+
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif

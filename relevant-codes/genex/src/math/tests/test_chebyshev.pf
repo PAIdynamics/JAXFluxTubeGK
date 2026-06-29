@@ -1,0 +1,255 @@
+module test_chebyshev
+    !! Contains test for Chebyshev polynomials
+    use funit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: PI
+    use chebyshev_polynomials_m
+
+    ! From PARALLAX
+    use polynomials_m, only: polyder, polyval
+
+    implicit none
+
+contains
+
+    @test
+    subroutine test_first_kind()
+        real(kind=GP), dimension(:), allocatable :: expected
+
+        ! Test against hardcoded values for the first 10 orders,
+        ! see https://oeis.org/A028297
+
+        allocate(expected(1))
+        expected = [   1.0_GP]
+        @assertEqual(chebyshev_T(0), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(2))
+        expected = [   0.0_GP,    1.0_GP]
+        @assertEqual(chebyshev_T(1), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(3))
+        expected = [  -1.0_GP,    0.0_GP,    2.0_GP]
+        @assertEqual(chebyshev_T(2), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(4))
+        expected = [   0.0_GP,   -3.0_GP,    0.0_GP,     4.0_GP]
+        @assertEqual(chebyshev_T(3), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(5))
+        expected = [   1.0_GP,    0.0_GP,   -8.0_GP,     0.0_GP,    8.0_GP]
+        @assertEqual(chebyshev_T(4), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(6))
+        expected = [   0.0_GP,    5.0_GP,    0.0_GP,   -20.0_GP,    0.0_GP, &
+                      16.0_GP]
+        @assertEqual(chebyshev_T(5), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(7))
+        expected = [  -1.0_GP,    0.0_GP,   18.0_GP,     0.0_GP,  -48.0_GP, &
+                       0.0_GP,   32.0_GP]
+        @assertEqual(chebyshev_T(6), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(8))
+        expected = [   0.0_GP,   -7.0_GP,    0.0_GP,    56.0_GP,    0.0_GP, &
+                    -112.0_GP,    0.0_GP,   64.0_GP]
+        @assertEqual(chebyshev_T(7), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(9))
+        expected = [   1.0_GP,    0.0_GP,  -32.0_GP,     0.0_GP,  160.0_GP, &
+                       0.0_GP, -256.0_GP,    0.0_GP,   128.0_GP]
+        @assertEqual(chebyshev_T(8), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(10))
+        expected = [   0.0_GP,    9.0_GP,    0.0_GP,  -120.0_GP,    0.0_GP, &
+                     432.0_GP,    0.0_GP, -576.0_GP,     0.0_GP,  256.0_GP]
+        @assertEqual(chebyshev_T(9), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(11))
+        expected = [  -1.0_GP,    0.0_GP,   50.0_GP,     0.0_GP, -400.0_GP, &
+                       0.0_GP, 1120.0_GP,    0.0_GP, -1280.0_GP,    0.0_GP, &
+                     512.0_GP]
+        @assertEqual(chebyshev_T(10), expected, GP_EPS)
+        deallocate(expected)
+
+    end subroutine
+
+    @test
+    subroutine test_second_kind()
+        real(kind=GP), dimension(:), allocatable :: expected
+
+        ! Test against hardcoded values for the first 10 orders,
+        ! see https://oeis.org/A053117
+
+        allocate(expected(1))
+        expected = [   1.0_GP]
+        @assertEqual(chebyshev_U(0), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(2))
+        expected = [   0.0_GP,    2.0_GP]
+        @assertEqual(chebyshev_U(1), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(3))
+        expected = [  -1.0_GP,    0.0_GP,     4.0_GP]
+        @assertEqual(chebyshev_U(2), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(4))
+        expected = [   0.0_GP,   -4.0_GP,     0.0_GP,     8.0_GP]
+        @assertEqual(chebyshev_U(3), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(5))
+        expected = [   1.0_GP,    0.0_GP,   -12.0_GP,     0.0_GP,   16.0_GP]
+        @assertEqual(chebyshev_U(4), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(6))
+        expected = [   0.0_GP,    6.0_GP,     0.0_GP,   -32.0_GP,    0.0_GP, &
+                      32.0_GP]
+        @assertEqual(chebyshev_U(5), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(7))
+        expected = [  -1.0_GP,    0.0_GP,    24.0_GP,     0.0_GP,  -80.0_GP, &
+                       0.0_GP,   64.0_GP]
+        @assertEqual(chebyshev_U(6), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(8))
+        expected = [   0.0_GP,   -8.0_GP,     0.0_GP,    80.0_GP,    0.0_GP, &
+                    -192.0_GP,    0.0_GP,   128.0_GP]
+        @assertEqual(chebyshev_U(7), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(9))
+        expected = [   1.0_GP,    0.0_GP,   -40.0_GP,     0.0_GP,  240.0_GP, &
+                       0.0_GP, -448.0_GP,     0.0_GP,   256.0_GP]
+        @assertEqual(chebyshev_U(8), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(10))
+        expected = [   0.0_GP,   10.0_GP,     0.0_GP,  -160.0_GP,    0.0_GP, &
+                     672.0_GP,    0.0_GP, -1024.0_GP,     0.0_GP,  512.0_GP]
+        @assertEqual(chebyshev_U(9), expected, GP_EPS)
+        deallocate(expected)
+
+        allocate(expected(11))
+        expected = [  -1.0_GP,    0.0_GP,    60.0_GP,     0.0_GP, -560.0_GP, &
+                       0.0_GP, 1792.0_GP,     0.0_GP, -2304.0_GP,    0.0_GP, &
+                    1024.0_GP]
+        @assertEqual(chebyshev_U(10), expected, GP_EPS)
+        deallocate(expected)
+
+    end subroutine
+
+    @test
+    subroutine test_properties()
+        real(kind=GP), dimension(:), allocatable :: poly_T
+        real(kind=GP) :: x, expected
+        real(kind=GP), parameter :: tol = 10.0_GP * GP_EPS
+        real(kind=GP), parameter :: tol2 = 1e3_GP * GP_EPS
+
+        allocate(poly_T(9))
+        poly_T  = chebyshev_T(8)
+
+        ! Trig relations
+        x = 0.333_GP
+        @assertEqual(polyval(poly_T, x), cos(8.0_GP * acos(x)), tol)
+        x = -0.1734_GP
+        @assertEqual(polyval(poly_T, x), cos(8.0_GP * acos(x)), tol)
+
+        ! NOTE: Because n=8 and x>1, values of cosh are very large and we use
+        !       higher tolerance to test the absolute value
+        x = 1.08421_GP
+        @assertEqual(polyval(poly_T, x), cosh(8.0_GP * acosh(x)), tol2)
+        x = 1.054_GP
+        @assertEqual(polyval(poly_T, x), cosh(8.0_GP * acosh(x)), tol2)
+
+        x = -1.075_GP
+        @assertEqual(polyval(poly_T, x), cosh(8.0_GP * acosh(-x)), tol2)
+        x = -1.057_GP
+        @assertEqual(polyval(poly_T, x), cosh(8.0_GP * acosh(-x)), tol2)
+
+        ! Radical relations
+        x = 1.0163_GP
+        expected = (x - sqrt(x**2 - 1.0_GP))**8.0_GP &
+                 + (x + sqrt(x**2 - 1.0_GP))**8.0_GP
+        @assertEqual(polyval(poly_T, x), 0.5_GP * expected, tol2)
+        expected = (x - sqrt(x**2 - 1.0_GP))**8.0_GP &
+                 + (x - sqrt(x**2 - 1.0_GP))**(-8.0_GP)
+        @assertEqual(polyval(poly_T, x), 0.5_GP * expected, tol2)
+
+        ! Symmetry
+        @assertEqual(polyval(poly_T, x), polyval(poly_T, -x), tol)
+        ! Roots (k=4)
+        x = cos(PI * 4.5_GP / 8.0_GP)
+        @assertEqual(polyval(poly_T, x), 0.0_GP, tol)
+
+        @assertEqual(polyval(poly_T,  1.0_GP), 1.0_GP, tol)
+        @assertEqual(polyval(poly_T, -1.0_GP), 1.0_GP, tol)
+    end subroutine
+
+    @test
+    subroutine test_relations()
+        real(kind=GP), dimension(:), allocatable :: poly_T, poly_U, &
+            dpoly_T, d2poly_T, poly_U2, poly_T2, poly_T3, dpoly_T2, dpoly_T3
+        integer :: i
+
+        ! Test first derivative against analytical relation
+        allocate(poly_T(6), dpoly_T(5), poly_U(5))
+        poly_T  = chebyshev_T(5)
+        poly_U  = chebyshev_U(4)
+        dpoly_T = polyder(poly_T)
+        @assertEqual(dpoly_T, poly_U * 5, GP_EPS)
+
+        ! Test second derivative against limiting value at x=1.0
+        allocate(d2poly_T(4))
+        d2poly_T = polyder(dpoly_T)
+        @assertEqual(polyval(d2poly_T, 1.0_GP), (5**4 - 5**2) / 3.0_GP, GP_EPS)
+
+        ! Test against recurrence relation connecting T and U
+        allocate(poly_U2(6))
+        allocate(poly_T2, source=poly_T)
+        poly_U2 = chebyshev_U(5)
+        do i = 2, 6
+            poly_T2(i) = poly_T2(i) + poly_U(i-1)
+        enddo
+        @assertEqual(poly_U2, poly_T2, GP_EPS)
+
+        ! Test against another recurrence relation connecting T and U
+        deallocate(poly_U)
+        allocate(poly_U(4))
+        poly_U = chebyshev_U(3)
+        poly_U2 = poly_U2 / 2.0_GP
+        do i = 1, 4
+            poly_U2(i) = poly_U2(i) - poly_U(i) / 2.0_GP
+        enddo
+        @assertEqual(poly_T, poly_U2, GP_EPS)
+
+        ! Test against recurrence relation for derivative of T
+        deallocate(dpoly_T, d2poly_T, poly_T2)
+        allocate(poly_T2(5), poly_T3(7), dpoly_T2(4), dpoly_T3(6))
+        poly_T2  = chebyshev_T(4)
+        poly_T3  = chebyshev_T(6)
+        dpoly_T2 = polyder(poly_T2)
+        dpoly_T3 = polyder(poly_T3)
+        poly_T   = dpoly_T3 / 6.0_GP
+        do i = 1, 4
+            poly_T(i) = poly_T(i) - dpoly_T2(i) / 4.0_GP
+        enddo
+        @assertEqual(poly_T, 2.0_GP * chebyshev_T(5), GP_EPS)
+    end subroutine
+
+end module

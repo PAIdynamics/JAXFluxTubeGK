@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Colors for highlights
+RED='\033[0;31m'   # red
+BROWN='\033[0;33m' # Brown/dark yellow
+NC='\033[0m'       # no color
+
+# Error flags which trigger the hooks
+sbj_err=false  # Error flag for commit subject length
+tag_err=false  # Error flag for commit tag
+cap_err=false  # Error flag for commit subject capitalization
+dot_err=false  # Error flag for punctuation in the commit subject
+sep_err=false  # Error flag for the second line
+bdy_err=false  # Error flag for the lines in commit body
+
+# Store the commit message into array
+line_ctr=0
+lines=()
+while IFS= read -r line; do
+    # Skip comments
+    if [ "${line:0:1}" == "#" ]; then
+        continue
+    fi
+
+    # Hook to make sure that no line in commit body exceeds 72 characters
+    # Store line index and length which exceeds 72 characters
+    if [ "${#line}" -gt 72 ]; then
+        bdy_err=true
+    fi
+
+    # Stop loop when the line is empty
+    if [[ "${line_ctr}" -gt 1 && "${#line}" == 0 ]]; then
+        break
+    fi
+
+    lines+=("$line")
+    line_ctr=$(( $line_ctr+1 ))
+done < "${1}"
+
+# Hook to make sure that no commit subject exceeds 50 characters
+if [ "${#lines[0]}" -gt 50 ]; then
+    sbj_err=true
+fi
+
+# Hook to make sure that the commit subject contains commit tag
+if [[ "${lines[0]}" != *"["* && "${lines[0]}" != *"] "* ]]; then
+    tag_err=true
+    tag=""
+    subject=${lines[0]}
+else
+    tag=${lines[0]%"] "*}"]"
+    subject=${lines[0]#*"] "}
+fi
+
+# Hook to make sure that there is no punctuation in the commit subject
+if [[ ${lines[0]: -1} == "." ]]; then
+    dot_err=true
+fi
+
+# Hook to make sure that the commit subject is capitalized
+if [[ "${subject:0:1}" != [[:upper:]] ]]; then
+    cap_err=true
+fi
+
+# Hook to make sure that the second line is empty
+if [ "${#lines[1]}" != 0 ]; then
+    sep_err=true
+fi
+
+# Main hook to abort the commit
+if ${sbj_err} || ${tag_err} || ${cap_err} || ${dot_err} || ${sep_err} || ${bdy_err}; then
+
+    # Display the submitted commit message (color-coded)
+    echo -e "${BROWN}Your commit message:${NC}"
+    for ((idx=0; idx<=${line_ctr}; idx++)); do
+        if [[ "${idx}" == 0 ]]; then
+            if ${cap_err}; then
+                cap="${RED}${subject: 0:1}${NC}"
+            else
+                cap="${subject: 0:1}"
+            fi
+            if ${tag_err}; then
+                left="${subject: 1:49}"
+            else
+                tag="${tag} "
+                left="${subject: 1:50-${#tag}-2}"
+            fi
+            if ${dot_err}; then
+                left="${left: 0:-1}${RED}${left: -1}${NC}"
+            fi
+            if ${sbj_err}; then
+                right="${RED}${subject: 50-${#lines[0]}}${NC}"
+            else
+                right=""
+            fi
+            echo -e "${tag}${cap}${left}${right}"
+        elif [[ "${idx}" == 1 && "${sep_err}" == true ]]; then
+            echo -e "${RED}${lines[${idx}]}${NC}"
+        elif [[ "${idx}" -gt 1 && "${#lines[${idx}]}" -gt 72 ]]; then
+            left="${lines[${idx}]: 0:72}"
+            right="${lines[${idx}]: 72-${#lines[${idx}]}}"
+            echo -e "${left}${RED}${right}${NC}"
+        else
+            echo "${lines[${idx}]}"
+        fi
+    done
+
+    # Error messages
+    if ${sbj_err}; then
+        echo -e "${RED}Aborting commit${NC}: The commit subject is limited to 50 characters."
+    fi
+    if ${tag_err}; then
+        echo -e "${RED}Aborting commit${NC}: The commit subject must contain commit tag in [ ]."
+    fi
+    if ${cap_err}; then
+        echo -e "${RED}Aborting commit${NC}: The commit subject must be capitalized."
+    fi
+    if ${dot_err}; then
+        echo -e "${RED}Aborting commit${NC}: The commit subject must not end with period."
+    fi
+    if ${sep_err}; then
+        echo -e "${RED}Aborting commit${NC}: The second line must be empty."
+    fi
+    if ${bdy_err}; then
+        echo -e "${RED}Aborting commit${NC}: The commit body is limited to 72 characters per line."
+    fi
+
+    exit 1
+fi
+
+exit 0

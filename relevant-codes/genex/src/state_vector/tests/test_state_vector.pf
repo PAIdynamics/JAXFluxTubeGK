@@ -1,0 +1,88 @@
+module test_state_vector
+    !! Contains tests for the state_vector_t type
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use state_vector_m, only: state_vector_t
+    use params_gpu_offload_m, only: get_use_gpu_offload
+
+    ! Unit test helpers
+    use test_params_m, only: setup_test_gpu_offload
+
+    implicit none
+
+contains
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank(), &
+                                    print_messages=.true., &
+                                    debug=.true.)
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_state_vector_add(this)
+        !! Tests the add function of the state_vector_t type
+        class (MpiTestMethod), intent(inout) :: this
+        type(state_vector_t), allocatable :: y, s_a
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        real(kind=GP) :: alpha
+        real(kind=GP), pointer, dimension(:,:,:,:,:) :: res
+
+        allocate(y, s_a)
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+                                          this%getNumProcesses(), 1, 1, 1)
+        call dcomm_handler_ptr%initialize_RZ_domain(16)
+
+        call y%initialize(dcomm_handler_ptr)
+        call s_a%initialize(dcomm_handler_ptr)
+
+        call y%set_uniform(1.0_GP)
+        call s_a%set_uniform(6.0_GP)
+
+        ! We test RK4 coefficients
+        alpha = 1.0_GP / 6.0_GP
+        call y%add(alpha, s_a)
+
+        call y%update_host_dist_func()
+        res => y%dist_func%get_pointer()
+
+        ! Compare to expected result
+        @assertEqual(2.0_GP, res, tolerance=GP_EPS)
+
+        deallocate(y, s_a)
+
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_state_vector_memory_safety(this)
+        !! Tests the memory safety of the state_vector_t and its member objects
+        class (MpiTestMethod), intent(inout) :: this
+        type(state_vector_t), allocatable :: sv
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        integer, parameter :: n_iter = 100
+        integer :: j
+
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+        this%getNumProcesses(), 1, 1, 1)
+        call dcomm_handler_ptr%initialize_RZ_domain(16)
+
+        ! Simple memory safety check is done by allocating and deallocating
+        ! a state vector object multiple times. Trivial memory leaks will
+        ! return a fatal error from this especially in the case of GPU test.
+        do j = 1, n_iter
+            allocate(sv)
+            call sv%initialize(dcomm_handler_ptr)
+            deallocate(sv)
+        end do
+    end subroutine
+end module

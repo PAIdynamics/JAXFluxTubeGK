@@ -1,0 +1,131 @@
+###############################################################################
+# Broad MMS testing (CPU)
+###############################################################################
+
+mms-cpu-debug-gnu:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "debug"
+    RUN_TYPE: "cpu"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-cpu-debug-gnu-coverage
+  needs: ["utest-cpu-debug-gnu-coverage"]
+
+mms-cpu-release-gnu:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-cpu-release-gnu
+  needs: ["utest-cpu-release-gnu"]
+
+mms-cpu-debug-intel:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "debug"
+    RUN_TYPE: "cpu"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-cpu-debug-intel
+  needs: ["utest-cpu-debug-intel"]
+
+mms-cpu-release-intel:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  artifacts:
+    untracked: true
+    expire_in: 1d
+  dependencies:
+    - utest-cpu-release-intel
+  needs: ["utest-cpu-release-intel"]
+
+###############################################################################
+# Broad MMS testing (GPU)
+###############################################################################
+
+mms-gpu-debug-gnu:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - gpu
+    - raven
+  variables:
+    BUILD_TYPE: "debug"
+    RUN_TYPE: "gpu"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-gpu-debug-gnu-coverage
+  needs: ["utest-gpu-debug-gnu-coverage"]
+
+mms-gpu-release-gnu:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "gpu"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-gpu-release-gnu
+  needs: ["utest-gpu-release-gnu"]
+
+mms-gpu-debug-intel:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "debug"
+    RUN_TYPE: "gpu"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-gpu-debug-intel
+  needs: ["utest-gpu-debug-intel"]
+
+mms-gpu-release-intel:
+  extends: .broad_mms_test_template
+  except:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "gpu"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - utest-gpu-release-intel
+  needs: ["utest-gpu-release-intel"]

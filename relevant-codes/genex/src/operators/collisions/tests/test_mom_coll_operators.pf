@@ -1,0 +1,404 @@
+module test_mom_coll_operators
+    !! Contains tests for collisional moments operators
+!$  use omp_lib
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use ieee_arithmetic
+    use genex_fortran_env_m, only: GP, GP_EPS, DP
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_ERR_UTESTS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use logger_m, only: logger_get_debug_channel
+    use data_storage_m, only: data_storage_5d_t, data_storage_cpu_5d_t
+    use data_array_m, only: data_array_4d_t, data_array_5d_t
+    use mesh_5d_m, only: mesh_5d_t
+    use op_mom_coll_m, only: op_mom_coll_t, op_mom_coll_cpu_t
+    use profiles_m, only: profile_cbc_cpu_t
+    use profile_container_m, only: profile_container_t
+    use dist_initial_m, only: dist_initial_maxw_cpu_t, &
+                              dist_initial_bi_maxw_cpu_t
+    use dist_initial_container_m, only: dist_initial_container_t
+    use params_profile_cbc_m, only: params_profile_cbc_t, &
+                                    get_params_profile_cbc_dens, &
+                                    get_params_profile_cbc_temp
+    use params_dist_initial_bi_maxw_m, only: &
+        params_dist_initial_bi_maxw_t, &
+        get_params_dist_initial_bi_maxw
+    use params_species_m, only: get_mass, get_charge, get_temp_scaling, &
+                                n_spec_supported
+    use params_normalization_m, only: get_L_ref, get_rho_ref
+    use params_gpu_offload_m, only: get_use_gpu_offload
+
+#ifdef ENABLE_GPU
+    use op_mom_coll_m, only: op_mom_coll_gpu_t
+#endif
+
+    ! Unit test helpers
+    use test_params_m
+
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SLAB, SALPHA
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class (MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    subroutine init(test, grid_type_mu, equi_type, dcomm_handler, mesh, &
+                    data_storage)
+        !! Creates the dcomm_handler, mesh and a single data_storage
+        !! instance which is used for the test. Furthermore it activates
+        !! OpenMP testing.
+        class(MpiTestMethod), intent(in) :: test
+        !! Instance of the current test
+        character(len=*), intent(in) :: grid_type_mu
+        !! Type of the mu grid
+        character(len=*), intent(in) :: equi_type
+        !! Type of the equilibrium
+        type(dcomm_handler_t), allocatable, target, intent(out) :: dcomm_handler
+        !! Created dcomm_handler
+        type(mesh_5d_t), allocatable, intent(out) :: mesh
+        !! Created mesh
+        class(data_storage_5d_t), allocatable, intent(out) :: data_storage
+        !! Created data_storage
+
+        integer :: n_rz, n_phi, n_vp, n_mu, n_sp
+        integer :: n_procs, n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp
+        integer :: n_gridpoints_mu
+        integer :: iequi
+        real(kind=GP) :: spacing_RZ, length_vp, length_mu
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+
+        n_procs = test%getNumProcesses()
+
+        ! Setup dcomm_handler
+        select case (n_procs)
+        case (1)
+          n_procs_phi = 1
+          n_procs_vp  = 1
+          n_procs_mu  = 1
+          n_procs_sp  = 1
+        case (2)
+          n_procs_phi = 1
+          n_procs_vp  = 2
+          n_procs_mu  = 1
+          n_procs_sp  = 1
+        case (4)
+          n_procs_phi = 1
+          n_procs_vp  = 2
+          n_procs_mu  = 2
+          n_procs_sp  = 1
+        case default
+            call handle_error("Unsupported n_procs in unit test!", &
+                              GENEX_ERR_UTESTS, __LINE__, __FILE__)
+        end select
+
+        ! For Gauss Laguerre quadrature we need less points but more domain
+        if(grid_type_mu == "gauss-laguerre") then
+            n_gridpoints_mu = 16
+            length_vp =  7.0_GP
+            length_mu = 49.0_GP
+        else
+            n_gridpoints_mu = 64
+            length_vp =  4.0_GP
+            length_mu = 16.0_GP
+        endif
+
+        if(equi_type == "slab") then
+            iequi = SLAB
+            spacing_RZ = 16.0_GP
+        elseif(equi_type == "salpha") then
+            iequi = SALPHA
+            spacing_RZ = 0.095_GP
+        else
+            call handle_error("Unsupported equi type in unit test!", &
+                              GENEX_ERR_UTESTS, __LINE__, __FILE__)
+        endif
+
+        ! Setup mesh
+        allocate(mesh)
+        call setup_test_equi_slab(test%getMpiCommunicator(), &
+                                  test%getProcessRank(), &
+                                  sol=.false.)
+        call setup_test_mesh(test%getMpiCommunicator(), &
+                             test%getProcessRank(), &
+                             equilibrium_type=iequi, &
+                             spacing_RZ=spacing_RZ, &
+                             n_points_phi=1, &
+                             n_points_vp=32, &
+                             n_points_mu=n_gridpoints_mu, &
+                             length_vp=length_vp, &
+                             length_mu=length_mu, &
+                             grid_type_mu=grid_type_mu, &
+                             quad_type_vp="simpson")
+        ! NOTE: We setup the coll type to LBD since this enables
+        !       ghost exchange in mu
+        call setup_test_coll(test%getMpiCommunicator(), &
+                             test%getProcessRank(), &
+                             coll_type="lbd")
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(test%getMpiCommunicator(), &
+                                     n_procs_phi, n_procs_vp, n_procs_mu, &
+                                     n_procs_sp)
+        dcomm_handler_ptr => dcomm_handler
+
+        call mesh%initialize(dcomm_handler_ptr)
+
+        ! Setup data storage
+        n_rz  = mesh%size_RZ()
+        n_phi = mesh%size_phi()
+        n_vp  = mesh%size_vp()
+        n_mu  = mesh%size_mu()
+        n_sp  = mesh%size_sp()
+
+        allocate(data_storage_cpu_5d_t :: data_storage)
+        call data_storage%initialize(dcomm_handler_ptr)
+    end subroutine
+
+    @test(npes = [1, 2, 4])
+    subroutine test_op_mom_coll_slab(this)
+        !! Tests the moment calculation for the collision operator
+        class(MpiTestMethod), intent(inout) :: this
+        !! Instance of the current test
+
+        ! Test for different quadratures. We have less precision when not
+        ! using Gauss-Laguerre quadrature.
+        call test_op_mom_coll_core(this, "gauss-laguerre", "slab", 1e-12_GP)
+        call test_op_mom_coll_core(this, "uniform",        "slab", 1e-2_GP)
+        call test_op_mom_coll_core(this, "quadratic",      "slab", 1e-3_GP)
+    end subroutine
+
+    @test(npes = [4])
+    subroutine test_op_mom_coll_salpha(this)
+        !! Tests the moment calculation for the collision operator
+        class(MpiTestMethod), intent(inout) :: this
+        !! Instance of the current test
+
+        ! Test for different quadratures. We have less precision when not
+        ! using Gauss-Laguerre quadrature.
+        call test_op_mom_coll_core(this, "gauss-laguerre", "salpha", 1e-12_GP)
+    end subroutine
+
+    subroutine test_op_mom_coll_core(this, grid_type_mu, equi_type, tol)
+        !! Core testroutine for the collisional moment operators
+        class(MpiTestMethod), intent(inout) :: this
+        !! Instance of the current test
+        character(len=*), intent(in) :: grid_type_mu
+        !! Type of the mu grid
+        character(len=*), intent(in) :: equi_type
+        !! Type of the equilibrium
+
+        real(kind=GP), intent(in) :: tol
+        !! Test tolerance
+
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), allocatable, target :: mesh
+        class(data_storage_5d_t), allocatable :: data_storage
+
+        class(op_mom_coll_t), allocatable :: op_mom
+        type(profile_cbc_cpu_t) :: profile_dens, profile_temp
+        type(params_profile_cbc_t) :: params_profile
+        type(params_dist_initial_bi_maxw_t) :: params_dist_initial
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_bi_maxw_cpu_t) :: dist_initial
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+
+        class(data_array_5d_t), pointer :: da_f
+        class(data_array_4d_t), allocatable :: da_moments
+        real(kind=GP), parameter :: vdrift = 0.1279_GP
+        real(kind=GP), contiguous, pointer, dimension(:,:,:,:,:) :: f_ptr
+        real(kind=GP), contiguous, pointer, dimension(:) :: phi
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: is_compute, rho, &
+                                                              theta
+        real(kind=GP), contiguous, pointer, dimension(:,:,:,:) :: moments
+        integer, dimension(5) :: lb, ub, lb_stripped, ub_stripped
+        integer :: n, n_sp
+        integer :: comm, rank
+        character(len=3) :: op_type = "cpu"
+        real(kind=GP), dimension(n_spec_supported) :: temps
+
+        comm = this%getMpiCommunicator()
+        rank = this%getProcessRank()
+
+        call init(this, grid_type_mu, equi_type, dcomm_handler, mesh, &
+                  data_storage)
+
+        dcomm_handler_ptr => dcomm_handler
+        da_f => data_storage%get_data_pointer()
+        f_ptr => da_f%get_pointer()
+        lb = da_f%get_lbound()
+        ub = da_f%get_ubound()
+        lb_stripped = da_f%get_lbound_stripped()
+        ub_stripped = da_f%get_ubound_stripped()
+        phi => mesh%get_phi_pointer()
+        is_compute => mesh%get_is_compute_pointer()
+        rho => mesh%get_rho_pointer()
+        theta => mesh%get_theta_pointer()
+
+        ! Set initial condition
+        n_sp = mesh%size_sp()
+        allocate(profile_container(n_sp))
+        temps  = [1.33_GP, 2.3_GP, 4.1_GP, 3.1_GP, &
+                  2.4_GP, 3.33_GP, 1.3_GP, 1.25_GP]
+        do n = 1, n_sp
+            params_profile = get_params_profile_cbc_dens(n)
+            call profile_dens%initialize(params_profile)
+            params_profile = get_params_profile_cbc_temp(n)
+            params_profile%prefac = temps(n)
+            call profile_temp%initialize(params_profile)
+            ! Set temp_scaling to be equal to initial temperatures
+            ! Shows that temp_scalings improves moment calculation
+            call setup_test_species(this%getMpiCommunicator(), &
+                                this%getProcessRank(), &
+                                temp_scalings=temps)
+            ! Initialize isotropic profile with dens and temp
+            call profile_container(n)%initialize(.true., profile_dens, &
+                                    profile_temp, profile_temp, profile_temp)
+        end do
+        allocate(dist_initial_container(n_sp))
+        do n = 1, n_sp
+            params_dist_initial = get_params_dist_initial_bi_maxw(n)
+            ! Initialize a drifting Maxwellian
+            params_dist_initial%drift_vpar = vdrift
+            call setup_test_dist_initial(comm, rank, n, &
+                                         params_dist_initial)
+            call dist_initial%initialize(profile_container, n)
+            call dist_initial_container(n)%initialize(dist_initial)
+        end do
+
+        block
+            integer :: i, k, l, m, n, ierr
+            real(kind=GP) :: bps, dens, temp
+            real(kind=GP), dimension(:), allocatable :: prefac_bps
+            real(kind=GP), contiguous, pointer, dimension(:) :: vp, mu
+            real(kind=GP), contiguous, pointer, dimension(:,:) :: absB, &
+                                                                  curl_normb_y
+
+            allocate(prefac_bps(n_sp))
+            do n = 1, n_sp
+                prefac_bps(n) = sqrt(2.0_GP * get_mass(n) &
+                                            * get_temp_scaling(n)) &
+                              * get_rho_ref() / (get_charge(n) * get_L_ref())
+            enddo
+
+            absB => mesh%get_absB_pointer()
+            vp   => mesh%get_vp_pointer()
+            mu   => mesh%get_mu_pointer()
+            curl_normb_y => mesh%get_curl_normb_y_pointer()
+
+            do i = lb_stripped(1), ub_stripped(1)
+            do k = lb_stripped(2), ub_stripped(2)
+            do l = lb_stripped(3), ub_stripped(3)
+            do m = lb_stripped(4), ub_stripped(4)
+            do n = lb_stripped(5), ub_stripped(5)
+                call profile_container(n)%eval_dens(rho(i, k), theta(i, k), &
+                                                    phi(k), dens, ierr)
+                call profile_container(n)%eval_temp(rho(i, k), theta(i, k), &
+                                                    phi(k), temp, ierr)
+
+                ! B parallel star
+                bps = absB(i, k) + prefac_bps(n) * vp(l) * curl_normb_y(i, k)
+
+                f_ptr(i, k, l, m, n) = absB(i, k) / bps &
+                    * dist_initial_container(n)%eval(rho(i, k), theta(i, k), &
+                                                     phi(k), vp(l), &
+                                                     mu(m) * absB(i, k))
+            end do
+            end do
+            end do
+            end do
+            end do
+        end block
+
+        ! Initialize operator
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_mom_coll_gpu_t :: op_mom)
+            op_type = "gpu"
+#endif
+        else
+            allocate(op_mom_coll_cpu_t :: op_mom)
+        endif
+        call op_mom%initialize(dcomm_handler_ptr, mesh)
+
+        ! Debug log test announcement
+        if(dcomm_handler%is_master()) &
+            write(logger_get_debug_channel(), "(A,I1,A,ES9.2)") &
+            "Test of op_mom_coll_"//op_type//"_t (", this%getNumProcesses(), &
+            "procs), grid="//grid_type_mu//&
+            ", equi="//equi_type//", tolerance = ", tol
+
+        ! Perform the moment calculation
+        allocate(da_moments)
+        call da_moments%initialize([lb_stripped(1), lb_stripped(2), 1, 1], &
+                                   [ub_stripped(1), ub_stripped(2), 3, n_sp])
+        moments => da_moments%get_pointer()
+        call da_f%update_device()
+        call op_mom%apply(da_f, da_moments)
+        call da_moments%update_host()
+
+        ! Check results only for computation points, since target, ghost, and
+        ! filler points are not computed in the collision operators
+        block
+            real(kind=GP) :: dens, temp
+            integer :: i, k, ierr
+
+            do i = lb_stripped(1), ub_stripped(1)
+            do k = lb_stripped(2), ub_stripped(2)
+                if(is_compute(i, k) == 0.0_GP) cycle
+            do n = 1, n_sp
+                ! Check density
+                call profile_container(n)%eval_dens(rho(i, k), theta(i, k), &
+                                                    phi(k), dens, ierr)
+                @assertEqual(dens, moments(i, k, 1, n), tol)
+
+                ! Check drift
+                @assertEqual(vdrift, moments(i, k, 2, n), tol)
+
+                ! Check temperature
+                call profile_container(n)%eval_temp(rho(i, k), theta(i, k), &
+                                                    phi(k), temp, ierr)
+                temp = temp / get_temp_scaling(n)
+                @assertEqual(temp, moments(i, k, 3, n), tol)
+            enddo
+            enddo
+            enddo
+        end block
+
+        deallocate(da_moments)
+        deallocate(op_mom)
+        deallocate(dist_initial_container)
+        deallocate(profile_container)
+        deallocate(data_storage)
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+
+    end subroutine
+
+end module

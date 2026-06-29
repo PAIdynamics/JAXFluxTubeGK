@@ -1,0 +1,54 @@
+msg = "                        &
+&                               &
+&                         &
+&  GXXXXXXXXXXXXXXXXXXXXXXXXXXX&
+&XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX&
+&XXXXXXXXXXXXXXXXE  &
+&  X                           &
+&                               &
+&                N  &
+&  X                           &
+&                               &
+&                N  &
+&  X       XENNNNNNNNN         &
+&                               &
+&                N  &
+&  X     XNNNXX     XXX        &
+&                               &
+&          XGX   N  &
+&  X    NNNN                   &
+&                            GXX&
+&        XXGX    N  &
+&  X   ENNN     GGGGGG   &
+&XGGGGGG  XGX    XGN   GGGGGG&
+&       XGXX    XXGG      N  &
+&  X   NNNN    XXXNNNN   NN&
+&       NNNX   NN   XNX&
+&             XGXXXXXX        N&
+&  &
+&  X   XNNNX       NNG  XNNXXG&
+&   GNX NX XNX   NNXXX   XXXXX&
+&    GGGGGX         N  &
+&  X    XNNNEXXXXXNNN   NN&
+&       NN   NXNN   GNX&
+&            XGEENGXEEG        N&
+&  &
+&  X      XXNNNNNNE    XNNEEEX&
+&  XNX    NNG   NNEEEG       &
+&XXENGX    XEEG      N  &
+&  X                           &
+&                               &
+&       XEEEX    N  &
+&  X                           &
+&                               &
+&                N  &
+&  X   ........................&
+&...............................&
+&.............   N  &
+&  X   GYROKINETIC &
+&ELECTROMAGNETIC NUMERICAL &
+&EXPERIMENT IN X-POINT GEOMETRY&
+&   N  &
+&  NXXXXXXXXXXXXXXXXXXXXXXXXXXX&
+&XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX&
+&XXXXXXXXXXXXXXXXX  "

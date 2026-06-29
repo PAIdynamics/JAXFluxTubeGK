@@ -1,0 +1,199 @@
+###############################################################################
+# Scheduled deep MMS testing (CPU)
+###############################################################################
+
+mms-cpu-slab-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "slab"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-cpu-circular-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "circular"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-cpu-salpha-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "salpha"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-cpu-slab-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "slab"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]
+
+mms-cpu-circular-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "circular"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]
+
+mms-cpu-salpha-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cpu"
+    EQUILIBRIUM: "salpha"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]
+
+###############################################################################
+# Scheduled deep MMS testing (GPU)
+###############################################################################
+
+mms-gpu-slab-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cxx"
+    EQUILIBRIUM: "slab"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-gpu-circular-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cxx"
+    EQUILIBRIUM: "circular"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-gpu-salpha-intel:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "cxx"
+    EQUILIBRIUM: "salpha"
+    COMPILER_VENDOR: "intel"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-intel
+  needs: ["build-release-intel"]
+
+mms-gpu-slab-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "ompx"
+    EQUILIBRIUM: "slab"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]
+
+mms-gpu-circular-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "ompx"
+    EQUILIBRIUM: "circular"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]
+
+mms-gpu-salpha-gnu:
+  extends: .deep_mms_test_template
+  only:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    BUILD_TYPE: "release"
+    RUN_TYPE: "ompx"
+    EQUILIBRIUM: "salpha"
+    COMPILER_VENDOR: "gnu"
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - build-release-gnu
+  needs: ["build-release-gnu"]

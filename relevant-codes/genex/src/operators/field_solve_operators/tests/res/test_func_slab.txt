@@ -1,0 +1,1 @@
+test_func = Sin((2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*Sin(2*npol*Z)

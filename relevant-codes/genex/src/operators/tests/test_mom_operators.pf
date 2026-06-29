@@ -1,0 +1,569 @@
+module test_mom_operators
+    !! Contains tests for the operators
+    !! op_mom_maxwells_eq_t and op_mom_ohms_law_t
+!$  use omp_lib
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use ieee_arithmetic
+
+    use math_m, only: PI, almost_equal
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_ERR_UTESTS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use logger_m, only: logger_get_debug_channel
+    use data_storage_m, only: data_storage_5d_t, data_storage_cpu_5d_t
+    use data_array_m, only: data_array_2d_t, data_array_5d_t
+    use mesh_5d_m, only: mesh_5d_t
+    use profiles_m, only: profile_cbc_cpu_t
+    use profile_container_m, only: profile_container_t
+    use dist_initial_m, only: dist_initial_bi_maxw_cpu_t
+    use dist_initial_container_m, only: dist_initial_container_t
+    use params_species_m, only: get_mass, get_charge, get_temp_scaling, &
+                                n_spec_supported
+    use params_normalization_m, only: get_beta_ref, get_L_ref, get_rho_ref
+    use params_profile_cbc_m, only: params_profile_cbc_t, &
+                                    get_params_profile_cbc_dens, &
+                                    get_params_profile_cbc_temp
+    use params_dist_initial_bi_maxw_m, only: &
+        params_dist_initial_bi_maxw_t, &
+        get_params_dist_initial_bi_maxw
+    use params_mesh_m, only: get_use_bsg
+    use params_bsg_m, only: get_num_bsg_blocks, get_bsg_interp_order
+
+    use op_set_initial_condition_m, only: op_set_initial_condition_cpu_t
+    use op_mom_maxwells_eq_m, only: op_mom_maxwells_eq_t, &
+                                    op_mom_maxwells_eq_cpu_t
+    use op_mom_ohms_law_m, only: op_mom_ohms_law_t, op_mom_ohms_law_cpu_t
+    use params_gpu_offload_m, only: get_use_gpu_offload
+    use bsg_operators_m, only: bsg_operators_t
+
+#ifdef ENABLE_GPU
+    use op_mom_maxwells_eq_m, only: op_mom_maxwells_eq_gpu_t
+    use op_mom_ohms_law_m, only: op_mom_ohms_law_gpu_t
+#endif
+
+    ! Unit test helpers
+    use test_params_m
+
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SLAB
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        ! Uses custom temp_scaling
+        class(MpiTestMethod), intent(inout) :: this
+        real(kind=GP), dimension(n_spec_supported) :: temp_scalings
+
+        temp_scalings  = [1.33_GP, 2.3_GP, 4.1_GP, 3.1_GP, &
+                          2.4_GP, 3.33_GP, 1.3_GP, 1.25_GP]
+
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+        call setup_test_species(this%getMpiCommunicator(), &
+                                this%getProcessRank(), &
+                                temp_scalings=temp_scalings)
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    subroutine init(test, dcomm_handler, mesh, data_storage)
+        !! Creates the dcomm_handler, mesh and a single data_storage
+        !! instance which is used for the test. Furthermore it activates
+        !! OpenMP testing.
+        class(MpiTestMethod), intent(in) :: test
+        !! Instance of the current test
+        type(dcomm_handler_t), allocatable, target, intent(out) :: dcomm_handler
+        !! Created dcomm_handler
+        type(mesh_5d_t), allocatable, intent(out) :: mesh
+        !! Created mesh
+        class(data_storage_5d_t), allocatable, intent(out) :: data_storage
+        !! Created data_storage
+
+        integer :: n_rz, n_phi, n_vp, n_mu, n_sp
+        integer :: n_procs, n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+
+        n_procs = test%getNumProcesses()
+
+        ! Setup dcomm_handler
+        select case (n_procs)
+        case (1)
+          n_procs_phi = 1
+          n_procs_vp = 1
+          n_procs_mu = 1
+          n_procs_sp = 1
+        case (2)
+          n_procs_phi = 1
+          n_procs_vp = 2
+          n_procs_mu = 1
+          n_procs_sp = 1
+        case (4)
+          n_procs_phi = 1
+          n_procs_vp = 2
+          n_procs_mu = 2
+          n_procs_sp = 1
+        case (8)
+          n_procs_phi = 2
+          n_procs_vp = 1
+          n_procs_mu = 2
+          n_procs_sp = 2
+        case default
+            call handle_error("Unsupported n_procs in unit test!", &
+                              GENEX_ERR_UTESTS, __LINE__, __FILE__)
+        end select
+
+        ! Setup mesh
+        allocate(mesh)
+        call setup_test_mesh(test%getMpiCommunicator(), &
+                             test%getProcessRank(), &
+                             equilibrium_type=SLAB, &
+                             spacing_RZ=10.0_GP, &
+                             n_points_phi=4, &
+                             n_points_vp=32, &
+                             n_points_mu=32, &
+                             length_vp=7.0_GP, &
+                             length_mu=49.0_GP)
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(test%getMpiCommunicator(), &
+                                      n_procs_phi, n_procs_vp, n_procs_mu, &
+                                      n_procs_sp)
+        dcomm_handler_ptr => dcomm_handler
+
+        call mesh%initialize(dcomm_handler_ptr)
+
+        ! Setup data storage
+        n_rz = mesh%size_RZ()
+        n_phi = mesh%size_phi()
+        n_vp = mesh%size_vp()
+        n_mu = mesh%size_mu()
+        n_sp = mesh%size_sp()
+
+        allocate(data_storage_cpu_5d_t :: data_storage)
+        call data_storage%initialize(dcomm_handler_ptr)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine op_mom_maxwells_eq(this)
+        !! Tests the moment calculation for the quasi-neutrality equation
+        !! and Ampere's law
+        class(MpiTestMethod), intent(inout) :: this
+        !! Instance of the current test
+
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), allocatable, target :: mesh
+        class(data_storage_5d_t), allocatable :: data_storage
+        class(data_array_5d_t), pointer :: da_f
+        class(data_array_2d_t), allocatable :: da_co_qn_eq, da_b_qn_eq, &
+                                               da_b_amps_law, da_b_bpar_eq
+
+        class(op_mom_maxwells_eq_t), allocatable :: op_mom
+        type(op_set_initial_condition_cpu_t) :: op_set_initial_condition
+        type(profile_cbc_cpu_t) :: profile_dens, profile_temp_par, &
+                                   profile_temp_perp
+        type(params_profile_cbc_t) :: params_profile
+        type(params_dist_initial_bi_maxw_t) :: params_dist_initial
+        type(profile_container_t), allocatable :: profile_container(:)
+        type(dist_initial_bi_maxw_cpu_t) :: dist_initial
+        type(dist_initial_container_t), allocatable :: dist_initial_container(:)
+        class(bsg_operators_t), allocatable :: bsg_op
+
+        real(kind=GP), contiguous, pointer, dimension(:,:,:,:,:) :: f_ptr
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: co_qn_eq, &
+                                                              b_qn_eq, &
+                                                              b_amps_law, &
+                                                              b_bpar_eq
+        real(kind=GP), contiguous, pointer, dimension(:) :: phi
+        real(kind=GP), parameter :: tol = 1e-10_GP
+        real(kind=GP), parameter :: vdrift = 1.2_GP
+        integer, dimension(5) :: lb, ub, lb_stripped, ub_stripped
+        integer :: n, n_sp
+        integer :: comm, rank
+
+        rank = this%getProcessRank()
+        comm = this%getMpiCommunicator()
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_mom_maxwells_eq_gpu_t :: op_mom)
+#endif
+        else
+            allocate(op_mom_maxwells_eq_cpu_t :: op_mom)
+        endif
+
+        call init(this, dcomm_handler, mesh, data_storage)
+
+        allocate(bsg_operators_t :: bsg_op)
+        if (get_use_bsg()) then
+            call bsg_op%initialize(mesh, get_num_bsg_blocks(), &
+                                   get_bsg_interp_order())
+        else
+            call bsg_op%initialize(mesh, 1)
+        endif
+
+        dcomm_handler_ptr => dcomm_handler
+        da_f => data_storage%get_data_pointer()
+        f_ptr => da_f%get_pointer()
+        lb = da_f%get_lbound()
+        ub = da_f%get_ubound()
+        lb_stripped = da_f%get_lbound_stripped()
+        ub_stripped = da_f%get_ubound_stripped()
+        phi => mesh%get_phi_pointer()
+
+        ! Set initial condition
+        n_sp = mesh%size_sp()
+        allocate(profile_container(n_sp))
+        do n = 1, n_sp
+            params_profile = get_params_profile_cbc_dens(n)
+            call profile_dens%initialize(params_profile)
+            params_profile = get_params_profile_cbc_temp(n)
+            call profile_temp_par%initialize(params_profile)
+            params_profile = get_params_profile_cbc_temp(n)
+            if (n == 1) then
+                ! Set Tperp anisotropy for the first species
+                ! NOTE: Species need to have different temperatures, otherwise
+                !       the rhs in the bpar equation equals exactly zero due to
+                !       charge factor we added to test the other moments
+                params_profile%prefac = params_profile%prefac * 1.5_GP
+            endif
+            call profile_temp_perp%initialize(params_profile)
+            ! Initialize isotropic profile with dens and temp
+            call profile_container(n)%initialize(.false., profile_dens, &
+                                    profile_temp_par, profile_temp_par, &
+                                    profile_temp_perp)
+        end do
+        allocate(dist_initial_container(n_sp))
+        do n = 1, n_sp
+            params_dist_initial = get_params_dist_initial_bi_maxw(n)
+            ! Initialize a drifting Maxwellian
+            params_dist_initial%drift_vpar = vdrift
+            call setup_test_dist_initial(comm, rank, n, &
+                                         params_dist_initial)
+            call dist_initial%initialize(profile_container, n)
+            call dist_initial_container(n)%initialize(dist_initial)
+        end do
+        call op_set_initial_condition%initialize(dcomm_handler_ptr, mesh, &
+                                                 dist_initial_container, bsg_op)
+        call op_set_initial_condition%apply(da_f)
+        ! Multiply the distribution with the charge in order to get non-trivial
+        ! charge and current density for testing
+        do n = lb(5), ub(5)
+            f_ptr(:,:,:,:,n) = get_charge(n) * f_ptr(:,:,:,:,n)
+        enddo
+
+        ! Debug log test announcement
+        if(dcomm_handler%is_master()) &
+            write(logger_get_debug_channel(), "(A,I1,A,ES9.2)") &
+            "Test of op_mom_maxwells_eq (", this%getNumProcesses(), &
+            "procs), tolerance = ", tol
+
+        allocate(da_co_qn_eq, da_b_qn_eq, da_b_amps_law, da_b_bpar_eq)
+        call da_b_qn_eq%initialize([lb(1), lb_stripped(2)], &
+                                   [ub(1), ub_stripped(2)])
+        call da_b_amps_law%initialize(mold=da_b_qn_eq)
+        call da_co_qn_eq%initialize(mold=da_b_qn_eq)
+        call da_b_bpar_eq%initialize(mold=da_b_qn_eq)
+
+        b_qn_eq => da_b_qn_eq%get_pointer()
+        b_amps_law => da_b_amps_law%get_pointer()
+        co_qn_eq => da_co_qn_eq%get_pointer()
+        b_bpar_eq => da_b_bpar_eq%get_pointer()
+
+        ! Copy array to GPU. This does nothing if no GPU backend is specified.
+        call da_f%update_device()
+
+        ! Perform the moment calculation
+        call op_mom%initialize(dcomm_handler_ptr, mesh, bsg_op)
+        call op_mom%apply(da_f, da_co_qn_eq, da_b_qn_eq, da_b_amps_law, &
+                          da_b_bpar_eq)
+
+        ! Copy array to CPU. This does nothing if no GPU backend is specified
+        call da_b_qn_eq%update_host()
+        call da_b_amps_law%update_host()
+        call da_co_qn_eq%update_host()
+        call da_b_bpar_eq%update_host()
+
+        ! Check results
+        block
+            real(kind=GP), dimension(:,:), pointer :: is_compute, rho, theta
+            real(kind=GP), contiguous, pointer, dimension(:,:) :: jacobian, absB
+            real(kind=GP) :: expected, dens, temp_perp
+            integer :: i, k, ierr
+
+            is_compute => mesh%get_is_compute_pointer()
+            jacobian => mesh%get_jacobian_pointer()
+            absB => mesh%get_absB_pointer()
+
+            rho => mesh%get_rho_pointer()
+            theta => mesh%get_theta_pointer()
+
+            do k = lb_stripped(2), ub_stripped(2)
+            do i = lb(1), ub(1)
+                ! Check co of the quasi-neutrality equation
+                expected = 0.0_GP
+                do n = 1, n_sp
+                    call profile_container(n)%eval_dens(rho(i, k), &
+                                                        theta(i, k), phi(k), &
+                                                        dens, ierr)
+                    ! NOTE: We multiply by the charge to account for the
+                    !       multiplication of the charge in the initialization
+                    !       of the distribution function above.
+                    expected = expected + dens * get_mass(n) &
+                                          * (get_rho_ref() / get_L_ref())**2 &
+                                          * jacobian(i, k) / absB(i, k)**2 &
+                                          * get_charge(n)
+                enddo
+                @assertEqual(expected, co_qn_eq(i, k), tol)
+
+                ! We do not affect the target, boundary, or filler values of b
+                ! in the operator. Only test compute points.
+                if(is_compute(i, k) == 0.0_GP) cycle
+
+                ! Check b of the quasi-neutrality equation
+                expected = 0.0_GP
+                do n = 1, n_sp
+                    call profile_container(n)%eval_dens(rho(i, k), &
+                                                        theta(i, k), phi(k), &
+                                                        dens, ierr)
+                    expected = expected + dens
+                enddo
+                @assertEqual(expected, b_qn_eq(i, k), tol)
+
+                ! Check b of parallel Amperes law
+                expected = 0.0_GP
+                do n = 1, n_sp
+                    call profile_container(n)%eval_dens(rho(i, k), &
+                                                        theta(i, k), phi(k), &
+                                                        dens, ierr)
+                    expected = expected + params_dist_initial%drift_vpar &
+                                          * get_beta_ref() * dens &
+                                          * sqrt(get_temp_scaling(n) &
+                                                 / 2.0_GP / get_mass(n))
+                enddo
+                @assertEqual(expected, b_amps_law(i, k), tol)
+
+                ! Check b of bpar equation
+                expected = 0.0_GP
+                do n = 1, n_sp
+                    call profile_container(n)%eval_dens(rho(i, k), &
+                                                        theta(i, k), phi(k), &
+                                                        dens, ierr)
+
+                    call profile_container(n)%eval_temp_perp(rho(i, k), &
+                                                             theta(i, k), &
+                                                             phi(k), &
+                                                             temp_perp, ierr)
+                    ! NOTE: We multiply by the charge to account for the
+                    !       change in f during initialization.
+                    expected = expected - get_charge(n) * get_beta_ref() &
+                                          * dens * temp_perp &
+                                          / (2.0_GP * absB(i, k))
+                enddo
+                @assertEqual(expected, b_bpar_eq(i, k), tol)
+            enddo
+            enddo
+        end block
+
+        deallocate(op_mom, da_co_qn_eq, da_b_qn_eq, da_b_amps_law, da_b_bpar_eq)
+        deallocate(dist_initial_container)
+        deallocate(profile_container)
+        deallocate(data_storage)
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+    end subroutine
+
+    @test(npes = [1, 2, 4, 8])
+    subroutine op_mom_ohms_law(this)
+        !! Tests the moment calculation for ohms law
+        class(MpiTestMethod), intent(inout) :: this
+        !! Instance of the current test
+
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), allocatable, target :: mesh
+        class(data_storage_5d_t), allocatable :: data_storage
+        class(op_mom_ohms_law_t), allocatable :: op_mom
+        class(bsg_operators_t), allocatable :: bsg_op
+        class(data_array_5d_t), pointer :: da_f
+        class(data_array_5d_t), allocatable :: da_df
+        class(data_array_2d_t), allocatable :: da_b_ohms_law, da_lambda_ohms_law
+
+        real(kind=GP), contiguous, pointer, dimension(:,:,:,:,:) :: f_ptr, &
+                                                                    df_ptr
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: b_ohms_law, &
+                                                              lambda_ohms_law
+        real(kind=GP), dimension(:), allocatable, target :: vp
+        real(kind=GP), dimension(:), pointer :: mu_ptr, vp_ptr
+        real(kind=GP) :: c1, c2, c3, c4
+        real(kind=GP), parameter :: tol = 1e-10_GP
+        integer, dimension(5) :: lb, ub, lb_stripped, ub_stripped
+        integer :: i, k, l, m, n, n_sp, n_vp
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_mom_ohms_law_gpu_t :: op_mom)
+#endif
+        else
+            allocate(op_mom_ohms_law_cpu_t :: op_mom)
+        endif
+
+        call init(this, dcomm_handler, mesh, data_storage)
+
+        allocate(bsg_operators_t :: bsg_op)
+        if (get_use_bsg()) then
+            call bsg_op%initialize(mesh, get_num_bsg_blocks(), &
+                                   get_bsg_interp_order())
+        else
+            call bsg_op%initialize(mesh, 1)
+        end if
+
+        dcomm_handler_ptr => dcomm_handler
+        da_f => data_storage%get_data_pointer()
+        f_ptr => da_f%get_pointer()
+        lb = da_f%get_lbound()
+        ub = da_f%get_ubound()
+        lb_stripped = da_f%get_lbound_stripped()
+        ub_stripped = da_f%get_ubound_stripped()
+
+        allocate(da_df)
+        call da_df%initialize(lb, ub)
+        df_ptr => da_df%get_pointer()
+
+        c1 = 1.0_GP
+        c2 = -1.0_GP
+        c3 = -0.5_GP
+        c4 = 1.5_GP
+
+        ! Initialize equidistant vp grid including ghost cells
+        ! NOTE: The vp grid obtained from mesh does not include ghost cells
+        !       therefore we generate and explicit equidistant vp grid
+        !       including ghost cells here. This grid includes the grid
+        !       contained in the mesh.
+        block
+            real(kind=GP) :: vp_min, delta_vp
+
+            n_vp = mesh%size_vp()
+            vp_ptr => mesh%get_vp_pointer()
+            delta_vp = mesh%delta_vp()
+            vp_min = vp_ptr(1) - delta_vp
+            allocate(vp(-1:n_vp+2))
+            do l = -1, n_vp + 2
+                vp(l) = (vp_min + l * delta_vp)
+            enddo
+        end block
+        mu_ptr => mesh%get_mu_pointer()
+        vp_ptr => vp
+
+        ! Initialize f and df
+        ! We use a polynomial in vp and an exponential function in mu. Both
+        ! can be integrated very efficiently with our numerical schemes.
+        do n = lb(5), ub(5)
+        do m = lb(4), ub(4)
+        do l = lb(3), ub(3)
+        do k = lb(2), ub(2)
+        do i = lb(1), ub(1)
+            f_ptr(i, k, l, m, n) =  &
+                    (c1 * vp_ptr(l) + 0.5_GP * c2 * vp_ptr(l)**2) &
+                    * exp(-mu_ptr(m))
+            df_ptr(i, k, l, m, n) = get_charge(n) * ( &
+                    (c1 + c2 * vp_ptr(l)) * exp(-mu_ptr(m)))
+        enddo
+        enddo
+        enddo
+        enddo
+        enddo
+
+        ! Debug log test announcement
+        if(dcomm_handler%is_master()) &
+            write(logger_get_debug_channel(), "(A,I1,A,ES9.2)") &
+            "Test of op_mom_ohms_law (", this%getNumProcesses(), &
+            "procs), tolerance = ", tol
+
+        allocate(da_b_ohms_law, da_lambda_ohms_law)
+        call da_b_ohms_law%initialize([lb(1), lb_stripped(2)], &
+                                      [ub(1), ub_stripped(2)])
+        call da_lambda_ohms_law%initialize(lb_stripped(1:2), ub_stripped(1:2))
+        b_ohms_law => da_b_ohms_law%get_pointer()
+        lambda_ohms_law => da_lambda_ohms_law%get_pointer()
+
+        ! Copy array to GPU. This does nothing if no GPU backend is specified.
+        call da_f%update_device()
+        call da_df%update_device()
+
+        ! Perform the moment calculation
+        call op_mom%initialize(dcomm_handler_ptr, mesh, bsg_op)
+        call op_mom%apply(da_f, da_df, da_lambda_ohms_law, da_b_ohms_law)
+
+        ! Copy array to CPU. This does nothing if no GPU backend is specified
+        call da_lambda_ohms_law%update_host()
+        call da_b_ohms_law%update_host()
+
+        ! Check results against the expected value
+        block
+            real(kind=GP) :: integral, expected_b, expected_lambda, a
+            real(kind=GP), dimension(:,:), pointer :: not_ghost
+            integer, dimension(:,:), pointer :: not_in_target
+            integer :: n_mu
+            n_mu = mesh%size_mu()
+
+            a = vp_ptr(n_vp)
+            integral = PI * 2.0_GP / 3.0_GP * a**3 * c2
+            not_in_target => mesh%get_not_in_target_pointer()
+            not_ghost => mesh%get_not_ghost_pointer()
+
+            do k = lb_stripped(2), ub_stripped(2)
+            do i = lb_stripped(1), ub_stripped(1)
+                ! We do not affect the boundary or filler values of b and lambda
+                ! in the operator. Only test non-ghost points.
+                if(not_ghost(i, k) /= 1.0_GP) cycle
+
+                expected_lambda = 0.0_GP
+                expected_b = 0.0_GP
+                n_sp = mesh%size_sp()
+                do n = 1, n_sp
+                    expected_lambda = expected_lambda - &
+                        get_beta_ref() / (2.0_GP * get_mass(n)) * integral
+                    expected_b = expected_b + &
+                        get_beta_ref() &
+                        * sqrt(get_temp_scaling(n) / 2.0_GP / get_mass(n)) &
+                        * integral
+                enddo
+                ! Lambda is affected in the target, adjust the expected value.
+                if(not_in_target(i, k) == 0) then
+                    expected_lambda = 1.0_GP
+                endif
+
+                @assertEqual(expected_lambda, lambda_ohms_law(i, k), tol)
+
+                ! We do not affect the target values of b in the operator. Only
+                ! test outside the target.
+                if(not_in_target(i, k) == 1) then
+                    @assertEqual(expected_b, b_ohms_law(i, k), tol)
+                endif
+            enddo
+            enddo
+        end block
+
+        deallocate(da_df, da_b_ohms_law, da_lambda_ohms_law)
+        deallocate(op_mom)
+        deallocate(data_storage)
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+        deallocate(bsg_op)
+    end subroutine
+
+end module

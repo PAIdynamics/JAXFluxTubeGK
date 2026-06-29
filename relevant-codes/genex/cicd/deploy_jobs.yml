@@ -1,0 +1,145 @@
+###############################################################################
+# Python tools unit test
+###############################################################################
+
+.setup_pytest_env: &setup_pytest_env |
+  source confix/cmake/functions/gxload.sh
+  gxload python
+  python -m venv venv_test
+  source venv_test/bin/activate
+  pip install pytest
+  pip install -r ./tools/requirements.in
+
+.tools_pytest_definition: &tools_pytest_definition
+  stage: deploy
+  tags:
+      - modules
+  script:
+      - *setup_pytest_env
+      - cd tools/tests/
+      - pytest
+      - cd ../..
+
+test_tools:
+  <<: *tools_pytest_definition
+  except:
+    - schedules
+  tags:
+      - cpu
+  variables:
+    GIT_LFS_SKIP_SMUDGE: "1"
+  dependencies:
+    - mms-cpu-release-intel
+  needs: ["mms-cpu-release-intel"]
+
+###############################################################################
+# FORD documentation
+###############################################################################
+
+.create_ford_doc: &create_ford_docs |
+  PAGE_DIR="./doc"
+  bash ./bash/line_count.sh
+  cp ./.line_count/line_count_report.md $PAGE_DIR
+  TOTAL_LINES=$(echo "$(grep -oP '\d+' $PAGE_DIR/line_count_report.md | head -1)")
+  cp ./.line_count/line_count_report.md $PAGE_DIR
+  source confix/cmake/functions/gxload.sh
+  gxload python
+  python -m venv venv_ford
+  source venv_ford/bin/activate
+  pip install ford
+  pip install anybadge
+  OUTPUT_DIR="../public"
+  ford ./doc/ford.conf -p ./ -o $OUTPUT_DIR
+  anybadge --value=$TOTAL_LINES --file=lines.svg --label="lines" \
+           --color=plum
+  deactivate
+  rm -rf venv_ford
+  mkdir -p public/badges
+  mv *.svg public/badges/
+
+.build_template_ford_docs: &ford_docs_definition
+  stage: deploy
+  tags:
+    - modules
+  script:
+    - *create_ford_docs
+  artifacts:
+    paths:
+      - public
+
+ford-docs:
+  <<: *ford_docs_definition
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "release"'
+      when: always
+    - when: never
+
+###############################################################################
+# Code Coverage
+###############################################################################
+
+.create_code_coverage_gnu: &create_code_coverage_gnu |
+  source confix/cmake/functions/gxload.sh
+  gxload gnu
+  ROOT_DIR=$(pwd)
+  cd public/
+  if [[ ! -f cov_cpu.info ]]; then
+    echo "cov_cpu.info" missing!
+    echo $(ls)
+    exit 1
+  fi
+  if [[ ! -f cov_gpu.info ]]; then
+    echo "cov_gpu.info" missing!
+    echo $(ls)
+    exit 1
+  fi
+  source $ROOT_DIR/confix/coverage/lcov_file_coverage.sh
+  sed -Ei "s|(SF:).*?/src/|\1${ROOT_DIR}/src/|g" cov_cpu.info
+  sed -Ei "s|(SF:).*?/src/|\1${ROOT_DIR}/src/|g" cov_gpu.info
+  merge_lcov_coverage_info cov_total.info cov_cpu.info cov_gpu.info
+  create_html_coverage_report cov_total.info $ROOT_DIR/coverage/cov_html_gnu.cfg
+  print_lcov_total_coverage cov_total.info
+  mv html_cov coverage
+  mv *.info coverage/
+  cd $ROOT_DIR
+  if [[ ${GNU_COVERAGE_PERCENT%.*} -le 0 ]]; then exit 1; fi
+
+.build_template_codecov: &code_coverage_definition
+  stage: deploy
+  tags:
+    - modules
+    - perl
+  script:
+    - *create_code_coverage_gnu
+  artifacts:
+    paths:
+      - public
+
+code-coverage:
+  <<: *code_coverage_definition
+  except:
+    - schedules
+  variables:
+    BUILD_TYPE: "debug"
+    COMPILER_VENDOR: "gnu"
+    COVERAGE: "true"
+  coverage: '/Code coverage is \d+.\d+%/'
+  needs: ["utest-cpu-debug-gnu-coverage", "utest-gpu-debug-gnu-coverage"]
+
+###############################################################################
+# Create Pages
+###############################################################################
+
+pages:
+  stage: deploy
+  tags:
+    - modules
+  script:
+    - echo "building pages..."
+  needs:
+    - job: code-coverage
+    - job: ford-docs
+      optional: true
+  artifacts:
+    paths:
+      - public

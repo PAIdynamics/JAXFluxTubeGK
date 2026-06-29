@@ -1,0 +1,43 @@
+# Makefile for GX on adroit.princeton.edu
+#
+
+define STANDARD_SYSTEM_CONFIGURATION
+module load intel ;\
+module load intel-mpi ;\
+module load cudatoolkit ;\
+module load gsl ;\
+module load netcdf/intel-16.0/hdf5-1.8.16/intel-mpi/4.4.0 ;\
+module load hdf5/intel-16.0/intel-mpi/1.8.16 ;\
+echo Module configuration complete ;\
+export MAKEFLAGS='-j -I Makefiles' ;\
+export CUDAARCH=35 ;\
+export PYTHONPATH=${PWD}/src;\
+echo
+endef
+
+USE_LOCAL_SPFUNC=on
+
+NETCDF_LIB = -L ${NETCDFDIR}/lib64 -lnetcdff -lnetcdf -L ${HDF5DIR}/lib64 -lhdf5 -lhdf5_hl
+
+ifdef USE_LAPACK
+	LAPACK_LIB = -L/usr/lib/x86_64-linux-gnu -llapack
+endif
+
+MPI_LIB = -lmpi
+
+FORT_LIB = -lifcore
+
+GSL_LIB = -L ${GSL_ROOT_DIR}/lib64 -lgsl -lgslcblas -lm
+
+FC=ifort
+NVCC=nvcc
+CUDAARCH=70
+
+CUDA_LIB = -lcufft_static -lculibos -lcublas -lcusolver
+NVCC_FLAGS = -arch=compute_${CUDAARCH} -code=sm_${CUDAARCH} -use_fast_math -prec-sqrt=true
+
+ifeq ($(debug),on)
+  NVCCFLAGS += -g -G 
+else
+  NVCCFLAGS += -O3
+endif

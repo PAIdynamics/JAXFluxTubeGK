@@ -1,0 +1,66 @@
+# --- Python artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+env/
+venv/
+mamba_env/
+
+# --- C++ / CUDA build artifacts ---
+build/
+_build/
+*.so
+*.a
+*.o
+*.fatbin
+*.cubin
+*.ptx
+test_lto
+
+# --- Project-specific outputs ---
+*outputs*/
+benchmark_temp_outputs/
+test_io_out/
+test_outputs/
+validation_outputs_*/
+baseline_*.npz
+*.npz
+*.out
+*.log
+tmp/
+cache/
+gkw_ref/
+
+# --- VCS / IDE / Editor noise ---
+.vscode/
+.idea/
+.gemini/
+.claude/settings.local.json
+.claude/projects/
+.claude/plans/
+.claude/shell-snapshots/
+.DS_Store
+*.swp
+*~
+*wandb*
+.wandb/
+
+# --- Other ---
+notebooks/figs/
+hlo_dump/*.txt
+*.hlo.txt
+validation_*/
+/figs/
+!docs/figs/
+*egg-info/
+.nfs*
+configs/sweep
+upload_changed_py.sh
+**/CUDALibrarySamples/
+**/jax_cache/
+.claude/
+.opencode/
+paper/

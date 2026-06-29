@@ -1,0 +1,441 @@
+module test_bnd_cond_operators
+    !! Contains tests for the operators
+    !! op_bnd_cond_dir_cpu_t, op_bnd_cond_neum_cpu_t
+!$  use omp_lib
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use ieee_arithmetic
+
+    use math_m, only: PI, almost_equal
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use genex_error_handling_m, only: handle_error
+    use genex_status_codes_m, only: GENEX_ERR_UTESTS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use logger_m, only: logger_get_debug_channel
+    use data_storage_m, only: data_storage_cpu_5d_t, &
+                              data_storage_cpu_2d_t
+    use data_array_m, only: data_array_2d_t, &
+                            data_array_5d_t
+    use mesh_5d_m, only: mesh_5d_t
+    use op_bnd_cond_m, only: op_bnd_cond_base_t, &
+                             op_bnd_cond_dir_cpu_t, &
+                             op_bnd_cond_neum_cpu_t
+    use params_gpu_offload_m, only: get_use_gpu_offload
+
+#ifdef ENABLE_GPU
+    use op_bnd_cond_m, only: op_bnd_cond_dir_gpu_t, op_bnd_cond_neum_gpu_t
+#endif
+
+    ! Unit test helpers
+    use test_params_m
+
+    ! From PARALLAX
+    use equilibrium_factory_m, only: SALPHA, DOMMASCHK
+
+    ! Define constant values to fill compute, buffer, and ghost points
+    real(kind=GP), parameter :: VAL_COMPUTE     = 111.0_GP
+    real(kind=GP), parameter :: VAL_BUFFER      = 222.0_GP
+    real(kind=GP), parameter :: VAL_GHOST       = 333.0_GP
+    real(kind=GP), parameter :: VAL_INNER_GHOST = 666.0_GP
+    real(kind=GP), parameter :: VAL_OUTER_GHOST = 999.0_GP
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    subroutine init_test(this, dcomm_handler, mesh, equi, spacing_RZ)
+        class (mpitestmethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable, target, intent(inout) :: &
+                                                              dcomm_handler
+        type(mesh_5d_t), target, allocatable, intent(inout):: mesh
+        integer, intent(in) :: equi
+        real(kind=GP), intent(in) :: spacing_RZ
+        integer :: n_procs, n_procs_phi, n_procs_vp, n_procs_mu, n_procs_sp
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+
+        n_procs = this%getNumProcesses()
+
+        select case (n_procs)
+        case (1)
+            n_procs_phi = 1
+            n_procs_vp  = 1
+            n_procs_mu  = 1
+            n_procs_sp  = 1
+        case (3)
+            n_procs_phi = 3
+            n_procs_vp  = 1
+            n_procs_mu  = 1
+            n_procs_sp  = 1
+        case default
+            call handle_error("Unsupported n_procs in unit test!", &
+                              GENEX_ERR_UTESTS, __LINE__, __FILE__)
+        end select
+
+        allocate(mesh)
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=equi, &
+                             spacing_RZ=spacing_RZ, &
+                             n_points_phi=3, &
+                             n_points_vp=1, &
+                             n_points_mu=1, &
+                             n_points_sp=1, &
+                             quad_type_vp="trapezoidal")
+
+        allocate(dcomm_handler)
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+                                          n_procs_phi, n_procs_vp, n_procs_mu, &
+                                          n_procs_sp)
+        call mesh%initialize(dcomm_handler_ptr)
+    end subroutine
+
+    @test(npes = [1, 3])
+    subroutine test_op_bnd_cond_dir_salpha(this)
+        !! Tests the op_bnd_cond_dir_t operator for salpha and Dommaschk
+        !! equilibria.
+        class (mpitestmethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), target, allocatable :: mesh
+
+        if(this%getProcessRank() == 0) then
+            write(logger_get_debug_channel(), *) ""
+            write(logger_get_debug_channel(), *) "Testing op_bnd_cond_dir_t"
+        end if
+
+        ! SALPHA
+        call init_test(this, dcomm_handler, mesh, SALPHA, &
+                       spacing_RZ=0.09_GP)
+        dcomm_handler_ptr => dcomm_handler
+        call test_op_bnd_cond_dir_core(dcomm_handler_ptr, mesh)
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+
+    end subroutine
+
+    @test(npes = [3])
+    subroutine test_op_bnd_cond_dir_dommaschk(this)
+        !! Tests the op_bnd_cond_dir_t operator for salpha and Dommaschk
+        !! equilibria.
+        class (mpitestmethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), target, allocatable :: mesh
+
+        if(this%getProcessRank() == 0) then
+            write(logger_get_debug_channel(), *) ""
+            write(logger_get_debug_channel(), *) "Testing op_bnd_cond_dir_t"
+        end if
+
+        ! Dommaschk
+        call init_test(this, dcomm_handler, mesh, DOMMASCHK, &
+                       spacing_RZ=0.012_GP)
+        dcomm_handler_ptr => dcomm_handler
+        call test_op_bnd_cond_dir_core(dcomm_handler_ptr, mesh)
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+
+    end subroutine
+
+    subroutine test_op_bnd_cond_dir_core(dcomm_handler_ptr, mesh)
+        type(dcomm_handler_t), pointer, intent(in) :: dcomm_handler_ptr
+        type(mesh_5d_t), target, intent(inout) :: mesh
+
+        class(op_bnd_cond_base_t), allocatable :: op_bnd_cond
+        type(data_array_5d_t), allocatable :: da_f_in
+        type(data_array_2d_t), allocatable :: da_es_pot, da_A_par, &
+                                              da_E_par, da_co
+
+        real(kind=GP), pointer, dimension(:,:) :: is_compute
+        real(kind=GP), pointer, dimension(:,:,:,:,:) :: f_ptr
+        real(kind=GP), pointer, dimension(:,:) :: es_pot_ptr, A_par_ptr, &
+                                                  E_par_ptr, co_ptr
+        integer :: lb_stripped(5), ub_stripped(5), lb(5), ub(5)
+        integer :: i, k
+
+        is_compute => mesh%get_is_compute_pointer()
+
+        lb          = dcomm_handler_ptr%get_lbound()
+        ub          = dcomm_handler_ptr%get_ubound()
+        lb_stripped = dcomm_handler_ptr%get_lbound_stripped()
+        ub_stripped = dcomm_handler_ptr%get_ubound_stripped()
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_bnd_cond_dir_gpu_t :: op_bnd_cond)
+#endif
+        else
+            allocate(op_bnd_cond_dir_cpu_t :: op_bnd_cond)
+        end if
+        call op_bnd_cond%initialize(dcomm_handler_ptr, mesh)
+
+        ! Allocate input data for the operator
+        allocate(da_f_in, da_es_pot, da_A_par, da_E_par, da_co)
+        call da_f_in%initialize(lb, ub, lb_stripped, ub_stripped)
+        call da_es_pot%initialize(lb(:2), ub(:2), lb_stripped(:2), &
+                                  ub_stripped(:2), val=VAL_COMPUTE)
+        call da_A_par%initialize(da_es_pot, val=VAL_COMPUTE)
+        call da_E_par%initialize(da_es_pot, val=VAL_COMPUTE)
+        call da_co%initialize(da_es_pot, val=VAL_COMPUTE)
+
+        f_ptr      => da_f_in%get_pointer()
+        es_pot_ptr => da_es_pot%get_pointer()
+        A_par_ptr  => da_A_par%get_pointer()
+        E_par_ptr  => da_E_par%get_pointer()
+        co_ptr     => da_co%get_pointer()
+
+        ! The bnd_cond operator sets the value for all b variables in the
+        ! field equations. We thus can only test it if we apply it
+        ! to all arrays simultaneously.
+
+        call op_bnd_cond%apply(da_f_in, da_co, da_es_pot, da_A_par, da_E_par, &
+                               t=0.0_GP)
+
+        call da_co%update_host()
+        call da_es_pot%update_host()
+        call da_A_par%update_host()
+        call da_E_par%update_host()
+
+        ! Check the values of the electromagnetic field
+        ! on the ghost indices and in the target
+        do k = lb_stripped(2), ub_stripped(2)
+        do i = lb(1), ub(1)
+            if(is_compute(i, k) == 0.0_GP) then
+                @assertEqual(0.0_GP, es_pot_ptr(i, k), GP_EPS)
+                @assertEqual(0.0_GP, A_par_ptr(i, k), GP_EPS)
+                @assertEqual(0.0_GP, E_par_ptr(i, k), GP_EPS)
+            end if
+        end do
+        end do
+        @assertEqual(VAL_COMPUTE, co_ptr, GP_EPS)
+
+        deallocate(da_E_par, da_A_par, da_es_pot, da_f_in)
+        deallocate(op_bnd_cond)
+    end subroutine
+
+    @test(npes = [1, 3])
+    subroutine test_op_bnd_cond_neum(this)
+        !! Tests the op_bnd_cond_neum_t operator for salpha equilibrium
+        class (mpitestmethod), intent(inout) :: this
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(mesh_5d_t), target, allocatable :: mesh
+
+        if(this%getProcessRank() == 0) then
+            write(logger_get_debug_channel(), *) ""
+            write(logger_get_debug_channel(), *) "Testing op_bnd_cond_neum_t"
+        end if
+
+        ! Salpha
+        call init_test(this, dcomm_handler, mesh, SALPHA, &
+                       spacing_RZ=0.012_GP)
+        dcomm_handler_ptr => dcomm_handler
+
+        call setup_test_bnd_cond(this%getMpiCommunicator(), &
+                                 this%getProcessRank(), &
+                                 bnd_cond_type='neumann')
+        call test_op_bnd_cond_neum_core(dcomm_handler_ptr, mesh)
+
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+
+    end subroutine
+
+    subroutine test_op_bnd_cond_neum_core(dcomm_handler_ptr, mesh)
+        type(dcomm_handler_t), pointer, intent(in) :: dcomm_handler_ptr
+        type(mesh_5d_t), target, intent(inout) :: mesh
+
+        type(data_array_5d_t), allocatable :: da_f_inout
+        type(data_array_2d_t), allocatable :: da_es_pot, da_A_par, da_E_par, &
+                                              da_co
+
+        real(kind=GP), pointer, contiguous, dimension(:,:,:,:,:) :: f_inout
+        real(kind=GP), pointer, dimension(:,:) :: es_pot_ptr, A_par_ptr, &
+                                                  E_par_ptr, co_ptr
+        real(kind=GP), pointer, contiguous, dimension(:) :: vp_ptr, mu_ptr
+        real(kind=GP), pointer, contiguous, dimension(:,:) :: is_compute, &
+                                                              rho_ptr, is_core
+        integer, contiguous, pointer, dimension(:,:) :: buf_zone
+
+        class(op_bnd_cond_base_t), allocatable :: op_bnd_cond
+        integer, dimension(5) :: lb, ub, lb_stripped, ub_stripped
+        integer :: i, k, l, m, n
+
+        real(kind=GP) :: res, expected, tolerance, rho_c, failed, passed
+        logical :: all_fine
+
+        lb          = dcomm_handler_ptr%get_lbound()
+        ub          = dcomm_handler_ptr%get_ubound()
+        lb_stripped = dcomm_handler_ptr%get_lbound_stripped()
+        ub_stripped = dcomm_handler_ptr%get_ubound_stripped()
+
+        ! Allocate op
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_bnd_cond_neum_gpu_t :: op_bnd_cond)
+#endif
+        else
+            allocate(op_bnd_cond_neum_cpu_t :: op_bnd_cond)
+        end if
+        call op_bnd_cond%initialize(dcomm_handler_ptr, mesh)
+
+        ! Allocate input data for the operator
+        allocate(da_f_inout, da_es_pot, da_A_par, da_E_par, da_co)
+        call da_f_inout%initialize(lb, ub, lb_stripped, ub_stripped)
+        call da_es_pot%initialize(lb(:2), ub(:2), lb_stripped(:2), &
+                                  ub_stripped(:2), val=VAL_COMPUTE)
+        call da_A_par%initialize(da_es_pot, val=VAL_COMPUTE)
+        call da_E_par%initialize(da_es_pot, val=VAL_COMPUTE)
+        call da_co%initialize(da_es_pot, val=VAL_COMPUTE)
+
+        f_inout    => da_f_inout%get_pointer()
+        es_pot_ptr => da_es_pot%get_pointer()
+        A_par_ptr  => da_A_par%get_pointer()
+        E_par_ptr  => da_E_par%get_pointer()
+        co_ptr     => da_co%get_pointer()
+
+        is_compute => mesh%get_is_compute_pointer()
+        is_core    => mesh%get_is_core_pointer()
+        rho_ptr    => mesh%get_rho_pointer()
+        buf_zone   => mesh%get_buf_zone_pointer()
+        vp_ptr     => mesh%get_vp_pointer()
+        mu_ptr     => mesh%get_mu_pointer()
+        rho_c      = (mesh%rho_max() + mesh%rho_min()) / 2.0_GP
+
+        ! NOTE: We initialize the values of the distribution function
+        !       in the computational points, the inner,
+        !       the outer ghost points, and in the inner buffer regions
+        !       with different values. We initialize the electromagnetic
+        !       fields with the same value everywhere.
+
+        !$omp parallel default(none) &
+        !$omp firstprivate(lb, ub, lb_stripped, ub_stripped, rho_c) &
+        !$omp shared(f_inout, is_compute, buf_zone, rho_ptr) &
+        !$omp private(i, k, l, m, n)
+        do n = lb_stripped(5), ub_stripped(5)
+        do m = lb_stripped(4), ub_stripped(4)
+        do l = lb_stripped(3), ub_stripped(3)
+        do k = lb_stripped(2), ub_stripped(2)
+        !$omp do schedule(static)
+        do i = lb(1), ub(1)
+            if(is_compute(i, k) == 1.0_GP) then
+                f_inout(i, k, l, m, n) = VAL_COMPUTE  &
+                                    * (1.0_GP - real(buf_zone(i, k), kind=GP)) &
+                                    + real(buf_zone(i, k), kind=GP) * VAL_BUFFER
+            else
+                if(rho_ptr(i, k) > rho_c) &
+                    f_inout(i, k, l, m, n) = VAL_OUTER_GHOST
+                if(rho_ptr(i, k) < rho_c) &
+                    f_inout(i, k, l, m, n) = VAL_INNER_GHOST
+            end if
+        end do
+        !$omp end do nowait
+        end do
+        end do
+        end do
+        end do
+        !$omp end parallel
+
+        call da_f_inout%update_device()
+
+        ! Apply op
+        call op_bnd_cond%apply(da_f_inout, da_co, da_es_pot, da_A_par, &
+                               da_E_par, t=0.0_GP)
+
+        call da_f_inout%update_host()
+        call da_co%update_host()
+        call da_es_pot%update_host()
+        call da_A_par%update_host()
+        call da_E_par%update_host()
+
+        ! Check the results
+        tolerance = GP_EPS
+        failed    = 0.0_GP
+        passed    = 0.0_GP
+        all_fine  = .true.
+
+        !$omp parallel default(none) &
+        !$omp firstprivate(lb, ub, lb_stripped, ub_stripped, rho_c, tolerance) &
+        !$omp shared(f_inout, is_compute, is_core, rho_ptr, &
+        !$omp        failed, passed, buf_zone, vp_ptr, mu_ptr) &
+        !$omp private(i, k, l, m, n, res, expected)
+        do n = lb_stripped(5), ub_stripped(5)
+        do m = lb_stripped(4), ub_stripped(4)
+        do l = lb_stripped(3), ub_stripped(3)
+        do k = lb_stripped(2), ub_stripped(2)
+        !$omp do schedule(static)
+        do i = lb(1), ub(1)
+            if(is_core(i, k) == 0.0_GP) cycle
+
+            res = f_inout(i, k, l, m, n)
+
+            if(is_compute(i, k) == 1.0_GP) then
+                expected = VAL_COMPUTE &
+                         * (1.0_GP - real(buf_zone(i, k), kind=GP)) &
+                         + VAL_BUFFER * real(buf_zone(i, k), kind=GP)
+            else
+                if(rho_ptr(i, k) > rho_c) expected = VAL_OUTER_GHOST
+                if(rho_ptr(i, k) < rho_c ) expected = VAL_BUFFER
+            end if
+
+            ! Check result
+            if(.not. almost_equal(res, expected, tolerance)) then
+                failed = failed + 1
+            else
+                passed = passed + 1
+            end if
+        end do
+        !$omp end do nowait
+        end do
+        end do
+        end do
+        end do
+        !$omp end parallel
+
+        if(failed > 0.0_GP) all_fine = .false.
+        @assertTrue(all_fine)
+
+        ! Check the values of the electromagnetic field
+        ! on the ghost indices and in the target
+        do k = lb_stripped(2), ub_stripped(2)
+        do i = lb(1), ub(1)
+            if(is_compute(i, k) == 0.0_GP) then
+                @assertEqual(0.0_GP, es_pot_ptr(i, k), GP_EPS)
+                @assertEqual(0.0_GP, A_par_ptr(i, k), GP_EPS)
+                @assertEqual(0.0_GP, E_par_ptr(i, k), GP_EPS)
+            end if
+        end do
+        end do
+        @assertEqual(VAL_COMPUTE, co_ptr, GP_EPS)
+
+        deallocate(da_E_par, da_A_par, da_es_pot, da_f_inout)
+        deallocate(op_bnd_cond)
+
+    end subroutine
+
+end module

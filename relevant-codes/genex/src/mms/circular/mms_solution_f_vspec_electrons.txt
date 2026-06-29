@@ -1,0 +1,6 @@
+mms_solution_f_electrons = Cos(2*mu + vp)*(krond(0,int(mu))*krond(0,int(vp)) + krond(0,int(vp))*krond(1,int &
+(mu)) + krond(0,int(mu))*krond(1,int(vp)) + krond(1,int(mu))*krond(1,int( &
+vp)) + krond(0,int(mu))*krond(2,int(vp)) + krond(1,int(mu))*krond(2,int( &
+vp)) + krond(0,int(mu))*krond(3,int(vp)) + krond(1,int(mu))*krond(3,int(vp)))*( &
+5.D-2 + 9.5D-1*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((nrad*Pi*(-rhomin + Sqrt( &
+R**2 + Z**2)))/(rhomax - rhomin))**2*Sin(npol*atan(Z,R))**2)

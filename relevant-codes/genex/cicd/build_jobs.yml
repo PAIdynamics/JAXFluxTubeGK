@@ -1,0 +1,66 @@
+build-debug-gnu:
+  extends: .build_template
+  except:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    BUILD_TYPE: "debug"
+    COMPILER_VENDOR: "gnu"
+
+build-debug-gnu-coverage:
+  extends: .build_template
+  except:
+    - schedules
+  tags:
+    - gpu
+  variables:
+    GIT_SUBMODULE_FORCE_HTTPS: true
+    BUILD_TYPE: "debug"
+    COMPILER_VENDOR: "gnu"
+    COVERAGE: "true"
+
+build-release-gnu:
+  extends: .build_template
+  variables:
+    GIT_SUBMODULE_FORCE_HTTPS: true
+    BUILD_TYPE: "release"
+    COMPILER_VENDOR: "gnu"
+
+build-debug-intel:
+  extends: .build_template
+  except:
+    - schedules
+  variables:
+    BUILD_TYPE: "debug"
+    COMPILER_VENDOR: "intel"
+
+build-release-intel:
+  extends: .build_template
+  tags:
+    - cpu
+  variables:
+    BUILD_TYPE: "release"
+    COMPILER_VENDOR: "intel"
+
+build-debug-gnu-amd:
+  extends: .build_template
+  except:
+    - schedules
+  tags:
+    - amd
+    - gpu
+  variables:
+    BUILD_TYPE: "debug"
+    COMPILER_VENDOR: "gnu"
+
+build-release-gnu-amd:
+  extends: .build_template
+  except:
+    - schedules
+  tags:
+    - amd
+    - gpu
+  variables:
+    BUILD_TYPE: "release"
+    COMPILER_VENDOR: "gnu"

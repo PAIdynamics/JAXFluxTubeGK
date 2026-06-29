@@ -1,0 +1,1941 @@
+module test_parameters
+    !! Contains test for the parameters
+    use funit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: PI
+    use math_m, only: almost_equal
+    use logger_m, only: logger_get_debug_channel
+    use file_handling_m, only: delete_file_if_exists
+
+    use error_params_m
+    use params_m
+    use params_collisions_m
+    use params_field_solve_m
+    use params_gpu_offload_m
+    use params_gyrokinetic_system_m
+    use params_initial_condition_m
+    use params_mesh_m
+    use params_bsg_m
+    use params_mms_m
+    use params_normalization_m
+    use params_numerical_scheme_m
+    use params_parallelization_m
+    use params_devtools_m
+    use params_bnd_cond_m
+    use params_set_blob_m, get_blob_strength => get_strength
+    use params_set_mode_m, get_mode_strength => get_strength
+    use params_source_m
+    use params_source_dens_m
+    use params_source_heat_m
+    use params_source_torque_m
+    use params_source_lapd_m
+    use params_time_loop_m
+    use params_time_split_m
+    use params_species_m
+    use params_species_config_m
+    use params_neutrals_m
+    use params_neutrals_config_m
+    use params_neutrals_init_m
+    use params_neutrals_set_blob_m
+    use params_profile_plateau_m
+    use params_profile_uniform_m
+    use params_profile_cbc_m
+    use params_profile_sine_m
+    use params_profile_lapd_m
+    use params_dist_initial_bi_maxw_m
+    use params_dist_initial_double_maxw_m
+    use params_dist_initial_ring_m
+    use params_dist_initial_slowing_down_m
+    use params_dist_initial_maxw_vspec_m
+    use params_diagnostics_m
+    use bsg_types_m, only: MAX_BLOCKS
+
+    implicit none
+
+    character(len=*), parameter :: filename = "test_params.txt"
+    !! Filename for testing the parameter read and write
+contains
+
+    @before
+    subroutine setup
+        ! Delete filenames if exist.
+        integer :: n
+        integer, parameter :: n_spec = 2
+        character(len=64) :: fname
+
+        ! Make sure test parameters files do not already exist
+        call delete_file_if_exists(filename)
+        do n = 1, n_spec
+            fname = "test_params_"//trim(get_name(n))//".txt"
+            call delete_file_if_exists(fname)
+        end do
+        fname = "test_params_"//trim(get_neut_name(1))//".txt"
+        call delete_file_if_exists(fname)
+    end subroutine
+
+    @after
+    subroutine teardown
+        ! Teardown test
+    end subroutine
+
+    function to_lower(string) result(lower_string)
+        !! Returns a version of the given string where all letters are lowercase
+        character(len=*), intent(in) :: string
+        character(len=len(string)) :: lower_string
+        integer :: i_cap, i
+        character(len=26), parameter :: cap = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        character(len=26), parameter :: low = 'abcdefghijklmnopqrstuvwxyz'
+
+        lower_string = string
+        ! Go through all characters and lower them if they are capitalized
+        do i = 1, len_trim(string)
+            i_cap = index(cap, string(i:i))
+            if (i_cap > 0) lower_string(i:i) = low(i_cap:i_cap)
+        end do
+    end function
+
+    logical function file_contains(string_to_check, fname)
+        !! Checks that the file given by filename contains the string given to
+        !! check. Can be used to check if a namelist or a parameter has been
+        !! written.
+        character(len=*), intent(in) :: string_to_check
+        character(len=*), intent(in), optional :: fname
+        !! Optionally specify the file that should be checked. If not present
+        !! uses the default file in the module.
+
+        character(len=32) :: file_to_check
+        character(len=128) :: line_to_check
+        integer :: iunit, io_status
+        logical :: file_exists
+
+        if(present(fname)) then
+            file_to_check = fname
+        else
+            file_to_check = filename
+        endif
+
+        ! First check that file exists
+        inquire(file=file_to_check, exist=file_exists)
+        @assertTrue(file_exists)
+
+        file_contains = .false.
+        open(newunit=iunit, file=file_to_check, action='read')
+        ! Go through all lines and check if the string is contained in the line
+        do
+            read(iunit, '(A)', iostat=io_status) line_to_check
+            if(io_status == 0) then
+                ! Read success
+                file_contains = (index(to_lower(line_to_check), &
+                                       to_lower(string_to_check)) /= 0)
+                if(file_contains) exit
+            else if(io_status < 0) then
+                ! EOF
+                exit
+            else
+                ! Read error
+                @assertTrue(.false.)
+            endif
+        enddo
+        close(unit=iunit)
+    end function
+
+    @test
+    subroutine test_params_error_handling()
+        !! Tests the error handling routines for the parameter file methods
+        integer :: iunit, ierr, itest
+
+        namelist / test_namelist / itest
+        namelist / test_namelist2 / itest
+
+        ! TODO: Add checks for proper error behaviour if non-fatal errors are
+        !       implemented.
+
+        ! Make sure a standard call works
+        open(newunit=iunit, file=filename, status='unknown', &
+             action='write', position='append', iostat=ierr)
+        call handle_open_error(filename, ierr)
+        itest = 42
+        write(iunit, nml=test_namelist, iostat=ierr)
+        call handle_write_error(filename, ierr, nml_name="test_namelist")
+        close(iunit)
+
+        open(newunit=iunit, file=filename, status='old', action='read', &
+             iostat=ierr)
+        call handle_open_error(filename, ierr)
+        read(iunit, nml=test_namelist, iostat=ierr)
+        call handle_read_error(filename, ierr, nml_name="test_namelist", &
+                               iunit=iunit)
+
+        ! Should pass without error for non-existing namelist
+        read(iunit, nml=test_namelist2, iostat=ierr)
+        call handle_read_error(filename, ierr, nml_name="test_namelist2", &
+                               iunit=iunit)
+        close(iunit)
+
+    end subroutine
+
+    @test
+    subroutine test_params()
+        !! Tests the general parameter file methods
+        character(:), allocatable :: parameter_file
+        logical :: equal
+        integer :: ierr, istat
+
+        parameter_file = get_parameter_file()
+        call set_parameter_file("test_params.txt")
+
+        equal = (get_parameter_file() == parameter_file)
+        @assertFalse(equal)
+        equal = (get_parameter_file() == "test_params.txt")
+        @assertTrue(equal)
+
+        ! Check if write and read work. Details on write and read will be
+        ! checked by the individual tests
+        call write_parameter_file("./")
+        call execute_command_line("mv params_electrons_out.txt &
+                                  &params_electrons.txt", &
+                                  cmdstat=ierr, exitstat=istat)
+        @assertEqual(ierr, 0)
+        @assertEqual(istat, 0)
+        call execute_command_line("mv params_protons_out.txt &
+                                  &params_protons.txt", &
+                                  cmdstat=ierr, exitstat=istat)
+        @assertEqual(ierr, 0)
+        @assertEqual(istat, 0)
+
+        call set_parameter_file("params_out.txt")
+        call read_parameter_file()
+        call delete_file_if_exists("params_out.txt")
+        call delete_file_if_exists("params_protons.txt")
+        call delete_file_if_exists("params_electrons.txt")
+    end subroutine
+
+    @test
+    subroutine test_collision_parameters()
+        !! Tests read and write of the collision parameters
+        real(kind=GP) :: dens_floor, temp_floor
+        character(len=16) :: coll_type, relx_type
+        logical :: equal
+
+        coll_type  = get_coll_type()
+        relx_type  = get_relx_type()
+        dens_floor = get_dens_floor()
+        temp_floor = get_temp_floor()
+
+        call write_params_collisions(filename)
+        @assertTrue(file_contains("params_collisions"))
+        @assertTrue(file_contains("coll_type"))
+        @assertTrue(file_contains("relx_type"))
+        @assertTrue(file_contains("dens_floor"))
+        @assertTrue(file_contains("temp_floor"))
+        call read_params_collisions(filename)
+
+        equal = (coll_type == get_coll_type())
+        @assertTrue(equal)
+        equal = (relx_type == get_relx_type())
+        @assertTrue(equal)
+        equal = (dens_floor == get_dens_floor())
+        @assertTrue(equal)
+        equal = (temp_floor == get_temp_floor())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_devtools_parameters()
+        !! Tests read and write of the developer tool parameters
+        integer :: parallax_dbgout
+        logical :: dbg_region, isolate_tsync, trace_dmem, trace_rt
+        logical :: equal
+
+        parallax_dbgout = get_parallax_dbgout()
+        dbg_region      = get_debug_profregion()
+        isolate_tsync   = get_isolate_tsync()
+        trace_dmem      = get_trace_device_memory()
+        trace_rt        = get_trace_runtime()
+
+        call write_params_devtools(filename)
+        @assertTrue(file_contains("params_devtools"))
+        @assertTrue(file_contains("parallax_dbgout"))
+        @assertTrue(file_contains("debug_profregion"))
+        @assertTrue(file_contains("isolate_tsync"))
+        @assertTrue(file_contains("trace_device_memory"))
+        @assertTrue(file_contains("trace_runtime"))
+        call read_params_devtools(filename)
+
+        @assertEqual(parallax_dbgout, get_parallax_dbgout())
+        equal = (dbg_region .eqv. get_debug_profregion())
+        @assertTrue(equal)
+        equal = (isolate_tsync .eqv. get_isolate_tsync())
+        @assertTrue(equal)
+        equal = (trace_dmem .eqv. get_trace_device_memory())
+        @assertTrue(equal)
+        equal = (trace_rt .eqv. get_trace_runtime())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_field_solve_parameters()
+        !! Tests read and write of the field solve parameters
+        integer :: maxiter
+        real(kind=GP) :: restol_zero
+        character(len=16) :: smoother
+        logical :: equal
+
+        maxiter     = get_maxiter()
+        restol_zero = get_restol_zero()
+        smoother    = get_smoother()
+
+        call write_params_field_solve(filename)
+        @assertTrue(file_contains("params_field_solve"))
+        @assertTrue(file_contains("maxiter"))
+        @assertTrue(file_contains("restol_zero"))
+        @assertTrue(file_contains("smoother"))
+        call read_params_field_solve(filename)
+
+        equal = (maxiter == get_maxiter())
+        @assertTrue(equal)
+        equal = (restol_zero == get_restol_zero())
+        @assertTrue(equal)
+        equal = (smoother == get_smoother())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_gpu_offload_parameters()
+        !! Tests read and write of the GPU offloading parameters
+        integer :: gx_backend, px_backend, align
+        logical :: use_gx_offload, use_px_offload, use_px_data, &
+                   swap, equal
+
+        use_gx_offload  = get_use_gpu_offload()
+        use_px_offload  = get_use_parallax_gpu_offload()
+        use_px_data     = get_use_parallax_gpu_data_explicit()
+        gx_backend      = get_gpu_offload_backend()
+        px_backend      = get_parallax_gpu_offload_backend()
+        swap            = get_swap_mesh_members()
+        align           = get_array_alignment()
+
+        call write_params_gpu_offload(filename)
+        @assertTrue(file_contains("use_gpu_offload"))
+        @assertTrue(file_contains("gpu_offload_backend"))
+        @assertTrue(file_contains("use_parallax_gpu_offload"))
+        @assertTrue(file_contains("parallax_gpu_offload_backend"))
+        @assertTrue(file_contains("use_parallax_gpu_data_explicit"))
+        @assertTrue(file_contains("swap_mesh_members"))
+        @assertTrue(file_contains("large_array_alignment"))
+        call read_params_gpu_offload(filename)
+
+        equal = (use_gx_offload .eqv. get_use_gpu_offload())
+        @assertTrue(equal)
+        equal = (use_px_offload .eqv. get_use_parallax_gpu_offload())
+        @assertTrue(equal)
+        equal = (use_px_data .eqv. get_use_parallax_gpu_data_explicit())
+        @assertTrue(equal)
+        equal = (gx_backend == get_gpu_offload_backend())
+        @assertTrue(equal)
+        equal = (px_backend == get_parallax_gpu_offload_backend())
+        @assertTrue(equal)
+        equal = (swap .eqv. get_swap_mesh_members())
+        @assertTrue(equal)
+        equal = (align == get_array_alignment())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_gyrokinetic_system_parameters()
+        !! Tests read and write of the gyrokinetic system parameters
+        logical :: with_rhs, with_em_flutter, &
+                   with_nlin_polarization, with_bpar
+        character(len=10) :: flr_model
+        logical :: equal
+
+        with_rhs        = get_with_rhs()
+        with_em_flutter = get_with_em_flutter()
+        with_nlin_polarization = get_with_nlin_polarization()
+        with_bpar = get_with_bpar()
+        flr_model = get_flr_model()
+
+        equal = (flr_model == "lwa")
+        @assertTrue(equal)
+
+        call write_params_gyrokinetic_system(filename)
+        @assertTrue(file_contains("params_gyrokinetic_system"))
+        @assertTrue(file_contains("with_rhs"))
+        @assertTrue(file_contains("with_em_flutter"))
+        @assertTrue(file_contains("with_nlin_polarization"))
+        @assertTrue(file_contains("with_bpar"))
+        @assertTrue(file_contains("flr_model"))
+        call read_params_gyrokinetic_system(filename)
+
+        equal = (with_rhs .eqv. get_with_rhs())
+        @assertTrue(equal)
+        equal = (with_em_flutter .eqv. get_with_em_flutter())
+        @assertTrue(equal)
+        equal = (with_nlin_polarization .eqv. get_with_nlin_polarization())
+        @assertTrue(equal)
+        equal = (with_bpar .eqv. get_with_bpar())
+        @assertTrue(equal)
+        equal = (flr_model == get_flr_model())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_initial_condition_parameters()
+        !! Tests read and write of the initial condition parameters
+        character(len=16) :: initial_perturbation
+        logical :: use_canonical_maxw
+        logical :: equal
+
+        initial_perturbation = get_initial_perturbation()
+        use_canonical_maxw = get_use_canonical_maxw()
+
+        call write_params_initial_condition(filename)
+        @assertTrue(file_contains("params_initial_condition"))
+        @assertTrue(file_contains("initial_perturbation"))
+        @assertTrue(file_contains("use_canonical_maxw"))
+        call read_params_initial_condition(filename)
+
+        equal = (initial_perturbation == get_initial_perturbation())
+        @assertTrue(equal)
+        equal = (use_canonical_maxw .eqv. get_use_canonical_maxw())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_mesh_parameters()
+        !! Tests read and write of the mesh parameters
+        integer :: n_levels
+        real(kind=GP) :: spacing_RZ, length_vp, length_mu
+        integer :: n_points_phi, n_points_vp, n_points_mu, n_points_sp
+        integer :: equilibrium_type
+        character(len=24) :: quad_type_vp, grid_type_mu
+        logical :: equal
+        logical :: use_vspectral
+        logical :: only_first_field_period
+        logical :: extend_beyond_wall
+        logical :: use_bsg
+        integer, dimension(:), allocatable :: reorder_size
+
+        n_levels                = get_n_levels()
+        spacing_RZ              = get_spacing_RZ()
+        length_vp               = get_length_vp()
+        length_mu               = get_length_mu()
+        n_points_phi            = get_n_points_phi()
+        n_points_vp             = get_n_points_vp()
+        n_points_mu             = get_n_points_mu()
+        n_points_sp             = get_n_points_sp()
+        equilibrium_type        = get_equilibrium_type()
+        only_first_field_period = get_only_first_field_period()
+        extend_beyond_wall      = get_extend_beyond_wall()
+        quad_type_vp            = get_quad_type_vp()
+        grid_type_mu            = get_grid_type_mu()
+        use_vspectral           = get_use_vspectral()
+        use_bsg                 = get_use_bsg()
+
+        allocate(reorder_size(1:n_levels))
+        reorder_size            = get_reorder_size()
+
+        call write_params_mesh(filename)
+        @assertTrue(file_contains("params_mesh"))
+        @assertTrue(file_contains("n_levels"))
+        @assertTrue(file_contains("spacing_RZ"))
+        @assertTrue(file_contains("length_vp"))
+        @assertTrue(file_contains("length_mu"))
+        @assertTrue(file_contains("n_points_phi"))
+        @assertTrue(file_contains("n_points_vp"))
+        @assertTrue(file_contains("n_points_mu"))
+        @assertTrue(file_contains("n_points_sp"))
+        @assertTrue(file_contains("equilibrium_type"))
+        @assertTrue(file_contains("only_first_field_period"))
+        @assertTrue(file_contains("extend_beyond_wall"))
+        @assertTrue(file_contains("quad_type_vp"))
+        @assertTrue(file_contains("grid_type_mu"))
+        @assertTrue(file_contains("use_vspectral"))
+        @assertTrue(file_contains("use_bsg"))
+        @assertTrue(file_contains("reorder_size"))
+        call read_params_mesh(filename)
+
+        equal = (n_levels == get_n_levels())
+        @assertTrue(equal)
+        equal = (spacing_RZ == get_spacing_RZ())
+        @assertTrue(equal)
+        equal = (length_vp == get_length_vp())
+        @assertTrue(equal)
+        equal = (length_mu == get_length_mu())
+        @assertTrue(equal)
+        equal = (n_points_phi == get_n_points_phi())
+        @assertTrue(equal)
+        equal = (n_points_vp == get_n_points_vp())
+        @assertTrue(equal)
+        equal = (n_points_mu == get_n_points_mu())
+        @assertTrue(equal)
+        equal = (n_points_sp == get_n_points_sp())
+        @assertTrue(equal)
+        equal = (equilibrium_type == get_equilibrium_type())
+        @assertTrue(equal)
+        equal = (only_first_field_period .eqv. get_only_first_field_period())
+        @assertTrue(equal)
+        equal = (extend_beyond_wall .eqv. get_extend_beyond_wall())
+        @assertTrue(equal)
+        equal = (quad_type_vp == get_quad_type_vp())
+        @assertTrue(equal)
+        equal = (grid_type_mu == get_grid_type_mu())
+        @assertTrue(equal)
+        equal = (use_vspectral .eqv. get_use_vspectral())
+        @assertTrue(equal)
+        equal = (use_bsg .eqv. get_use_bsg())
+        @assertTrue(equal)
+        equal = all(reorder_size == get_reorder_size())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_bsg_parameters()
+        !! Tests read and write of the BSG parameters
+        integer :: num_blocks, bsg_interp_order
+        logical :: equal
+        real(kind=GP), dimension(MAX_BLOCKS) :: vplen_markers, radial_markers
+
+        num_blocks       = get_num_bsg_blocks()
+        vplen_markers    = get_vplen_markers()
+        radial_markers   = get_radial_markers()
+        bsg_interp_order = get_bsg_interp_order()
+
+        call write_params_bsg(filename)
+        @assertTrue(file_contains("num_blocks"))
+        @assertTrue(file_contains("vplen_markers"))
+        @assertTrue(file_contains("radial_markers"))
+        @assertTrue(file_contains("bsg_interp_order"))
+        call read_params_bsg(filename)
+
+        equal = (num_blocks == get_num_bsg_blocks())
+        @assertTrue(equal)
+        equal = all(vplen_markers == get_vplen_markers())
+        @assertTrue(equal)
+        equal = all(radial_markers == get_radial_markers())
+        @assertTrue(equal)
+        equal = (bsg_interp_order == get_bsg_interp_order())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_mms_parameters()
+        !! Tests read and write of the MMS parameters
+        integer :: npol, ntor, nrad
+        real(kind=GP) :: omega, q, shear, minor_r, ell_ax1, ell_ax2
+        logical :: equal
+
+        npol    = get_npol()
+        ntor    = get_ntor()
+        nrad    = get_nrad()
+        omega   = get_omega()
+        q       = get_q()
+        shear   = get_shear()
+        minor_r = get_minor_r()
+        ell_ax1 = get_ell_ax1()
+        ell_ax2 = get_ell_ax2()
+
+        call write_params_mms(filename)
+        @assertTrue(file_contains("params_mms"))
+        @assertTrue(file_contains("npol"))
+        @assertTrue(file_contains("ntor"))
+        @assertTrue(file_contains("nrad"))
+        @assertTrue(file_contains("omega"))
+        @assertTrue(file_contains("q"))
+        @assertTrue(file_contains("shear"))
+        @assertTrue(file_contains("minor_r"))
+        @assertTrue(file_contains("ell_ax1"))
+        @assertTrue(file_contains("ell_ax2"))
+        call read_params_mms(filename)
+
+        equal = (npol == get_npol())
+        @assertTrue(equal)
+        equal = (ntor == get_ntor())
+        @assertTrue(equal)
+        equal = (nrad == get_nrad())
+        @assertTrue(equal)
+        equal = almost_equal(omega, get_omega(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(q, get_q(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(shear, get_shear(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(minor_r, get_minor_r(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(ell_ax1, get_ell_ax1(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(ell_ax2, get_ell_ax2(), GP_EPS)
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_normalization_parameters()
+        !! Tests read and write of the normalization parameters
+        real(kind=GP) :: m_ref, T_ref, n_ref, L_ref, B_ref, P_ref
+        real(kind=GP) :: rho_ref, c_ref, coll_ref, beta_ref, diff_ref, &
+                         rate_ref, xsec_ref, fuel_ref, heat_ref, &
+                         torque_ref
+        logical :: equal
+
+        m_ref = get_m_ref()
+        T_ref = get_T_ref()
+        n_ref = get_n_ref()
+        L_ref = get_L_ref()
+        B_ref = get_B_ref()
+        P_ref = get_P_ref()
+        rho_ref  = get_rho_ref()
+        c_ref    = get_c_ref()
+        coll_ref = get_coll_ref()
+        beta_ref = get_beta_ref()
+        diff_ref = get_diff_ref()
+        rate_ref = get_rate_ref()
+        xsec_ref = get_xsec_ref()
+        fuel_ref = get_fuel_ref()
+        torque_ref = get_torque_ref()
+        heat_ref = get_heat_ref()
+
+        call check_derived_params()
+        call write_params_normalization(filename)
+        @assertTrue(file_contains("params_normalization"))
+        @assertTrue(file_contains("m_ref"))
+        @assertTrue(file_contains("T_ref"))
+        @assertTrue(file_contains("n_ref"))
+        @assertTrue(file_contains("L_ref"))
+        @assertTrue(file_contains("B_ref"))
+        @assertTrue(file_contains("P_ref"))
+        call read_params_normalization(filename)
+        call check_derived_params()
+
+        equal = almost_equal(m_ref, get_m_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(T_ref, get_T_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(n_ref, get_n_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(L_ref, get_L_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(B_ref, get_B_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(P_ref, get_P_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+
+        equal = almost_equal(rho_ref, get_rho_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        ! Check for rel tol since c_ref is around 1e5
+        equal = almost_equal(1.0_GP, get_c_ref() / c_ref, 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(coll_ref, get_coll_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(beta_ref, get_beta_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(diff_ref, get_diff_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(rate_ref, get_rate_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(xsec_ref, get_xsec_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(fuel_ref, get_fuel_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(torque_ref, get_torque_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(heat_ref, get_heat_ref(), 100.0_GP*GP_EPS)
+        @assertTrue(equal)
+    contains
+        subroutine check_derived_params()
+            real(kind=GP) :: T_eV, T_cgs, m_cgs, B_cgs, L_cgs, n_cgs
+            real(kind=GP) :: c_si, omega, rho_si, beta, coll, diff, rate, &
+                             xsec, fuel, heat
+
+            real(kind=GP), parameter :: e_charge_si = 1.602176634e-019_GP
+            ! Electron charge in C
+            real(kind=GP), parameter :: e_charge_cgs = 4.80320425e-010_GP
+            ! Electron charge in statC
+            real(kind=GP), parameter :: m_proton = 1.67262192369e-024_GP
+            ! Proton mass in g
+            real(kind=GP), parameter :: sol = 2.99792458e10_GP
+            ! Speed of light in cm / s
+
+            T_eV  = get_T_ref() * 1e3_GP   ! to eV
+            ! T in eV times e in C gives the energy in J which relates to
+            ! erg by 1e7
+            T_cgs = T_eV  * e_charge_si * 1e7_GP
+            m_cgs = get_m_ref() * m_proton ! to g
+            B_cgs = get_B_ref() * 1e4_GP   ! to G
+            n_cgs = get_n_ref() * 1e13_GP  ! to cm^-3
+            L_cgs = get_L_ref() * 1e2_GP   ! to cm
+
+            ! Check ref velocity
+            c_si = sqrt(T_cgs / m_cgs) / 100.0_GP
+            equal = almost_equal(1.0_GP, get_c_ref() / c_si, 1e-8_GP)
+            @assertTrue(equal)
+
+            ! Check ref Larmor radius
+            omega = (B_cgs * e_charge_cgs) / (m_cgs * sol)
+            rho_si = c_si / omega
+            equal = almost_equal(rho_si, get_rho_ref(), 1e-9_GP)
+            @assertTrue(equal)
+
+            ! Check ref beta
+            beta = 8.0_GP * PI * n_cgs * T_cgs / B_cgs**2
+            equal = almost_equal(beta, get_beta_ref(), 1e-5_GP)
+            @assertTrue(equal)
+
+            ! Check ref coll
+            coll = (16.0_GP / 3.0_GP) * sqrt(2.0_GP * PI) * &
+                   e_charge_cgs**4 * n_cgs * L_cgs / T_cgs**2
+            equal = almost_equal(coll, get_coll_ref(), 1e-11_GP)
+            @assertTrue(equal)
+
+            ! Check ref diff
+            ! 1e2: conversion m -> cm
+            diff = c_si * L_cgs / 1e2_GP
+            equal = almost_equal(1.0_GP, get_diff_ref() / diff, 1e-8_GP)
+            @assertTrue(equal)
+
+            ! Check ref rate
+            ! 1e15: conversion 1e19 m^{-2} -> cm^{-2}
+            rate = c_si * 1e15_GP / (L_cgs * n_cgs)
+            equal = almost_equal(1.0_GP, get_rate_ref() / rate, 1e-8_GP)
+            @assertTrue(equal)
+
+            ! Check ref cross-section
+            xsec = 1e15_GP / (L_cgs * n_cgs)
+            equal = almost_equal(1.0_GP, get_xsec_ref() / xsec, 1e-8_GP)
+            @assertTrue(equal)
+
+            ! Check ref fuelling
+            ! Does the check in SI units, except n which is in 1e19 m^{-3}
+            fuel = (L_cgs / 1e2_GP)**2 * c_si * get_n_ref()
+            equal = almost_equal(1.0_GP, get_fuel_ref() / fuel, 1e-8_GP)
+            @assertTrue(equal)
+
+            ! Check ref heat source
+            ! Does the check in SI units and convert W to kW
+            heat = (L_cgs / 1e2_GP)**2 * c_si * (T_cgs / 1e7_GP) &
+                 * (n_cgs * 1e6_GP)
+            heat = heat / 1e3_GP
+            equal = almost_equal(1.0_GP, get_heat_ref() / heat, 1e-8_GP)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_numerical_scheme_parameters()
+        !! Tests read and write of the numerical_scheme parameters
+        integer :: int_order
+        real(kind=GP) :: hyp_y, hyp_xz, hyp_vp
+        integer :: buf_zone_size, buf_zone_size_axis
+        real(kind=GP) :: buf_zone_strength, buf_zone_strength_axis
+        logical :: equal
+
+        int_order = get_int_order()
+        hyp_y     = get_hyp_y()
+        hyp_xz    = get_hyp_xz()
+        hyp_vp    = get_hyp_vp()
+        buf_zone_size          = get_buf_zone_size()
+        buf_zone_strength      = get_buf_zone_strength()
+        buf_zone_size_axis     = get_buf_zone_size_axis()
+        buf_zone_strength_axis = get_buf_zone_strength_axis()
+
+        call write_params_numerical_scheme(filename)
+        @assertTrue(file_contains("params_numerical_scheme"))
+        @assertTrue(file_contains("int_order"))
+        @assertTrue(file_contains("hyp_y"))
+        @assertTrue(file_contains("hyp_xz"))
+        @assertTrue(file_contains("hyp_vp"))
+        @assertTrue(file_contains("buf_zone_size"))
+        @assertTrue(file_contains("buf_zone_strength"))
+        @assertTrue(file_contains("buf_zone_size_axis"))
+        @assertTrue(file_contains("buf_zone_strength_axis"))
+        call read_params_numerical_scheme(filename)
+
+        equal = (int_order == get_int_order())
+        @assertTrue(equal)
+        equal = (hyp_y == get_hyp_y())
+        @assertTrue(equal)
+        equal = (hyp_xz == get_hyp_xz())
+        @assertTrue(equal)
+        equal = (hyp_vp == get_hyp_vp())
+        @assertTrue(equal)
+        equal = (buf_zone_size == get_buf_zone_size())
+        @assertTrue(equal)
+        equal = (buf_zone_strength == get_buf_zone_strength())
+        @assertTrue(equal)
+        equal = (buf_zone_size_axis == get_buf_zone_size_axis())
+        @assertTrue(equal)
+        equal = (buf_zone_strength_axis == get_buf_zone_strength_axis())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_parallelization_parameters()
+        !! Tests read and write of the parallelization parameters
+        integer :: n_procs_RZ, n_procs_vp, n_procs_mu, n_procs_phi, n_procs_sp
+        logical :: equal
+
+        n_procs_RZ  = get_n_procs_RZ()
+        n_procs_vp  = get_n_procs_vp()
+        n_procs_mu  = get_n_procs_mu()
+        n_procs_phi = get_n_procs_phi()
+        n_procs_sp  = get_n_procs_sp()
+
+        call write_params_parallelization(filename)
+        @assertTrue(file_contains("params_parallelization"))
+        @assertTrue(file_contains("n_procs_RZ"))
+        @assertTrue(file_contains("n_procs_vp"))
+        @assertTrue(file_contains("n_procs_mu"))
+        @assertTrue(file_contains("n_procs_phi"))
+        @assertTrue(file_contains("n_procs_sp"))
+        call read_params_parallelization(filename)
+
+        equal = (n_procs_RZ == get_n_procs_RZ())
+        @assertTrue(equal)
+        equal = (n_procs_vp == get_n_procs_vp())
+        @assertTrue(equal)
+        equal = (n_procs_mu == get_n_procs_mu())
+        @assertTrue(equal)
+        equal = (n_procs_phi == get_n_procs_phi())
+        @assertTrue(equal)
+        equal = (n_procs_sp == get_n_procs_sp())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_set_blob_parameters()
+        !! Tests read and write of the set blob parameters
+        real(kind=GP) :: mean_R, mean_Z, mean_phi, mean_vp, &
+                         sigma_R, sigma_Z, sigma_phi, strength
+        logical :: equal
+
+        mean_R    = get_mean_R()
+        mean_Z    = get_mean_Z()
+        mean_phi  = get_mean_phi()
+        mean_vp   = get_mean_vp()
+        sigma_R   = get_sigma_R()
+        sigma_Z   = get_sigma_Z()
+        sigma_phi = get_sigma_phi()
+        strength  = get_blob_strength()
+
+        call write_params_set_blob(filename)
+        @assertTrue(file_contains("params_set_blob"))
+        @assertTrue(file_contains("mean_R"))
+        @assertTrue(file_contains("mean_Z"))
+        @assertTrue(file_contains("mean_phi"))
+        @assertTrue(file_contains("mean_vp"))
+        @assertTrue(file_contains("sigma_R"))
+        @assertTrue(file_contains("sigma_Z"))
+        @assertTrue(file_contains("sigma_phi"))
+        @assertTrue(file_contains("strength"))
+        call read_params_set_blob(filename)
+
+        equal = (mean_R == get_mean_R())
+        @assertTrue(equal)
+        equal = (mean_Z == get_mean_Z())
+        @assertTrue(equal)
+        equal = (mean_phi == get_mean_phi())
+        @assertTrue(equal)
+        equal = (mean_vp == get_mean_vp())
+        @assertTrue(equal)
+        equal = (sigma_R == get_sigma_R())
+        @assertTrue(equal)
+        equal = (sigma_Z == get_sigma_Z())
+        @assertTrue(equal)
+        equal = (sigma_phi == get_sigma_phi())
+        @assertTrue(equal)
+        equal = (strength == get_blob_strength())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_set_mode_parameters()
+        !! Tests read and write of the set blob parameters
+        real(kind=GP) :: strength, mean_rho, sigma_rho, k_par
+        integer :: toroidal_mode_number, poloidal_mode_number
+        logical :: equal
+
+        strength  = get_mode_strength()
+        mean_rho  = get_mean_rho()
+        sigma_rho = get_sigma_rho()
+        k_par     = get_k_par()
+        toroidal_mode_number = get_toroidal_mode_number()
+        poloidal_mode_number = get_poloidal_mode_number()
+
+        call write_params_set_mode(filename)
+        @assertTrue(file_contains("params_set_mode"))
+        @assertTrue(file_contains("strength"))
+        @assertTrue(file_contains("mean_rho"))
+        @assertTrue(file_contains("sigma_rho"))
+        @assertTrue(file_contains("k_par"))
+        call read_params_set_mode(filename)
+
+        equal = (strength == get_mode_strength())
+        @assertTrue(equal)
+        equal = (mean_rho == get_mean_rho())
+        @assertTrue(equal)
+        equal = (sigma_rho == get_sigma_rho())
+        @assertTrue(equal)
+        equal = (toroidal_mode_number == get_toroidal_mode_number())
+        @assertTrue(equal)
+        equal = (poloidal_mode_number == get_poloidal_mode_number())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_source_parameters()
+        !! Tests read and write of the source parameters
+        character(len=16), dimension(n_source_type_supported) :: &
+                                                            source_type
+        integer :: s
+        logical :: equal
+
+        do s = 1, n_source_type_supported
+            source_type(s) = get_source_type(s)
+        enddo
+
+        call write_params_source(filename)
+        @assertTrue(file_contains("params_source"))
+        @assertTrue(file_contains("source_type"))
+        call read_params_source(filename)
+
+        do s = 1, n_source_type_supported
+            equal = (source_type(s) == get_source_type(s))
+            @assertTrue(equal)
+        enddo
+
+    end subroutine
+
+    @test
+    subroutine test_bnd_cond_parameters()
+        !! Tests read and write of the boundary condition parameters
+        character(len=16) :: bnd_cond_type
+        logical :: freeze_dens, freeze_even_mom
+        logical :: equal
+
+        bnd_cond_type = get_bnd_cond_type()
+        freeze_dens = get_freeze_dens()
+        freeze_even_mom = get_freeze_even_mom()
+
+        call write_params_bnd_cond(filename)
+        @assertTrue(file_contains("params_bnd_cond"))
+        @assertTrue(file_contains("bnd_cond_type"))
+        @assertTrue(file_contains("freeze_dens"))
+        @assertTrue(file_contains("freeze_even_mom"))
+        call read_params_bnd_cond(filename)
+        equal = (bnd_cond_type == get_bnd_cond_type())
+        @assertTrue(equal)
+        equal = (freeze_dens .eqv. get_freeze_dens())
+        @assertTrue(equal)
+        equal = (freeze_even_mom .eqv. get_freeze_even_mom())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_source_lapd_parameters()
+        !! Tests read and write of the source lapd parameters
+        real(kind=GP) :: extent, width, strength, c_Te, prefac_Te, prefac_Ti
+        logical :: equal
+
+        extent    = get_extent()
+        width     = get_width()
+        strength  = get_strength()
+        c_Te      = get_c_Te()
+        prefac_Te = get_prefac_Te()
+        prefac_Ti = get_prefac_Ti()
+
+        call write_params_source_lapd(filename)
+        @assertTrue(file_contains("params_source_lapd"))
+        @assertTrue(file_contains("extent"))
+        @assertTrue(file_contains("width"))
+        @assertTrue(file_contains("strength"))
+        @assertTrue(file_contains("c_Te"))
+        @assertTrue(file_contains("prefac_Te"))
+        @assertTrue(file_contains("prefac_Ti"))
+        call read_params_source_lapd(filename)
+
+        equal = (extent == get_extent())
+        @assertTrue(equal)
+        equal = (width == get_width())
+        @assertTrue(equal)
+        equal = (strength == get_strength())
+        @assertTrue(equal)
+        equal = (c_Te == get_c_Te())
+        @assertTrue(equal)
+        equal = (prefac_Te == get_prefac_Te())
+        @assertTrue(equal)
+        equal = (prefac_Ti == get_prefac_Ti())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_source_dens_parameters()
+        !! Tests read and write of the source density parameters
+        integer, parameter :: n_spec = 2
+        type(params_source_loc_t) :: params_old, &
+                                     params_new
+        logical :: equal
+        integer :: i, s
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            params_old = get_params_source_dens(i)
+            fname = "test_params_"//trim(get_name(i))//".txt"
+            call write_params_source_dens(fname, i)
+            @assertTrue(file_contains("params_source_dens", fname))
+            @assertTrue(file_contains("temp", fname))
+            @assertTrue(file_contains("rho_mid", fname))
+            @assertTrue(file_contains("width", fname))
+            @assertTrue(file_contains("amp", fname))
+            @assertTrue(file_contains("is_pure", fname))
+            call read_params_source_dens(fname, i)
+            write(logger_get_debug_channel(), *) &
+            "Test params source dens for "//trim(get_name(i))
+            params_new = get_params_source_dens(i)
+
+            @assertTrue(get_n_source_loc_dens(i) == 1)
+
+            do s = 1, n_source_loc_supported
+                equal = (params_new%temp(s) == params_old%temp(s))
+                @assertTrue(equal)
+                equal = (params_new%rho_mid(s) == params_old%rho_mid(s))
+                @assertTrue(equal)
+                equal = (params_new%amp(s) == params_old%amp(s))
+                @assertTrue(equal)
+                equal = (params_new%width(s) == params_old%width(s))
+                @assertTrue(equal)
+                equal = (params_new%is_pure(s) .eqv. params_old%is_pure(s))
+                @assertTrue(equal)
+            enddo
+        enddo
+
+    end subroutine
+
+    @test
+    subroutine test_source_torque_parameters()
+        !! Tests read and write of the source torque parameters
+        integer, parameter :: n_spec = 2
+        type(params_source_loc_t) :: params_old, &
+                                     params_new
+        logical :: equal
+        integer :: i, s
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            params_old = get_params_source_torque(i)
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_source_torque(fname, i)
+            @assertTrue(file_contains("params_source_torque", fname))
+            @assertTrue(file_contains("temp", fname))
+            @assertTrue(file_contains("rho_mid", fname))
+            @assertTrue(file_contains("width", fname))
+            @assertTrue(file_contains("amp", fname))
+            @assertTrue(file_contains("is_pure", fname))
+            call read_params_source_torque(fname, i)
+            write(logger_get_debug_channel(), *) &
+                 "Test params source torque for "//trim(get_name(i))
+            params_new = get_params_source_torque(i)
+
+            @assertTrue(get_n_source_loc_torque(i) == 1)
+
+            do s = 1, n_source_loc_supported
+                equal = (params_new%temp(s) == params_old%temp(s))
+                @assertTrue(equal)
+                equal = (params_new%rho_mid(s) == params_old%rho_mid(s))
+                @assertTrue(equal)
+                equal = (params_new%amp(s) == params_old%amp(s))
+                @assertTrue(equal)
+                equal = (params_new%width(s) == params_old%width(s))
+                @assertTrue(equal)
+                equal = (params_new%is_pure(s) .eqv. params_old%is_pure(s))
+                @assertTrue(equal)
+            enddo
+        enddo
+
+    end subroutine
+
+    @test
+    subroutine test_source_heat_parameters()
+        !! Tests read and write of the source heat parameters
+        integer, parameter :: n_spec = 2
+        type(params_source_loc_t) :: params_old, &
+                                     params_new
+        logical :: equal
+        integer :: i, s
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            params_old = get_params_source_heat(i)
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_source_heat(fname, i)
+            @assertTrue(file_contains("params_source_heat", fname))
+            @assertTrue(file_contains("temp", fname))
+            @assertTrue(file_contains("rho_mid", fname))
+            @assertTrue(file_contains("width", fname))
+            @assertTrue(file_contains("amp", fname))
+            @assertTrue(file_contains("is_pure", fname))
+            call read_params_source_heat(fname, i)
+            write(logger_get_debug_channel(), *) &
+                "Test params source heat for "//trim(get_name(i))
+            params_new = get_params_source_heat(i)
+
+            @assertTrue(get_n_source_loc_heat(i) == 1)
+
+            do s = 1, n_source_loc_supported
+                equal = (params_new%temp(s) == params_old%temp(s))
+                @assertTrue(equal)
+                equal = (params_new%rho_mid(s) == params_old%rho_mid(s))
+                @assertTrue(equal)
+                equal = (params_new%amp(s) == params_old%amp(s))
+                @assertTrue(equal)
+                equal = (params_new%width(s) == params_old%width(s))
+                @assertTrue(equal)
+                equal = (params_new%is_pure(s) .eqv. params_old%is_pure(s))
+                @assertTrue(equal)
+            enddo
+        enddo
+
+    end subroutine
+
+    @test
+    subroutine test_time_loop_parameters()
+        !! Tests read and write of the time loop parameters
+        real(kind=GP) :: dt
+        integer :: n_timesteps, wrap_up_time, steps_diagnostics, &
+                   steps_checkpoint, n_stages_pirock
+        character(len=16) :: time_stepping_scheme
+        logical :: start_from_checkpoint, run_mms
+        logical :: equal
+
+        dt                    = get_dt()
+        n_timesteps           = get_n_timesteps()
+        n_stages_pirock       = get_n_stages_pirock()
+        wrap_up_time          = get_wrap_up_time()
+        steps_diagnostics     = get_steps_diagnostics()
+        steps_checkpoint      = get_steps_checkpoint()
+        time_stepping_scheme  = get_time_stepping_scheme()
+        start_from_checkpoint = get_start_from_checkpoint()
+        run_mms               = get_run_mms()
+
+        call write_params_time_loop(filename)
+        @assertTrue(file_contains("params_time_loop"))
+        @assertTrue(file_contains("dt"))
+        @assertTrue(file_contains("n_timesteps"))
+        @assertTrue(file_contains("n_stages_pirock"))
+        @assertTrue(file_contains("wrap_up_time"))
+        @assertTrue(file_contains("steps_diagnostics"))
+        @assertTrue(file_contains("steps_checkpoint"))
+        @assertTrue(file_contains("time_stepping_scheme"))
+        @assertTrue(file_contains("start_from_checkpoint"))
+        @assertTrue(file_contains("run_mms"))
+        call read_params_time_loop(filename)
+
+        equal = (dt == get_dt())
+        @assertTrue(equal)
+        equal = (n_timesteps == get_n_timesteps())
+        @assertTrue(equal)
+        equal = (n_stages_pirock == get_n_stages_pirock())
+        @assertTrue(equal)
+        equal = (wrap_up_time == get_wrap_up_time())
+        @assertTrue(equal)
+        equal = (steps_diagnostics == get_steps_diagnostics())
+        @assertTrue(equal)
+        equal = (steps_checkpoint == get_steps_checkpoint())
+        @assertTrue(equal)
+        equal = (time_stepping_scheme == get_time_stepping_scheme())
+        @assertTrue(equal)
+        equal = (start_from_checkpoint .eqv. get_start_from_checkpoint())
+        @assertTrue(equal)
+        equal = (run_mms .eqv. get_run_mms())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_time_split_parameters()
+        !! Tests read and write of the time split parameters
+        character(len=16) :: time_scheme_collisions, time_scheme_neutrals
+        integer :: n_stages_collisions, n_stages_neutrals
+        real(kind=GP) :: eta_collisions, eta_neutrals
+        logical :: equal
+
+        time_scheme_collisions = get_time_scheme_collisions()
+        time_scheme_neutrals   = get_time_scheme_neutrals()
+        n_stages_collisions    = get_n_stages_collisions()
+        n_stages_neutrals      = get_n_stages_neutrals()
+        eta_collisions         = get_eta_collisions()
+        eta_neutrals           = get_eta_neutrals()
+
+        call write_params_time_split(filename)
+        @assertTrue(file_contains("time_scheme_collisions"))
+        @assertTrue(file_contains("time_scheme_neutrals"))
+        @assertTrue(file_contains("n_stages_collisions"))
+        @assertTrue(file_contains("n_stages_neutrals"))
+        @assertTrue(file_contains("eta_collisions"))
+        @assertTrue(file_contains("eta_neutrals"))
+        call read_params_time_split(filename)
+
+        equal = (time_scheme_collisions == get_time_scheme_collisions())
+        @assertTrue(equal)
+        equal = (time_scheme_neutrals == get_time_scheme_neutrals())
+        @assertTrue(equal)
+        equal = (n_stages_collisions == get_n_stages_collisions())
+        @assertTrue(equal)
+        equal = (n_stages_neutrals == get_n_stages_neutrals())
+        @assertTrue(equal)
+        equal = almost_equal(eta_collisions, get_eta_collisions(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(eta_neutrals, get_eta_neutrals(), GP_EPS)
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_species_parameters()
+        !! Tests read and write of the species parameters
+        integer, parameter :: n_spec = 2
+        real(kind=GP), dimension(n_spec) :: masses, charges, temp_scalings
+        character(len=24), dimension(n_spec) :: names
+        integer :: i
+        logical :: equal
+
+        do i = 1, n_spec
+            masses(i)        = get_mass(i)
+            charges(i)       = get_charge(i)
+            names(i)         = get_name(i)
+            temp_scalings(i) = get_temp_scaling(i)
+        enddo
+
+        call write_params_species(filename)
+        @assertTrue(file_contains("params_species"))
+        @assertTrue(file_contains("masses"))
+        @assertTrue(file_contains("charges"))
+        @assertTrue(file_contains("names"))
+        @assertTrue(file_contains("temp_scalings"))
+        call read_params_species(filename)
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params species for "//trim(get_name(i))
+            equal = (masses(i) == get_mass(i))
+            @assertTrue(equal)
+            equal = (charges(i) == get_charge(i))
+            @assertTrue(equal)
+            equal = (names(i) == get_name(i))
+            @assertTrue(equal)
+            equal = (temp_scalings(i) == get_temp_scaling(i))
+            @assertTrue(equal)
+
+            if(names(i) == "electrons") then
+                @assertTrue(get_is_electrons(i))
+            else
+                @assertTrue(.not. get_is_electrons(i))
+            endif
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_species_config_parameters()
+        !! Tests read and write of the species config parameters
+        integer, parameter :: n_spec = 2
+        type(params_species_config_t), dimension(n_spec) :: &
+            spec_configs_old, spec_configs_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params species config for "//trim(get_name(i))
+
+            spec_configs_old(i) = get_params_species_config(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_species_config(fname, i)
+            @assertTrue(file_contains("params_species_config", fname))
+            @assertTrue(file_contains("dist_initial_type", fname))
+            @assertTrue(file_contains("is_isotropic", fname))
+            @assertTrue(file_contains("profile_type_dens", fname))
+            @assertTrue(file_contains("profile_type_temp", fname))
+            @assertTrue(file_contains("profile_type_temp_par", fname))
+            @assertTrue(file_contains("profile_type_temp_perp", fname))
+            call read_params_species_config(fname, i)
+
+            spec_configs_new(i) = get_params_species_config(i)
+
+            equal = (spec_configs_new(i)%dist_initial_type &
+                        == spec_configs_old(i)%dist_initial_type)
+            @assertTrue(equal)
+            equal = (spec_configs_new(i)%is_isotropic &
+                        .eqv. spec_configs_old(i)%is_isotropic)
+            @assertTrue(equal)
+            equal = (spec_configs_new(i)%profile_type_dens &
+                        == spec_configs_old(i)%profile_type_dens)
+            @assertTrue(equal)
+            equal = (spec_configs_new(i)%profile_type_temp &
+                        == spec_configs_old(i)%profile_type_temp)
+            @assertTrue(equal)
+            equal = (spec_configs_new(i)%profile_type_temp_par &
+                        == spec_configs_old(i)%profile_type_temp_par)
+            @assertTrue(equal)
+            equal = (spec_configs_new(i)%profile_type_temp_perp &
+                        == spec_configs_old(i)%profile_type_temp_perp)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_neutrals_parameters()
+        !! Tests read and write of the neutrals parameters
+        integer, parameter :: n_neut = 1
+        real(kind=GP), dimension(n_neut) :: masses
+        character(len=24), dimension(n_neut) :: names
+        character(len=24), dimension(n_neut) :: mapped_ions_names
+        integer :: o
+        logical :: equal
+
+        do o = 1, n_neut
+            masses(o) = get_neut_mass(o)
+            names(o) = get_neut_name(o)
+            mapped_ions_names(o) = get_neut_mapped_ion_name(o)
+        enddo
+
+        call write_params_neutrals(filename)
+        @assertTrue(file_contains("params_neutrals"))
+        @assertTrue(file_contains("masses"))
+        @assertTrue(file_contains("names"))
+        @assertTrue(file_contains("mapped_ions_names"))
+        call read_params_neutrals(filename)
+
+        do o = 1, n_neut
+            write(logger_get_debug_channel(), *) &
+                "Test params neutrals for "//trim(get_neut_name(o))
+            equal = almost_equal(masses(o), get_neut_mass(o), GP_EPS)
+            @assertTrue(equal)
+            equal = (names(o) == get_neut_name(o))
+            @assertTrue(equal)
+            equal = (mapped_ions_names(o) == get_neut_mapped_ion_name(o))
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_neutrals_config_parameters()
+        !! Tests read and write of the neutrals config parameters
+        integer, parameter :: n_spec = 1
+        character(len=16) :: neutrals_evolve_type
+        character(len=16) :: neutrals_coupling_type
+        real(kind=GP) :: neutrals_dens_floor
+        real(kind=GP) :: neutrals_temp_floor
+        real(kind=GP) :: neutrals_gamma_u
+        real(kind=GP) :: neutrals_gamma_T
+        real(kind=GP) :: neutrals_gamma_W
+        logical :: equal
+
+        neutrals_evolve_type = get_neut_evolve_type()
+        neutrals_coupling_type = get_neut_coupling_type()
+        neutrals_dens_floor = get_neut_dens_floor()
+        neutrals_temp_floor = get_neut_temp_floor()
+        neutrals_gamma_u = get_neut_gamma_u()
+        neutrals_gamma_T = get_neut_gamma_T()
+        neutrals_gamma_W = get_neut_gamma_W()
+
+        write(logger_get_debug_channel(), *) &
+              "Test neutrals config params"
+
+        call write_params_neutrals_config(filename)
+        @assertTrue(file_contains("neutrals_evolve_type"))
+        @assertTrue(file_contains("neutrals_coupling_type"))
+        @assertTrue(file_contains("neutrals_dens_floor"))
+        @assertTrue(file_contains("neutrals_temp_floor"))
+        @assertTrue(file_contains("neutrals_gamma_u"))
+        @assertTrue(file_contains("neutrals_gamma_T"))
+        @assertTrue(file_contains("neutrals_gamma_W"))
+        call read_params_neutrals(filename)
+
+        equal = (neutrals_evolve_type == get_neut_evolve_type())
+        @assertTrue(equal)
+        equal = (neutrals_coupling_type == get_neut_coupling_type())
+        @assertTrue(equal)
+        equal = almost_equal(neutrals_dens_floor, get_neut_dens_floor(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(neutrals_temp_floor, get_neut_temp_floor(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(neutrals_gamma_u, get_neut_gamma_u(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(neutrals_gamma_T, get_neut_gamma_T(), GP_EPS)
+        @assertTrue(equal)
+        equal = almost_equal(neutrals_gamma_W, get_neut_gamma_W(), GP_EPS)
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_neutrals_init_parameters()
+        !! Tests read and write of the neutrals init parameters
+        integer, parameter :: n_spec = 1
+        type(params_neutrals_init_t), dimension(n_spec) :: &
+            neut_init_old, neut_init_new
+        integer :: o
+        logical :: equal
+        character(len=64) :: fname
+
+        do o = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params neutrals init for "//trim(get_neut_name(o))
+
+            neut_init_old(o) = get_neut_params_init(o)
+
+            fname = "test_params_"//trim(get_neut_name(o))//".txt"
+
+            call write_params_neutrals_init(fname, o)
+            @assertTrue(file_contains("params_neutrals_init", fname))
+            @assertTrue(file_contains("profile_type_dens", fname))
+            @assertTrue(file_contains("initial_perturbation_dens", fname))
+            call read_params_neutrals_init(fname, o)
+
+            neut_init_new(o) = get_neut_params_init(o)
+
+            equal = (trim(neut_init_new(o)%profile_type_dens) &
+                     == trim(neut_init_old(o)%profile_type_dens))
+            @assertTrue(equal)
+            equal = (neut_init_new(o)%initial_perturbation_dens &
+                     == neut_init_old(o)%initial_perturbation_dens)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_neutrals_set_blob()
+        !! Tests read and write of the neutrals set blob parameters
+        integer, parameter :: n_spec = 1
+        type(params_neut_blob_t) :: blob_dens_old, blob_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            blob_dens_old = get_neut_params_blob_dens(i)
+
+            fname = "test_params_"//trim(get_neut_name(i))//".txt"
+
+            call write_params_neutrals_set_blob(fname, i)
+            @assertTrue(file_contains("params_neutrals_blob_dens", fname))
+            @assertTrue(file_contains("mean_R", fname))
+            @assertTrue(file_contains("mean_Z", fname))
+            @assertTrue(file_contains("mean_phi", fname))
+            @assertTrue(file_contains("sigma_R", fname))
+            @assertTrue(file_contains("sigma_Z", fname))
+            @assertTrue(file_contains("sigma_phi", fname))
+            @assertTrue(file_contains("strength", fname))
+            call read_params_neutrals_set_blob(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile blob dens for "//trim(get_neut_name(i))
+            blob_new = get_neut_params_blob_dens(i)
+            call compare_blob(blob_dens_old, blob_new)
+        end do
+    contains
+        subroutine compare_blob(blob_old, blob_new)
+            type(params_neut_blob_t), intent(in) :: blob_old, &
+                                                    blob_new
+
+            equal = almost_equal(blob_old%mean_R, blob_new%mean_R, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%mean_Z, blob_new%mean_Z, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%mean_phi, blob_new%mean_phi, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%sigma_R, blob_new%sigma_R, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%sigma_Z, blob_new%sigma_Z, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%sigma_phi, blob_new%sigma_phi, GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(blob_old%strength, blob_new%strength, GP_EPS)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_profile_uniform_parameters()
+        !! Tests read and write of the profile uniform (neutrals) parameters
+        integer, parameter :: n_spec = 1
+        type(params_profile_uniform_t) :: uniform_dens_old, uniform_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            uniform_dens_old = get_params_profile_uniform_dens(i)
+
+            fname = "test_params_"//trim(get_neut_name(i))//".txt"
+
+            call write_params_profile_uniform(fname, i)
+            @assertTrue(file_contains("params_profile_uniform_dens", fname))
+            @assertTrue(file_contains("strength", fname))
+            call read_params_profile_uniform(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile uniform dens for "//trim(get_neut_name(i))
+            uniform_new = get_params_profile_uniform_dens(i)
+            call compare_uniform(uniform_dens_old, uniform_new)
+        enddo
+    contains
+        subroutine compare_uniform(uniform_old, uniform_new)
+            type(params_profile_uniform_t), intent(in) :: uniform_old, &
+                                                          uniform_new
+
+            equal = almost_equal(uniform_old%strength, &
+                                 uniform_new%strength, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_profile_plateau_parameters()
+        !! Tests read and write of the profile plateau (neutrals) parameters
+        integer, parameter :: n_spec = 1
+        type(params_profile_plateau_t) :: plateau_dens_old, plateau_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            plateau_dens_old      = get_params_profile_plateau_dens(i)
+
+            fname = "test_params_"//trim(get_neut_name(i))//".txt"
+
+            call write_params_profile_plateau(fname, i)
+            @assertTrue(file_contains("params_profile_plateau_dens", fname))
+            @assertTrue(file_contains("rho_inner_foot", fname))
+            @assertTrue(file_contains("rho_inner_top", fname))
+            @assertTrue(file_contains("rho_outer_top", fname))
+            @assertTrue(file_contains("rho_outer_foot", fname))
+            @assertTrue(file_contains("amp_in", fname))
+            @assertTrue(file_contains("amp_plateau", fname))
+            @assertTrue(file_contains("amp_out", fname))
+            call read_params_profile_plateau(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile plateau dens for "//trim(get_neut_name(i))
+            plateau_new = get_params_profile_plateau_dens(i)
+            call compare_plateau(plateau_dens_old, plateau_new)
+        enddo
+    contains
+        subroutine compare_plateau(plateau_old, plateau_new)
+            type(params_profile_plateau_t), intent(in) :: plateau_old, &
+                                                          plateau_new
+
+            equal = almost_equal(plateau_old%rho_inner_foot, &
+                                 plateau_new%rho_inner_foot, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%rho_inner_top, &
+                                 plateau_new%rho_inner_top, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%rho_outer_top, &
+                                 plateau_new%rho_outer_top, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%rho_outer_foot, &
+                                 plateau_new%rho_outer_foot, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%amp_in, &
+                                 plateau_new%amp_in, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%amp_plateau, &
+                                 plateau_new%amp_plateau, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+            equal = almost_equal(plateau_old%amp_out, &
+                                 plateau_new%amp_out, 10.0_GP * GP_EPS)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_profile_cbc_parameters()
+        !! Tests read and write of the profile cbc parameters
+        integer, parameter :: n_spec = 2
+        type(params_profile_cbc_t) :: cbc_dens_old, cbc_temp_old, &
+            cbc_temp_par_old, cbc_temp_perp_old, cbc_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            cbc_dens_old      = get_params_profile_cbc_dens(i)
+            cbc_temp_old      = get_params_profile_cbc_temp(i)
+            cbc_temp_par_old  = get_params_profile_cbc_temp_par(i)
+            cbc_temp_perp_old = get_params_profile_cbc_temp_perp(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_profile_cbc(fname, i)
+            @assertTrue(file_contains("params_profile_cbc_dens", fname))
+            @assertTrue(file_contains("params_profile_cbc_temp", fname))
+            @assertTrue(file_contains("params_profile_cbc_temp_par", fname))
+            @assertTrue(file_contains("params_profile_cbc_temp_perp", fname))
+            ! NOTE: We currently only check if the parameters have been written
+            !       once for dens, temp, temp_par or temp_perp. To improve the
+            !       test once could check if the file contains them multiple
+            !       times.
+            @assertTrue(file_contains("kappa", fname))
+            @assertTrue(file_contains("prefac", fname))
+            @assertTrue(file_contains("delta", fname))
+            @assertTrue(file_contains("center", fname))
+            call read_params_profile_cbc(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile cbc dens for "//trim(get_name(i))
+            cbc_new = get_params_profile_cbc_dens(i)
+            call compare_cbc(cbc_dens_old, cbc_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile cbc temp for "//trim(get_name(i))
+            cbc_new = get_params_profile_cbc_temp(i)
+            call compare_cbc(cbc_temp_old, cbc_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile cbc temp par for "//trim(get_name(i))
+            cbc_new = get_params_profile_cbc_temp_par(i)
+            call compare_cbc(cbc_temp_par_old, cbc_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile cbc temp perp for "//trim(get_name(i))
+            cbc_new = get_params_profile_cbc_temp_perp(i)
+            call compare_cbc(cbc_temp_perp_old, cbc_new)
+        enddo
+    contains
+        subroutine compare_cbc(cbc_old, cbc_new)
+            type(params_profile_cbc_t), intent(in) :: cbc_old, cbc_new
+
+            equal = (cbc_old%kappa  == cbc_new%kappa)
+            @assertTrue(equal)
+            equal = (cbc_old%prefac == cbc_new%prefac)
+            @assertTrue(equal)
+            equal = (cbc_old%delta  == cbc_new%delta)
+            @assertTrue(equal)
+            equal = (cbc_old%center == cbc_new%center)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_profile_sine_parameters()
+        !! Tests read and write of the profile sine parameters
+        integer, parameter :: n_spec = 2
+        type(params_profile_sine_t) :: sine_dens_old, sine_temp_old, &
+            sine_temp_par_old, sine_temp_perp_old, sine_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            sine_dens_old      = get_params_profile_sine_dens(i)
+            sine_temp_old      = get_params_profile_sine_temp(i)
+            sine_temp_par_old  = get_params_profile_sine_temp_par(i)
+            sine_temp_perp_old = get_params_profile_sine_temp_perp(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_profile_sine(fname, i)
+            @assertTrue(file_contains("params_profile_sine_dens", fname))
+            @assertTrue(file_contains("params_profile_sine_temp", fname))
+            @assertTrue(file_contains("params_profile_sine_temp_par", fname))
+            @assertTrue(file_contains("params_profile_sine_temp_perp", fname))
+            ! NOTE: We currently only check if the parameters have been written
+            !       once for dens, temp, temp_par or temp_perp. To improve the
+            !       test once could check if the file contains them multiple
+            !       times.
+            @assertTrue(file_contains("rho_min", fname))
+            @assertTrue(file_contains("rho_max", fname))
+            @assertTrue(file_contains("amp_min", fname))
+            @assertTrue(file_contains("amp_max", fname))
+            call read_params_profile_sine(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile sine dens for "//trim(get_name(i))
+            sine_new = get_params_profile_sine_dens(i)
+            call compare_sine(sine_dens_old, sine_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile sine temp for "//trim(get_name(i))
+            sine_new = get_params_profile_sine_temp(i)
+            call compare_sine(sine_temp_old, sine_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile sine temp par for "//trim(get_name(i))
+            sine_new = get_params_profile_sine_temp_par(i)
+            call compare_sine(sine_temp_par_old, sine_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile sine temp perp for "//trim(get_name(i))
+            sine_new = get_params_profile_sine_temp_perp(i)
+            call compare_sine(sine_temp_perp_old, sine_new)
+        enddo
+    contains
+        subroutine compare_sine(sine_old, sine_new)
+            type(params_profile_sine_t), intent(in) :: sine_old, sine_new
+
+            equal = (sine_old%rho_min == sine_new%rho_min)
+            @assertTrue(equal)
+            equal = (sine_old%rho_max == sine_new%rho_max)
+            @assertTrue(equal)
+            equal = (sine_old%amp_min == sine_new%amp_min)
+            @assertTrue(equal)
+            equal = (sine_old%amp_max == sine_new%amp_max)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_profile_lapd_parameters()
+        !! Tests read and write of the profile lapd parameters
+        integer, parameter :: n_spec = 2
+        type(params_profile_lapd_t) :: lapd_dens_old, lapd_temp_old, lapd_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            lapd_dens_old = get_params_profile_lapd_dens(i)
+            lapd_temp_old = get_params_profile_lapd_temp(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_profile_lapd(fname, i)
+            @assertTrue(file_contains("params_profile_lapd_dens", fname))
+            @assertTrue(file_contains("params_profile_lapd_temp", fname))
+            ! NOTE: We currently only check if the parameters have been written
+            !       once for dens, temp, temp_par or temp_perp. To improve the
+            !       test once could check if the file contains them multiple
+            !       times.
+            @assertTrue(file_contains("cfac", fname))
+            @assertTrue(file_contains("prefac", fname))
+            call read_params_profile_lapd(fname, i)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile lapd dens for "//trim(get_name(i))
+            lapd_new = get_params_profile_lapd_dens(i)
+            call compare_lapd(lapd_dens_old, lapd_new)
+
+            write(logger_get_debug_channel(), *) &
+                "Test params profile lapd temp for "//trim(get_name(i))
+            lapd_new = get_params_profile_lapd_temp(i)
+            call compare_lapd(lapd_temp_old, lapd_new)
+        enddo
+    contains
+        subroutine compare_lapd(lapd_old, lapd_new)
+            type(params_profile_lapd_t), intent(in) :: lapd_old, lapd_new
+
+            equal = (lapd_old%cfac == lapd_new%cfac)
+            @assertTrue(equal)
+            equal = (lapd_old%prefac == lapd_new%prefac)
+            @assertTrue(equal)
+        end subroutine
+    end subroutine
+
+    @test
+    subroutine test_diagnostics_parameters()
+        !! Tests read and write of the diagnostics parameters
+        integer :: polar_n_theta, polar_n_rho
+        logical :: diagnose_tpc
+        logical :: equal
+
+        polar_n_theta = get_polar_n_theta()
+        polar_n_rho   = get_polar_n_rho()
+        diagnose_tpc  = get_diagnose_tpc()
+
+        write(logger_get_debug_channel(), *) &
+              "Test params diagnostics"
+
+        call write_params_diagnostics(filename)
+        @assertTrue(file_contains("params_diagnostics"))
+        @assertTrue(file_contains("polar_n_theta"))
+        @assertTrue(file_contains("polar_n_rho"))
+        @assertTrue(file_contains("diagnose_tpc"))
+        call read_params_diagnostics(filename)
+
+        equal = (polar_n_theta == get_polar_n_theta())
+        @assertTrue(equal)
+        equal = (polar_n_rho == get_polar_n_rho())
+        @assertTrue(equal)
+        equal = (diagnose_tpc .eqv. get_diagnose_tpc())
+        @assertTrue(equal)
+    end subroutine
+
+    @test
+    subroutine test_dist_initial_bi_maxw_parameters()
+        !! Tests read and write of the dist initial bi maxw parameters
+        integer, parameter :: n_spec = 2
+        type(params_dist_initial_bi_maxw_t) :: params_old, params_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params dist initial bi maxw for "//get_name(i)
+
+            params_old = get_params_dist_initial_bi_maxw(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_dist_initial_bi_maxw(fname, i)
+            equal = file_contains("params_dist_initial_bi_maxw", fname)
+            @assertTrue(equal)
+            @assertTrue(file_contains("drift_vpar", fname))
+            @assertTrue(file_contains("tau_par", fname))
+            @assertTrue(file_contains("tau_perp", fname))
+            call read_params_dist_initial_bi_maxw(fname, i)
+
+            params_new = get_params_dist_initial_bi_maxw(i)
+
+            equal = (params_old%drift_vpar == params_new%drift_vpar)
+            @assertTrue(equal)
+            equal = (params_old%tau_par == params_new%tau_par)
+            @assertTrue(equal)
+            equal = (params_old%tau_perp == params_new%tau_perp)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_dist_initial_maxw_vspec_parameters()
+        !! Tests read and write of the dist initial spectral maxw parameters
+        integer, parameter :: n_spec = 2
+        type(params_dist_initial_maxw_vspec_t) :: params_old, params_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params dist initial maxw vspec for "//get_name(i)
+
+            params_old = get_params_dist_initial_maxw_vspec(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_dist_initial_maxw_vspec(fname, i)
+            equal = file_contains("params_dist_initial_maxw_vspec", fname)
+            @assertTrue(equal)
+            @assertTrue(file_contains("drift_vpar", fname))
+
+            call read_params_dist_initial_maxw_vspec(fname, i)
+
+            params_new = get_params_dist_initial_maxw_vspec(i)
+
+            equal = (params_old%drift_vpar == params_new%drift_vpar)
+            @assertTrue(equal)
+
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_dist_initial_double_maxw_parameters()
+        !! Tests read and write of the dist initial double maxw parameters
+        integer, parameter :: n_spec = 2
+        type(params_dist_initial_double_maxw_t) :: params_old, params_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params dist initial double maxw for "&
+                //trim(get_name(i))
+
+            params_old = get_params_dist_initial_double_maxw(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_dist_initial_double_maxw(fname, i)
+            equal = file_contains("params_dist_initial_double_maxw", &
+                                  fname)
+            @assertTrue(equal)
+            @assertTrue(file_contains("drift_par1", fname))
+            @assertTrue(file_contains("drift_par2", fname))
+            @assertTrue(file_contains("amp1", fname))
+            @assertTrue(file_contains("amp2", fname))
+            call read_params_dist_initial_double_maxw(fname, i)
+
+            params_new = get_params_dist_initial_double_maxw(i)
+
+            equal = (params_old%drift_par1 == params_new%drift_par1)
+            @assertTrue(equal)
+            equal = (params_old%drift_par2 == params_new%drift_par2)
+            @assertTrue(equal)
+            equal = (params_old%amp1 == params_new%amp1)
+            @assertTrue(equal)
+            equal = (params_old%amp2 == params_new%amp2)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_dist_initial_ring_parameters()
+        !! Tests read and write of the dist initial ring parameters
+        integer, parameter :: n_spec = 2
+        type(params_dist_initial_ring_t) :: params_old, params_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params dist initial ring for "//trim(get_name(i))
+
+            params_old = get_params_dist_initial_ring(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_dist_initial_ring(fname, i)
+            equal = file_contains("params_dist_initial_ring", fname)
+            @assertTrue(equal)
+            @assertTrue(file_contains("drift_par", fname))
+            @assertTrue(file_contains("drift_perp", fname))
+            @assertTrue(file_contains("width_par", fname))
+            @assertTrue(file_contains("width_perp", fname))
+            call read_params_dist_initial_ring(fname, i)
+
+            params_new = get_params_dist_initial_ring(i)
+
+            equal = (params_old%drift_par  == params_new%drift_par)
+            @assertTrue(equal)
+            equal = (params_old%drift_perp == params_new%drift_perp)
+            @assertTrue(equal)
+            equal = (params_old%width_par  == params_new%width_par)
+            @assertTrue(equal)
+            equal = (params_old%width_perp == params_new%width_perp)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+
+    @test
+    subroutine test_dist_initial_slowing_down_parameters()
+        !! Tests read and write of the dist initial slowing down parameters
+        integer, parameter :: n_spec = 2
+        type(params_dist_initial_slowing_down_t) :: params_old, params_new
+        integer :: i
+        logical :: equal
+        character(len=64) :: fname
+
+        do i = 1, n_spec
+            write(logger_get_debug_channel(), *) &
+                "Test params dist initial slowing down for "//trim(get_name(i))
+
+            params_old = get_params_dist_initial_slowing_down(i)
+
+            fname = "test_params_"//trim(get_name(i))//".txt"
+
+            call write_params_dist_initial_slowing_down(fname, i)
+            equal = file_contains("params_dist_initial_slowing_down", fname)
+            @assertTrue(equal)
+            @assertTrue(file_contains("vbirth", fname))
+            call read_params_dist_initial_slowing_down(fname, i)
+
+            params_new = get_params_dist_initial_slowing_down(i)
+
+            equal = (params_old%vbirth  == params_new%vbirth)
+            @assertTrue(equal)
+        enddo
+    end subroutine
+end module

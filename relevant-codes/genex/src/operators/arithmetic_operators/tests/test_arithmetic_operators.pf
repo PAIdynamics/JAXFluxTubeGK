@@ -1,0 +1,907 @@
+module test_arithmetic_operators
+    !! Contains tests for the simple arithmetic operators op_set_uniform_t
+    !! op_axpy_t, op_lin_comb_t, op_copy_t on CPU and GPU
+!$  use omp_lib
+    use mpi
+    use pfunit
+    use, intrinsic :: iso_fortran_env
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use logger_m, only: logger_get_debug_channel
+    use math_m, only: random_real, random_int, random_positive_real
+    use op_set_uniform_m, only: op_set_uniform_t, op_set_uniform_cpu_t
+    use op_axpy_m, only: op_axpy_t, op_axpy_cpu_t
+    use op_copy_m, only: op_copy_t, op_copy_cpu_t
+    use op_lin_comb_m, only: op_lin_comb_t, op_lin_comb_cpu_t
+    use params_gpu_offload_m, only: get_use_gpu_offload
+    use helpers_arithmetic_operators_m, only: &
+        ref_value_op_axpy, ref_value_op_lin_comb, &
+        copy_array_device_real, copy_array_device_integer, &
+        copy_array_host_real, copy_array_host_integer
+
+    ! Unit test helpers
+    use test_params_m, only: setup_test_gpu_offload
+
+#ifdef ENABLE_GPU
+    use op_set_uniform_m, only: op_set_uniform_gpu_t
+    use op_axpy_m, only: op_axpy_gpu_t
+    use op_copy_m, only: op_copy_gpu_t
+    use op_lin_comb_m, only: op_lin_comb_gpu_t
+#endif
+
+    implicit none
+
+contains
+
+    @test(npes = [1])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    @test(npes = [1])
+    subroutine test_op_set_uniform(this)
+        !! Tests all versions of op_set_uniform
+        class(MpiTestMethod), intent(inout) :: this
+        integer :: i
+
+        ! Random tests
+        do i=1,10
+            call test_op_set_uniform_real(random_real())
+            call test_op_set_uniform_integer(random_int())
+        end do
+
+        ! Chosen values
+        call test_op_set_uniform_logical(.true.)
+        call test_op_set_uniform_logical(.false.)
+        call test_op_set_uniform_real(2.71828_GP)
+        call test_op_set_uniform_integer(72)
+
+        ! Corner cases
+        call test_op_set_uniform_real(huge(0.0_GP))
+        call test_op_set_uniform_real(tiny(0.0_GP))
+        call test_op_set_uniform_real(epsilon(0.0_GP))
+        call test_op_set_uniform_integer(huge(0))
+
+    end subroutine
+
+    subroutine test_op_set_uniform_real(template)
+        !! Tests the operator op_set_uniform_cpu_t and op_set_uniform_gpu_t
+        !! for real datatype
+        real(kind=GP), intent(in) :: template
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+
+        integer, parameter :: n_threads = 4
+        real(kind=GP), allocatable, dimension(:) :: a_1d
+        real(kind=GP), allocatable, dimension(:, :) :: a_2d
+        real(kind=GP), allocatable, dimension(:, :, :) :: a_3d
+        real(kind=GP), allocatable, dimension(:, :, :, :) :: a_4d
+        real(kind=GP), allocatable, dimension(:, :, :, :, :) :: a_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp, length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+        endif
+        call op_set_uniform%initialize()
+
+        ! Allocate input data for the operator
+        n_rz  = 4
+        n_phi = 4
+        n_vp  = 4
+        n_mu  = 4
+        n_sp  = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_real(length, a_1d)
+        call op_set_uniform%apply(a_1d, template)
+        call copy_array_host_real(length, a_1d)
+        @assertEqual(template, a_1d, tolerance=GP_EPS)
+        deallocate(a_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_real(length, a_2d)
+        call op_set_uniform%apply(a_2d, template)
+        call copy_array_host_real(length, a_2d)
+        @assertEqual(template, a_2d, tolerance=GP_EPS)
+        deallocate(a_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_3d)
+        call op_set_uniform%apply(a_3d, template)
+        call copy_array_host_real(length, a_3d)
+        @assertEqual(template, a_3d, tolerance=GP_EPS)
+        deallocate(a_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_4d)
+        call op_set_uniform%apply(a_4d, template)
+        call copy_array_host_real(length, a_4d)
+        @assertEqual(template, a_4d, tolerance=GP_EPS)
+        deallocate(a_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_5d)
+        call op_set_uniform%apply(a_5d, template)
+        call copy_array_host_real(length, a_5d)
+        @assertEqual(template, a_5d, tolerance=GP_EPS)
+        deallocate(a_5d)
+
+        deallocate(op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    subroutine test_op_set_uniform_integer(template)
+        !! Tests the operator op_set_uniform_cpu_t and op_set_uniform_gpu_t
+        !! for integer datatype
+        integer, intent(in) :: template
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+
+        integer, parameter :: n_threads = 4
+        integer, allocatable, dimension(:) :: a_1d
+        integer, allocatable, dimension(:, :) :: a_2d
+        integer, allocatable, dimension(:, :, :) :: a_3d
+        integer, allocatable, dimension(:, :, :, :) :: a_4d
+        integer, allocatable, dimension(:, :, :, :, :) :: a_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp, length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+        endif
+        call op_set_uniform%initialize()
+
+        ! Allocate input data for the operator
+        n_rz  = 4
+        n_phi = 4
+        n_vp  = 4
+        n_mu  = 4
+        n_sp  = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_integer(length, a_1d)
+        call op_set_uniform%apply(a_1d, template)
+        call copy_array_host_integer(length, a_1d)
+        @assertEqual(template, a_1d)
+        deallocate(a_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_integer(length, a_2d)
+        call op_set_uniform%apply(a_2d, template)
+        call copy_array_host_integer(length, a_2d)
+        @assertEqual(template, a_2d)
+        deallocate(a_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_3d)
+        call op_set_uniform%apply(a_3d, template)
+        call copy_array_host_integer(length, a_3d)
+        @assertEqual(template, a_3d)
+        deallocate(a_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_4d)
+        call op_set_uniform%apply(a_4d, template)
+        call copy_array_host_integer(length, a_4d)
+        @assertEqual(template, a_4d)
+        deallocate(a_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_5d)
+        call op_set_uniform%apply(a_5d, template)
+        call copy_array_host_integer(length, a_5d)
+        @assertEqual(template, a_5d)
+        deallocate(a_5d)
+
+        deallocate(op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    subroutine test_op_set_uniform_logical(template)
+        !! Tests the operator op_set_uniform_cpu_t and op_set_uniform_gpu_t
+        !! for logical datatype but only on CPU
+        logical, intent(in) :: template
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+
+        integer, parameter :: n_threads = 4
+        logical, allocatable, dimension(:) :: a_1d
+        logical, allocatable, dimension(:, :) :: a_2d
+        logical, allocatable, dimension(:, :, :) :: a_3d
+        logical, allocatable, dimension(:, :, :, :) :: a_4d
+        logical, allocatable, dimension(:, :, :, :, :) :: a_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+        endif
+        call op_set_uniform%initialize()
+
+        ! Allocate input data for the operator
+        n_rz = 4
+        n_phi = 4
+        n_vp = 4
+        n_mu = 4
+        n_sp = 4
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call op_set_uniform%apply(a_1d, template)
+        @assertEqual(template, a_1d)
+        deallocate(a_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call op_set_uniform%apply(a_2d, template)
+        @assertEqual(template, a_2d)
+        deallocate(a_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_3d, template)
+        @assertEqual(template, a_3d)
+        deallocate(a_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_4d, template)
+        @assertEqual(template, a_4d)
+        deallocate(a_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_5d, template)
+        @assertEqual(template, a_5d)
+        deallocate(a_5d)
+
+        deallocate(op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    @test(npes = [1])
+    subroutine test_op_axpy(this)
+        !! Tests all versions of op_axpy
+        class(MpiTestMethod), intent(inout) :: this
+        real(kind=GP) :: rnd_alpha, rnd_y, rnd_x
+        integer :: i
+
+        ! Random tests
+        do i=1,1000
+            call random_number(rnd_y)
+            call random_number(rnd_alpha)
+            call random_number(rnd_x)
+
+            call test_op_axpy_core(rnd_y, random_real()/2.0_GP, rnd_x)
+            call test_op_axpy_core(random_real()/2.0_GP, rnd_alpha, &
+                                    random_real()/2.0_GP)
+        end do
+
+        ! Chosen values
+        call test_op_axpy_core(1.0_GP, 1.0_GP / 6.0_GP, 2.0_GP)
+
+    end subroutine
+
+    subroutine test_op_axpy_core(template_y, alpha, template_x)
+        !! Tests the op_axpy_cpu_t and op_axpy_gpu_t operators
+        real(kind=GP), intent(in) :: template_y
+        real(kind=GP), intent(in) :: alpha
+        real(kind=GP), intent(in) :: template_x
+
+        class(op_axpy_t), allocatable :: op_axpy
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+
+        integer, parameter :: n_threads = 4
+        real(kind=GP), allocatable, dimension(:) :: a_1d, b_1d
+        real(kind=GP), allocatable, dimension(:, :) :: a_2d, b_2d
+        real(kind=GP), allocatable, dimension(:, :, :) :: a_3d, b_3d
+        real(kind=GP), allocatable, dimension(:, :, :, :) :: a_4d, b_4d
+        real(kind=GP), allocatable, dimension(:, :, :, :, :) :: a_5d, b_5d
+        real(kind=GP) :: expected
+        integer :: n_rz, n_phi, n_vp, n_mu, n_sp
+        integer(kind=INT64) :: length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_axpy_gpu_t :: op_axpy)
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+#endif
+        else
+            allocate(op_axpy_cpu_t :: op_axpy)
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+        endif
+        call op_axpy%initialize()
+        call op_set_uniform%initialize()
+
+        ! Allocate input data for the operator
+        n_rz = 4
+        n_phi = 4
+        n_vp = 4
+        n_mu = 4
+        n_sp = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+        expected = ref_value_op_axpy(alpha, template_x, template_y)
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(b_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_real(length, a_1d)
+        call copy_array_device_real(length, b_1d)
+        call op_set_uniform%apply(a_1d, template_y)
+        call op_set_uniform%apply(b_1d, template_x)
+        call op_axpy%apply(a_1d, alpha, b_1d)
+        call copy_array_host_real(length, a_1d)
+        call copy_array_host_real(length, b_1d)
+        @assertEqual(expected, a_1d, tolerance=GP_EPS)
+        deallocate(a_1d, b_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(b_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_real(length, a_2d)
+        call copy_array_device_real(length, b_2d)
+        call op_set_uniform%apply(a_2d, template_y)
+        call op_set_uniform%apply(b_2d, template_x)
+        call op_axpy%apply(a_2d, alpha, b_2d)
+        call copy_array_host_real(length, a_2d)
+        call copy_array_host_real(length, b_2d)
+        @assertEqual(expected, a_2d, tolerance=GP_EPS)
+        deallocate(a_2d, b_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(b_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_3d)
+        call copy_array_device_real(length, b_3d)
+        call op_set_uniform%apply(a_3d, template_y)
+        call op_set_uniform%apply(b_3d, template_x)
+        call op_axpy%apply(a_3d, alpha, b_3d)
+        call copy_array_host_real(length, a_3d)
+        call copy_array_host_real(length, b_3d)
+        @assertEqual(expected, a_3d, tolerance=GP_EPS)
+        deallocate(a_3d, b_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(b_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_4d)
+        call copy_array_device_real(length, b_4d)
+        call op_set_uniform%apply(a_4d, template_y)
+        call op_set_uniform%apply(b_4d, template_x)
+        call op_axpy%apply(a_4d, alpha, b_4d)
+        call copy_array_host_real(length, a_4d)
+        call copy_array_host_real(length, b_4d)
+        @assertEqual(expected, a_4d, tolerance=GP_EPS)
+        deallocate(a_4d, b_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(b_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_5d)
+        call copy_array_device_real(length, b_5d)
+        call op_set_uniform%apply(a_5d, template_y)
+        call op_set_uniform%apply(b_5d, template_x)
+        call op_axpy%apply(a_5d, alpha, b_5d)
+        call copy_array_host_real(length, a_5d)
+        call copy_array_host_real(length, b_5d)
+        @assertEqual(expected, a_5d, tolerance=GP_EPS)
+        deallocate(a_5d, b_5d)
+
+        deallocate(op_set_uniform, op_axpy)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    @test(npes = [1])
+    subroutine test_op_lin_comb(this)
+        !! Tests all versions of op_lin_comb
+        class(MpiTestMethod), intent(inout) :: this
+        real(kind=GP) :: rnd_alpha, rnd_beta, rnd_x1, rnd_x2
+        integer :: i
+
+        ! Random tests
+        do i=1,10
+            call random_number(rnd_alpha)
+            call random_number(rnd_beta)
+            rnd_x1=random_positive_real()
+            rnd_x2=random_positive_real()
+            call test_op_lin_comb_core(rnd_alpha, rnd_x1, rnd_beta, rnd_x2)
+            call test_op_lin_comb_core(-rnd_alpha, rnd_x1, rnd_beta, rnd_x2)
+            call test_op_lin_comb_core(rnd_alpha, -rnd_x1, rnd_beta, rnd_x2)
+            call test_op_lin_comb_core(rnd_alpha, rnd_x1, -rnd_beta, rnd_x2)
+            call test_op_lin_comb_core(rnd_alpha, rnd_x1, rnd_beta, -rnd_x2)
+            call test_op_lin_comb_core(-rnd_alpha, -rnd_x1, rnd_beta, rnd_x2)
+            call test_op_lin_comb_core(rnd_alpha, rnd_x1, -rnd_beta, -rnd_x2)
+            call test_op_lin_comb_core(-rnd_alpha, -rnd_x1, -rnd_beta, -rnd_x2)
+        end do
+
+        ! Chosen values
+        call test_op_lin_comb_core(1.0_GP / 6.0_GP, 1.0_GP, 1.0_GP / 3.0_GP, &
+                                   2.0_GP)
+
+    end subroutine
+
+    subroutine test_op_lin_comb_core(alpha, template_a, beta, template_b)
+        !! Tests the op_lin_comb_cpu_t operator
+        real(kind=GP), intent(in) :: alpha
+        real(kind=GP), intent(in) :: template_a
+        real(kind=GP), intent(in) :: beta
+        real(kind=GP), intent(in) :: template_b
+
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+        class(op_lin_comb_t), allocatable :: op_lin_comb
+
+        integer, parameter :: n_threads = 4
+        real(kind=GP), allocatable, dimension(:) :: a_1d, b_1d, c_1d
+        real(kind=GP), allocatable, dimension(:, :) :: a_2d, b_2d, c_2d
+        real(kind=GP), allocatable, dimension(:, :, :) :: a_3d, b_3d, c_3d
+        real(kind=GP), allocatable, dimension(:, :, :, :) :: a_4d, b_4d, c_4d
+        real(kind=GP), allocatable, dimension(:, :, :, :, :) :: a_5d, b_5d, c_5d
+        real(kind=GP) :: expected
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp, length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+            allocate(op_lin_comb_gpu_t :: op_lin_comb)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+            allocate(op_lin_comb_cpu_t :: op_lin_comb)
+        endif
+        call op_set_uniform%initialize()
+        call op_lin_comb%initialize()
+
+        ! Allocate input data for the operator
+        n_rz  = 4
+        n_phi = 4
+        n_vp  = 4
+        n_mu  = 4
+        n_sp  = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+
+        expected = ref_value_op_lin_comb(alpha, beta, template_a, template_b)
+        call op_lin_comb%initialize()
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(b_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(c_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_real(length, a_1d)
+        call copy_array_device_real(length, b_1d)
+        call copy_array_device_real(length, c_1d)
+        call op_set_uniform%apply(a_1d, 0.0_GP)
+        call op_set_uniform%apply(b_1d, template_a)
+        call op_set_uniform%apply(c_1d, template_b)
+        call op_lin_comb%apply(a_1d, alpha, b_1d, beta, c_1d)
+        call copy_array_host_real(length, a_1d)
+        call copy_array_host_real(length, b_1d)
+        call copy_array_host_real(length, c_1d)
+        @assertRelativelyEqual(expected, a_1d, tolerance=5*GP_EPS)
+        deallocate(a_1d, b_1d, c_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(b_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(c_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_real(length, a_2d)
+        call copy_array_device_real(length, b_2d)
+        call copy_array_device_real(length, c_2d)
+        call op_set_uniform%apply(a_2d, 0.0_GP)
+        call op_set_uniform%apply(b_2d, template_a)
+        call op_set_uniform%apply(c_2d, template_b)
+        call op_lin_comb%apply(a_2d, alpha, b_2d, beta, c_2d)
+        call copy_array_host_real(length, a_2d)
+        call copy_array_host_real(length, b_2d)
+        call copy_array_host_real(length, c_2d)
+        @assertRelativelyEqual(expected, a_2d, tolerance=5*GP_EPS)
+        deallocate(a_2d, b_2d, c_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(b_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(c_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_3d)
+        call copy_array_device_real(length, b_3d)
+        call copy_array_device_real(length, c_3d)
+        call op_set_uniform%apply(a_3d, 0.0_GP)
+        call op_set_uniform%apply(b_3d, template_a)
+        call op_set_uniform%apply(c_3d, template_b)
+        call op_lin_comb%apply(a_3d, alpha, b_3d, beta, c_3d)
+        call copy_array_host_real(length, a_3d)
+        call copy_array_host_real(length, b_3d)
+        call copy_array_host_real(length, c_3d)
+        @assertRelativelyEqual(expected, a_3d, tolerance=5*GP_EPS)
+        deallocate(a_3d, b_3d, c_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(b_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(c_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_4d)
+        call copy_array_device_real(length, b_4d)
+        call copy_array_device_real(length, c_4d)
+        call op_set_uniform%apply(a_4d, 0.0_GP)
+        call op_set_uniform%apply(b_4d, template_a)
+        call op_set_uniform%apply(c_4d, template_b)
+        call op_lin_comb%apply(a_4d, alpha, b_4d, beta, c_4d)
+        call copy_array_host_real(length, a_4d)
+        call copy_array_host_real(length, b_4d)
+        call copy_array_host_real(length, c_4d)
+        @assertRelativelyEqual(expected, a_4d, tolerance=5*GP_EPS)
+        deallocate(a_4d, b_4d, c_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(b_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(c_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_5d)
+        call copy_array_device_real(length, b_5d)
+        call copy_array_device_real(length, c_5d)
+        call op_set_uniform%apply(a_5d, 0.0_GP)
+        call op_set_uniform%apply(b_5d, template_a)
+        call op_set_uniform%apply(c_5d, template_b)
+        call op_lin_comb%apply(a_5d, alpha, b_5d, beta, c_5d)
+        call copy_array_host_real(length, a_5d)
+        call copy_array_host_real(length, b_5d)
+        call copy_array_host_real(length, c_5d)
+        @assertRelativelyEqual(expected, a_5d, tolerance=5*GP_EPS)
+        deallocate(a_5d, b_5d, c_5d)
+
+        deallocate(op_lin_comb, op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    @test(npes = [1])
+    subroutine test_op_copy(this)
+        !! Tests all versions of op_copy
+        class(MpiTestMethod), intent(inout) :: this
+        integer :: i
+
+        ! Random tests
+        do i=1,10
+            call test_op_copy_real(random_real())
+            call test_op_copy_integer(random_int())
+        end do
+
+        ! Chosen values
+        call test_op_copy_logical(.true.)
+        call test_op_copy_logical(.false.)
+        call test_op_copy_real(2.71828_GP)
+        call test_op_copy_integer(72)
+
+        ! Corner cases
+        call test_op_copy_real(huge(0.0_GP))
+        call test_op_copy_real(tiny(0.0_GP))
+        call test_op_copy_real(epsilon(0.0_GP))
+        call test_op_copy_integer(huge(0))
+
+    end subroutine
+
+    subroutine test_op_copy_real(template)
+        !! Tests the op_copy_cpu_t, op_copy_cpu_t operators
+        real(kind=GP), intent(in) :: template
+
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+        class(op_copy_t), allocatable :: op_copy
+
+        integer, parameter :: n_threads = 4
+        real(kind=GP), allocatable, dimension(:) :: a_1d, b_1d
+        real(kind=GP), allocatable, dimension(:, :) :: a_2d, b_2d
+        real(kind=GP), allocatable, dimension(:, :, :) :: a_3d, b_3d
+        real(kind=GP), allocatable, dimension(:, :, :, :) :: a_4d, b_4d
+        real(kind=GP), allocatable, dimension(:, :, :, :, :) :: a_5d, b_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp, length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+            allocate(op_copy_gpu_t :: op_copy)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+            allocate(op_copy_cpu_t :: op_copy)
+        endif
+        call op_set_uniform%initialize()
+        call op_copy%initialize()
+
+        ! Allocate input data for the operator
+        n_rz  = 4
+        n_phi = 4
+        n_vp  = 4
+        n_mu  = 4
+        n_sp  = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(b_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_real(length, a_1d)
+        call copy_array_device_real(length, b_1d)
+        call op_set_uniform%apply(a_1d, 0.0_GP)
+        call op_set_uniform%apply(b_1d, template)
+        call op_copy%apply(a_1d, b_1d)
+        call copy_array_host_real(length, a_1d)
+        call copy_array_host_real(length, b_1d)
+        @assertEqual(template, a_1d, tolerance=GP_EPS)
+        deallocate(a_1d, b_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(b_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_real(length, a_2d)
+        call copy_array_device_real(length, b_2d)
+        call op_set_uniform%apply(a_2d, 0.0_GP)
+        call op_set_uniform%apply(b_2d, template)
+        call op_copy%apply(a_2d, b_2d)
+        call copy_array_host_real(length, a_2d)
+        call copy_array_host_real(length, b_2d)
+        @assertEqual(template, a_2d, tolerance=GP_EPS)
+        deallocate(a_2d, b_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(b_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_3d)
+        call copy_array_device_real(length, b_3d)
+        call op_set_uniform%apply(a_3d, 0.0_GP)
+        call op_set_uniform%apply(b_3d, template)
+        call op_copy%apply(a_3d, b_3d)
+        call copy_array_host_real(length, a_3d)
+        call copy_array_host_real(length, b_3d)
+        @assertEqual(template, a_3d, tolerance=GP_EPS)
+        deallocate(a_3d, b_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(b_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_4d)
+        call copy_array_device_real(length, b_4d)
+        call op_set_uniform%apply(a_4d, 0.0_GP)
+        call op_set_uniform%apply(b_4d, template)
+        call op_copy%apply(a_4d, b_4d)
+        call copy_array_host_real(length, a_4d)
+        call copy_array_host_real(length, b_4d)
+        @assertEqual(template, a_4d, tolerance=GP_EPS)
+        deallocate(a_4d, b_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(b_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_real(length, a_5d)
+        call copy_array_device_real(length, b_5d)
+        call op_set_uniform%apply(a_5d, 0.0_GP)
+        call op_set_uniform%apply(b_5d, template)
+        call op_copy%apply(a_5d, b_5d)
+        call copy_array_host_real(length, a_5d)
+        call copy_array_host_real(length, b_5d)
+        @assertEqual(template, a_5d, tolerance=GP_EPS)
+        deallocate(a_5d, b_5d)
+
+        deallocate(op_copy, op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    subroutine test_op_copy_integer(template)
+        !! Tests the op_copy_cpu_t, op_copy_cpu_t operators
+        integer, intent(in) :: template
+
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+        class(op_copy_t), allocatable :: op_copy
+
+        integer, parameter :: n_threads = 4
+        integer, allocatable, dimension(:) :: a_1d, b_1d
+        integer, allocatable, dimension(:, :) :: a_2d, b_2d
+        integer, allocatable, dimension(:, :, :) :: a_3d, b_3d
+        integer, allocatable, dimension(:, :, :, :) :: a_4d, b_4d
+        integer, allocatable, dimension(:, :, :, :, :) :: a_5d, b_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp, length
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+            allocate(op_copy_gpu_t :: op_copy)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+            allocate(op_copy_cpu_t :: op_copy)
+        endif
+        call op_set_uniform%initialize()
+        call op_copy%initialize()
+
+        ! Allocate input data for the operator
+        n_rz  = 4
+        n_phi = 4
+        n_vp  = 4
+        n_mu  = 4
+        n_sp  = 4
+        length = n_rz * n_phi * n_vp * n_mu * n_sp
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(b_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call copy_array_device_integer(length, a_1d)
+        call copy_array_device_integer(length, b_1d)
+        call op_set_uniform%apply(a_1d, 0)
+        call op_set_uniform%apply(b_1d, template)
+        call op_copy%apply(a_1d, b_1d)
+        call copy_array_host_integer(length, a_1d)
+        call copy_array_host_integer(length, b_1d)
+        @assertEqual(template, a_1d)
+        deallocate(a_1d, b_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(b_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call copy_array_device_integer(length, a_2d)
+        call copy_array_device_integer(length, b_2d)
+        call op_set_uniform%apply(a_2d, 0)
+        call op_set_uniform%apply(b_2d, template)
+        call op_copy%apply(a_2d, b_2d)
+        call copy_array_host_integer(length, a_2d)
+        call copy_array_host_integer(length, b_2d)
+        @assertEqual(template, a_2d)
+        deallocate(a_2d, b_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(b_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_3d)
+        call copy_array_device_integer(length, b_3d)
+        call op_set_uniform%apply(a_3d, 0)
+        call op_set_uniform%apply(b_3d, template)
+        call op_copy%apply(a_3d, b_3d)
+        call copy_array_host_integer(length, a_3d)
+        call copy_array_host_integer(length, b_3d)
+        @assertEqual(template, a_3d)
+        deallocate(a_3d, b_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(b_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_4d)
+        call copy_array_device_integer(length, b_4d)
+        call op_set_uniform%apply(a_4d, 0)
+        call op_set_uniform%apply(b_4d, template)
+        call op_copy%apply(a_4d, b_4d)
+        call copy_array_host_integer(length, a_4d)
+        call copy_array_host_integer(length, b_4d)
+        @assertEqual(template, a_4d)
+        deallocate(a_4d, b_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(b_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call copy_array_device_integer(length, a_5d)
+        call copy_array_device_integer(length, b_5d)
+        call op_set_uniform%apply(a_5d, 0)
+        call op_set_uniform%apply(b_5d, template)
+        call op_copy%apply(a_5d, b_5d)
+        call copy_array_host_integer(length, a_5d)
+        call copy_array_host_integer(length, b_5d)
+        @assertEqual(template, a_5d)
+        deallocate(a_5d, b_5d)
+
+        deallocate(op_copy, op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+
+    subroutine test_op_copy_logical(template)
+        !! Tests the op_copy_cpu_t, op_copy_cpu_t operators
+        logical, intent(in) :: template
+
+        class(op_set_uniform_t), allocatable :: op_set_uniform
+        class(op_copy_t), allocatable :: op_copy
+
+        integer, parameter :: n_threads = 4
+        logical, allocatable, dimension(:) :: a_1d, b_1d
+        logical, allocatable, dimension(:, :) :: a_2d, b_2d
+        logical, allocatable, dimension(:, :, :) :: a_3d, b_3d
+        logical, allocatable, dimension(:, :, :, :) :: a_4d, b_4d
+        logical, allocatable, dimension(:, :, :, :, :) :: a_5d, b_5d
+        integer(kind=INT64) :: n_rz, n_phi, n_vp, n_mu, n_sp
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(n_threads)
+        !$ call omp_set_dynamic(.false.)
+
+        if(get_use_gpu_offload()) then
+#ifdef ENABLE_GPU
+            allocate(op_set_uniform_gpu_t :: op_set_uniform)
+            allocate(op_copy_gpu_t :: op_copy)
+#endif
+        else
+            allocate(op_set_uniform_cpu_t :: op_set_uniform)
+            allocate(op_copy_cpu_t :: op_copy)
+        endif
+        call op_set_uniform%initialize()
+        call op_copy%initialize()
+
+        ! allocate input data for the operator
+        n_rz = 4
+        n_phi = 4
+        n_vp = 4
+        n_mu = 4
+        n_sp = 4
+
+        allocate(a_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        allocate(b_1d(n_rz * n_phi * n_vp * n_mu * n_sp))
+        call op_set_uniform%apply(a_1d, .false.)
+        call op_set_uniform%apply(b_1d, template)
+        call op_copy%apply(a_1d, b_1d)
+        @assertEqual(template, a_1d)
+        deallocate(a_1d, b_1d)
+
+        allocate(a_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        allocate(b_2d(n_rz * n_phi * n_vp * n_mu, n_sp))
+        call op_set_uniform%apply(a_2d, .false.)
+        call op_set_uniform%apply(b_2d, template)
+        call op_copy%apply(a_2d, b_2d)
+        @assertEqual(template, a_2d)
+        deallocate(a_2d, b_2d)
+
+        allocate(a_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        allocate(b_3d(n_rz * n_phi * n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_3d, .false.)
+        call op_set_uniform%apply(b_3d, template)
+        call op_copy%apply(a_3d, b_3d)
+        @assertEqual(template, a_3d)
+        deallocate(a_3d, b_3d)
+
+        allocate(a_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        allocate(b_4d(n_rz * n_phi, n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_4d, .false.)
+        call op_set_uniform%apply(b_4d, template)
+        call op_copy%apply(a_4d, b_4d)
+        @assertEqual(template, a_4d)
+        deallocate(a_4d, b_4d)
+
+        allocate(a_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        allocate(b_5d(n_rz, n_phi, n_vp, n_mu, n_sp))
+        call op_set_uniform%apply(a_5d, .false.)
+        call op_set_uniform%apply(b_5d, template)
+        call op_copy%apply(a_5d, b_5d)
+        @assertEqual(template, a_5d)
+        deallocate(a_5d, b_5d)
+
+        deallocate(op_copy, op_set_uniform)
+
+        !$ call omp_set_dynamic(.true.)
+        !$ call omp_set_num_threads(1)
+        !$ call omp_set_dynamic(.false.)
+    end subroutine
+end module

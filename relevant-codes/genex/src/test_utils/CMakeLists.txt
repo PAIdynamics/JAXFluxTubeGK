@@ -1,0 +1,25 @@
+target_sources(GENEXTestUtils-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/equilibrium_reference_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_coll_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_devtools_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_dist_initial_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_equi_slab_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_equi_circular_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_equi_dommaschk_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_gpu_offload_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_gyrokinetic_system_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_initial_condition_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_io_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_mesh_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_bsg_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_neutrals_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_neutrals_config_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_neutrals_init_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_species_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_diagnostics_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_time_split_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_sources_s.f90
+        ${CMAKE_CURRENT_LIST_DIR}/test_params_bnd_cond_s.f90
+)

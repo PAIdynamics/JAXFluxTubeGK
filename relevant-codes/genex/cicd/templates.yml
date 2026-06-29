@@ -1,0 +1,171 @@
+.load_and_build: &load_and_build
+    - echo -e "${GREEN}CI - setup script started${NC}"
+    - git submodule init
+    - git submodule update
+    - source confix/cmake/functions/gxload.sh
+    - >
+      if [[ "$COMPILER_VENDOR" == "gnu" ]]; then
+        # Try loading gnu and GPU vendor modules, otherwise pure gnu
+        # Avoid error output by piping to file. Exit codes are handled with ||
+        failure=false
+        gxload gnu nvhpc &> .msg || failure=true
+        if [[ $failure == 'true' ]]; then
+          failure=false
+          gxload gnu amd-llvm &> .msg || failure=true
+        fi
+        if [[ $failure == 'true' ]]; then
+          failure=false
+          gxload gnu &> .msg || failure=true
+        fi
+        if [[ $failure == 'true' ]]; then
+          echo -e "${BoldRed}Failed to load gnu toolchain!${NC}"
+        fi
+        cat .msg
+        rm .msg
+      elif [[ "$COMPILER_VENDOR" == "intel" ]]; then
+        gxload intel
+      fi
+    - git lfs install
+    - git lfs pull
+    - |
+      if [[ $REDACT == 'true' ]]; then
+        python $(pwd)/rlstools/redact.py -n
+        python $(pwd)/rlstools/redact.py -v
+      fi
+    - echo -e "${GREEN}CI - loading modules finished${NC}"
+    - echo -e "${GREEN}CI - building genex started${NC}"
+    - BUILD_DIR=./build-$BUILD_TYPE-$COMPILER_VENDOR
+    - '[ -d "$BUILD_DIR" ] && rm -Rf "$BUILD_DIR"'
+    - mkdir "$BUILD_DIR"
+    - cd "$BUILD_DIR"
+    - if [[ $COVERAGE == 'true' ]]; then COV_OPT=ON; else COV_OPT=OFF; fi
+    - 'BUILD_UTESTS=${BUILD_UTESTS:-ON}'
+    - >
+      if [[ $MACH_NAME =~ "IZUM Vega" ]]; then
+        python -m venv venv_build
+        source venv_build/bin/activate
+      fi
+    - pip install -r ../cmake/python/requirements.in
+    - >
+      cmake .. \
+        -DVARS_VERBOSE=ON \
+        -DPREBUILDER_REQUIRED=ON -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DPRECISION=double \
+        -DCMAKE_C_COMPILER=$GENEX_C_COMPILER -DCMAKE_CXX_COMPILER=$GENEX_CXX_COMPILER \
+        -DCMAKE_Fortran_COMPILER=$GENEX_F90_COMPILER -DENABLE_SHARED_GENEX_LIB=ON \
+        -DENABLE_UTESTS=$BUILD_UTESTS -DCOVERAGE=$COV_OPT -DENABLE_GPU=ON \
+        -DOFFLOAD_BACKEND=$GENEX_SUPPORTED_GPU_BACKENDS \
+        -DPARALLAX_OFFLOAD_BACKEND=$PARALLAX_SUPPORTED_GPU_BACKENDS
+    - cmake --build . --parallel ${CONFIX_PARALLEL_BUILD_PROCESSES} --target all
+    - >
+      if [[ $MACH_NAME =~ "IZUM Vega" ]]; then
+        deactivate
+        rm -rf venv_build
+      fi
+    - cd ..
+    - echo -e "${GREEN}CI - building genex finished${NC}"
+    - echo -e "${GREEN}CI - setup script successful${NC}"
+
+.unit_test_template:
+    variables:
+      BUILD_UTESTS: "ON"
+    stage: unit-tests
+    tags:
+        - slurm
+    script:
+        - *load_and_build
+        - echo -e "${GREEN}CI - unit test script started${NC}"
+        - ROOT_DIR=$(pwd)
+        - BUILD_DIR=$ROOT_DIR/build-$BUILD_TYPE-$COMPILER_VENDOR
+        - >
+          if [[ $TEST_NAME == 'utest' ]]; then
+            COVSUFFIX=cpu
+            utest_flag=""
+          elif [[ $TEST_NAME == 'gpu-utest' ]]; then
+            COVSUFFIX=gpu
+            utest_flag="--gpu"
+          fi
+        - >
+          if [[ $COVERAGE == 'true' ]]; then
+            mkdir -p public/
+          fi
+        - cd $BUILD_DIR/unit-testing
+        - >
+          if [[ $MACH_NAME =~ "IZUM Vega" ]] || [[ $MACH_NAME =~ "MPCDF Viper-CPU" ]]; then
+            echo -e "${BOLDBLUE}Use sbatch script for ${MACH_NAME}!${NC}"
+            source sbatch_utests.sh --wait --kill $utest_flag
+          else
+            source salloc_utests.sh -o $utest_flag
+          fi
+        - cd $ROOT_DIR
+        - >
+          if [[ "$COVERAGE" == "true" ]]; then
+          if [[ "$COMPILER_VENDOR" == "intel" ]]; then
+            echo -e "${BoldRed}Intel code coverage is not supported!${NC}"
+            exit 1
+          elif [[ "$COMPILER_VENDOR" == "gnu" ]]; then
+            cd $BUILD_DIR
+            source $ROOT_DIR/confix/coverage/lcov_file_coverage.sh
+            create_lcov_coverage_info cov_$COVSUFFIX.info $ROOT_DIR/coverage/cov_config_gnu.cfg
+            cd $ROOT_DIR
+            mv $BUILD_DIR/cov_$COVSUFFIX.info public/
+          fi
+          fi
+        - echo -e "${GREEN}CI - unit test script successful${NC}"
+
+.broad_mms_test_template:
+    variables:
+      BUILD_UTESTS: "OFF"
+    stage: mms-tests
+    tags:
+        - slurm
+    script:
+        - *load_and_build
+        - echo -e "${GREEN}CI - mms broad script started${NC}"
+        - cd build-$BUILD_TYPE-$COMPILER_VENDOR/mms-testing/grid
+        - echo -e "${BOLDBLUE}Running broad MMS testing for"\
+                  "the grid-based cases${NC}"
+        - |
+          if [[ "$RUN_TYPE" == "gpu" ]] && \
+             [[ -f "run_mms_broad_gpu_by_parts.sh" ]]; then
+            source run_mms_broad_gpu_by_parts.sh
+          else
+            echo -e "sbatch --wait submit_mms_broad_${RUN_TYPE}.sh"
+            sbatch --wait submit_mms_broad_${RUN_TYPE}.sh
+            source mms_assert_broad_${RUN_TYPE}.sh
+          fi
+        - |
+          if [[ "$RUN_TYPE" == "cpu" ]]; then
+            cd ../bsg
+            echo -e "${BOLDBLUE}Running broad MMS testing for"\
+                    "the BSG case${NC}"
+            sbatch --wait submit_mms_broad_${RUN_TYPE}.sh
+            source mms_assert_broad_${RUN_TYPE}.sh
+          fi
+        - cd ../../..
+        - echo -e "${GREEN}CI - mms broad script successful${NC}"
+
+.deep_mms_test_template:
+    variables:
+      BUILD_UTESTS: "OFF"
+    stage: mms-tests
+    tags:
+        - slurm
+    script:
+        - *load_and_build
+        - echo -e "${GREEN}CI - mms deep script started${NC}"
+        - cd build-$BUILD_TYPE-$COMPILER_VENDOR/mms-testing/grid/$EQUILIBRIUM
+        - echo -e "${BOLDBLUE}Running deep MMS testing for the grid-based"\
+                  "${EQUILIBRIUM} cases with ${RUN_TYPE}${NC}"
+        - sbatch --wait submit_mms_deep_${RUN_TYPE}.sh
+        - source mms_assert_deep.sh ${RUN_TYPE}
+        - cd ../../../..
+        - echo -e "${GREEN}CI - mms deep script successful${NC}"
+
+.build_template:
+  variables:
+    BUILD_UTESTS: "ON"
+  stage: build
+  tags:
+    - modules
+  script:
+    - *load_and_build

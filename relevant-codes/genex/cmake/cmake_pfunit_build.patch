@@ -1,0 +1,36 @@
+diff --git a/include/add_pfunit_ctest.cmake b/include/add_pfunit_ctest.cmake
+index 345def5..d2387b7 100644
+--- a/include/add_pfunit_ctest.cmake
++++ b/include/add_pfunit_ctest.cmake
+@@ -117,15 +117,12 @@ function (add_pfunit_ctest test_package_name)
+   if (PF_TEST_MAX_PES AND NOT PFUNIT_SKIP_MPI)
+     target_link_libraries (${test_package_name} ${_PFUNIT_LIBRARIES})
+     if (NOT PFUNIT_MPI_USE_MPIEXEC)
+-      set(MPIEXEC mpirun)
+-      set(MPIEXEC_NUMPROC_FLAG "-np")
+-    endif()
+-    if (MPIEXEC MATCHES ".*openmpi*")
+-      list(APPEND MPIEXEC_PREFLAGS "--oversubscribe")
++      set(MPIEXEC srun)
++      set(MPIEXEC_NUMPROC_FLAG "-n")
+     endif()
+     add_test (NAME ${test_package_name}
+       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+-      COMMAND ${MPIEXEC} ${MPIEXEC_PREFLAGS} ${MPIEXEC_NUMPROC_FLAG} ${PF_TEST_MAX_PES} ${CMAKE_CURRENT_BINARY_DIR}/${test_package_name}
++      COMMAND ${MPIEXEC} ${MPIEXEC_PREFLAGS} ${MPIEXEC_NUMPROC_FLAG} ${PF_TEST_MAX_PES} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${test_package_name}
+       )
+   else()
+     target_link_libraries (${test_package_name} ${_FUNIT_LIBRARIES})
+diff --git a/bin/funit/pFUnitParser.py b/bin/funit/pFUnitParser.py
+index 7097f33..2538336 100755
+--- a/bin/funit/pFUnitParser.py
++++ b/bin/funit/pFUnitParser.py
+@@ -754,7 +754,7 @@ class Parser():
+     def printParameterHeader(self, type):
+         self.outputFile.write('   type (' + type + '), allocatable :: testParameters(:)\n')
+         self.outputFile.write('   type (' + type + ') :: testParameter\n')
+-        self.outputFile.write('   integer :: iParam \n')
++        self.outputFile.write('   integer :: iParam, iCase \n')
+         self.outputFile.write('   integer, allocatable :: cases(:) \n')
+         self.outputFile.write(' \n')
+ 

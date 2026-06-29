@@ -1,0 +1,581 @@
+module test_quadrature
+    !! Contains test for different quadrature routines
+    use funit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: PI, almost_equal
+    use quadrature_m, only: create_midpoint_weights, &
+                            create_trapezoidal_weights, &
+                            create_simpson_weights, &
+                            create_gauss_laguerre
+    ! From PARALLAX
+    use array_generation_m, only: linspace
+
+    implicit none
+
+    real(kind=GP), parameter :: weights_tol = 100.0_GP * GP_EPS
+    !! Tolerance used for testing the weights generated (for quadrature itself
+    !! we specify the tolerance individually)
+
+contains
+
+    @test
+    subroutine test_midpoint_weights
+        !! Tests the midpoint weights
+
+        integer, parameter :: npoints = 55
+        real(kind=GP), parameter :: length = 3.5_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+        real(kind=GP), dimension(1) :: weights_single
+
+        integer :: l
+        real(kind=GP) :: expected
+
+        ! Test special case 1 point
+        call create_midpoint_weights(1, weights_single, weights_single)
+        @assertTrue(weights_single == 1.0_GP)
+
+        ! Test midpoint weights on one-sided interval
+        points = linspace(0.0_GP, length, npoints, &
+                          endpoint=.false., stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            @assertEqual(expected, weights(l), weights_tol)
+        end do
+
+        ! Test midpoint weights on two-sided interval
+        points = linspace(-length, length, npoints, &
+                          endpoint=.false., stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            @assertEqual(expected, weights(l), weights_tol)
+        end do
+
+        ! Test midpoint weights on two-sided interval asymmetric
+        points = linspace(-length, 2.0_GP * length, npoints, &
+                          endpoint=.false., stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            @assertEqual(expected, weights(l), weights_tol)
+        end do
+
+        ! Test midpoint weights on one-sided interval and quadratic grid
+        points = linspace(0.0_GP, sqrt(length), npoints, &
+                          endpoint=.false., stagger=.true.)**2
+        call create_midpoint_weights(npoints, points, weights, &
+                                     quadratic=.true.)
+        do l = 1, npoints
+            expected = 2.0_GP * sqrt(points(l)) &
+                     * (sqrt(points(2)) - sqrt(points(1)))
+            @assertEqual(expected, weights(l), weights_tol)
+        end do
+
+    end subroutine
+
+    @test
+    subroutine test_midpoint_quadrature
+        !! Tests the midpoint integration
+
+        integer, parameter :: npoints = 100
+        real(kind=GP), parameter :: length = 3.0_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+
+        integer :: l
+        real(kind=GP) :: integral, expected
+
+        ! Test midpoint integration on one-sided interval
+        points = linspace(0.0_GP, length, npoints, &
+                          endpoint=.false., stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 1.0_GP + sinh(length) - cosh(length)
+        @assertEqual(expected, integral, 1e-4_GP)
+
+        ! Test midpoint integration on two-sided interval
+        points = linspace(-length, length, npoints, stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)**2) * weights(l)
+        end do
+        expected = sqrt(PI) * erf(length)
+        @assertEqual(expected, integral, 1e-5_GP)
+
+        ! Test midpoint integration on one-sided interval and quadratic grid
+        points = linspace(0.0_GP, sqrt(length), npoints, &
+                          endpoint=.false., stagger=.true.)**2
+        call create_midpoint_weights(npoints, points, weights, &
+                                     quadratic=.true.)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 1.0_GP + sinh(length) - cosh(length)
+        @assertEqual(expected, integral, 1e-4_GP)
+
+        ! Test midpoint integration on one-sided interval without staggering.
+        ! In that case the integral has slightly different boundaries
+        ! i.e. [-delta/2, length-delta/2] instead of [0, length]
+        points = linspace(0.0_GP, length, npoints, &
+                          endpoint=.false., stagger=.false.)
+        call create_midpoint_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 0.964574_GP
+        @assertEqual(expected, integral, 1e-4_GP)
+
+        ! Test midpoint integration on linear function for exactness
+        points = linspace(0.0_GP, length, npoints, &
+                          endpoint=.false., stagger=.true.)
+        call create_midpoint_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + (points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 7.5_GP
+        @assertEqual(expected, integral, 100*GP_EPS)
+    end subroutine
+
+    @test
+    subroutine test_trapezoidal_weights
+        !! Tests the trapezoidal weights
+
+        integer, parameter :: npoints = 63
+        real(kind=GP), parameter :: length = 2.3_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+        real(kind=GP), dimension(1) :: weights_single
+
+        integer :: l
+        real(kind=GP) :: expected
+
+        ! Test special case 1 point
+        call create_trapezoidal_weights(1, weights_single, weights_single)
+        @assertTrue(weights_single == 1.0_GP)
+
+        ! Test trapezoidal weights on one-sided interval
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            if(l == 1 .or. l == npoints) then
+                @assertEqual(0.5_GP * expected, weights(l), weights_tol)
+            else
+                @assertEqual(expected, weights(l), weights_tol)
+            endif
+        end do
+
+        ! Test trapezoidal weights on two-sided interval
+        points = linspace(-length, length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            if(l == 1 .or. l == npoints) then
+                @assertEqual(0.5_GP * expected, weights(l), weights_tol)
+            else
+                @assertEqual(expected, weights(l), weights_tol)
+            endif
+        end do
+
+        ! Test trapezoidal weights on two-sided interval asymmetric
+        points = linspace(-length, 2.0_GP * length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            if(l == 1 .or. l == npoints) then
+                @assertEqual(0.5_GP*expected, weights(l), weights_tol)
+            else
+                @assertEqual(expected, weights(l), weights_tol)
+            endif
+        end do
+
+        ! Test trapezoidal weights on two-sided interval asymmetric
+        points = linspace(0.0_GP, length**(0.25_GP), npoints, &
+                          endpoint=.true.)**4
+        call create_trapezoidal_weights(npoints, points, weights)
+        expected = points(2) - points(1)
+        do l = 1, npoints
+            if(l == 1) then
+                expected = 0.5_GP * (points(2) - points(1))
+            elseif(l == npoints) then
+                expected = 0.5_GP * (points(npoints) - points(npoints - 1))
+            else
+                expected = 0.5_GP * (points(l + 1) - points(l - 1))
+            endif
+            @assertEqual(expected, weights(l), weights_tol)
+        end do
+
+    end subroutine
+
+    @test
+    subroutine test_trapezoidal_quadrature
+        !! Tests the trapezoidal integration
+
+        integer, parameter :: npoints = 100
+        real(kind=GP), parameter :: length = 3.0_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+
+        integer :: l
+        real(kind=GP) :: integral, expected
+
+        ! Test trapezoidal integration on one-sided interval
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 1.0_GP + sinh(length) - cosh(length)
+        @assertEqual(expected, integral, 1e-4_GP)
+
+        ! Test trapezoidal integration on two-sided interval
+        points = linspace(-length, length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)**2) * weights(l)
+        end do
+        expected = sqrt(PI) * erf(length)
+        @assertEqual(expected, integral, 1e-6_GP)
+
+        ! Test trapezoidal integration on one-sided interval and quartic grid
+        points = linspace(0.0_GP, length**(0.25_GP), npoints, &
+                          endpoint=.true.)**4
+        call create_trapezoidal_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 1.0_GP + sinh(length) - cosh(length)
+        @assertEqual(expected, integral, 3e-4_GP)
+
+        ! Test trapezoidal integration on linear function for exactness
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_trapezoidal_weights(npoints, points, weights)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + (points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 7.5_GP
+        @assertEqual(expected, integral, 100.0_GP * GP_EPS)
+    end subroutine
+
+    @test
+    subroutine test_simpson_weights
+        !! Tests the Simpson weights
+
+        integer, parameter :: npoints = 31
+        real(kind=GP), parameter :: length = 4.73_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+        real(kind=GP), dimension(:), allocatable :: points_small, &
+                                                      weights_small
+
+        integer :: ierr, i
+        real(kind=GP), dimension(npoints) :: expected
+
+        ! Test for errors with too few points
+        do i = 1, 7
+            allocate(points_small(i), weights_small(i))
+            call create_simpson_weights(i, points_small, weights_small, ierr)
+            @assertTrue(ierr == 1)
+            deallocate(points_small, weights_small)
+        enddo
+        ! Test for 8 points to work (minimum)
+        allocate(points_small(8), weights_small(8))
+        call create_simpson_weights(8, points_small, weights_small, ierr)
+        @assertTrue(ierr == 0)
+        deallocate(points_small, weights_small)
+
+        ! Test for one-sided interval
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        expected = 48.0_GP
+        expected(1:4) = [17.0_GP, 59.0_GP, 43.0_GP, 49.0_GP]
+        expected(npoints-3:npoints) = [49.0_GP, 43.0_GP, 59.0_GP, 17.0_GP]
+        expected = expected / 48.0_GP * (points(2) - points(1))
+        @assertTrue(all(almost_equal(expected, weights, GP_EPS)))
+
+        ! Test for two-sided interval
+        points = linspace(-length, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        expected = 48.0_GP
+        expected(1:4) = [17.0_GP, 59.0_GP, 43.0_GP, 49.0_GP]
+        expected(npoints-3:npoints) = [49.0_GP, 43.0_GP, 59.0_GP, 17.0_GP]
+        expected = expected / 48.0_GP * (2.0_GP * length / (npoints - 1))
+        @assertTrue(all(almost_equal(expected, weights, GP_EPS)))
+
+    end subroutine
+
+    @test
+    subroutine test_simpson_quadrature
+        !! Tests the Simpson integration
+
+        integer, parameter :: npoints = 100
+        real(kind=GP), parameter :: length = 3.0_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+
+        integer :: l, ierr
+        real(kind=GP) :: integral, expected
+
+        ! Test Simpson integration on one-sided interval
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) * weights(l)
+        end do
+        expected = 1.0_GP + sinh(length) - cosh(length)
+        @assertEqual(expected, integral, 1e-8_GP)
+
+        ! Test Simpson integration on two-sided interval
+        points = linspace(-length, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)**2) * weights(l)
+        end do
+        expected = sqrt(PI) * erf(length)
+        @assertEqual(expected, integral, 1e-9_GP)
+
+        ! Test Simpson integration on linear function for exactness
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + (points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 7.5_GP
+        @assertEqual(expected, integral, 100.0_GP * GP_EPS)
+
+        ! Test Simpson integration on quadratic function for exactness
+        points = linspace(0.0_GP, length, npoints, endpoint=.true.)
+        call create_simpson_weights(npoints, points, weights, ierr)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + (- 2.0_GP * points(l)**2 &
+                                   + 5.0_GP * points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 7.5_GP
+        @assertEqual(expected, integral, 100.0_GP * GP_EPS)
+    end subroutine
+
+    @test
+    subroutine test_gauss_laguerre_weights_points
+        !! Tests the rescaled Gauss-Laguerre weights and points
+
+        real(kind=GP), parameter :: length = 3.0_GP
+        real(kind=GP), dimension(1) :: points_single, weights_single
+        real(kind=GP), dimension(:), allocatable :: points, weights, diff
+        real(kind=GP), dimension(:), allocatable :: points_err, weights_err
+
+        logical :: equal
+        integer :: ierr, npoints
+        real(kind=GP) :: fac
+        real(kind=GP), dimension(:), allocatable :: expected_points, &
+                                                    expected_weights
+        real(kind=GP), parameter :: tol = 1000.0_GP * GP_EPS
+
+        ! Test for error with too many points
+        allocate(points_err(1:65), weights_err(1:65))
+        call create_gauss_laguerre(65, length, points_err, weights_err, ierr)
+        @assertTrue(ierr == 1)
+        deallocate(points_err, weights_err)
+
+        ! Test for no error at maximum points
+        allocate(points_err(1:64), weights_err(1:64))
+        call create_gauss_laguerre(64, length, points_err, weights_err, ierr)
+        @assertTrue(ierr == 0)
+        deallocate(points_err, weights_err)
+
+        ! Test special case 1 point
+        call create_gauss_laguerre(1, length, points_single, weights_single, &
+                                   ierr)
+        @assertTrue(ierr == 0)
+        @assertTrue(points_single  == 1.0_GP)
+        @assertTrue(weights_single == 1.0_GP)
+
+        ! Test for 5 values against tabulated ones
+        npoints = 5
+        allocate(points(1:npoints), weights(1:npoints), diff(1:npoints))
+        call create_gauss_laguerre(npoints, length, points, weights, ierr)
+        @assertTrue(ierr == 0)
+
+        allocate(expected_points(1:npoints), expected_weights(1:npoints))
+        ! Laguerre-Gauss Quadrature points and weights for n=5 from DLMF
+        expected_points = [0.263560319718141_GP, 0.141340305910652e1_GP, &
+                           0.359642577104072e1_GP, 0.708581000585884e1_GP, &
+                           0.126408008442758e2_GP]
+        expected_weights = [0.521755610582809_GP, 0.398666811083176_GP, &
+                            0.759424496817076e-1_GP, 0.361175867992205e-2_GP, &
+                            0.233699723857762e-4_GP]
+
+        ! Transform table values to rescaled values
+        expected_weights = expected_weights * exp(expected_points)
+        fac = length / sum(expected_weights)
+        expected_points  = expected_points * fac
+        expected_weights = expected_weights * fac
+
+        diff = expected_points - points
+        where (expected_points >= 1.0_GP) diff = diff / expected_points
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        diff = expected_weights - weights
+        where (expected_weights >= 1.0_GP) diff = diff / expected_weights
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        deallocate(expected_points, points)
+        deallocate(expected_weights, weights)
+        deallocate(diff)
+
+        ! Second test, compare against externally calculated 15 values
+        npoints = 15
+        allocate(points(1:npoints), weights(1:npoints), diff(1:npoints))
+        allocate(expected_points(1:npoints), expected_weights(1:npoints))
+        call create_gauss_laguerre(npoints, length, points, weights, ierr)
+        @assertTrue(ierr == 0)
+
+        ! Rescaled expected points
+        expected_points = [0.0051594348508386_GP, 0.02724328092875069_GP, &
+                           0.0672160797468573_GP, 0.12551635754754426_GP, &
+                           0.2028003881049875_GP, 0.29999279018378816_GP, &
+                           0.4183556661995562_GP, 0.55959580278894140_GP, &
+                           0.7260360689557920_GP, 0.92090179474488300_GP, &
+                           1.1488308105614538_GP, 1.41686757013551160_GP, &
+                           1.7366718335737856_GP, 2.13054562078135100_GP, &
+                           2.6555917912551568_GP]
+
+        expected_weights = [0.0132474219969321_GP, 0.03097065235816689_GP, &
+                            0.0490469259298085_GP, 0.06766225277047040_GP, &
+                            0.0870587942168137_GP, 0.10753463088479145_GP, &
+                            0.1294728389095838_GP, 0.15339003546992838_GP, &
+                            0.1800200795641280_GP, 0.21046916530305468_GP, &
+                            0.2465305423791729_GP, 0.29140446907586054_GP, &
+                            0.3516506570293494_GP, 0.44411592264111566_GP, &
+                            0.6374256114708231_GP]
+
+        diff = expected_points - points
+        where (expected_points >= 1.0_GP) diff = diff / expected_points
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        diff = expected_weights - weights
+        where (expected_weights >= 1.0_GP) diff = diff / expected_weights
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        ! Unscaled points of the same test
+        expected_points = [0.0933078120172814_GP, 0.4926917403018833_GP, &
+                           1.2155954120709490_GP, 2.2699495262037392_GP, &
+                           3.6676227217514383_GP, 5.4253366274135550_GP, &
+                           7.5659162266130650_GP, 10.120228568019112_GP, &
+                           13.130282482175726_GP, 16.654407708329960_GP, &
+                           20.776478899448843_GP, 25.623894226728805_GP, &
+                           31.407519169754003_GP, 38.530683306485900_GP, &
+                           48.026085572685760_GP]
+
+        ! This table is weights * exp(points)
+        expected_weights = [0.2395781703111207_GP, 0.5601008427926383_GP, &
+                            0.8870082629186140_GP, 1.2236644021479728_GP, &
+                            1.5744487216295235_GP, 1.9447519765299480_GP, &
+                            2.3415020566362275_GP, 2.7740419268257440_GP, &
+                            3.2556433463978167_GP, 3.8063117142257505_GP, &
+                            4.4584777538368210_GP, 5.2700177844297520_GP, &
+                            6.3595634697305860_GP, 8.0317876321169660_GP, &
+                            11.527772100941060_GP]
+
+        ! Revert scaling of calculated points using weights from the table
+        ! NOTE: In the calculation of fact we use already weights * exp(points)
+        !       from the table. Afterwards we restore weights by removing the
+        !       exponential.
+        fac = length / sum(expected_weights)
+        expected_weights = expected_weights / exp(expected_points)
+        points  = points  / fac
+        weights = weights / fac / exp(points)
+
+        diff = expected_points - points
+        where (expected_points >= 1.0_GP) diff = diff / expected_points
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        diff = expected_weights - weights
+        where (expected_weights >= 1.0_GP) diff = diff / expected_weights
+        equal = all(almost_equal(diff, 0.0_GP, tol))
+        @assertTrue(equal)
+
+        deallocate(expected_points, points)
+        deallocate(expected_weights, weights)
+    end subroutine
+
+    @test
+    subroutine test_gauss_laguerre_quadrature
+        !! Tests the Gauss-Laguerre integration
+
+        integer, parameter :: npoints = 15
+        real(kind=GP), parameter :: length = 49.0_GP
+        real(kind=GP), dimension(npoints) :: points, weights
+
+        integer :: l, ierr
+        real(kind=GP) :: integral, expected
+
+        ! Create points and weights and then test different cases
+        call create_gauss_laguerre(npoints, length, points, weights, ierr)
+
+        ! Test Gauss-Laguerre integration
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-3.0_GP * points(l)) * weights(l)
+        end do
+        expected = 1.0_GP / 3.0_GP * (1.0_GP - 1.0_GP / exp(147.0_GP))
+        @assertEqual(expected, integral, 1e-9)
+
+        ! Test Gauss-Laguerre integration with more complicated function
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral &
+                     + exp(-points(l)) * bessel_j0(points(l)) * weights(l)
+        end do
+        expected = 0.7071067811863932_GP
+        @assertEqual(expected, integral, 1e-11_GP)
+
+        ! Test Gauss-Laguerre integration for exactness
+        ! using linear_fun(x) * exp(-x)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral &
+                     + exp(-points(l)) * (points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 2.0_GP - 51.0_GP / exp(length)
+        @assertEqual(expected, integral, 100.0_GP * GP_EPS)
+
+        ! Test Gauss-Laguerre integration function for exactness
+        ! using quadratic_fun(x) * exp(-x)
+        @assertTrue(ierr == 0)
+        integral = 0.0_GP
+        do l = 1, npoints
+            integral = integral + exp(-points(l)) &
+                                * (- 2.0_GP * points(l)**2 &
+                                   + 5.0_GP * points(l) + 1.0_GP) * weights(l)
+        end do
+        expected = 2.0_GP + 4751.0_GP / exp(length)
+        @assertEqual(expected, integral, 100.0_GP * GP_EPS)
+
+    end subroutine
+
+end module

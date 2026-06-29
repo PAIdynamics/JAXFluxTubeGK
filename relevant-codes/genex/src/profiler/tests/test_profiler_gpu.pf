@@ -1,0 +1,266 @@
+module test_profiler_gpu
+    !! Contains tests for the C++ related features of profiler module
+    use pfunit
+    use, intrinsic :: iso_c_binding, only: C_CHAR
+    use profiler_m, only: profiler_start, profiler_stop, profiler_inject, &
+                          profiler_print, profiler_reset, &
+                          profiler_inject_allreduce
+    use genex_fortran_env_m, only: DP
+    use genex_status_codes_m, only: GENEX_SUCCESS
+    use dcomm_handler_m, only: dcomm_handler_t
+    use type_converters_m, only: string_f2c
+    use helpers_profiler_gpu_m, only: cbind_profiler_injection, &
+                                      cbind_profiler_allreduce
+
+    ! Unit test helpers
+    use test_params_m
+
+    implicit none
+
+contains
+
+    @test(npes = [8])
+    subroutine test_initialize_params_gpu_offload(this)
+        !! Initialize the GPU offloading backend to CPU or GPU
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_gpu_offload(this%getMpiCommunicator(), &
+                                    this%getProcessRank())
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_profiler_injection(this)
+        !! Tests the profiler injection feature of the profiler
+        class(MpiTestMethod), intent(inout) :: this
+
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        integer :: n_procs, channel, ierr
+        character(len=16) :: rname1, rname2
+        character(len=1, kind=C_CHAR), dimension(16) :: rname1_c, rname2_c
+        integer :: tsleep1, tsleep2, n_calls, n_calls_ref
+        real(kind=DP) :: time_inj, time_inj1, time_inj2, time_multi, &
+                         time_total, tol
+
+        n_procs = this%getNumProcesses()
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(this%getMpiCommunicator(), &
+                                          n_procs, 1, 1, 1)
+
+        ! Number of calls to test the multi call feature
+        n_calls_ref = 3
+
+        ! Start the top-level profiler region
+        call profiler_start("test_injection", ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Call a C binding routine to suspend the execution time for 50 ms
+        rname1  = "injection_1"
+        tsleep1 = 50 ! ms
+        call string_f2c(rname1, rname1_c)
+        ierr = cbind_profiler_injection(tsleep1, rname1_c, n_calls_ref)
+        @assertEqual(ierr, 0)
+
+        ! Inject the first profiler region to the profiler
+        call profiler_inject(rname1, ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Inject a test profiler region to the profiler for multi call case
+        call profiler_inject("multi_call", ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Call a C binding routine to suspend the execution time for 10 ms
+        rname2  = "injection_2"
+        tsleep2 = 10 ! ms
+        call string_f2c(rname2, rname2_c)
+        ierr = cbind_profiler_injection(tsleep2, rname2_c, n_calls_ref)
+        @assertEqual(ierr, 0)
+
+        ! Inject the second profiler region to the profiler
+        call profiler_inject(rname2, ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Inject a test profiler region to the profiler for multi call case
+        call profiler_inject("multi_call", ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! End the top-level profiler region
+        call profiler_stop("test_injection", ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Write performance summary to file
+        open(newunit=channel, file='test_inj.txt', action='write')
+        call profiler_print(dcomm_handler_ptr, channel, "test_injection", &
+                            ierr, .true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+        close(unit=channel)
+
+        ! Test profiler reset subroutine
+        call profiler_reset()
+
+        ! Read values from the profiler output file and assert the measurements
+        if (dcomm_handler%is_master()) then
+            ! Read the time per calls of each regions
+            time_inj1 = read_file('test_inj.txt', rname1, 'time per call')
+            time_inj2 = read_file('test_inj.txt', rname2, 'time per call')
+            time_multi = read_file('test_inj.txt', 'multi_call', &
+                                   'time per call')
+            n_calls = int(read_file('test_inj.txt', 'multi_call', '#calls'))
+
+            ! Assertion with thw following tolerance in seconds
+            tol = 1e-3 ! 1 ms to take the overheads into account
+
+            ! Each injected profiler region takes longer than the prescribed
+            ! sleep time due to overhead
+            @assertGreaterThan(time_inj1, real(tsleep1, kind=DP)/1000)
+            @assertGreaterThan(time_inj2, real(tsleep2, kind=DP)/1000)
+            ! Each injected profiler region takes the same as the prescribed
+            ! sleep time within 1 ms tolerance
+            @assertEqual(real(tsleep1, kind=DP)/1000, time_inj1, tolerance=tol)
+            @assertEqual(real(tsleep2, kind=DP)/1000, time_inj2, tolerance=tol)
+
+            ! Assert number of calls and time of the multi call profiler region
+            @assertEqual(n_calls, (n_calls_ref * 2 - 1) * n_procs)
+            @assertEqual(0.01_DP, time_multi, tolerance=tol)
+
+            ! Read the accumulative time of each regions
+            time_total = time_multi * n_procs ! Account for initial call time
+            time_inj  = read_file('test_inj.txt', 'test_injection', 'time / s')
+            time_inj1 = read_file('test_inj.txt', rname1, 'time / s')
+            time_inj2 = read_file('test_inj.txt', rname2, 'time / s')
+            time_multi = read_file('test_inj.txt', 'multi_call', 'time / s')
+            time_total = time_total + time_inj1 + time_inj2 + time_multi
+
+            ! The time combination of all regions should be almost equal to
+            ! the overall time
+            @assertEqual(time_inj, time_total, tolerance=3.0*tol*n_procs)
+
+        endif
+
+    contains
+
+        function read_file(filename, r_key, c_key) result(res)
+            !! Read the numerical value profiler output file
+            character(len=*), intent(in) :: filename
+            !! FIlename of the profiler output file
+            character(len=*), intent(in) :: r_key
+            !! Row key
+            character(len=*), intent(in) :: c_key
+            !! Column key
+            real(kind=DP) :: res
+            !! Lookup value
+
+            character(len=128) :: header, line
+            integer, dimension(2) :: c_id
+            integer :: channel
+
+            ! Open and read from the file
+            open(newunit=channel, file=trim(filename), action='read')
+
+            line = ""
+            do while (index(line, r_key) == 0)
+                read(channel, '(A)') line
+
+                if (index(line, "region") /= 0) then
+                    header = line
+                endif
+            enddo
+
+            close(unit=channel)
+
+            ! Get the string indices of numerical value
+            c_id(1) = index(header, c_key)
+            c_id(2) = c_id(1) + len(trim(c_key))
+
+            ! Convert the string to real
+            read(line(c_id(1):c_id(2)), *) res
+
+        end function
+
+    end subroutine
+
+    @test(npes = [1, 8])
+    subroutine test_profiler_tsync_isolation_cxx(this)
+        !! Tests the isolation of synchronization time from communication time
+        !! in the case of MPI_Allreduce profiling region
+        class (MpiTestMethod), intent(inout) :: this
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), target :: dcomm_handler
+        integer :: comm, rank, n_procs, channel, ierr
+        character(len=128) :: lines
+
+        comm    = this%getMpiCommunicator()
+        rank    = this%getProcessRank()
+        n_procs = this%getNumProcesses()
+
+        dcomm_handler_ptr => dcomm_handler
+        call dcomm_handler_ptr%initialize(comm, n_procs, 1, 1, 1)
+
+        call setup_test_params(comm, rank)
+
+        call profiler_start("test", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Test the profiler without the synchronization time isolation (default)
+
+        call profiler_start("default", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        call cbind_profiler_allreduce(comm)
+        call profiler_inject_allreduce(ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        call profiler_stop("default", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Test the profiler with the synchronization time isolation
+        call setup_test_devtools(comm, rank, isolate_tsync=.true.)
+
+        call profiler_start("isolated", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        call cbind_profiler_allreduce(comm)
+        call profiler_inject_allreduce(ierr)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        call profiler_stop("isolated", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        call profiler_stop("test", ierr, set_path=.true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+
+        ! Write performance summary to file
+        open(newunit=channel, file='test_profiler.txt', action='write')
+        call profiler_print(dcomm_handler_ptr, channel, "test", ierr, .true.)
+        @assertEqual(ierr, GENEX_SUCCESS)
+        close(unit=channel)
+
+        ! Load file, read individual lines and check for substrings in each line
+        if(dcomm_handler%is_master()) then
+            open(newunit=channel, file='test_profiler.txt', action='read')
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "region")            /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "------")            /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "test")              /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "  default")         /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "    mpi_allreduce") /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "  isolated")        /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "    mpi_barrier")   /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "    mpi_allreduce") /= 0)
+            read(channel, '(A)') lines
+            @assertTrue(index(lines, "------")            /= 0)
+            close(unit=channel)
+        endif
+
+        ! Test profiler reset subroutine
+        call profiler_reset()
+        call teardown_test_params(comm, rank)
+    end subroutine
+
+end module

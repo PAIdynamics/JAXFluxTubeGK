@@ -1,0 +1,81 @@
+! This GKW input file replicates the adiabatic standard case of GYRO in the paper
+! "Nonlinear gyrokinetic turbulence simulations of E x B shear quenching of transport"
+! Kinsey, Waltz and Candy, Physics of Plasmas 12, 062302 (2005)
+! To compare energy fluxes divide by 9.5 from GKW fluxes output col 2
+! To compare time units multiply GKW time by 3/sqrt(2).
+! Fluxes output is comparable to the published result for same gridsizes.
+! The case is not converged for nmod or vpar.
+! The case is converged for nx, lx, timestep and dissipation.
+! ns and nmu are not convergence tested.
+! Recommend at least 16 processors, 32 better.
+
+&CONTROL
+ testing = .false.,
+ silent = .false.,
+ order_of_the_scheme = 'fourth_order'
+ parallel_boundary_conditions = 'zero'
+ matrix_format = 'complex'
+ READ_FILE  = .false.
+ NON_LINEAR = .true.
+ zonal_adiabatic = .true.,
+ METHOD = 'EXP',
+ METH   = 2, 
+ DTIM   = 0.01 
+ NTIME  = 500,			!Factor sqrt(2)/3 to get to gyro normalised time
+ NAVERAGE = 100,		!This will take us up to the same runtime length
+ nlapar = .false., 
+ collisions = .false.
+ disp_par = 1.8			
+ disp_vp  = 1.8
+ lverbose = .true.
+ max_sec = 170000   		!47.2 Hrs
+ /
+ &GRIDSIZE
+ NX = 83,   !Must be an odd number
+ N_s_grid = 16, 
+ N_mu_grid = 8,
+ nperiod = 1, 
+ N_vpar_grid = 16, 
+ NMOD = 16		!More effecient usage up to 21 
+                        !16 Reproduces their input which is not converged
+ number_of_species = 1 ! Number of species. Note: do not count the adiabatic species  
+ /
+ &MODE
+ CHIN    = 0., 
+ KTHRHO  = 0.5,
+ mode_box = .true., 
+ krhomax = 1.06,    !Evaluated on the low field side of outboard midplane
+                    !Factor sqrt(2) greater than the GYRO equivalent
+ ikxspace = 6, 	    !Box sizes comparable
+ /
+ &GEOM 
+ SHAT = 1.0
+ Q    = 2.0, 
+ EPS  = 0.16,
+ /
+ &SPCGENERAL
+ beta = 0.000,
+ adiabatic_electrons = .true.
+ /
+ &SPECIES 
+ MASS  = 1, 
+ Z     = 1.0, 
+ TEMP  = 1.0, 
+ dens  = 1.0,
+ rlt   = 9.0,
+ rln   = 3.0, 
+ uprim = 0.0,
+ / 
+ &SPECIES 
+ MASS  = 2.77e-4, 		!sqrt(mi/me)=60
+ Z     = -1.0, 
+ TEMP  = 1.0,
+ dens  = 1.0,
+ rlt   = 9.0,
+ rln   = 3.0, 
+ uprim = 0.0,
+ / 
+ &ROTATION
+ VCOR = 0
+ shear_rate=0.0
+ /

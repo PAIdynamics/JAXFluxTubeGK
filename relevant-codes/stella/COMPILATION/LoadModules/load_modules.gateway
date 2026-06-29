@@ -1,0 +1,34 @@
+# Clean modules
+module purge
+
+# Set environment variables
+export STELLA_SYSTEM='gateway'
+export MAKEFLAGS=-IMakefiles
+
+# Load Gateway modules
+module load cineca
+module load intel/pe-xe-2017--binary
+module load intelmpi/2017--binary
+module load szip/2.1--gnu--6.1.0
+module load zlib/1.2.8--gnu--6.1.0
+module load hdf5/1.8.17--intel--pe-xe-2017--binary
+module load netcdf/4.4.1--intel--pe-xe-2017--binary
+module load netcdff/4.4.4--intel--pe-xe-2017--binary
+module load fftw/3.3.4--intelmpi--2017--binary
+module load mkl/2017--binary
+module load lapack/3.6.1--intel--pe-xe-2017--binary
+module load blas/3.6.0--intel--pe-xe-2017--binary
+
+# Compile stella with CMake
+module load cmake/3.26.3-dxu
+
+# Numerical tests need python
+module load python/3.9.4
+
+# Check loaded modules
+echo "   "
+echo "GCC version:"
+gcc --version
+echo "Python version:"
+python --version
+echo "   "

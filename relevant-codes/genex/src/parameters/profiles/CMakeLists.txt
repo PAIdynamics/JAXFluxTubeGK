@@ -1,0 +1,9 @@
+target_sources(GENEXCore-Library
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_cbc_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_lapd_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_sine_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_plateau_m.f90
+        ${CMAKE_CURRENT_LIST_DIR}/params_profile_uniform_m.f90
+)

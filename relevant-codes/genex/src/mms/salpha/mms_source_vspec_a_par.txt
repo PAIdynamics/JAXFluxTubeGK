@@ -1,0 +1,45 @@
+mms_source_a_par = -(((rhoref**2*((-2*npol*Z*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos(2*npol*atan( &
+Z,-1.D0 + R))*Sin((2*nrad*Pi*(-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/( &
+rhomax - rhomin)))/((-1.D0 + R)**2 + Z**2) + (2*nrad*Pi*(-1.D0 + R)*Cos( &
+ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*Sqrt(( &
+-1.D0 + R)**2 + Z**2))))/Lref**2 + (R*rhoref**2*((-8*npol*nrad*Pi*( &
+-1.D0 + R)*Z*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Cos(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*((-1.D0 + R)**2 + Z**2)**1.5D0) + ( &
+4*npol*(-1.D0 + R)*Z*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos(2*npol*atan( &
+Z,-1.D0 + R))*Sin((2*nrad*Pi*(-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/( &
+rhomax - rhomin)))/((-1.D0 + R)**2 + Z**2)**2 - (2*nrad*Pi*(-1.D0 + R)**2*Cos( &
+ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*((-1.D0 + R)**2 + Z**2)**1.5D0) + ( &
+2*nrad*Pi*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*Sqrt((-1.D0 + R)**2 + Z**2)) - ( &
+4*npol**2*Z**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/((-1.D0 + R)**2 + Z**2)**2 - (4*nrad**2*Pi**2*(-1.D0 + R)**2*Cos( &
+ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr**2*(rhomax - rhomin)**2*(( &
+-1.D0 + R)**2 + Z**2))))/Lref**2 + (R*rhoref**2*((8*npol*nrad*Pi*( &
+-1.D0 + R)*Z*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Cos(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*((-1.D0 + R)**2 + Z**2)**1.5D0) - ( &
+4*npol*(-1.D0 + R)*Z*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos(2*npol*atan( &
+Z,-1.D0 + R))*Sin((2*nrad*Pi*(-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/( &
+rhomax - rhomin)))/((-1.D0 + R)**2 + Z**2)**2 - (2*nrad*Pi*Z**2*Cos( &
+ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*((-1.D0 + R)**2 + Z**2)**1.5D0) + ( &
+2*nrad*Pi*Cos(ntor*phi)**2*Cos(omega*t)**2*Cos((2*nrad*Pi*(-rhomin + Sqrt(( &
+-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan( &
+Z,-1.D0 + R)))/(minorr*(rhomax - rhomin)*Sqrt((-1.D0 + R)**2 + Z**2)) - ( &
+4*npol**2*(-1.D0 + R)**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*( &
+-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin( &
+2*npol*atan(Z,-1.D0 + R)))/((-1.D0 + R)**2 + Z**2)**2 - ( &
+4*nrad**2*Pi**2*Z**2*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*( &
+-rhomin + Sqrt((-1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin( &
+2*npol*atan(Z,-1.D0 + R)))/(minorr**2*(rhomax - rhomin)**2*(( &
+-1.D0 + R)**2 + Z**2))))/Lref**2)/R)

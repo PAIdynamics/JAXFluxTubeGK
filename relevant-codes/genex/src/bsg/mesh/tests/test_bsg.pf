@@ -1,0 +1,344 @@
+module test_bsg
+    !! Contains tests for the block_structured_grids_t
+    use mpi
+    use pfunit
+    use genex_fortran_env_m, only: GP
+    use mesh_5d_m, only: mesh_5d_t
+    use structured_grids_m, only: vp_grid_t
+    use dcomm_handler_m, only: dcomm_handler_t
+    use block_structured_grids_m, only: block_structured_grids_t
+    use bsg_types_m, only: pack_flags, unpack_all_flags, unpack_bflag
+
+    ! From PARALLAX
+    use equilibrium_m, only: equilibrium_t
+    use equilibrium_factory_m, only: create_equilibrium, CIRCULAR
+    use csrmat_m, only: csrmat_t => csrmat_t
+
+    ! Unit test helpers
+    use test_params_m
+
+    implicit none
+
+contains
+
+    @before
+    subroutine setup(this)
+        ! Flush out all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call setup_test_params(this%getMpiCommunicator(), &
+                               this%getProcessRank())
+    end subroutine
+
+    @after
+    subroutine teardown(this)
+        ! Read all the default parameters
+        class(MpiTestMethod), intent(inout) :: this
+        call teardown_test_params(this%getMpiCommunicator(), &
+                                  this%getProcessRank())
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_initialization(this)
+        !! Tests BSG class
+        class (MpiTestMethod), intent(inout) :: this
+
+        ! Case 1: Circular BSG
+        ! n_blocks = 2
+        ! n_points_vp = 10
+        ! vp_length = 3.5_GP
+        call initialize_test(this, 2, CIRCULAR, 3.5_GP, 10, &
+                             radial_markers=[0.3_GP], &
+                             vplen_markers=[3.5_GP, 3.5_GP])
+
+        ! Case 2: Circular BSG
+        ! n_blocks = 3
+        ! n_points_vp = 10
+        ! vp_length = 3.5_GP
+        call initialize_test(this, 3, CIRCULAR, 3.5_GP, 10, &
+                             radial_markers=[0.25_GP, 0.5_GP], &
+                             vplen_markers=[3.5_GP, 2.5_GP, 1.5_GP])
+
+    contains
+
+        subroutine initialize_test(this, num_blocks, eq_type, &
+                                   length_vp, vp_points, &
+                                   radial_markers, vplen_markers, spacing_RZ, &
+                                   mu_points, phi_points)
+            ! Initializes the test
+            class (MpiTestMethod), intent(inout) :: this
+            integer, intent(in) :: num_blocks
+            integer, intent(in) :: eq_type
+            real(kind=GP), intent(in) :: length_vp
+            integer, intent(in) :: vp_points
+            real(kind=GP), dimension(num_blocks-1), intent(in) :: radial_markers
+            real(kind=GP), dimension(num_blocks), intent(in) :: vplen_markers
+            real(kind=GP), intent(in), optional :: spacing_RZ
+            integer, intent(in), optional :: mu_points, phi_points
+
+            integer :: lb_phi, nb
+            type(vp_grid_t), dimension(:), allocatable :: vp_bsg
+            class(equilibrium_t), allocatable :: equilibrium_instance
+            type(block_structured_grids_t), allocatable :: bsg_instance
+            type(mesh_5d_t), allocatable :: mesh
+            type(dcomm_handler_t), allocatable, target :: dcomm_handler
+            type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+            real(kind=GP), contiguous, pointer, dimension(:,:) :: R, Z
+            type(csrmat_t), dimension(:), pointer :: map_positive1, &
+                                                     map_positive2
+            type(csrmat_t), dimension(:), pointer :: map_negative1, &
+                                                     map_negative2
+            integer, contiguous, pointer, dimension(:,:,:,:) :: neighour_indices
+            real(kind=GP), contiguous, pointer, dimension(:,:) :: is_core_ptr
+            real(kind=GP) :: spacing_RZ_default
+            integer :: mu_points_default, phi_points_default
+            real(kind=GP) :: bsg_radial_marker
+            logical :: eq
+            integer :: getter_num_blocks
+            real(kind=GP) :: getter_vp_length
+
+            spacing_RZ_default = 16_GP
+            if (present(spacing_RZ)) spacing_RZ_default = spacing_RZ
+            mu_points_default = 4
+            if (present(mu_points)) mu_points_default = mu_points
+            phi_points_default = 4
+            if (present(phi_points)) phi_points_default = phi_points
+            call create_equilibrium(equilibrium_instance, eq_type)
+
+            allocate(mesh)
+            call setup_test_mesh(this%getMpiCommunicator(), &
+                                 this%getProcessRank(), &
+                                 equilibrium_type=eq_type, &
+                                 spacing_RZ=spacing_RZ_default, &
+                                 n_points_phi=phi_points_default, &
+                                 n_points_vp=vp_points, &
+                                 n_points_mu=mu_points_default, &
+                                 length_vp=length_vp, &
+                                 use_bsg=.true.)
+
+            call setup_test_bsg(this%getMpiCommunicator(), &
+                                this%getProcessRank(), &
+                                num_blocks=num_blocks, &
+                                vplen_markers=vplen_markers, &
+                                radial_markers=radial_markers)
+
+            allocate(dcomm_handler)
+            call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                          this%getNumProcesses(), 1, 1, 1)
+
+            dcomm_handler_ptr => dcomm_handler
+            call mesh%initialize(dcomm_handler_ptr)
+
+            ! All pointers
+            R => mesh%get_R_pointer()
+            Z => mesh%get_Z_pointer()
+            map_positive1 => mesh%get_map_positive1_pointer()
+            map_positive2 => mesh%get_map_positive2_pointer()
+            map_negative1 => mesh%get_map_negative1_pointer()
+            map_negative2 => mesh%get_map_negative2_pointer()
+            neighour_indices => mesh%get_neighbor_indices_pointer()
+            is_core_ptr => mesh%get_is_core_pointer()
+
+            ! Set lower bound phi to 1
+            lb_phi = 1
+
+            ! BSG initialization
+            allocate(bsg_instance)
+            call bsg_instance%initialize(num_blocks, radial_markers)
+            ! Set vp grid
+            call bsg_instance%init_vp_grid(vp_points, length_vp, &
+                                           vplen_markers)
+            ! allocate vp_BSG array
+            allocate(vp_bsg(num_blocks))
+
+            ! Construct BSG
+            call bsg_instance%construct(R(:,lb_phi), Z(:,lb_phi), &
+                                        is_core=is_core_ptr(:,lb_phi), &
+                                      equilibrium_instance=equilibrium_instance)
+            call bsg_instance%set_flags(map_positive1(lb_phi), &
+                                        map_positive2(lb_phi), &
+                                        map_negative1(lb_phi), &
+                                        map_negative2(lb_phi), &
+                                        neighour_indices(:,:,:,lb_phi))
+
+            do nb = 1, num_blocks
+                call vp_bsg(nb)%initialize(vp_points)
+                call vp_bsg(nb)%construct(vplen_markers(nb), &
+                                          "trapezoidal")
+            end do
+
+            ! Check if initialized
+            @assertTrue(bsg_instance%is_initialized())
+
+            ! Check if the number of blocks are correct
+            getter_num_blocks = bsg_instance%get_num_blocks()
+            @assertEqual(getter_num_blocks, num_blocks)
+
+            deallocate(mesh)
+            deallocate(dcomm_handler)
+            deallocate(bsg_instance)
+            deallocate(equilibrium_instance)
+            deallocate(vp_bsg)
+
+        end subroutine
+
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_map_matrix_flag(this)
+        !! Tests BSG class
+        class (MpiTestMethod), intent(inout) :: this
+        integer, allocatable, dimension(:) :: bflag_array
+        integer :: bflag_p, flag
+        type(block_structured_grids_t), allocatable :: bsg_instance
+
+        allocate(bsg_instance)
+        allocate(bflag_array(10))
+        bflag_array = [1,1,1,1,4,5,6,5,2,8]
+
+        bflag_p = 3
+        flag = bsg_instance%set_map_matrix_flag(bflag_p, bflag_array)
+        @assertEqual(1, flag)
+
+        bflag_p = 4
+        flag = bsg_instance%set_map_matrix_flag(bflag_p, bflag_array)
+        @assertEqual(1, flag)
+
+        bflag_p = 5
+        flag = bsg_instance%set_map_matrix_flag(bflag_p, bflag_array)
+        @assertEqual(1, flag)
+
+        bflag_array = 2
+        bflag_p = 2
+        flag = bsg_instance%set_map_matrix_flag(bflag_p, bflag_array)
+        @assertEqual(0, flag)
+
+        deallocate(bsg_instance)
+        deallocate(bflag_array)
+    end subroutine
+
+    @test(npes=[1])
+    subroutine test_block_flag(this)
+        !! Tests flag block flag specification for RZ grid
+        class (MpiTestMethod), intent(inout) :: this
+        type(block_structured_grids_t), allocatable :: bsg_instance
+        class(equilibrium_t), allocatable :: equilibrium_instance
+        integer :: num_blocks, n_points_vp
+        real(kind=GP) :: length
+        type(mesh_5d_t), allocatable :: mesh
+        type(dcomm_handler_t), pointer :: dcomm_handler_ptr
+        type(dcomm_handler_t), allocatable, target :: dcomm_handler
+        real(kind=GP), allocatable, dimension(:) :: vplen_markers, &
+                                                    radial_markers
+        integer, contiguous, pointer, dimension(:) :: bsg_flags
+        integer :: rz_points, i
+        integer, allocatable, dimension(:) :: bflag_before
+        integer, allocatable, dimension(:) :: bflag_after
+        logical, allocatable, dimension(:) :: sign_before
+        logical, allocatable, dimension(:) :: sign_after
+        logical, dimension(5) :: all_flags
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: R, Z
+        type(csrmat_t), dimension(:), pointer :: map_positive1, map_positive2
+        type(csrmat_t), dimension(:), pointer :: map_negative1, map_negative2
+        integer, contiguous, pointer, dimension(:,:,:,:) :: neighour_indices
+        real(kind=GP), contiguous, pointer, dimension(:,:) :: is_core_ptr
+        integer :: block_value_positive
+        integer, allocatable, dimension(:) :: flatten_array
+
+        allocate(mesh)
+        num_blocks = 2
+        length = 3.5_GP
+        n_points_vp = 32
+        allocate(vplen_markers(num_blocks))
+        allocate(radial_markers(num_blocks-1))
+        vplen_markers = length
+        radial_markers = 0.25_GP
+        call setup_test_mesh(this%getMpiCommunicator(), &
+                             this%getProcessRank(), &
+                             equilibrium_type=CIRCULAR, &
+                             spacing_RZ=0.05_GP, &
+                             n_points_phi=16, &
+                             n_points_vp=32, &
+                             n_points_mu=16, &
+                             length_vp = length, &
+                             use_bsg=.true.)
+        call setup_test_bsg(this%getMpiCommunicator(), &
+                            this%getProcessRank(), &
+                            num_blocks=num_blocks, &
+                            vplen_markers=vplen_markers, &
+                            radial_markers=radial_markers)
+
+        call create_equilibrium(equilibrium_instance, CIRCULAR)
+
+        allocate(dcomm_handler)
+        call dcomm_handler%initialize(this%getMpiCommunicator(), &
+                                      this%getNumProcesses(), 1, 1, 1)
+        dcomm_handler_ptr => dcomm_handler
+
+        call mesh%initialize(dcomm_handler_ptr)
+        R => mesh%get_R_pointer()
+        Z => mesh%get_Z_pointer()
+        map_positive1 => mesh%get_map_positive1_pointer()
+        map_positive2 => mesh%get_map_positive2_pointer()
+        map_negative1 => mesh%get_map_negative1_pointer()
+        map_negative2 => mesh%get_map_negative2_pointer()
+        neighour_indices => mesh%get_neighbor_indices_pointer()
+        is_core_ptr => mesh%get_is_core_pointer()
+
+        allocate(bsg_instance)
+        call bsg_instance%initialize(num_blocks, radial_markers)
+        call bsg_instance%init_vp_grid(n_points_vp, length, vplen_markers)
+        call bsg_instance%construct(R(:, 1), Z(:, 1), &
+                                    is_core=is_core_ptr(:,1), &
+                                    equilibrium_instance=equilibrium_instance)
+        bsg_flags => bsg_instance%get_bsg_flags_pointer()
+        rz_points = size(bsg_flags)
+        allocate(bflag_before(rz_points))
+        allocate(sign_before(rz_points))
+        do i = 1, rz_points
+            bflag_before(i) = unpack_bflag(bsg_flags(i))
+            all_flags = unpack_all_flags(bsg_flags(i))
+            sign_before(i) = all_flags(5)
+        end do
+
+        call bsg_instance%set_flags(map_positive1(1), map_positive2(1), &
+                                    map_negative1(1), map_negative2(1), &
+                                    neighour_indices(:,:,:,1))
+        allocate(bflag_after(rz_points))
+        allocate(sign_after(rz_points))
+        do i = 1, rz_points
+            bflag_after(i) = unpack_bflag(bsg_flags(i))
+            all_flags = unpack_all_flags(bsg_flags(i))
+            sign_after(i) = all_flags(5)
+        end do
+
+        ! Check bflag values are same without considering negative block values
+        allocate(flatten_array(size(neighour_indices, 1) * &
+                               size(neighour_indices, 2)))
+        do i = 1, rz_points
+            block_value_positive = bflag_after(i)
+            @assertEqual(block_value_positive, bflag_before(i))
+            ! For a particular i value, get all neighboring points and flatten
+            flatten_array = pack(neighour_indices(:,:,i,1), .true.)
+            if (all(bflag_before(flatten_array) == 1) .or. &
+                all(bflag_before(flatten_array) == 2)) then
+                @assertFalse(sign_before(i))
+                @assertFalse(sign_after(i))
+            else
+                @assertFalse(sign_before(i))
+                @assertTrue(sign_after(i))
+            end if
+        end do
+
+        deallocate(mesh)
+        deallocate(dcomm_handler)
+        deallocate(bsg_instance)
+        deallocate(vplen_markers)
+        deallocate(radial_markers)
+        deallocate(bflag_before)
+        deallocate(flatten_array)
+        deallocate(bflag_after)
+        deallocate(sign_before)
+        deallocate(sign_after)
+    end subroutine
+
+end module

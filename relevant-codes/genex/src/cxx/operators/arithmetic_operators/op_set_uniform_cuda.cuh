@@ -1,0 +1,29 @@
+#ifndef OP_SET_UNIFORM_CUDA_CUH
+#define OP_SET_UNIFORM_CUDA_CUH
+
+#include "genex_cxx_env.hxx"
+#include "op_set_uniform.hxx"
+
+// Experimental C++ class which corresponds to the Fortran class
+// op_set_uniform_gpu_t with CUDA on GPU
+class op_set_uniform_cuda_t: public op_set_uniform_gpu_t
+{
+public:
+    // Default constructor
+    op_set_uniform_cuda_t() = default;
+
+    // Default destructor
+    ~op_set_uniform_cuda_t() override = default;
+
+    // Apply the operator to the given input values for real type
+    // with CUDA on GPU. Return 0 for success and 1 for error.
+    int32_t apply(const int64_t size_y, const real_t a,
+                  real_t* __restrict__ y) const override;
+
+    // Apply the operator to the given input values for integer type
+    // with CUDA on GPU. Return 0 for success and 1 for error.
+    int32_t apply(const int64_t size_y, const int32_t a,
+                  int32_t* __restrict__ y) const override;
+};
+
+#endif

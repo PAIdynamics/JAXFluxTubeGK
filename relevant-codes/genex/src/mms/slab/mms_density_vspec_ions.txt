@@ -1,0 +1,2 @@
+mms_density_ions = 5.D-2 + 9.5D-1*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((nrad*Pi*(R - rhomin))/( &
+rhomax - rhomin))**2*Sin(npol*Pi*Z)**2

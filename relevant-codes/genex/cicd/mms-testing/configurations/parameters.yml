@@ -1,0 +1,197 @@
+################################################################################
+## Common parameters shared in all cases
+## NOTE: These parameters may be overwritten by parameters prescribed in other
+##       sections.
+##
+## Format:
+## common_parameters:
+##   namelist:
+##     parameter: value/s
+################################################################################
+common_parameters:
+  params_mesh:
+    spacing_RZ: 0.0368
+    n_points_phi: 12
+    n_points_vp: 10
+    n_points_mu: 4
+    length_vp: 3.5
+    length_mu: 16
+
+  params_parallelization:
+    n_procs_phi: 1
+    n_procs_vp: 1
+    n_procs_mu: 1
+    n_procs_sp: 1
+
+  params_field_solve:
+    restol_zero: 1e-8
+
+  params_normalization:
+    n_ref: 1.0
+    B_ref: 0.14142
+    T_ref: 1.0
+    L_ref: 1.0
+
+  params_numerical_scheme:
+    buf_zone_size: 0
+
+  params_species:
+    names: [ions, electrons]
+    charges: [1.0, -1.0]
+    masses: [1.0, 1.0]
+    temp_scalings: [1.0, 1.0]
+
+  params_time_loop:
+    dt: 0.0125
+    n_timesteps: 50
+    steps_diagnostics: 25
+    steps_checkpoint: 1000
+    time_stepping_scheme: rk4
+    run_mms: .true.
+    wrap_up_time: 0
+
+  params_gyrokinetic_system:
+    with_bpar: .true.
+
+  notes: |
+    We simulate 5/4 of a half-period (0.625 tau with a default omega of 2pi, or
+    0.0625 tau with an omega of 20pi). After this time we compare the simulation
+    result with the exact MMS solution and calculate the error.
+    This time value has been specifically chosen for the following reason.
+    The exact MMS solution for f_electrons, f_ions, es_pot and A_par
+    has the analytical dependency of cos(omega * t)**2 in time.
+    For E_par = dA_par/dt, this has the analytical form of
+    cos(omega * t) * sin(omega * t). Both functions should not approach
+    zero at the time of comparison between simulation and MMS result, thus
+    we chose the value of 5/4 of a half-period which corresponds to the
+    value of cos(omega * t)**2 = cos(omega * t) * sin(omega * t) = 0.5.
+
+################################################################################
+## Geometry or equilibrium specific parameters
+## NOTE: These parameters overwrite common parameters above. "delete" keyword
+##       can be use here to remove existing entries.
+##
+## Format:
+## geometric_parameters:
+##   geometryN:
+##     namelist:
+##       parameter: value/s
+################################################################################
+geometric_parameters:
+  slab:
+    params_mesh:
+      equilibrium_type: 4
+      n_points_phi: 16
+      n_points_vp: 16
+
+    equi_slab_params:
+      yperiodic: .false.
+      boxsize: 1.0
+      sol: .false.
+
+    params_mms:
+      rho_min: 0.0
+      rho_max: 1.0
+
+  circular:
+    params_mesh:
+      equilibrium_type: 2
+
+    equi_circular_params:
+      rhomin: 0.1
+      rhomax: 0.5
+      qtype: 0
+      rhoq_ref: 0.0
+      q_ref: 0.86
+      shear: 0.0
+      theta_limiter: 0.0
+      dtheta_limiter: 0.0
+      rho_limiter: 1.0
+
+    params_mms:
+      q: 0.86
+      shear: 0.0
+      minor_r: 1.0
+      rho_min: 0.1
+      rho_max: 0.5
+
+  salpha:
+    params_mesh:
+      equilibrium_type: 5
+
+    equi_salpha_params:
+      minor_r: 1.0
+      q_ref: 0.86
+      rhomin: 0.1
+      L_ref: 1.0
+      shear: 2.12
+      B_ref:  0.14142
+      rhomax: 0.5
+
+    params_mms:
+      minor_r: 1.0
+      shear: 2.12
+      q: 0.86
+      rho_min: 0.1
+      rho_max: 0.5
+
+  dommaschk:
+    params_mesh:
+      equilibrium_type: 6
+      spacing_RZ: 0.0065
+      n_points_phi: 6
+      only_first_field_period: .true.
+
+    params_equi_dommaschk:
+      rhomin              : 0.477
+      rhomax              : 1.001
+      bndry_from_file     : .true.
+      outer_bndry_file    : "default"
+      outer_bndry_var     : "polygon_042"
+      inner_bndry_file    : "default"
+      inner_bndry_var     : "polygon_020"
+      rho_from_file       : .true.
+      rho_file            : "default"
+      exclusion_from_file : .false.
+
+    params_mms:
+      omega: 62.83185307179586
+      ntor: 5
+      rho_min: 0.477
+      rho_max: 1.001
+
+    params_time_loop:
+      dt: 0.00125
+
+    params_normalization:
+      L_ref: 10.0
+
+    params_numerical_scheme:
+      buf_zone_strength: 0.0
+
+    params_parallelization:
+      n_procs_phi: 2
+
+################################################################################
+## Varying parameters w.r.t. each resolution
+##
+## Format:
+## resolution_parameters:
+##   namelist:
+##     parameter: [resolution1, resolution2, ..., resolutionN]
+################################################################################
+resolution_parameters:
+  params_mesh:
+    n_levels: [1, 2, 3, 4, 4]
+
+################################################################################
+## Explicit parameters which are different in every case for each geometries
+## and resolutions of the velocity space based MMS testing
+##
+## Format:
+## explicit_parameters:
+##   namelist:
+##     parameter:
+##       geometryN: [resolution1, resolution2, ..., resolutionN]
+################################################################################
+explicit_parameters:

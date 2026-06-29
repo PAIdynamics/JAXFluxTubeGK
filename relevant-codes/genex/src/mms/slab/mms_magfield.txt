@@ -1,0 +1,13 @@
+absB = 1
+dabsBdR = 0
+dabsBdphi = 0
+dabsBdZ = 0
+bR = 0
+bphi = 1
+bZ = 0
+dbRdphi = 0
+dbRdZ = 0
+dbphidR = 0
+dbphidZ = 0
+dbZdR = 0
+dbZdphi = 0

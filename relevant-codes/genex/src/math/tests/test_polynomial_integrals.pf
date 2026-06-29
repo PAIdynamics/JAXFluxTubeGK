@@ -1,0 +1,146 @@
+module test_polynomial_integrals
+    !! Contains tests for the polynomial_integrals_m module
+    use funit
+    use genex_fortran_env_m, only: GP, GP_EPS
+    use math_m, only: PI
+    use polynomial_integrals_m, only: integral_hermite, &
+                                      integral_laguerre
+    implicit none
+
+    integer, parameter :: ntest = 10
+
+contains
+
+    @test
+    subroutine test_integral_hermite()
+        !! Test analytical integrals involing Hermite polynomials
+        !! multiplied by x to the power n
+        real(kind=GP) :: expected, res, tol, beta
+        integer :: n, p, i
+        integer, dimension(ntest) :: ps, ns
+        real(kind=GP), dimension(ntest) :: expected_res
+
+        ! Check the case of p even
+        beta  = 1.0_GP
+        ps    = [0, 0, 0, 2, 2, 4, 2, 4, 6, 6]
+        ns    = [0, 2, 4, 0, 2, 2, 4, 4, 4, 6]
+
+        ! NOTE: We have checked the results using Mathematica.
+        expected_res = [Pi**1.5_GP, &
+                        Pi**1.5_GP / 2.0_GP, &
+                        3.0_GP * Pi**1.5_GP / 4.0_GP, &
+                        0.0_GP, &
+                        Pi**1.5_GP / sqrt(2.0_GP), &
+                        0.0_GP, &
+                        3.0_GP * Pi**1.5_GP/ sqrt(2.0_GP), &
+                        sqrt(3.0_GP / 2.0_GP) * Pi**1.5_GP, &
+                        0.0_GP, &
+                        3.0_GP * sqrt(5.0_GP) * Pi**1.5_GP/ 2.0_GP]
+
+        tol = 1e-10_GP
+
+        do i = 1, ntest
+            res = integral_hermite(ps(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+        ! NOTE: Because of round-off errors, we increase the tolerance
+        !       when considering beta different than 1.
+        tol = 1e-6_GP
+        beta = 0.5_GP
+
+        expected_res = [7.874804972861209_GP, &
+                        7.874804972861209_GP, &
+                        23.62441491858363_GP, &
+                        5.568327996831708_GP, &
+                        27.84163998415855_GP, &
+                        43.40082151674335_GP, &
+                        150.34485591445608_GP, &
+                        400.25202065441096_GP, &
+                        752.7676170342379_GP, &
+                        10472.714391371046_GP]
+
+        do i = 1, ntest
+            res = integral_hermite(ps(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+        ! Check the case of p odd
+        beta  = 1.0_GP
+        ps    = [1, 1, 1, 3, 3, 3, 5, 5, 5, 5]
+        ns    = [0, 1, 2, 0, 1, 3, 0, 3, 5, 7]
+
+        ! NOTE: We have checked the results using Mathematica.
+        expected_res = [0.0_GP, Pi**1.5_GP / sqrt(2.0_GP), 0.0_GP, &
+                        0.0_GP, 0.0_GP, sqrt(3.0_GP) / 2.0_GP * Pi**1.5_GP, &
+                        0.0_GP, 0.0_GP, sqrt(15.0_GP) / 2.0_GP * Pi**1.5_GP, &
+                        21.0_GP * sqrt(15.0_GP) / 4.0_GP * Pi**1.5_GP]
+
+        tol = 1e-10_GP
+
+        do i = 1, ntest
+            res = integral_hermite(ps(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+        ! NOTE: Because of round-off errors, we increase the tolerance
+        !       when considering beta different than 1.
+        tol = 1e-6_GP
+        beta = 0.5_GP
+
+        expected_res = [0.0_GP, &
+                        11.13665599366341_GP, &
+                        0.0_GP, &
+                        0.0_GP, &
+                        13.63956231269167_GP, &
+                        95.4769361888417_GP, 0.0_GP, &
+                        167.7444368298754_GP, &
+                        1936.685770672199_GP, 24658.43221399167_GP]
+
+        do i = 1, ntest
+            res = integral_hermite(ps(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+    end subroutine
+
+    @test
+    subroutine test_integral_laguerre()
+        !! Test analytical integrals involing Laguerre polynomials
+        !! multiplied by x to the power n
+        real(kind=GP) :: res, tol, beta
+        integer, dimension(ntest) :: js, ns
+        real(kind=GP), dimension(ntest) :: expected_res
+        integer :: i
+
+        js    = [0, 0, 0, 1, 1, 1, 1, 2, 2, 2]
+        ns    = [0, 1, 2, 0, 1, 2, 3, 0, 1, 2]
+
+        ! NOTE: We have checked the results using Mathematica.
+        beta = 1.0_GP
+        expected_res = [1.0_GP,  1.0_GP,  2.0_GP,  0.0_GP, &
+                       -1.0_GP, -4.0_GP, -18.0_GP, 0.0_GP, &
+                        0.0_GP,  2.0_GP]
+
+        ! NOTE: Because of round-off errors, we increase the tolerance
+        !       when considering beta different than 1.
+        tol = 1e-10_GP
+
+        do i = 1, ntest
+            res = integral_laguerre(js(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+        beta = 0.5_GP
+        expected_res = [  2.0_GP,   4.0_GP,   16.0_GP, -2.0_GP, &
+                        -12.0_GP, -80.0_GP, -672.0_GP, &
+                          2.0_GP,  20.0_GP,  208.0_GP]
+
+        do i = 1, ntest
+            res = integral_laguerre(js(i), ns(i), beta)
+            @assertEqual(expected_res(i), res, tol)
+        enddo
+
+    end subroutine
+
+end module
