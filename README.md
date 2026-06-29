@@ -1,0 +1,341 @@
+# stellarator-gk
+
+Differentiable local flux-tube gyrokinetics for stellarator design studies.
+
+This repository is a JAX-first implementation of a linear electrostatic
+flux-tube gyrokinetic solver.  The physics and sign conventions are aligned
+with GKW and Gyaradax; DESC, GX, stella, and local fixture data are used for
+geometry import, validation, and benchmark comparisons.
+
+The current production milestone is a trusted linear W7-X stellarator run.  The
+code can already run reduced stellarator scans, reduced optimization examples,
+Rosenbluth-Hinton and Cyclone gates, and several geometry/code-to-code parity
+checks.  Full nonlinear turbulence, production DESC shape optimization,
+kinetic-electron TEM validation, collisions, and electromagnetic effects are
+explicitly deferred.
+
+## Repository Map
+
+```text
+src/stellarator_gk/      Python package and public solver API
+tests/                   Unit, validation, fixture, and regression tests
+examples/                User-facing runnable workflows and diagnostics
+scripts/                 Fixture generators, external-code prep, audit tools
+fixtures/                Committed reference inputs and validation artifacts
+figures/                 Generated CSV/PDF result artifacts for the paper
+docs/                    Short developer notes
+papers/                  Local paper/reference material
+relevant-codes/          Local checkouts/reference codes used for comparison
+main.tex                 Physics, numerics, and current validation write-up
+TODO.md                  Current prioritized backlog
+STATUS.md                Current project status and active blocker
+```
+
+## Install
+
+Use Python 3.11 or newer.  The project is configured for `uv`.
+
+```bash
+uv sync --extra dev
+```
+
+Most commands below use `uv run`, so `uv` will also create/update the local
+environment as needed.
+
+For numerical parity tests and production-style diagnostics, enable JAX x64:
+
+```bash
+export JAX_ENABLE_X64=1
+```
+
+## Quick Checks
+
+Run the import smoke test:
+
+```bash
+uv run pytest tests/test_import.py -q
+```
+
+Run the focused W7-X RHS comparison tests:
+
+```bash
+JAX_ENABLE_X64=1 uv run pytest \
+  tests/test_w7x_ky03_rhs_model_balance.py \
+  tests/test_w7x_stella_rhs_trace_comparison.py -q
+```
+
+Run the full test suite when changing shared solver behavior:
+
+```bash
+JAX_ENABLE_X64=1 uv run pytest
+```
+
+Run linting:
+
+```bash
+uv run ruff check src tests examples scripts
+```
+
+Build the paper:
+
+```bash
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+```
+
+## Run a Reduced Stellarator Scan
+
+The easiest end-to-end run is the reduced stellarator scan:
+
+```bash
+uv run --extra dev python examples/run_stellarator_linear_scan.py \
+  --output-dir runs/dshape_linear_scan
+```
+
+By default this uses the committed DESC DSHAPE fixture
+`fixtures/desc_geometry_dshape_rho05_alpha0.npz`.  The command writes:
+
+```text
+geometry_audit.json
+geometry_audit.csv
+ky_growth.csv
+mode_structures.csv
+convergence_history.csv
+convergence_metadata.json
+quasilinear_proxy.json
+run_config.json
+```
+
+The scan can also read:
+
+- `--geometry-source desc-path --desc-path ...` for a DESC equilibrium path,
+- `--geometry-source eik --eik-reference ...` for GX/GIST/GS2 eik tables,
+- `--geometry-source stella-geometry --stella-geometry ...` for stella
+  `.geometry` files.
+
+These runs are useful integration checks.  They are not production
+stellarator-optimization claims unless the readiness gates pass.
+
+## Common Workflows
+
+### Validation Gates
+
+Summarize the main reduced validation gates:
+
+```bash
+uv run --extra dev python examples/run_validation_gates.py
+```
+
+Regenerate validation CSV/PDF artifacts used by `main.tex`:
+
+```bash
+uv run --extra dev python examples/generate_validation_gate_figures.py
+```
+
+### W7-X Reduced Benchmark
+
+Regenerate the reduced W7-X benchmark fixture:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/generate_w7x_itg_reduced_benchmark.py
+```
+
+Run the W7-X production-readiness ledger:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/run_w7x_production_readiness_gate.py
+```
+
+The ledger currently remains blocked by open solver/stella mode-structure
+parity.  This is intentional: reduced runs should stay reduced until the
+external W7-X gate passes.
+
+### Matched stella W7-X Path
+
+The preferred external W7-X reference is stella.  The prepared run directory is:
+
+```text
+fixtures/stella_w7x_mode_structure_run/
+```
+
+The matched stella fixture has already been exported to:
+
+```text
+fixtures/w7x_itg_external_mode_structure_fixture.csv
+```
+
+Compare a solver mode-structure fixture against the stella reference:
+
+```bash
+JAX_ENABLE_X64=1 uv run python examples/run_w7x_mode_structure_gate.py \
+  --observed-fixture fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200/mode_structures.csv \
+  --reference-fixture fixtures/w7x_itg_external_mode_structure_fixture.csv \
+  --ky-values 0.1,0.2,0.3 \
+  --resample-reference-to-observed-z
+```
+
+Current status: growth is close at matched `t=200` controls, but the `ky=0.3`
+frequency/profile comparison remains open.  The active blocker is direct
+term-array parity between the solver and a patched stella RHS trace.
+
+### W7-X `ky=0.3` RHS Trace Work
+
+Regenerate the solver-side W7-X `ky=0.3` RHS/model balance:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
+  --output-dir fixtures/w7x_ky03_rhs_model_balance
+```
+
+Prepare and run the patched stella RHS trace in a scratch tree:
+
+```bash
+uv run python scripts/prepare_stella_w7x_rhs_trace_run.py --overwrite \
+  --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
+bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
+bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
+```
+
+Summarize and compare the trace:
+
+```bash
+uv run python scripts/summarize_stella_w7x_rhs_trace.py \
+  /tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat \
+  --output fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json
+uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
+  --require-raw-trace
+```
+
+The current comparator reports `blocked_array_contract_mismatch`: the raw stella
+trace and committed solver balance fixture use different velocity grids and the
+current raw trace lacks velocity quadrature weights.  The next step is a v2
+stella trace with velocity weights plus a solver-side full-array trace on a
+compatible grid.
+
+### External GX W7-X Cross-Check
+
+GX is a secondary W7-X reference path because it needs a suitable GPU/CUDA
+environment.  Package the prepared handoff bundle with:
+
+```bash
+uv run python scripts/package_w7x_external_reference_bundle.py \
+  --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz
+```
+
+On a GX-capable machine:
+
+```bash
+GX_EXECUTABLE=/path/to/gx \
+  bash fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
+```
+
+After returned GX outputs are copied back:
+
+```bash
+bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
+  --copy-outputs --resample-reference-to-observed-z
+```
+
+## Using the Python API
+
+The examples are the best starting point.  For direct API use, build grids and
+geometry first, then build a reusable residual precompute object.
+
+```python
+import jax.numpy as jnp
+
+from stellarator_gk import (
+    AdiabaticElectronParams,
+    FourierGridSpec,
+    GeometryScalarParams,
+    ParallelGridSpec,
+    SpeciesParams,
+    VelocityGridSpec,
+    build_fourier_grid,
+    build_linear_residual_precompute,
+    build_parallel_grid,
+    build_s_alpha_geometry,
+    build_velocity_grid,
+    linear_residual,
+)
+
+velocity = build_velocity_grid(
+    VelocityGridSpec(n_vpar=7, n_mu=5, vpar_max=2.0, mu_max=1.5)
+)
+parallel = build_parallel_grid(
+    ParallelGridSpec(n_z=16, z_min=0.0, z_max=1.0, topology="periodic")
+)
+fourier = build_fourier_grid(
+    FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.4))
+)
+geometry = build_s_alpha_geometry(
+    parallel, GeometryScalarParams(q=1.3, shat=0.7, eps=0.18)
+)
+ion = SpeciesParams(
+    charge=1.0,
+    mass=2.0,
+    density=1.0,
+    temperature=1.0,
+    density_gradient=1.0,
+    temperature_gradient=3.0,
+)
+electrons = AdiabaticElectronParams(density=1.0, temperature=1.0)
+
+precompute = build_linear_residual_precompute(
+    velocity,
+    parallel,
+    fourier,
+    geometry,
+    ion,
+    electron_params=electrons,
+)
+
+state_shape = (
+    velocity.vpar.size,
+    velocity.mu.size,
+    parallel.z.size,
+    fourier.kx.size,
+    fourier.ky.size,
+)
+state = jnp.zeros(state_shape, dtype=jnp.complex128)
+rhs = linear_residual(state, precomputed=precompute)
+```
+
+Important API rule: grid sizes, derivative backends, mode connectivity, and file
+I/O are static topology.  Continuous geometry arrays, species/profile
+parameters, RHS terms, field solves, time steps, diagnostics, and objectives are
+the differentiable path.
+
+## Current Validation Status
+
+Passing guardrails:
+
+- Rosenbluth-Hinton late-plateau gate.
+- Cyclone selected-ky scalar growth gate.
+- Cyclone term-level and GKW RHS/action parity gates.
+- DESC/GX/GX-GIST eik geometry contracts.
+- Reduced stellarator scan and fixed-topology optimization plumbing.
+
+Open blockers:
+
+- matched W7-X solver/stella `ky=0.3` frequency/profile parity,
+- direct weighted term-array parity against the patched stella RHS trace,
+- production W7-X convergence and CPU timing after parity,
+- full nonlinear turbulence and full DESC optimization.
+
+Read `STATUS.md` for the latest state and `TODO.md` for the next concrete
+tasks.
+
+## Development Notes
+
+- Keep new physics and numerical schemes documented in `main.tex`.
+- Add focused tests for every new public function in `src/`.
+- Prefer small explicit fixture contracts over hidden convention fixes.
+- Keep integer topology outside JAX gradient-traced paths.
+- Do not label reduced examples as production physics results.
+
+Useful companion docs:
+
+- `docs/performance_and_differentiability.md`
+- `docs/optimization_integration.md`
+- `TODO.md`
+- `STATUS.md`
