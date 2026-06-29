@@ -1,0 +1,170 @@
+\documentclass[11pt,a4paper,oneside]{article}
+\usepackage[latin1]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{times}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes} 
+\usepackage{bm}
+\usepackage{float}
+\hypersetup{
+    bookmarks=true,         % show bookmarks bar?
+    unicode=false,          % non-Latin characters in AcrobatB!GBs bookmarks
+    pdftoolbar=true,        % show AcrobatB!GBs toolbar?
+    pdfmenubar=true,        % show AcrobatB!GBs menu?
+    pdffitwindow=true,      % page fit to window when opened
+    pdftitle={My title},    % title
+    pdfauthor={Author},     % author
+    pdfsubject={Subject},   % subject of the document
+    pdfnewwindow=true,      % links in new window
+    pdfkeywords={keywords}, % list of keywords
+    colorlinks=true,        % false: boxed links; true: colored links
+    linkcolor=black,        % color of internal links
+    citecolor=blue,         % color of links to bibliography
+    filecolor=blue,         % color of file links
+    urlcolor=blue           % color of external links
+}
+
+\xdefinecolor{mygreen}{RGB}{0,220,0}
+\xdefinecolor{myblue}{RGB}{26,150,255}
+\topmargin-1cm
+\setlength{\textheight}{23.5cm}
+\setlength{\oddsidemargin}{0.5cm}
+\setlength{\textwidth}{15cm}
+
+\include{mylatexdefs}
+
+\frenchspacing
+
+\begin{document}
+\begin{center}
+  \begin{minipage}{\textwidth}%
+      \includegraphics[width=\textwidth]{ETHheader.pdf}
+    \vspace*{-5mm}
+  \end{minipage}
+\end{center}
+{\noindent
+  \hfill
+  Dr. Andreas Adelmann
+
+}
+\setlength{\parindent}{0pt}
+\vspace*{.8cm}
+\begin{center}
+  {\huge
+    Development of a Differentiable Flux-Tube Stellarator Gyrokinetic Turbulence Solver
+  }\\
+
+  \vspace*{1cm}
+  {\Large Master Thesis}
+  \end{center}
+
+\def\thebibliography#1{\subsection*{Literature}\list
+  {[\arabic{enumi}]}{\settowidth\labelwidth{[#1]}\leftmargin\labelwidth
+    \advance\leftmargin\labelsep
+    \usecounter{enumi}}
+  \def\newblock{\hskip .11em plus .33em minus -.07em}
+  \sloppy
+  \sfcode`\.=1000\relax}
+
+\setlength{\parskip}{1mm}
+
+\subsection*{Introduction}
+Magnetically confined fusion plasmas are strongly affected by microturbulence, which governs the transport of heat and particles across magnetic field lines. Modern stellarator optimization workflows already incorporate equilibrium and neoclassical transport objectives; however, turbulence optimization remains computationally challenging due to the high cost and limited differentiability of existing gyrokinetic solvers. Recent developments in differentiable scientific computing and GPU-accelerated frameworks such as JAX open the possibility of integrating gyrokinetic turbulence models directly into stellarator design loops.
+
+\subsection*{Goal}
+
+The goal of this project is to develop a differentiable flux-tube stellarator linear gyrokinetic turbulence code based on Gyaradax~\cite{galletti2026gyaradax} and GKW~\cite{peeters2009nonlinear}, and informed by GX~\cite{mandell2024gx} and its Laguerre--Hermite velocity-space formulation~\cite{mandell2018laguerre}.
+
+
+\begin{itemize}
+    \item The new solver will extend local gyrokinetic formulations from simplified tokamak geometry to fully three-dimensional stellarator magnetic equilibria imported from Boozer surface representations \cite{simsopt}. The implementation will support field-aligned stellarator coordinates and compute the geometric quantities required for flux tube gyrokinetic simulations.
+    \item GX will be treated as an algorithmic and benchmark reference rather than as the exact software architecture to copy. GX targets fast nonlinear production turbulence on GPUs using a Fourier--Laguerre--Hermite pseudo-spectral formulation. In contrast, this project targets a JAX-first, differentiable, CPU-usable linear electrostatic solver for optimization loops. GX methods that should be reused where appropriate include its local flux-tube geometry conventions, linked/twist-and-shift mode chains, gyroaverage and moment diagnostics, nonlinear pseudo-spectral/dealiasing strategy, Hermite--Laguerre velocity backend, closure models, and benchmark/input conventions. The current implementation already follows the local flux-tube, field-aligned, perpendicular-Fourier, precomputed-geometry, and spectral-operator aspects; the Hermite--Laguerre moment backend, closures, nonlinear dealiasing, and GX benchmark fixtures are planned extensions.
+    \item The project will focus on linear electrostatic gyrokinetics in the local flux-tube approximation. The governing five-dimensional gyrokinetic equations will be solved using Fourier discretization in the perpendicular directions combined with a spectral method along the magnetic field and velocity-space coordinates. The existing Gyaradax implementation currently advances the gyrokinetic equations in time using explicit Runge--Kutta integration to extract instability growth rates from temporal evolution. The new code should provide an interface to expose the ODE residual for a given state/solution, enabling both time-advance and eigenvalue-style solver paths.
+    \item Particular emphasis will be placed on differentiability of the numerical operators with respect to equilibrium parameters. The resulting framework will expose sensitivities of instability growth rate, mode frequencies, and turbulence transport proxies with respect to equilibrium and shape parameters such as pressure-gradient scale lengths, density-gradient scale lengths, magnetic shear, safety factor or rotational transform, plasma beta. These sensitivities can enable integration into gradient-based stellarator optimization pipelines and turbulence-aware plasma design workflows.
+    \item The developed code will be benchmarked against established gyrokinetic tools and standard linear stability test cases, e.g. ion-temperature-gradient (ITG) and trapped-electron-mode (TEM).
+    \item The new code should run in $\mathcal{O}(1)$ minutes on a $\mathcal{O}(100)$ CPUs such that it can be effectively included in a design loop. The reason is that current design loop of Proxima Fusion mainly runs on CPUs.
+\end{itemize}
+
+\subsection*{Roadmap}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{0.1\textwidth} p{0.8\textwidth}}
+\hline
+\textbf{Period} &  \textbf{Task} \\
+\hline
+Month 1 &
+Review gyrokinetic flux-tube formulation, numerics, stellarator geometry representations, and the Gyaradax implementation. Build and validate the existing code on standard tokamak ITG/TEM benchmark cases. \\
+
+Month 2 &
+Implement Boozer equilibrium import and compute the geometric quantities required for gyrokinetics. \\
+
+Month 3 &
+Extend the linear electrostatic gyrokinetic solver from simplified tokamak geometry to fully three-dimensional stellarator flux-tube geometry. Validate field-line following coordinates and geometric operators. \\
+
+Month 4 &
+Benchmark growth rates, mode frequencies, and mode structures against reference stellarator or tokamak gyrokinetic cases. Perform numerical convergence studies. \\
+Month 5 &
+Expose gradients of instability growth rates and turbulence proxies with respect to equilibrium and flux tube parameters.  Integrate the solver into a gradient-based stellarator design loop and demonstrate turbulence-aware optimization on a simplified stellarator configuration. 
+See~\cite{kim2024optimization,jorge2024direct}.\\
+Month 6 &
+Prepare final documentation and write the thesis.
+\\
+\hline
+\end{tabular}
+%\caption{}
+\end{table}
+
+\subsection*{Deliverables}
+
+Write your report in a concise manner using \LaTeX. The documented code and reproducible results (e.g., benchmarks, transformation examples, and evaluation metrics) should be attached. All project materials (code, \LaTeX{} sources, datasets, and presentations) must be maintained in a version-controlled repository.
+
+\subsection*{Contacts}
+\begin{itemize}
+
+\item Mohsen Sadr, \href{mailto:mohsen.sadr@psi.ch}{mohsen.sadr@psi.ch} and \href{mailto:msadr@paidynamics.ch}{msadr@paidynamics.ch}.
+
+\item Andreas Adelmann, \href{mailto:andreas.adelmann@psi.ch}{andreas.adelmann@psi.ch}.
+
+\end{itemize}
+
+
+\begin{thebibliography}{10}
+
+\bibitem{galletti2026gyaradax}
+Gianluca Galletti, Eric Volkmann, and Johannes Brandstetter. gyaradax: Local gyrokinetics jax
+code. arXiv preprint arXiv:2604.06085, 202
+
+\bibitem{peeters2009nonlinear}
+AG Peeters, Yann Camenen, F James Casson, WA Hornsby, AP Snodin, D Strintzi, and Gabor Szepesi. The nonlinear gyro-kinetic flux tube code GKW. Computer physics communications, 180(12):2650-2672, 2009.
+
+\bibitem{mandell2024gx}
+N. R. Mandell, W. D. Dorland, I. Abel, R. Gaur, P. Kim, M. Martin, and T. Qian. GX: a GPU-native gyrokinetic turbulence code for tokamak and stellarator design. Journal of Plasma Physics, 90:905900402, 2024.
+
+\bibitem{mandell2018laguerre}
+N. R. Mandell, W. D. Dorland, and M. Landreman. Laguerre-Hermite pseudo-spectral velocity formulation of gyrokinetics. Journal of Plasma Physics, 84:905840108, 2018.
+
+\bibitem{simsopt} https://simsopt.readthedocs.io/v0.4.3/simsopt.geo.html.
+
+
+\bibitem{kim2024optimization}
+Patrick Kim, Stefan Buller, Rory Conlin, William Dorland, Daniel W Dudt, Rahul Gaur, Rogerio Jorge, Egemen Kolemen, Matt Landreman, Noah R Mandell, et al. Optimization of nonlinear turbulence in stellarators. Journal of Plasma Physics, 90(2):905900210, 2024.
+
+
+\bibitem{jorge2024direct}
+R Jorge, W Dorland, P Kim, M Landreman, NR Mandell, G Merlo, and T Qian. Direct microstability optimization of stellarator devices. Physical Review E, 110(3):035201, 2024.
+
+\end{thebibliography}
+
+
+
+
+\vfill\noindent
+\today\ \ M. Sadr
+
+\end{document}
