@@ -150,7 +150,7 @@ Run it when the change affects shared solver behavior or validation contracts.
 - Reorganized `TODO.md` into a current prioritized backlog.
 - Reorganized `STATUS.md` into a compact status snapshot, active blocker, next
   actions, and test commands.
-- Updated `main.tex` to keep the paper focused on the model, current validation
+- Updated `tex/main.tex` to keep the paper focused on the model, current validation
   status, and remaining W7-X validation tasks.
 - No solver code was changed in this round.
 

@@ -35,12 +35,15 @@ scripts/                 Fixture generators, external-code prep, audit tools
 fixtures/                Committed reference inputs and validation artifacts
 figures/                 Generated CSV/PDF result artifacts for the paper
 docs/                    Short developer notes
-papers/                  Local paper/reference material
-relevant-codes/          Local checkouts/reference codes used for comparison
-main.tex                 Physics, numerics, and current validation write-up
+tex/                     Physics, numerics, and project TeX sources
 TODO.md                  Current prioritized backlog
 STATUS.md                Current project status and active blocker
 ```
+
+External MHD and gyrokinetic codes are optional providers and validation
+references. Keep their checkouts outside this repository and pass their paths
+explicitly to integration workflows; they are not runtime dependencies of the
+core solver.
 
 ## Install
 
@@ -90,7 +93,7 @@ uv run ruff check src tests examples scripts
 Build the paper:
 
 ```bash
-latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
+latexmk -pdf -interaction=nonstopmode -halt-on-error -cd tex/main.tex
 ```
 
 ## Run a Reduced Stellarator Scan
@@ -136,7 +139,7 @@ Summarize the main reduced validation gates:
 uv run --extra dev python examples/run_validation_gates.py
 ```
 
-Regenerate validation CSV/PDF artifacts used by `main.tex`:
+Regenerate validation CSV/PDF artifacts used by `tex/main.tex`:
 
 ```bash
 uv run --extra dev python examples/generate_validation_gate_figures.py
@@ -338,7 +341,7 @@ tasks.
 
 ## Development Notes
 
-- Keep new physics and numerical schemes documented in `main.tex`.
+- Keep new physics and numerical schemes documented in `tex/main.tex`.
 - Add focused tests for every new public function in `src/`.
 - Prefer small explicit fixture contracts over hidden convention fixes.
 - Keep integer topology outside JAX gradient-traced paths.

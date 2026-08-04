@@ -1,166 +1,240 @@
 # TODO: Differentiable Flux-Tube Stellarator GK Solver
 
-Last reviewed: 2026-06-29
+Last reviewed: 2026-08-04
 
 ## Goal
 
-Build a differentiable, local flux-tube, linear electrostatic stellarator
-gyrokinetic solver in JAX, following GKW/Gyaradax physics conventions and using
-GX/stella/DESC as geometry, method, and benchmark references.  The current
-milestone is not nonlinear turbulence yet; it is a trusted externally validated
-linear W7-X stellarator run that can gate CPU timing and reduced DESC
-optimization.
+Build `optimal-fusion` as a standalone JAX package for differentiable, local
+flux-tube gyrokinetics in stellarator design.  The package must own its solver,
+geometry data contract, fixtures, and core tests.  MHD and reference
+gyrokinetic codes must remain separately installable providers or validation
+tools, not copied source trees or implicit runtime dependencies.
+
+The current scientific milestone remains a trusted, externally validated
+linear electrostatic W7-X run.  Nonlinear turbulence, collisions,
+electromagnetic effects, and production equilibrium-shape optimization remain
+later milestones.
 
 Keep the workflow simple:
 
-1. Specify physics and numerics in `main.tex`.
-2. Implement solver functionality in `src/`.
-3. Add or update focused tests in `tests/` for every new public function.
-4. Keep `STATUS.md` current with commands, results, and remaining blockers.
+1. Specify physics and numerics in `tex/main.tex`.
+2. Implement reusable package functionality in `src/stellarator_gk/`.
+3. Add focused, self-contained tests for each public contract.
+4. Keep external-code comparisons reproducible through explicit paths,
+   versions, and generated fixtures.
+5. Keep `STATUS.md` current with commands, results, and blockers.
 
 ## Current State
 
 Implemented and tested:
 
-- core PyTree parameter/data types, Fourier grids, spectral collocation grids,
-  mode connectivity, and GKW finite-difference fallback operators;
-- circular, s-alpha, Boozer/precomputed, DESC-array, DESC-path, eik, and stella
-  geometry adapters;
-- Bessel/FLR, Maxwellian, drive, mirror, drift, streaming, quasineutrality, and
-  diagnostic primitives;
-- self-consistent matrix-free linear residual, `gkw_upwind` and `gkw_igh`
-  parity backends, RK4 time stepping, growth/frequency diagnostics, objectives,
-  and fixed-topology optimization helpers;
-- Hermite-Laguerre basis, moment diagnostics, GX-style hypercollision hooks,
-  and a reduced moment-RHS discriminator, but not a production replacement for
-  the collocation kinetic RHS;
-- reduced RH, Cyclone, Gyaradax/GKW, DESC/eik, W7-X, stella, and GX handoff
-  validation infrastructure.
+- core PyTree types, grids, mode connectivity, linear electrostatic RHS, field
+  solve, time advance, diagnostics, objectives, and fixed-topology gradients;
+- an MHD-neutral physical geometry object (`PhysicalFluxTubeGeometry`) and a
+  map from physical arrays to the solver's internal coefficients;
+- precomputed-array, DESC-array, optional DESC-object/path, GX/GIST eik, and
+  stella `.geometry` ingestion paths;
+- reduced RH, Cyclone, GKW/Gyaradax, DESC/eik, W7-X, stella, and GX validation
+  infrastructure;
+- reduced stellarator scans and optimization examples.
 
-Current trusted guardrails:
+Repository cleanup already completed:
 
-- true Rosenbluth-Hinton late-plateau gate passes;
-- Cyclone selected-ky scalar growth, term algebra, GKW RHS/action trace,
-  imported-state replay, initial/first-window contract, and row-normalized
-  `parallel_phi.dat` profile contracts pass their current tolerances;
-- DESC/GX/eik geometry and independent GX/VMEC GIST eik-source contracts pass;
-- reduced stellarator scan and optimization examples run and remain labeled
-  reduced.
+- [x] Remove tracked copies of external codes and papers from this repository.
+- [x] Keep DESC, GX, stella, GKW, Gyaradax, VMEC++, GVEC, and papers as sibling
+  repositories/reference material outside `optimal-fusion`.
+- [x] Move the project TeX sources to `tex/`.
 
-Current blockers:
+Standalone gaps found in the current code:
 
-- W7-X solver/stella parity remains open after matching geometry, field-line
-  length, `ky`, `kx=0`, late-time window, and simple velocity resolution.
-  Growth is close at `t=200`, but the `ky=0.3` real frequency/profile gate is
-  still open.
-- The W7-X `ky=0.3` scalar term comparison is narrowed but not yet an array
-  parity proof.  After the stella `flux_fac` drive correction, the largest
-  remaining scalar discrepancy is the parallel-streaming bundle.
-- Production W7-X convergence, CPU timing, and DESC optimization readiness stay
-  blocked until external W7-X parity passes.
-- Multi-ky Cyclone/GX low-ky branch-shape parity is open pending a true
-  external complex mode-structure fixture or a stronger moment-RHS comparison.
-- Full nonlinear turbulence, kinetic-electron TEM production validation,
-  collisions, electromagnetic effects, and full DESC shape optimization are
-  deferred extensions.
+- scripts, examples, tests, and fixture documentation still assume
+  `relevant-codes/...` exists inside this repository;
+- geometry loaders are split between the package, benchmark helpers, and the
+  stellarator scan example instead of sharing one public provider contract;
+- there is no first-class VMEC/VMEC++ `wout` or GVEC adapter, so W7-X geometry
+  is currently obtained indirectly from GX/GIST or stella artifacts;
+- the geometry contract does not yet carry a versioned statement of units,
+  normalization, signs, radial coordinate, field-line topology, provenance,
+  and differentiability;
+- a clean clone is not yet continuously tested without sibling source trees.
 
-## Immediate Next Round
+## Priority 0: Make the Repository Genuinely Standalone
 
-### 1. Close W7-X stella `ky=0.3` term-array parity
+- [ ] Remove all hard-coded `relevant-codes/...` defaults from tracked Python,
+  tests, README files, and fixture metadata.  Never resolve a dependency by its
+  location relative to the `optimal-fusion` checkout.
+- [ ] Make external source trees explicit optional inputs such as
+  `--desc-root`, `--gx-root`, `--stella-root`, `--gkw-root`, and executable or
+  equilibrium paths.  Environment-variable fallbacks may be offered, but every
+  workflow must print the resolved path and external revision.
+- [ ] Keep only small, code-independent numerical validation contracts needed
+  by the default test suite in `fixtures/`; record their origin, generating
+  dependency/version, configuration identifier, and command.  Do not commit
+  external implementation source, MHD equilibria, or generated geometry/run
+  output.
+- [ ] Separate tests into self-contained core/fixture tests and opt-in external
+  integration tests with pytest markers.  Core tests must skip neither because
+  a sibling checkout is absent nor because an external executable is absent.
+- [ ] Replace tests that read Gyaradax/GX/DESC source files with committed
+  numerical contracts or synthetic provider doubles.
+- [ ] Add a clean-clone CI job that installs only declared dependencies and
+  runs import, unit, reduced W7-X fixture, and packaging tests with no sibling
+  repositories available.
+- [ ] Add an sdist/wheel smoke test and verify installed-package workflows do
+  not depend on repository-relative files.
+- [x] Ignore local external checkout directories and generated external-run
+  outputs so they cannot be accidentally recommitted.
 
-- [ ] Rerun the patched stella RHS trace in format v2 so the raw trace includes
-  `wgts_vpa` and z-dependent `wgts_mu`.
-- [ ] Update the stella trace comparator to drop the duplicate periodic z
-  endpoint before array comparison.
+Acceptance gate: from a fresh clone, `uv sync --extra dev` followed by the core
+test command passes without DESC, GX, stella, GKW, Gyaradax, VMEC++, or GVEC
+source trees.
+
+## Priority 1: Define One Public MHD Geometry Interface
+
+- [ ] Define and document a small public `GeometryProvider` protocol that
+  returns `PhysicalFluxTubeGeometry` plus metadata.  Solvers must consume this
+  contract rather than knowing which MHD code produced it.
+- [ ] Version the serialized geometry schema and specify coordinates, units,
+  normalization, sign conventions, radial coordinate, `alpha`, field periods,
+  periodic endpoint policy, twist-and-shift/linking data, quadrature weights,
+  and provenance.
+- [ ] Separate static topology/file I/O from differentiable arrays.  State
+  clearly which provider outputs can carry gradients back to equilibrium
+  parameters and test those claims with `jax.grad`.
+- [ ] Move GX/GIST eik and stella `.geometry` parsing out of examples/benchmark
+  code into focused optional adapter modules that produce the same physical
+  contract.
+- [ ] Add schema validation with actionable errors for missing fields,
+  incompatible normalization, non-finite arrays, duplicate endpoints, and
+  inconsistent grid sizes.
+- [ ] Allow optional user-controlled serialization/caching of provider output
+  for expensive runs, but keep it outside the source tree and make the live
+  provider API the canonical path.  The solver must not require a separately
+  stored geometry file.
+- [ ] Keep solver-internal coefficients (`F`, `G`, `E_y`, `D_x`, `D_y`, metric
+  terms) derived in one tested location; providers should expose physical
+  quantities, not duplicate solver conventions.
+
+Acceptance gate: one solver run can switch among synthetic, DESC, VMEC, GVEC,
+GX/GIST, and stella providers without changing solver construction after the
+provider call.
+
+## Priority 2: Add Clean MHD Providers and a Direct W7-X Path
+
+### DESC
+
+- [ ] Turn the existing DESC object/path adapter into an optional provider with
+  a declared installation extra and no `PYTHONPATH` mutation or source-tree
+  assumption.
+- [ ] Pin/test the supported DESC API and add a small mock-based unit test plus
+  an opt-in integration test against the sibling DESC checkout or installed
+  release.
+- [ ] Verify gradients from continuous DESC equilibrium parameters through
+  sampled geometry and the reduced GK objective while holding grid topology
+  fixed.
+
+### VMEC / VMEC++ and W7-X
+
+- [ ] Define a stable programmatic equilibrium request such as an MHD provider
+  plus a named configuration (`W7-X`, configuration variant, surface, and
+  field line).  Record those inputs and dependency versions for reproducibility
+  instead of committing an equilibrium artifact.
+- [ ] Implement a VMEC++ provider that obtains or constructs the requested W7-X
+  design through the installed dependency and converts it directly to the
+  physical flux-tube contract in memory.
+- [ ] Keep `wout*.nc` import as an optional user interoperability path, not the
+  canonical W7-X source and not a committed project fixture.
+- [ ] Define equivalent named-configuration hooks for DESC and GVEC where their
+  APIs can construct or load the W7-X design programmatically.
+- [ ] Remove committed W7-X equilibrium and derived-geometry artifacts after
+  the live provider reproduces them.  Integration tests should generate data
+  in a temporary/cache directory and retain only compact numerical assertions
+  where a regression contract is essential.
+- [ ] Cross-check the direct W7-X provider against the committed GX/GIST and
+  stella geometry contracts term by term, including `B`, parallel derivative
+  scaling, metric elements, drift coefficients, field-period count, and
+  endpoint/linking conventions.
+- [ ] Make the reduced W7-X example accept a provider and named design directly
+  (for example `--geometry-provider vmecpp --configuration w7x-standard`), with
+  optional user-supplied equilibrium files as a secondary path.
+
+### GVEC
+
+- [ ] Specify the minimum GVEC output/API needed to build the physical
+  flux-tube contract and implement it as an optional adapter or exporter.
+- [ ] Add an opt-in GVEC integration test and compare a common equilibrium with
+  VMEC/DESC after matching surface and field line.
+
+Acceptance gate: W7-X runs from a named configuration through an installed MHD
+dependency without a repository-stored design/geometry file.  A user-supplied
+equilibrium file remains optional, while GX/stella are independent validation
+programs rather than geometry sources.
+
+## Priority 3: Preserve and Close the W7-X Scientific Validation Gate
+
+- [ ] Rerun the patched sibling stella RHS trace in format v2 with `wgts_vpa`
+  and z-dependent `wgts_mu`; require an explicit stella source/executable path
+  and record its commit.
+- [ ] Drop the duplicate periodic stella z endpoint before array comparison.
 - [ ] Emit a solver-side selected-mode full-array trace on a stella-compatible
-  `z/vpa/mu` grid, or add a documented interpolation/weighting adapter from the
-  solver grid to the stella grid.
+  `z/vpa/mu` grid, or add a documented interpolation and weighting adapter.
 - [ ] Compare velocity-weighted complex arrays for distribution, parallel
-  streaming, mirror force, magnetic drift, equilibrium drive, field-drive terms,
-  total RHS, quasineutrality numerator/denominator, and field normalization.
-- [ ] Inspect the parallel-streaming derivative/linking convention first if the
+  streaming, mirror force, magnetic drift, equilibrium drive, field-drive
+  terms, total RHS, quasineutrality numerator/denominator, and normalization.
+- [ ] Inspect the parallel-streaming derivative/linking convention first if
   weighted arrays confirm the current scalar mismatch.
+- [ ] After term parity passes, rerun the W7-X mode-structure gate against the
+  matched stella fixture.
+- [ ] Replace the reduced convergence ladder with production controls in
+  parallel and velocity resolution, backend, modes, field-line length,
+  timestep, and growth window.
+- [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
+  production optimization blocked until the readiness ledger passes.
+- [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a
+  secondary moment-method cross-check.
 
-Useful commands:
+## Priority 4: Differentiable Design Integration
 
-```bash
-uv run python scripts/prepare_stella_w7x_rhs_trace_run.py --overwrite \
-  --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
-uv run python scripts/summarize_stella_w7x_rhs_trace.py \
-  /tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat \
-  --output fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json
-uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py --require-raw-trace
-```
+- [ ] Define a stable objective API from equilibrium/provider parameters to
+  growth rate, real frequency, mode-structure penalties, and quasilinear
+  proxies.
+- [ ] Add finite-difference checks of gradients through geometry and time
+  advance, including near-degenerate eigenmode/branch cases.
+- [ ] Define remeshing and topology-change behavior: gradients are valid only
+  within a fixed grid/field-line connectivity contract, and optimization must
+  detect when rebuilding is required.
+- [ ] Demonstrate a reduced W7-X design loop through a real MHD provider before
+  claiming full shape optimization.
+- [ ] Add multiple surfaces and field lines, robust aggregation objectives,
+  checkpointing, and reproducible optimization metadata.
 
-### 2. Promote W7-X from reduced regression to production claim
+## Priority 5: Confidence Gaps and Deferred Physics
 
-- [ ] After W7-X solver/stella term parity passes, rerun the W7-X
-  mode-structure gate against the matched stella fixture.
-- [ ] Replace the reduced W7-X convergence ladder with a production-control
-  ladder in `n_z`, velocity resolution/backend, `kx/ky`, field-line length,
-  timestep, and growth-window diagnostics.
-- [ ] Rerun guarded production CPU timing only after the parity ledger passes.
-- [ ] Keep `examples/desc_fixture_optimization_loop.py --require-production-ready`
-  blocked until the readiness ledger passes.
+- [ ] Keep GKW selected-mode state-history and multi-time velocity-slice gaps
+  visible until closed or superseded by an independent stellarator reference.
+- [ ] Decide whether Chebyshev/GKW finite-difference velocity collocation is
+  the production CPU backend or the Hermite-Laguerre backend must become fully
+  production capable first.
+- [ ] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
+  ledger.
+- [ ] Validate kinetic-electron TEM physics.
+- [ ] Add collisions and electromagnetic perturbations.
+- [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
+  timestep control, saturated heat-flux diagnostics, and nonlinear parity.
+- [ ] Extend to full equilibrium-shape optimization only after the standalone
+  geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
-Useful commands:
+## Project Rules
 
-```bash
-uv run python examples/run_w7x_mode_structure_gate.py \
-  --observed-fixture fixtures/w7x_itg_stella_matched_time_ladder/runs/time_200/mode_structures.csv \
-  --reference-fixture fixtures/w7x_itg_external_mode_structure_fixture.csv \
-  --ky-values 0.1,0.2,0.3 --resample-reference-to-observed-z
-uv run python scripts/run_w7x_production_readiness_gate.py
-uv run python scripts/run_w7x_production_cpu_timing.py
-```
-
-### 3. Keep secondary external references available
-
-- [ ] Optionally run the prepared GX W7-X workflow on a CUDA/GX-capable machine
-  and ingest returned `.big.nc`/`.out.nc` files as a secondary moment-method
-  cross-check.
-- [ ] Re-run the exact GX Cyclone input-control scan after a true GX
-  `.big.nc` complex mode-structure artifact exists for the low-ky branch.
-
-Useful commands:
-
-```bash
-uv run python scripts/package_w7x_external_reference_bundle.py \
-  --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz
-GX_EXECUTABLE=/path/to/gx bash fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
-bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
-  --copy-outputs --resample-reference-to-observed-z
-```
-
-### 4. Maintain confidence gaps without blocking the W7-X path
-
-- [ ] Keep the GKW full selected-mode state-history and multi-time velocity-slice
-  discrepancies visible until either closed or explicitly demoted by an
-  independent stellarator reference.
-- [ ] Decide whether Chebyshev/GKW finite-difference velocity collocation is the
-  production CPU backend or whether the GX-style Hermite-Laguerre backend must
-  become production capable before optimization studies.
-- [ ] Keep the multi-ky Cyclone low-ky branch-shape gap in the validation ledger.
-
-### 5. Deferred physics after trusted linear W7-X
-
-- [ ] Kinetic-electron TEM validation.
-- [ ] Collisions and electromagnetic perturbations.
-- [ ] Nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear timestep
-  control, saturated heat-flux diagnostics, and nonlinear benchmark parity.
-- [ ] Full DESC optimization over real equilibrium shape degrees of freedom,
-  multiple surfaces/field lines, remeshing/topology handling, and production
-  readiness gates.
-
-## Rules
-
-- Keep `main.tex` as the concise physics/numerics source of truth; keep history
-  and raw details out of the paper unless they support a claim.
-- Keep `STATUS.md` as a current snapshot plus a short round log, not an
-  exhaustive transcript.
-- Do not claim production stellarator optimization or nonlinear turbulence until
-  the relevant parity, convergence, timing, and physics-extension gates pass.
-- Prefer small focused tests and explicit fixture artifacts over hidden
-  convention fixes.
+- `optimal-fusion` must never require a particular sibling-directory layout.
+- External codes are optional producers and validators; their source is not
+  part of this package.
+- `tex/main.tex` is the concise physics/numerics source of truth.
+- `STATUS.md` is a current snapshot and short round log, not an exhaustive
+  transcript.
+- Every external fixture records code/version, input, command, normalization,
+  and checksum/provenance.
+- Prefer small explicit contracts and adapter tests over hidden convention
+  fixes.
+- Do not claim production W7-X optimization or nonlinear turbulence until the
+  corresponding parity, convergence, timing, gradient, and physics gates pass.

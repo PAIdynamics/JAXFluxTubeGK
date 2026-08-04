@@ -3,4 +3,21 @@
 .ruff_cache/
 __pycache__/
 *.py[cod]
+.DS_Store
 
+# External codes are separately installed dependencies, never vendored here.
+relevant-codes/
+
+# Generated external W7-X reference-run artifacts.
+fixtures/gx_w7x_mode_structure_run/*.tar.gz
+fixtures/gx_w7x_mode_structure_run/wout_*.nc
+fixtures/stella_w7x_mode_structure_run/.stella_*
+fixtures/stella_w7x_mode_structure_run/*.error
+fixtures/stella_w7x_mode_structure_run/*.final_fields
+fixtures/stella_w7x_mode_structure_run/*.fluxes
+fixtures/stella_w7x_mode_structure_run/*.input
+fixtures/stella_w7x_mode_structure_run/*.omega
+fixtures/stella_w7x_mode_structure_run/*.out
+fixtures/stella_w7x_mode_structure_run/*.out.nc
+fixtures/stella_w7x_mode_structure_run/*.species.input
+fixtures/stella_w7x_mode_structure_run/wout_*.nc
