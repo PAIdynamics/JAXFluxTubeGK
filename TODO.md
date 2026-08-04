@@ -45,6 +45,10 @@ Repository cleanup already completed:
 - [x] Keep DESC, GX, stella, GKW, Gyaradax, VMEC++, GVEC, and papers as sibling
   repositories/reference material outside `optimal-fusion`.
 - [x] Move the project TeX sources to `tex/`.
+- [x] Add a pinned external dependency manifest and bootstrapper with separate
+  `mhd`, Python-validation, and native-validation profiles; managed content is
+  kept under ignored `.dependencies/`, while sibling clones can be verified
+  and reused without modification.
 
 Standalone gaps found in the current code:
 
@@ -90,6 +94,10 @@ Audit baseline on 2026-08-04:
   `--desc-root`, `--gx-root`, `--stella-root`, `--gkw-root`, and executable or
   equilibrium paths.  Environment-variable fallbacks may be offered, but every
   workflow must print the resolved path and external revision.
+- [x] Provide one preparation command that fetches exact fork commits,
+  builds/installs Python MHD providers, compiles native validation codes on
+  request, links discovered executables under `.dependencies/bin`, and writes
+  a local revision/command ledger.
 - [ ] Keep only small, code-independent numerical validation contracts needed
   by the default test suite in `fixtures/`; record their origin, generating
   dependency/version, configuration identifier, and command.  Do not commit
@@ -107,15 +115,20 @@ Audit baseline on 2026-08-04:
   not depend on repository-relative files.
 - [ ] Stop tracking `src/stellarator_gk.egg-info/`; build metadata must be
   generated and ignored.
-- [ ] Declare coherent optional extras for MHD providers and external fixture
-  readers (`vmecpp`, DESC, GVEC, NetCDF4 as needed), and document exact commands
-  using `--extra dev`/provider extras so `uv run` does not prune test tools.
+- [ ] Decide whether provider packages should remain manifest-installed or
+  also be exposed as PEP 508 extras. Add NetCDF4/reader extras as needed. The
+  bootstrapper now uses an inexact project sync to retain installed providers;
+  document that a later exact `uv sync` intentionally restores the core lock.
 - [x] Ignore local external checkout directories and generated external-run
   outputs so they cannot be accidentally recommitted.
 
 Acceptance gate: from a fresh clone, `uv sync --extra dev` followed by the core
 test command passes without DESC, GX, stella, GKW, Gyaradax, VMEC++, or GVEC
 source trees.
+
+Dependency preparation is now available, but it does not satisfy this gate by
+itself: core tests must still be independent, and provider/validator tests must
+consume the bootstrap state or explicit paths rather than old relative paths.
 
 ## Priority 1: Define One Public MHD Geometry Interface
 

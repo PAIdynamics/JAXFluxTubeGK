@@ -22,6 +22,11 @@ The target architecture is:
 - equilibrium files and generated W7-X geometry/run artifacts are not stored
   in this repository.
 
+A pinned dependency preparation layer now exists. `dependencies.toml` records
+the exact PAIdynamics fork revisions, and `scripts/bootstrap_dependencies.py`
+supports managed fetch/build/install as well as read-only reuse of matching
+sibling clones.
+
 ## Verified Implementation
 
 ### Core numerics
@@ -145,6 +150,35 @@ physics, time-advance, objective, or differentiability regression.
 - There are no installed console entry points for the solver workflows; the
   user interface is currently a collection of examples and scripts.
 
+### Dependency preparation
+
+Implemented profiles:
+
+- `mhd`: VMEC++, DESC, and GVEC, installed as Python packages (including their
+  native build steps where defined by those packages);
+- `validation-python`: Gyaradax;
+- `validation-native`: GX, stella, and GKW, built with their native systems;
+- `validation` and `all`: combined profiles.
+
+Managed clones/builds/executable links/state live below ignored
+`.dependencies/`. Every dependency is pinned to a full Git commit. With
+`--local-root`, a matching sibling clone is revision-checked and used without
+automatic checkout or source modification. Native executables are exposed via
+`.dependencies/bin`, and `.dependencies/state.json` records the local resolved
+state.
+
+The manifest/bootstrap unit tests and Ruff pass, and dry runs succeed for both
+managed-fetch and current sibling-checkout paths. The complete local `mhd`
+profile was also built and import-verified on macOS/Python 3.13. VMEC++ uses the
+documented Homebrew OpenMP root, and a build-only compatibility shim supports
+the old Versioneer copy in the pinned DESC fork without modifying its source.
+Bootstrap project syncs are inexact so repeat runs retain installed providers.
+The final environment is checked for package incompatibilities; the MHD profile
+resolves DESC's JAX `<0.10` requirement rather than leaving the core lock's JAX
+0.10.1 installed alongside it.
+Native validation builds remain platform dependent: GX requires CUDA and
+`GK_SYSTEM`, while stella and GKW may require site compiler/MPI/NetCDF setup.
+
 The local `.venv` was moved with the repository, leaving stale absolute
 shebangs in console scripts.  The audit therefore invoked pytest and Ruff with
 `python -m ...`.  This is a local environment relocation issue; clean-clone
@@ -154,15 +188,17 @@ wheel/CI tests are still needed to validate the documented installation path.
 
 1. Restore a green standalone test suite by removing the 13 direct source/input
    dependencies and separating external integration tests with markers.
-2. Define the versioned `GeometryRequest` / `GeometryProvider` /
+2. Route integration tests and scripts through the bootstrap state or explicit
+   dependency paths instead of `relevant-codes/...`.
+3. Define the versioned `GeometryRequest` / `GeometryProvider` /
    `GeometryResult` contract, including the parallel grid and full metadata.
-3. Add VMEC++ as the first live named W7-X provider and expose the standard
+4. Add VMEC++ as the first live named W7-X provider and expose the standard
    W7-X input through a supported API/resource in the VMEC++ fork.
-4. Convert the in-memory VMEC output to physical flux-tube arrays without an
+5. Convert the in-memory VMEC output to physical flux-tube arrays without an
    intermediate committed `wout`/GX/GIST/stella file.
-5. Cross-check the live provider against independent GX and stella references,
+6. Cross-check the live provider against independent GX and stella references,
    then remove superseded tracked W7-X equilibrium/derived artifacts.
-6. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
+7. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
    convergence, CPU timing, and real MHD optimization gradients.
 
 ## Current Risks
@@ -195,6 +231,17 @@ wheel/CI tests are still needed to validate the documented installation path.
   DESC, and GVEC repositories.
 - Reprioritized the roadmap around a live VMEC++ W7-X provider and a green
   standalone boundary before further scientific promotion.
+
+### 2026-08-04: Pinned Dependency Bootstrap
+
+- Added full-commit pins and preparation profiles for VMEC++, DESC, GVEC,
+  Gyaradax, GX, stella, and GKW.
+- Added managed clone/build/install handling, safe sibling-clone reuse, native
+  executable links, dry-run/fetch-only modes, and a local state ledger.
+- Added focused manifest/profile/dry-run/environment-path tests and dependency
+  setup documentation.
+- Built and import-verified the full VMEC++/DESC/GVEC profile from revision-
+  checked sibling clones on macOS/Python 3.13.
 
 ### 2026-06-29 and Earlier
 

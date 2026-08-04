@@ -1,0 +1,77 @@
+schema_version = 1
+
+[profiles]
+core = []
+mhd = ["vmecpp", "desc", "gvec"]
+validation-python = ["gyaradax"]
+validation-native = ["gx", "stella", "gkw"]
+validation = ["gyaradax", "gx", "stella", "gkw"]
+all = ["vmecpp", "desc", "gvec", "gyaradax", "gx", "stella", "gkw"]
+
+[dependencies.vmecpp]
+role = "mhd-provider"
+url = "https://github.com/PAIdynamics/vmecpp.git"
+revision = "ccdeec53e048f086d71b2ffa35070238e3c70373"
+source_dir = "vmecpp"
+install = "python"
+import_name = "vmecpp"
+macos_environment = { OpenMP_ROOT = "{brew_prefix}/opt/libomp" }
+
+[dependencies.desc]
+role = "mhd-provider"
+url = "https://github.com/PAIdynamics/DESC.git"
+revision = "512f93cfc892b64a65b72f2ac5e9b856d9f9f24a"
+source_dir = "DESC"
+install = "python"
+import_name = "desc"
+environment = { PYTHONPATH = "{root}/scripts/dependency_compat/desc" }
+
+[dependencies.gvec]
+role = "mhd-provider"
+url = "https://github.com/PAIdynamics/gvec.git"
+revision = "08ea5bd54e08572770e560d9ca88fe594bc8fd01"
+source_dir = "gvec"
+install = "python"
+import_name = "gvec"
+
+[dependencies.gyaradax]
+role = "validation-python"
+url = "https://github.com/PAIdynamics/gyaradax.git"
+revision = "8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234"
+source_dir = "gyaradax"
+install = "python"
+import_name = "gyaradax"
+
+[dependencies.gx]
+role = "validation-native"
+url = "https://github.com/PAIdynamics/gx.git"
+revision = "bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5"
+source_dir = "gx"
+install = "native"
+build = [["make", "-j", "{jobs}"]]
+executables = ["gx"]
+
+[dependencies.stella]
+role = "validation-native"
+url = "https://github.com/PAIdynamics/stella.git"
+revision = "564ca09b89904c231421c17c00068a9362061278"
+source_dir = "stella"
+install = "native"
+build = [
+  ["cmake", "-S", ".", "-B", "{build_dir}"],
+  ["cmake", "--build", "{build_dir}", "-j", "{jobs}"],
+]
+executables = [
+  "{build_dir}/stella",
+  "{build_dir}/COMPILATION/stella",
+  "{build_dir}/bin/stella",
+]
+
+[dependencies.gkw]
+role = "validation-native"
+url = "https://github.com/PAIdynamics/gkw.git"
+revision = "70a34688641cf5dad0884b9cc81c246ebb0645a3"
+source_dir = "gkw"
+install = "native"
+build = [["make", "-j", "{jobs}"]]
+executables = ["gkw.x", "run/gkw.x"]

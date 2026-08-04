@@ -4,6 +4,7 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+.dependencies/
 
 # External codes are separately installed dependencies, never vendored here.
 relevant-codes/

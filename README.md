@@ -53,6 +53,28 @@ Use Python 3.11 or newer.  The project is configured for `uv`.
 uv sync --extra dev
 ```
 
+For stellarator geometry from MHD codes, prepare the pinned provider forks:
+
+```bash
+python3 scripts/bootstrap_dependencies.py --profile mhd
+```
+
+This fetches, builds, and installs VMEC++, DESC, and GVEC outside the tracked
+source tree. Existing sibling clones can be reused without modifying them:
+
+```bash
+python3 scripts/bootstrap_dependencies.py --profile mhd --local-root ..
+```
+
+GX, stella, GKW, and Gyaradax are validation dependencies and are prepared
+separately with `--profile validation`. See
+[`docs/dependencies.md`](docs/dependencies.md) for profiles, pinned revisions,
+native build requirements, and dry-run/fetch-only options.
+
+For commands that consume these providers, use `.venv/bin/python` or
+`uv run --no-sync`; a normal exact `uv` sync intentionally restores the core
+lock and removes the external profile.
+
 Most commands below use `uv run`, so `uv` will also create/update the local
 environment as needed.
 
