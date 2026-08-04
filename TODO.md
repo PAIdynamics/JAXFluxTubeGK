@@ -32,8 +32,9 @@ Implemented and tested:
   solve, time advance, diagnostics, objectives, and fixed-topology gradients;
 - an MHD-neutral physical geometry object (`PhysicalFluxTubeGeometry`) and a
   map from physical arrays to the solver's internal coefficients;
-- precomputed-array, DESC-array, optional DESC-object/path, GX/GIST eik, and
-  stella `.geometry` ingestion paths;
+- precomputed-array and DESC-array/object/path adapters in the package, plus
+  GX/GIST eik loaders in `benchmarks.py` and stella `.geometry` parsing in the
+  reduced scan example;
 - reduced RH, Cyclone, GKW/Gyaradax, DESC/eik, W7-X, stella, and GX validation
   infrastructure;
 - reduced stellarator scans and optimization examples.
@@ -47,8 +48,8 @@ Repository cleanup already completed:
 
 Standalone gaps found in the current code:
 
-- scripts, examples, tests, and fixture documentation still assume
-  `relevant-codes/...` exists inside this repository;
+- 37 tracked files still mention `relevant-codes/...`; a clean-tree audit has
+  13 failing tests from missing Gyaradax, GX, and stella source/input paths;
 - geometry loaders are split between the package, benchmark helpers, and the
   stellarator scan example instead of sharing one public provider contract;
 - there is no first-class VMEC/VMEC++ `wout` or GVEC adapter, so W7-X geometry
@@ -56,13 +57,35 @@ Standalone gaps found in the current code:
 - the geometry contract does not yet carry a versioned statement of units,
   normalization, signs, radial coordinate, field-line topology, provenance,
   and differentiability;
-- a clean clone is not yet continuously tested without sibling source trees.
+- the repository has no CI configuration, external-integration markers, or
+  installed-wheel test;
+- generated `src/stellarator_gk.egg-info/` metadata is tracked and changes as a
+  side effect of local builds;
+- `benchmarks.py` is 16,564 lines and the top-level `__init__.py` eagerly
+  re-exports most of it, coupling the solver API to validation infrastructure;
+- tracked fixtures occupy about 175 MiB, mostly full GKW trace/matrix dumps;
+  173 tracked W7-X-related files occupy about 5 MiB and must be migrated to
+  live-provider integration tests where they represent equilibrium/geometry
+  artifacts.
+
+Audit baseline on 2026-08-04:
+
+- `ruff check src tests examples scripts`: pass;
+- full x64 pytest run: 306 passed, 13 failed, 8 skipped;
+- all 13 failures are missing removed external paths, not observed core
+  numerical regressions;
+- optional NetCDF4 and DESC checks skip because those integrations are not
+  declared in an installable project extra.
 
 ## Priority 0: Make the Repository Genuinely Standalone
 
 - [ ] Remove all hard-coded `relevant-codes/...` defaults from tracked Python,
   tests, README files, and fixture metadata.  Never resolve a dependency by its
   location relative to the `optimal-fusion` checkout.
+- [ ] First restore a green standalone suite by fixing the 13 known failures:
+  replace three Gyaradax source-reading tests, eight GX input/eik tests, and two
+  stella source-patching tests with synthetic/compact contracts or explicitly
+  configured integration tests.
 - [ ] Make external source trees explicit optional inputs such as
   `--desc-root`, `--gx-root`, `--stella-root`, `--gkw-root`, and executable or
   equilibrium paths.  Environment-variable fallbacks may be offered, but every
@@ -82,6 +105,11 @@ Standalone gaps found in the current code:
   repositories available.
 - [ ] Add an sdist/wheel smoke test and verify installed-package workflows do
   not depend on repository-relative files.
+- [ ] Stop tracking `src/stellarator_gk.egg-info/`; build metadata must be
+  generated and ignored.
+- [ ] Declare coherent optional extras for MHD providers and external fixture
+  readers (`vmecpp`, DESC, GVEC, NetCDF4 as needed), and document exact commands
+  using `--extra dev`/provider extras so `uv run` does not prune test tools.
 - [x] Ignore local external checkout directories and generated external-run
   outputs so they cannot be accidentally recommitted.
 
@@ -92,12 +120,16 @@ source trees.
 ## Priority 1: Define One Public MHD Geometry Interface
 
 - [ ] Define and document a small public `GeometryProvider` protocol that
-  returns `PhysicalFluxTubeGeometry` plus metadata.  Solvers must consume this
-  contract rather than knowing which MHD code produced it.
+  accepts a `GeometryRequest` and returns a `GeometryResult` containing the
+  `ParallelGrid`, `PhysicalFluxTubeGeometry`, and metadata.  Solvers must
+  consume this contract rather than knowing which MHD code produced it.
 - [ ] Version the serialized geometry schema and specify coordinates, units,
   normalization, sign conventions, radial coordinate, `alpha`, field periods,
   periodic endpoint policy, twist-and-shift/linking data, quadrature weights,
   and provenance.
+- [ ] Extend the current physical geometry model, which drops field-line
+  `alpha` and lacks `iota`, `nfp`, topology/linking, normalization, and provider
+  metadata, before treating it as the public inter-code contract.
 - [ ] Separate static topology/file I/O from differentiable arrays.  State
   clearly which provider outputs can carry gradients back to equilibrium
   parameters and test those claims with `jax.grad`.
@@ -139,9 +171,17 @@ provider call.
   plus a named configuration (`W7-X`, configuration variant, surface, and
   field line).  Record those inputs and dependency versions for reproducibility
   instead of committing an equilibrium artifact.
-- [ ] Implement a VMEC++ provider that obtains or constructs the requested W7-X
-  design through the installed dependency and converts it directly to the
-  physical flux-tube contract in memory.
+- [ ] Use VMEC++ as the first live W7-X provider: construct `VmecInput`, call
+  `vmecpp.run(...)`, and consume the returned in-memory `VmecOutput.wout`
+  without writing `wout_w7x.nc` in this repository.
+- [ ] Update the VMEC++ fork to expose its W7-X standard input as a supported
+  package resource or named Python API.  The current input exists at
+  `vmecpp/examples/data/input.w7x`, but examples are excluded from its sdist and
+  therefore are not a stable dependency interface.
+- [ ] Implement or upstream the VMEC-output-to-field-line transformation that
+  evaluates all physical flux-tube arrays required by
+  `PhysicalFluxTubeGeometry` in memory; do not route the canonical path through
+  GX/GIST or a temporary NetCDF file.
 - [ ] Keep `wout*.nc` import as an optional user interoperability path, not the
   canonical W7-X source and not a committed project fixture.
 - [ ] Define equivalent named-configuration hooks for DESC and GVEC where their
@@ -223,6 +263,18 @@ programs rather than geometry sources.
   timestep control, saturated heat-flux diagnostics, and nonlinear parity.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
+
+## Priority 6: Maintainability After the Standalone Boundary Is Green
+
+- [ ] Split the 16k-line `benchmarks.py` into focused fixture I/O, Cyclone/GKW,
+  geometry parity, and W7-X validation modules.
+- [ ] Keep benchmark-only symbols out of the default top-level import path;
+  expose a compact solver API and a separate validation namespace.
+- [ ] Replace historical `Phase N` docstrings with subsystem descriptions and
+  document which APIs are stable at version `0.1.x`.
+- [ ] Decide which large GKW traces are essential compact regression contracts,
+  regenerate smaller selected slices where possible, and move archival raw
+  traces out of the source distribution.
 
 ## Project Rules
 

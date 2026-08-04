@@ -1,176 +1,205 @@
 # STATUS
 
-Last updated: 2026-06-29
+Last updated: 2026-08-04
 
-## Snapshot
+## Executive Summary
 
-The repository now contains a working JAX-first linear electrostatic
-flux-tube gyrokinetic solver architecture.  The core path supports
-perpendicular Fourier modes, spectral/collocation `z/v_parallel/mu` grids,
-GKW finite-difference parity backends, self-consistent electrostatic
-quasineutrality, matrix-free RHS evaluation, RK4 time advancement,
-growth/frequency/mode-structure diagnostics, differentiable objectives, and
-fixed-topology optimization examples.
+`optimal-fusion` contains a substantial JAX-first linear electrostatic
+flux-tube gyrokinetic implementation, but it is not yet a clean standalone
+stellarator-design package.  The numerical core is broadly exercised and the
+current audit found no new core numerical regression.  The immediate blocker
+is now the software boundary: tests and workflows still depend on paths from
+the removed in-repository copies of Gyaradax, GX, stella, and DESC.
 
-The main implementation lives in `src/stellarator_gk/`.  The validation and
-artifact-producing workflows live mostly in `examples/`, `scripts/`,
-`fixtures/`, and `tests/`.
+The target architecture is:
 
-## Implemented
+- `optimal-fusion` owns the gyrokinetic solver and a code-neutral physical
+  flux-tube geometry contract;
+- installed MHD providers construct named equilibria such as W7-X and return
+  geometry in memory;
+- VMEC++, DESC, and GVEC are optional dependencies, not vendored source trees;
+- GX, stella, GKW, and Gyaradax are independently versioned validation tools;
+- equilibrium files and generated W7-X geometry/run artifacts are not stored
+  in this repository.
 
-- Core types, grids, mode connectivity, finite-difference fallback operators,
-  and static-vs-differentiable PyTree contracts.
-- Analytic circular and s-alpha geometry plus Boozer/precomputed, DESC-array,
-  DESC-path, eik, and stella geometry import paths.
-- Physics primitives: Bessel/FLR factors, Maxwellian, thermodynamic drive,
-  magnetic drift, mirror force, parallel streaming, adiabatic and kinetic field
-  solves, velocity integrals, spectra, and flux/proxy diagnostics.
-- Linear RHS assembly with term-level decomposition, `gkw_upwind`, and
-  source-matched `gkw_igh` parity paths.
-- RK4 integration, windowed growth/frequency diagnostics, mode-chain amplitude
-  normalization, matrix-free operator helpers, objective wrappers, and reduced
-  optimization loops.
-- Hermite-Laguerre basis/moment utilities and GX-style hypercollision/moment
-  discriminator hooks.
-- Reduced RH, Cyclone, Gyaradax/GKW trace, DESC/eik, W7-X, stella, and GX
-  handoff validation infrastructure.
+## Verified Implementation
 
-## Passing Guardrails
+### Core numerics
 
-- True Rosenbluth-Hinton late-plateau gate passes.
-- Cyclone selected-ky scalar growth gate passes after matching the GKW
-  `KTHRHO/kthnorm` convention.
-- Cyclone CBC term algebra, GKW RHS/action trace, imported-state replay,
-  initial/first-window contract, state normalization, and row-normalized
-  `parallel_phi.dat` profile checks pass their current contracts.
-- DESC/GX block-eik, DESC eik export, GX/GS2 eik import, and independent
-  GX/VMEC GIST eik-source checks pass.
-- Reduced W7-X scan, convergence/timing ledgers, and DESC optimization demos are
-  executable but remain explicitly reduced/non-production.
+Implemented in `src/stellarator_gk/`:
 
-## Active Blocker
+- frozen JAX PyTree parameter/grid/geometry data models;
+- Chebyshev velocity and open-parallel grids, Fourier periodic-parallel grids,
+  and GKW-style finite-difference velocity/operator paths;
+- perpendicular Fourier modes, mode-chain connectivity, and linked
+  twist-and-shift operations;
+- analytic circular and s-alpha geometry;
+- a physical stellarator array model and one map to internal `B`, `F`, `G`,
+  drift, and metric coefficients;
+- FLR/Bessel factors, Maxwellians, equilibrium drive, parallel streaming,
+  mirror force, magnetic drift, damping, and recurrence terms;
+- matrix-free multi-species linear electrostatic RHS assembly with matrix,
+  `gkw_upwind`, and fused `gkw_igh` parallel backends;
+- adiabatic- and kinetic-species quasineutrality solvers;
+- fixed-step RK4, modal filtering, CFL estimates, growth/frequency/mode-shape
+  diagnostics, and state normalization;
+- dense reduced-size operator/eigensystem helpers;
+- differentiable objectives and fixed-topology reduced optimization wrappers;
+- Hermite-Laguerre transforms, moments, hypercollision helpers, and a reduced
+  GX-style moment RHS.  This moment path is not integrated as the production
+  kinetic solver backend.
 
-The next scientific milestone is an externally validated linear W7-X run.  A
-matched stella W7-X fixture exists at
-`fixtures/w7x_itg_external_mode_structure_fixture.csv`, exported from the local
-CPU stella run with `ky=(0.1,0.2,0.3)`, `kx=0`, `nzed=256`, `nmu=8`,
-`nvgrid=16`, `tend=200`, and adiabatic electrons.
+### Geometry interoperability
 
-The solver has been matched to the stella geometry, field-line length,
-selected `ky`, `kx=0`, and late-time window.  At `t=200`, growth is close
-(`max_growth_error=8.00978267e-03`), but the W7-X gate remains open because the
-`ky=0.3` frequency/profile errors remain large:
+Present today:
 
-- `frequency_error=-1.65618027e-01` in the closest stella-scale
-  finite-difference velocity case;
-- `phi_phase_aligned_error=1.56517320e-01` for the same focus mode.
+- `PhysicalFluxTubeGeometry` and `FluxTubeGeometry` array containers;
+- direct construction from physical/precomputed arrays;
+- lazy DESC object/path extraction through `eq.compute`;
+- GX/GIST eik parsing and parity logic inside the large benchmark module;
+- stella `.geometry` parsing inside `examples/run_stellarator_linear_scan.py`.
 
-Velocity-grid refinement alone did not close the gap.  The solver-side
-`ky=0.3` RHS/model balance is internally consistent, with zero RHS
-reconstruction error and quasineutrality residual near machine precision.  The
-balance is streaming dominated.
+Not present today:
 
-The standard stella `.out.nc` output confirms the available geometry/streaming
-contract but lacks complex distribution and per-term RHS arrays.  A targeted
-non-destructive stella trace patch now exists and produced a raw 263 MB
-selected-mode trace in `/tmp`, summarized in
-`fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json`.
+- a `GeometryProvider` protocol or provider registry;
+- a request/result metadata model covering normalization, `alpha`, `iota`,
+  field periods, topology/linking, provenance, and differentiability;
+- a VMEC/VMEC++ adapter, a GVEC adapter, or direct named W7-X provider;
+- a single package-level path shared by DESC, VMEC++, GVEC, GX/GIST, and stella;
+- a demonstrated gradient from real MHD equilibrium/design parameters through
+  geometry into the GK objective.
 
-The first stella-vs-solver scalar term comparison is narrowed but not decisive.
-After fixing the stella geometry adapter to use the global-header `flux_fac`
-for the equilibrium-gradient drive coefficient, the solver drive fraction moved
-from `0.07783134` to `0.61459833` versus stella `0.77998161`.  The largest
-remaining scale-free discrepancy is now the parallel-streaming bundle.
+The sibling repositories contain viable W7-X inputs.  In particular, VMEC++
+has `examples/data/input.w7x` and exposes `VmecInput.from_file(...)` plus an
+in-memory `vmecpp.run(...).wout` result.  That example input is excluded from
+the VMEC++ source distribution, so the VMEC++ fork needs a supported packaged
+W7-X configuration API/resource before it can serve as a stable dependency.
 
-Current comparison status:
-`fixtures/w7x_ky03_stella_rhs_trace_comparison/stella_solver_rhs_trace_comparison_status.json`
-reports `blocked_array_contract_mismatch` because the current stella trace and
-solver balance fixture use different z/velocity grids and the raw stella trace
-is format v1 without velocity quadrature weights.
+### Optimization maturity
 
-## Next Actions
+The optimization API is differentiable for analytic geometry and supplied
+fixed-grid arrays.  Its equilibrium coefficients, beta, and pressure-gradient
+modulations are explicitly toy algebraic controls.  The DESC fixture loop is a
+reduced plumbing demonstration, not end-to-end MHD shape optimization.
 
-1. Rerun the patched stella RHS trace in v2 format with `wgts_vpa` and
-   z-dependent `wgts_mu`.
-2. Add or generate a solver-side selected-mode full-array trace on a
-   stella-compatible `z/vpa/mu` grid, or document an interpolation/weighting
-   adapter.
-3. Drop the duplicate stella z endpoint in the comparator and compare weighted
-   complex arrays for distribution, streaming, mirror, magnetic drift,
-   equilibrium drive, field-drive terms, total RHS, and field solve pieces.
-4. If the array comparison confirms the current scalar mismatch, inspect the
-   parallel-streaming derivative/linking convention before changing other
-   physics.
-5. Once W7-X parity passes, rerun production-shape convergence and guarded CPU
-   timing, then let the production-readiness ledger decide whether DESC
-   optimization can be labeled production-ready.
+## Validation State
 
-## Tests and Commands
+Previously established numerical guardrails remain represented in code and
+committed contracts:
 
-Use focused tests while editing a subsystem, then broader checks before making a
-production claim:
+- Rosenbluth-Hinton late-plateau validation;
+- selected-ky Cyclone scalar growth and extensive GKW term/action/state
+  comparisons;
+- DESC/GX eik conversion and geometry checks;
+- reduced W7-X scans, convergence ledgers, and optimization readiness guards.
 
-```bash
-uv run ruff check src tests examples scripts
-JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_stella_rhs_trace_comparison.py -q
-JAX_ENABLE_X64=1 uv run pytest tests/test_w7x_ky03_rhs_model_balance.py -q
-JAX_ENABLE_X64=1 uv run pytest tests/test_stella_w7x_rhs_trace_prep.py \
-  tests/test_stella_w7x_rhs_trace_summary.py \
-  tests/test_w7x_stella_rhs_trace_comparison.py -q
+The scientific W7-X gate remains open:
+
+- matched stella geometry, field-line length, `ky`, `kx=0`, and late-time
+  controls brought growth close at `t=200`;
+- the `ky=0.3` real-frequency and phase-aligned mode-profile comparison remains
+  outside tolerance;
+- the solver-side RHS balance reconstructs and is streaming dominated;
+- direct stella-vs-solver term-array comparison remains blocked by incompatible
+  velocity/z contracts and missing weights in the retained v1 trace summary;
+- production convergence, CPU timing, and MHD design optimization remain
+  blocked behind external W7-X parity.
+
+These results currently depend on committed derived fixtures.  They must be
+reproduced through live, explicitly versioned providers/validators before they
+can support the standalone production claim.
+
+## Repository Audit
+
+### Verification on 2026-08-04
+
+```text
+ruff check src tests examples scripts: PASS
+JAX_ENABLE_X64=1 python -m pytest -q:
+  306 passed, 13 failed, 8 skipped in 544.46 s
 ```
 
-The full test suite is:
+All 13 failures are caused by removed hard-coded external paths:
 
-```bash
-JAX_ENABLE_X64=1 uv run pytest
-```
+- 3 tests read Gyaradax geometry source directly;
+- 8 tests read GX Cyclone inputs or GX/GIST eik tables directly;
+- 2 tests read and patch stella source directly.
 
-Run it when the change affects shared solver behavior or validation contracts.
+The eight skips cover unavailable optional NetCDF4/DESC integrations and local
+GX/GIST W7-X inputs.  No failure in this run identified a core JAX solver,
+physics, time-advance, objective, or differentiability regression.
+
+### Standalone/package gaps
+
+- 37 tracked files still contain `relevant-codes/...` references.
+- There is no CI configuration or pytest external-integration marker scheme.
+- `pyproject.toml` declares only core, `dev`, and a small `reference` extra; it
+  does not declare DESC, VMEC++, GVEC, or NetCDF4 integration extras.
+- `src/stellarator_gk.egg-info/` is tracked and is modified by local builds.
+- `benchmarks.py` is 16,564 lines and `__init__.py` eagerly re-exports much of
+  the validation surface through the default package namespace.
+- `fixtures/` occupies about 175 MiB, mostly full GKW state/RHS/matrix dumps.
+- 173 tracked W7-X-related files occupy about 5 MiB.  Equilibrium and derived
+  geometry/run artifacts in this set should be removed after live providers
+  reproduce the required contracts.
+- There are no installed console entry points for the solver workflows; the
+  user interface is currently a collection of examples and scripts.
+
+The local `.venv` was moved with the repository, leaving stale absolute
+shebangs in console scripts.  The audit therefore invoked pytest and Ruff with
+`python -m ...`.  This is a local environment relocation issue; clean-clone
+wheel/CI tests are still needed to validate the documented installation path.
+
+## Active Priorities
+
+1. Restore a green standalone test suite by removing the 13 direct source/input
+   dependencies and separating external integration tests with markers.
+2. Define the versioned `GeometryRequest` / `GeometryProvider` /
+   `GeometryResult` contract, including the parallel grid and full metadata.
+3. Add VMEC++ as the first live named W7-X provider and expose the standard
+   W7-X input through a supported API/resource in the VMEC++ fork.
+4. Convert the in-memory VMEC output to physical flux-tube arrays without an
+   intermediate committed `wout`/GX/GIST/stella file.
+5. Cross-check the live provider against independent GX and stella references,
+   then remove superseded tracked W7-X equilibrium/derived artifacts.
+6. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
+   convergence, CPU timing, and real MHD optimization gradients.
 
 ## Current Risks
 
-- W7-X production readiness is blocked by solver/stella mode-structure parity,
-  not by missing entry-point code.
-- Current W7-X convergence/timing artifacts are reduced regression artifacts,
-  not production benchmarks.
-- Full selected-mode GKW state-history and multi-time velocity-slice parity
-  remain open confidence gaps, even though scalar growth and RHS/action parity
-  are strong.
-- Multi-ky Cyclone/GX low-ky branch-shape parity remains open until a true
-  external complex fixture or stronger moment-RHS comparison is available.
-- The Hermite-Laguerre backend is a tested discriminator/future backend seed,
-  not the current production kinetic RHS.
-- Nonlinear turbulence, kinetic-electron TEM validation, collisions, and
-  electromagnetic physics are deferred.
+- A large passing test count masks that the default suite is not standalone.
+- Geometry conventions are distributed across the package, benchmark module,
+  examples, scripts, and fixture metadata.
+- `PhysicalFluxTubeGeometry` is not yet rich enough to be the stable MHD/GK
+  interface because field-line and normalization metadata are missing.
+- The current W7-X claim is fixture-driven rather than provider-driven.
+- The fixed-step initial-value objective may change branches or become
+  ill-conditioned during design optimization; branch/gradient checks are not
+  yet implemented for real equilibria.
+- Production CPU scaling on approximately 100 CPUs has not been demonstrated.
+- Collisions, electromagnetic physics, nonlinear turbulence, kinetic-electron
+  TEM production validation, and full shape optimization are deferred.
 
 ## Round Log
 
-### 2026-06-29: Concise Planning Refresh
+### 2026-08-04: Standalone Architecture and Code Audit
 
-- Reorganized `TODO.md` into a current prioritized backlog.
-- Reorganized `STATUS.md` into a compact status snapshot, active blocker, next
-  actions, and test commands.
-- Updated `tex/main.tex` to keep the paper focused on the model, current validation
-  status, and remaining W7-X validation tasks.
-- No solver code was changed in this round.
+- Removed the untracked nested external-code copies and generated W7-X/stella
+  outputs; committed cleanup as `1495de4`.
+- Updated ignore rules so external trees and generated reference-run outputs
+  are not recommitted.
+- Read the solver, geometry, physics, time-advance, optimization, benchmark,
+  script, test, packaging, and fixture structure.
+- Ran the full x64 test suite and Ruff; recorded the exact standalone failures.
+- Confirmed programmatic W7-X starting configurations in the sibling VMEC++,
+  DESC, and GVEC repositories.
+- Reprioritized the roadmap around a live VMEC++ W7-X provider and a green
+  standalone boundary before further scientific promotion.
 
-### 2026-06-11: W7-X stella RHS Trace and `flux_fac` Correction
+### 2026-06-29 and Earlier
 
-- Added the non-destructive stella `ky=0.3` RHS trace preparation and summary
-  path.
-- Added the stella-vs-solver RHS trace comparator and committed comparison
-  fixtures.
-- Fixed the stella geometry adapter's equilibrium-drive coefficient to use
-  stella `flux_fac`.
-- Current blocker moved from missing stella RHS data to a direct
-  array-contract mismatch and remaining parallel-streaming-dominated scalar
-  discrepancy.
-
-### Earlier Milestones
-
-- Implemented Phases 2-12: core types/grids, analytic and stellarator geometry,
-  physics primitives, Hermite-Laguerre utilities, quasineutrality, diagnostics,
-  linear RHS, time advancement, objectives, performance hardening, and reduced
-  optimization integration.
-- Closed major RH, selected Cyclone scalar, GKW RHS/action, imported-state
-  replay, DESC/eik, and reduced validation-gate contracts.
+- Implemented the core grids, geometry arrays, linear physics, quasineutrality,
+  RHS, time advancement, objectives, performance helpers, reduced optimization,
+  and extensive GKW/GX/stella validation infrastructure.
+- Narrowed the W7-X stella mismatch to velocity/RHS term parity, with the
+  largest scale-free scalar discrepancy in the parallel-streaming bundle.
