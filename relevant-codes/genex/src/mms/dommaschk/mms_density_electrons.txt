@@ -1,4 +1,0 @@
-mms_density_electrons = 5.D-2 + 9.5D-1*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin(npol*atan( &
-Z,-1.D0 + R))**2*Sin((nrad*Pi*(-rhomin + Sqrt((-(Z*Cos(2.5D0*phi)) + ( &
--9.99D-1 + R)*Sin(2.5D0*phi))**2/ellax2**2 + ((-9.99D-1 + R)*Cos( &
-2.5D0*phi) + Z*Sin(2.5D0*phi))**2/ellax1**2)))/(rhomax - rhomin))**2

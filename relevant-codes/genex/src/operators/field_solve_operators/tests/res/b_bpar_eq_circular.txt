@@ -1,2 +1,0 @@
-b_bpar_eq = Sin((2*nrad*Pi*(-rhomin + Sqrt(R**2 + Z**2)))/(rhomax - rhomin))*Sin(2*npol*atan &
-(Z,R))

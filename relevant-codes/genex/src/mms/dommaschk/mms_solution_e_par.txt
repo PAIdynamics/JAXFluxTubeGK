@@ -1,4 +1,0 @@
-mms_solution_e_par = -2*omega*Cos(ntor*phi)**2*Cos(omega*t)*Sin(omega*t)*Sin(2*npol*atan( &
-Z,-1.D0 + R))*Sin((2*nrad*Pi*(-rhomin + Sqrt((-(Z*Cos(2.5D0*phi)) + ( &
--9.99D-1 + R)*Sin(2.5D0*phi))**2/ellax2**2 + ((-9.99D-1 + R)*Cos( &
-2.5D0*phi) + Z*Sin(2.5D0*phi))**2/ellax1**2)))/(rhomax - rhomin))

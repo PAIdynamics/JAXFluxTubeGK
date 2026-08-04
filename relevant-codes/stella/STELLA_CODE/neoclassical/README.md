@@ -1,2 +1,0 @@
-# Neoclassical terms
-

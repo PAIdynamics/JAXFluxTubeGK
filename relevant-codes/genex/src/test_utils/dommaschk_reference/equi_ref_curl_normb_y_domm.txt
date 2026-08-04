@@ -1,1 +1,0 @@
-curl_normb_y_domm = 0

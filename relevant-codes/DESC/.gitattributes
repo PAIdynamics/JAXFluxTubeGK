@@ -1,3 +1,0 @@
-*.ipynb -linguist-detectable
-documentation/* linguist-documentation
-desc/_version.py export-subst

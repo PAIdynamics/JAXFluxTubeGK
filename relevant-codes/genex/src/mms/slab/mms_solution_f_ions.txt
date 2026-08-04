@@ -1,3 +1,0 @@
-mms_solution_f_ions = 8.979356106258328D-3*exp(-mu - vp**2) + 1.7060776601890824D-1*exp( &
--mu - vp**2)*Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((nrad*Pi*(R - rhomin))/( &
-rhomax - rhomin))**2*Sin(npol*Pi*Z)**2

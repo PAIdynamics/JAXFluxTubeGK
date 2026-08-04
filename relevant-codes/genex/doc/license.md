@@ -1,5 +1,0 @@
-title: License
-
-# License
-
-{!../LICENSE!}

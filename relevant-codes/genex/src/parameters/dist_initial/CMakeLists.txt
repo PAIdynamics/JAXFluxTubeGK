@@ -1,9 +1,0 @@
-target_sources(GENEXCore-Library
-    PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_m.f90
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_bi_maxw_m.f90
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_double_maxw_m.f90
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_ring_m.f90
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_slowing_down_m.f90
-        ${CMAKE_CURRENT_LIST_DIR}/params_dist_initial_maxw_vspec_m.f90
-)

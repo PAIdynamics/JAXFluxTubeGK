@@ -1,5 +1,0 @@
-co_qn_eq = (R*rhoref**2*(5.D-1 + 5.D-1*(5.D-1 + Cos((nrad*Pi*(-rhomin + Sqrt(( &
--1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))**2*Cos(npol*atan( &
-Z,-1.D0 + R))**2) + Sin((nrad*Pi*(-rhomin + Sqrt(( &
--1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))**2*Sin(npol*atan( &
-Z,-1.D0 + R))**2))/Lref**2

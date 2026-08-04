@@ -1,6 +1,0 @@
-b_ohms_law = (4*npol**2*rhoref**2*Sin((2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*Sin( &
-2*npol*Z))/Lref**2 + (4*nrad**2*Pi**2*rhoref**2*Sin((2*nrad*Pi*(R - rhomin))/( &
-rhomax - rhomin))*Sin(2*npol*Z))/(Lref**2*(rhomax - rhomin)**2) + Sin(( &
-2*nrad*Pi*(R - rhomin))/(rhomax - rhomin))*(1.D0 + Cos((nrad*Pi*(R - rhomin))/( &
-rhomax - rhomin))**2*Cos(npol*Z)**2 + Sin((nrad*Pi*(R - rhomin))/( &
-rhomax - rhomin))**2*Sin(npol*Z)**2)*Sin(2*npol*Z)

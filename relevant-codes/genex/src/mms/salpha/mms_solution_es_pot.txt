@@ -1,2 +1,0 @@
-mms_solution_es_pot = Cos(ntor*phi)**2*Cos(omega*t)**2*Sin((2*nrad*Pi*(-rhomin + Sqrt(( &
--1.D0 + R)**2 + Z**2)/minorr))/(rhomax - rhomin))*Sin(2*npol*atan(Z,-1.D0 + R))
