@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -7,6 +8,7 @@ from stellarator_gk import (
     GeometryRequest,
     VmecppGeometryProvider,
     internal_geometry_from_result,
+    load_stella_geometry_data,
     resolve_geometry,
     vmec_field_line_from_wout,
 )
@@ -18,6 +20,7 @@ def _circular_wout(*, lasym=False):
     radius = 0.5 * np.sqrt(s)
     return SimpleNamespace(
         lasym=lasym,
+        signgs=1,
         nfp=5,
         ns=ns,
         xm=np.array([0, 1]),
@@ -29,8 +32,10 @@ def _circular_wout(*, lasym=False):
         lmns_full=np.zeros((2, ns)),
         bmnc=1.2 * np.ones((1, ns)),
         iotaf=0.7 + 0.04 * s,
+        iotas=0.7 + 0.04 * s,
         phi=-2.0 * np.pi * s,
         presf=2.0e3 * (1.0 - s),
+        pres=2.0e3 * (1.0 - s),
         Aminor_p=0.5,
     )
 
@@ -67,7 +72,7 @@ def test_vmec_wout_transformation_builds_complete_physical_contract():
         "b_cross_kappa_dot_grad_alpha",
     }
     np.testing.assert_allclose(arrays["theta"] - arrays["iota"] * arrays["phi"], 0.2)
-    np.testing.assert_allclose(arrays["B"], 1.2)
+    np.testing.assert_allclose(arrays["B"], 1.2 / 8.0)
     assert np.all(np.asarray(arrays["grad_psi_sq"]) > 0.0)
     assert np.all(np.asarray(arrays["grad_alpha_sq"]) > 0.0)
     assert all(np.all(np.isfinite(np.asarray(value))) for value in arrays.values())
@@ -148,3 +153,83 @@ def test_installed_vmecpp_runs_named_w7x_without_repository_artifact(vmecpp_root
     )
     assert result.physical.nfp == 5
     assert np.all(np.asarray(result.physical.B) > 0.0)
+
+
+@pytest.mark.external
+def test_direct_vmec_w7x_matches_independent_stella_geometry_terms(gx_root):
+    root = Path(__file__).resolve().parents[1]
+    stella = load_stella_geometry_data(
+        root / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"
+    )
+    zeta_reference = stella.column("zeta")
+    zeta_min = float(zeta_reference[0])
+    zeta_max = zeta_min + 2.0 * np.pi * stella.field_periods
+    request = GeometryRequest(
+        configuration="external-gx-w7x-wout",
+        radial_value=stella.global_value("rhoc"),
+        alpha=float(stella.column("alpha")[0]),
+        n_z=4096,
+        z_min=zeta_min,
+        z_max=zeta_max,
+        field_periods=stella.field_periods,
+    )
+    result = resolve_geometry(
+        VmecppGeometryProvider(
+            wout_path=gx_root / "benchmarks/linear/ITG_w7x/wout_w7x.nc",
+            revision="bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5",
+        ),
+        request,
+    )
+    physical = result.physical
+    zeta = np.asarray(physical.phi)
+
+    def sampled(values):
+        return np.interp(zeta_reference, zeta, values)
+
+    rho = request.radial_value
+    bmag = np.asarray(physical.B)
+    dxdpsit = -1.0 / rho
+    direct = {
+        "bmag": bmag,
+        "g_xx": np.asarray(physical.grad_psi_sq) * dxdpsit**2,
+        "g_xy": np.asarray(physical.grad_psi_dot_grad_alpha) * dxdpsit * rho,
+        "g_yy": np.asarray(physical.grad_alpha_sq) * rho**2,
+        "B_cross_gradB_dot_grad_alpha": (
+            np.asarray(physical.B_cross_gradB_dot_grad_alpha) / bmag**3 * rho
+        ),
+        "b_cross_kappa_dot_grad_alpha": (
+            np.asarray(physical.b_cross_kappa_dot_grad_alpha) / bmag * rho
+        ),
+        "B_cross_gradB_dot_grad_psi": (
+            np.asarray(physical.B_cross_gradB_dot_grad_psi) / bmag**3 * dxdpsit
+        ),
+    }
+    relative_errors = {
+        name: float(
+            np.linalg.norm(sampled(values) - stella.column(name))
+            / np.linalg.norm(stella.column(name))
+        )
+        for name, values in direct.items()
+    }
+    scales = {
+        name: float(
+            np.dot(sampled(values), stella.column(name))
+            / np.dot(stella.column(name), stella.column(name))
+        )
+        for name, values in direct.items()
+    }
+    assert relative_errors["bmag"] < 1.0e-2
+    assert max(relative_errors.values()) < 3.0e-1, relative_errors
+    assert all(0.85 < scale < 1.15 for scale in scales.values()), scales
+
+    zed = stella.column("zed")
+    dzed_dzeta = np.gradient(zed, zeta_reference)
+    expected_parallel = stella.column("b_dot_grad_zed") / dzed_dzeta
+    np.testing.assert_allclose(
+        sampled(np.asarray(physical.b_dot_grad_z)),
+        expected_parallel,
+        rtol=3.0e-2,
+        atol=3.0e-2,
+    )
+    assert result.metadata.nfp == 5
+    assert result.metadata.endpoint_policy == "exclude"

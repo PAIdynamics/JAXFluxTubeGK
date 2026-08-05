@@ -132,7 +132,9 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
 
     zeta = np.linspace(request.z_min, request.z_max, request.n_z, endpoint=False)
     full_s = np.linspace(0.0, 1.0, int(wout.ns))
-    theta_pest = request.alpha + _profile_value(wout.iotaf, full_s, s) * zeta
+    iota = _half_grid_value(wout.iotas, full_s, s)
+    d_iota_ds = _full_grid_derivative_on_half_grid(wout.iotaf, full_s, s)
+    theta_pest = request.alpha + iota * zeta
 
     modes = np.asarray(wout.xm, dtype=float)
     toroidal_modes = np.asarray(wout.xn, dtype=float)
@@ -171,7 +173,10 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
         )
     )
 
-    psi_s = _profile_derivative(np.asarray(wout.phi) / (2.0 * np.pi), full_s, s)
+    orientation = float(getattr(wout, "signgs", 1.0))
+    psi_s = orientation * _profile_derivative(
+        np.asarray(wout.phi) / (2.0 * np.pi), full_s, s
+    )
     if abs(psi_s) < 1.0e-14:
         raise ValueError("VMEC toroidal-flux derivative vanishes on the requested surface")
     r_theta_pest = r_theta / pest_theta_factor[:, None]
@@ -181,14 +186,21 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
     r_zeta_pest = r_zeta - r_theta * (lambda_zeta / pest_theta_factor)[:, None]
 
     jacobian = _dot(r_psi, np.cross(r_theta_pest, r_zeta_pest))
+    nyq_m = np.asarray(wout.xm_nyq, dtype=float)
+    nyq_n = np.asarray(wout.xn_nyq, dtype=float)
+    nyq_phase = nyq_m[:, None] * theta[None, :] - nyq_n[:, None] * zeta[None, :]
+    nyq_cosine = np.cos(nyq_phase)
+    nyq_sine = np.sin(nyq_phase)
+    if hasattr(wout, "gmnc"):
+        gmnc, _ = _half_grid_coefficients(wout.gmnc, full_s, s)
+        sqrt_g = gmnc @ nyq_cosine
+        jacobian = sqrt_g / (psi_s * pest_theta_factor)
     if np.any(np.abs(jacobian) < 1.0e-14):
         raise ValueError("VMEC physical coordinate Jacobian vanishes on the field line")
     grad_psi = np.cross(r_theta_pest, r_zeta_pest) / jacobian[:, None]
     grad_theta_pest = np.cross(r_zeta_pest, r_psi) / jacobian[:, None]
     grad_zeta = np.cross(r_psi, r_theta_pest) / jacobian[:, None]
 
-    iota = _profile_value(wout.iotaf, full_s, s)
-    d_iota_ds = _profile_derivative(wout.iotaf, full_s, s)
     d_iota_dpsi = d_iota_ds / psi_s
     grad_alpha = (
         grad_theta_pest
@@ -199,12 +211,7 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
     B_vector = (r_zeta_pest + iota * r_theta_pest) / jacobian[:, None]
     b = B_vector / np.linalg.norm(B_vector, axis=1)[:, None]
 
-    nyq_m = np.asarray(wout.xm_nyq, dtype=float)
-    nyq_n = np.asarray(wout.xn_nyq, dtype=float)
     bmnc, d_bmnc_ds = _half_grid_coefficients(wout.bmnc, full_s, s)
-    nyq_phase = nyq_m[:, None] * theta[None, :] - nyq_n[:, None] * zeta[None, :]
-    nyq_cosine = np.cos(nyq_phase)
-    nyq_sine = np.sin(nyq_phase)
     B = bmnc @ nyq_cosine
     B_s = d_bmnc_ds @ nyq_cosine
     B_theta = -(bmnc * nyq_m) @ nyq_sine
@@ -218,7 +225,8 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
         + B_zeta_pest[:, None] * grad_zeta
     )
 
-    pressure_gradient = _profile_derivative(wout.presf, full_s, s) / psi_s
+    d_pressure_ds = _full_grid_derivative_on_half_grid(wout.presf, full_s, s)
+    pressure_gradient = d_pressure_ds / psi_s
     b_cross_grad_B = np.cross(b, grad_B)
     b_cross_grad_psi = np.cross(b, grad_psi)
     b_cross_kappa = (
@@ -228,6 +236,14 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
     B_cross_grad_B = B[:, None] * b_cross_grad_B
 
     shear = -2.0 * s * d_iota_ds / iota
+    length_reference = float(wout.Aminor_p)
+    field_reference = (
+        2.0
+        * abs(float(np.asarray(wout.phi)[-1]) / (2.0 * np.pi))
+        / length_reference**2
+    )
+    if length_reference <= 0.0 or field_reference <= 0.0:
+        raise ValueError("VMEC Aminor_p and edge toroidal flux must define positive references")
     return {
         "theta": theta_pest,
         "phi": zeta,
@@ -235,15 +251,23 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
         "rho": request.radial_value,
         "iota": iota,
         "shear": shear,
-        "B": B,
-        "b_dot_grad_z": _dot(b, grad_zeta),
-        "grad_psi_sq": _dot(grad_psi, grad_psi),
-        "grad_alpha_sq": _dot(grad_alpha, grad_alpha),
-        "grad_psi_dot_grad_alpha": _dot(grad_psi, grad_alpha),
-        "B_cross_gradB_dot_grad_psi": _dot(B_cross_grad_B, grad_psi),
-        "B_cross_gradB_dot_grad_alpha": _dot(B_cross_grad_B, grad_alpha),
-        "b_cross_kappa_dot_grad_psi": _dot(b_cross_kappa, grad_psi),
-        "b_cross_kappa_dot_grad_alpha": _dot(b_cross_kappa, grad_alpha),
+        "B": B / field_reference,
+        "b_dot_grad_z": length_reference * _dot(b, grad_zeta),
+        "grad_psi_sq": _dot(grad_psi, grad_psi)
+        / (length_reference**2 * field_reference**2),
+        "grad_alpha_sq": length_reference**2 * _dot(grad_alpha, grad_alpha),
+        "grad_psi_dot_grad_alpha": _dot(grad_psi, grad_alpha) / field_reference,
+        "B_cross_gradB_dot_grad_psi": _dot(B_cross_grad_B, grad_psi)
+        / field_reference**3,
+        "B_cross_gradB_dot_grad_alpha": (
+            length_reference**2
+            * _dot(B_cross_grad_B, grad_alpha)
+            / field_reference**2
+        ),
+        "b_cross_kappa_dot_grad_psi": _dot(b_cross_kappa, grad_psi)
+        / field_reference,
+        "b_cross_kappa_dot_grad_alpha": length_reference**2
+        * _dot(b_cross_kappa, grad_alpha),
     }
 
 
@@ -261,15 +285,48 @@ def _invert_pest_angle(theta_pest, zeta, modes, toroidal_modes, lmns):
 
 
 def _full_grid_coefficients(values, grid, s):
-    spline = CubicSpline(grid, np.asarray(values), axis=1)
-    return np.asarray(spline(s)), np.asarray(spline(s, 1))
+    coefficients = np.asarray(values)
+    value = _linear_interpolate(coefficients, grid, s)
+    derivative = _linear_interpolate(
+        np.diff(coefficients, axis=1) / (grid[1] - grid[0]),
+        0.5 * (grid[1:] + grid[:-1]),
+        s,
+    )
+    return value, derivative
 
 
 def _half_grid_coefficients(values, full_grid, s):
     half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
     coefficients = np.asarray(values)[:, 1:]
-    spline = CubicSpline(half_grid, coefficients, axis=1)
-    return np.asarray(spline(s)), np.asarray(spline(s, 1))
+    value = _linear_interpolate(coefficients, half_grid, s)
+    derivative_on_full_grid = np.empty_like(np.asarray(values))
+    derivative_on_full_grid[:, 1:-1] = (
+        np.asarray(values)[:, 2:] - np.asarray(values)[:, 1:-1]
+    ) / (full_grid[1] - full_grid[0])
+    derivative_on_full_grid[:, 0] = derivative_on_full_grid[:, 1]
+    derivative_on_full_grid[:, -1] = derivative_on_full_grid[:, -2]
+    derivative = _linear_interpolate(derivative_on_full_grid, full_grid, s)
+    return value, derivative
+
+
+def _half_grid_value(values, full_grid, s):
+    half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
+    profile = np.asarray(values)[1:]
+    return float(np.interp(s, half_grid, profile))
+
+
+def _full_grid_derivative_on_half_grid(values, full_grid, s):
+    derivative = np.diff(np.asarray(values)) / (full_grid[1] - full_grid[0])
+    half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
+    return float(np.interp(s, half_grid, derivative))
+
+
+def _linear_interpolate(values, grid, s):
+    upper = int(np.searchsorted(grid, s, side="right"))
+    upper = min(max(upper, 1), len(grid) - 1)
+    lower = upper - 1
+    weight = (s - grid[lower]) / (grid[upper] - grid[lower])
+    return values[:, lower] * (1.0 - weight) + values[:, upper] * weight
 
 
 def _profile_value(values, grid, s):
