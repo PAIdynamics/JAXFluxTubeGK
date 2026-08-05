@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import shutil
 
 from stellarator_gk import (
     GVEC_GEOMETRY_COMPUTE_KEYS,
@@ -168,9 +169,13 @@ def test_installed_gvec_evaluates_live_pest_field_line(gvec_root):
 
 
 @pytest.mark.external
-def test_gvec_matches_vmec_on_common_w7x_equilibrium(gvec_root, vmecpp_root):
+def test_gvec_matches_vmec_on_common_w7x_equilibrium(
+    gvec_root, vmecpp_root, tmp_path
+):
     del vmecpp_root  # The fixture verifies the installed VMEC++ revision.
     case = gvec_root / "test-CI/examples/w7x_from_vmec_initLA_F"
+    parameter_file = shutil.copy2(case / "parameter.ini", tmp_path)
+    wout_path = shutil.copy2(case / "wout_d23p4_tm.nc", tmp_path)
     request = GeometryRequest(
         configuration="w7x-common-equilibrium",
         radial_value=0.6,
@@ -180,10 +185,10 @@ def test_gvec_matches_vmec_on_common_w7x_equilibrium(gvec_root, vmecpp_root):
         z_max=np.pi / 5.0,
     )
     vmec = resolve_geometry(
-        VmecppGeometryProvider(wout_path=case / "wout_d23p4_tm.nc"), request
+        VmecppGeometryProvider(wout_path=wout_path), request
     )
     gvec = resolve_geometry(
-        GvecGeometryProvider(parameter_file=case / "parameter.ini"), request
+        GvecGeometryProvider(parameter_file=parameter_file), request
     )
 
     relative_errors = {}
