@@ -28,7 +28,13 @@ def test_default_velocity_cases_include_spectral_and_gkw_grid_controls():
     cases = module.default_velocity_cases()
     by_name = {case.name: case for case in cases}
 
-    assert tuple(by_name) == ("cheb_4x4", "cheb_6x6", "cheb_8x8", "gkw_fd_16x8")
+    assert tuple(by_name) == (
+        "cheb_4x4",
+        "cheb_6x6",
+        "cheb_8x8",
+        "gkw_fd_16x8",
+        "native_32x8",
+    )
     assert by_name["cheb_4x4"].velocity_backend == "chebyshev"
     assert by_name["cheb_8x8"].n_vpar == 8
     assert by_name["cheb_8x8"].n_mu == 8
@@ -36,6 +42,10 @@ def test_default_velocity_cases_include_spectral_and_gkw_grid_controls():
     assert by_name["gkw_fd_16x8"].n_vpar == 16
     assert by_name["gkw_fd_16x8"].n_mu == 8
     assert by_name["gkw_fd_16x8"].total_time == 200.0
+    assert by_name["native_32x8"].velocity_backend == "midpoint_gauss_laguerre"
+    assert by_name["native_32x8"].n_vpar == 32
+    assert by_name["native_32x8"].n_mu == 8
+    assert by_name["native_32x8"].vpar_max == 3.0
 
 
 def test_velocity_discriminator_scan_args_hold_w7x_stella_controls_fixed(tmp_path):
@@ -69,6 +79,26 @@ def test_velocity_discriminator_scan_args_hold_w7x_stella_controls_fixed(tmp_pat
     assert scan_args[scan_args.index("--steps-per-window") + 1] == "5"
     assert scan_args[scan_args.index("--n-windows") + 1] == "2000"
     assert scan_args[scan_args.index("--growth-window-fraction") + 1] == "0.5"
+
+
+def test_native_velocity_case_selects_zero_free_gauss_laguerre_backend(tmp_path):
+    module = _load_module()
+    case = next(case for case in module.default_velocity_cases() if case.name == "native_32x8")
+
+    scan_args = module._scan_args(
+        case,
+        tmp_path / "run",
+        module.DEFAULT_STELLA_GEOMETRY,
+        "0.3",
+    )
+
+    assert scan_args[scan_args.index("--n-vpar") + 1] == "32"
+    assert scan_args[scan_args.index("--n-mu") + 1] == "8"
+    assert scan_args[scan_args.index("--velocity-backend") + 1] == (
+        "midpoint_gauss_laguerre"
+    )
+    assert scan_args[scan_args.index("--vpar-max") + 1] == "3.0"
+    assert float(scan_args[scan_args.index("--mu-max") + 1]) > 4.9
 
 
 def test_velocity_baseline_deltas_are_per_ky():

@@ -87,6 +87,14 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             n_mu=8,
             velocity_backend="finite_difference",
         ),
+        StellaVelocityCase(
+            name="native_32x8",
+            n_vpar=32,
+            n_mu=8,
+            velocity_backend="midpoint_gauss_laguerre",
+            vpar_max=3.0,
+            mu_max=4.916958697837631,
+        ),
     )
 
 
