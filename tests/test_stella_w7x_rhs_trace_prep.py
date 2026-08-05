@@ -4,12 +4,35 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
-import shutil
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "relevant-codes/stella/STELLA_CODE/gyrokinetic_equation/gyrokinetic_equation_explicit.f90"
 INPUT = ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.in"
+
+
+SYNTHETIC_EXPLICIT_SOURCE = """\
+module gyrokinetic_equation_explicit
+   private
+contains
+   subroutine add_explicit_gyrokinetic_terms
+      use parallelisation_layouts, only: vmu_lo
+      complex, dimension(:, :), allocatable :: rhs_ky_swap
+      restart_time_step = .false.
+      call advance_mirror_explicit(pdf, rhs)
+      call advance_wdrifty_explicit(pdf, phi, bpar, rhs)
+      call advance_wdriftx_explicit(pdf, phi, bpar, rhs)
+      call advance_wstar_explicit(phi, rhs)
+      call advance_parallel_streaming_explicit(pdf, phi, bpar, rhs)
+      ! if advancing apar, need to convert input pdf back from g to gbar
+   end subroutine add_explicit_gyrokinetic_terms
+   !****************************************************************************
+   !                                      Title
+end module gyrokinetic_equation_explicit
+"""
+
+
+def _write_synthetic_explicit_source(path: Path) -> None:
+    path.write_text(SYNTHETIC_EXPLICIT_SOURCE, encoding="utf-8")
 
 
 def _load_module():
@@ -26,7 +49,7 @@ def _load_module():
 def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Path):
     module = _load_module()
     source = tmp_path / "gyrokinetic_equation_explicit.f90"
-    shutil.copy2(SOURCE, source)
+    _write_synthetic_explicit_source(source)
 
     assert module.patch_stella_explicit_rhs_trace(
         source,
@@ -113,7 +136,7 @@ def test_prepare_rhs_trace_run_writes_minimal_patched_tree(tmp_path: Path):
     fake_source = tmp_path / "fake_stella"
     fake_explicit = fake_source / module.TARGET_RELATIVE_SOURCE
     fake_explicit.parent.mkdir(parents=True)
-    shutil.copy2(SOURCE, fake_explicit)
+    _write_synthetic_explicit_source(fake_explicit)
     vmec = tmp_path / "wout_w7x.nc"
     vmec.write_bytes(b"fake-vmec")
     output_root = tmp_path / "prepared"

@@ -1,10 +1,12 @@
 from dataclasses import replace
-from importlib import util
+from importlib import import_module
 from pathlib import Path
+import sys
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from stellarator_gk import (
     FourierGridSpec,
@@ -18,13 +20,10 @@ from stellarator_gk import (
 )
 
 
-def _gyaradax_geometry_module():
-    path = Path(__file__).resolve().parents[1] / "relevant-codes/gyaradax/gyaradax/geometry.py"
-    spec = util.spec_from_file_location("gyaradax_reference_geometry", path)
-    module = util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+def _gyaradax_geometry_module(root: Path):
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return import_module("gyaradax.geometry.geom")
 
 
 def _gkw_cell_centered_parallel_grid(n_z: int, nperiod: int = 1):
@@ -110,8 +109,9 @@ def test_circular_geometry_is_jittable_and_differentiable():
         )
 
 
-def test_s_alpha_geometry_matches_gyaradax_reference():
-    gyaradax_geometry = _gyaradax_geometry_module()
+@pytest.mark.external
+def test_s_alpha_geometry_matches_gyaradax_reference(gyaradax_root: Path):
+    gyaradax_geometry = _gyaradax_geometry_module(gyaradax_root)
     n_z = 10
     parallel = _gkw_cell_centered_parallel_grid(n_z)
     params = GeometryScalarParams(q=1.45, shat=0.65, eps=0.19)
@@ -147,8 +147,9 @@ def test_s_alpha_geometry_matches_gyaradax_reference():
     )
 
 
-def test_circular_geometry_matches_gyaradax_reference():
-    gyaradax_geometry = _gyaradax_geometry_module()
+@pytest.mark.external
+def test_circular_geometry_matches_gyaradax_reference(gyaradax_root: Path):
+    gyaradax_geometry = _gyaradax_geometry_module(gyaradax_root)
     n_z = 10
     parallel = _gkw_cell_centered_parallel_grid(n_z)
     params = GeometryScalarParams(q=1.45, shat=0.65, eps=0.19)
@@ -182,4 +183,3 @@ def test_circular_geometry_matches_gyaradax_reference():
         rtol=1e-12,
         atol=1e-12,
     )
-

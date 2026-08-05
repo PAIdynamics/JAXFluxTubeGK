@@ -106,6 +106,10 @@ Run the full test suite when changing shared solver behavior:
 JAX_ENABLE_X64=1 uv run pytest
 ```
 
+The default suite excludes explicitly marked external-code integrations and
+does not require sibling repositories. To run those checks, pass revision-
+checked roots explicitly; see [`docs/testing.md`](docs/testing.md).
+
 Run linting:
 
 ```bash

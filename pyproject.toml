@@ -31,7 +31,10 @@ include = ["stellarator_gk*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra -m 'not external'"
+markers = [
+  "external: requires an explicitly configured, revision-pinned external dependency",
+]
 
 [tool.ruff]
 line-length = 100

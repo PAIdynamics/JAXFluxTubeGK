@@ -1,9 +1,11 @@
-from importlib import util
+from importlib import import_module
 from pathlib import Path
+import sys
 import tomllib
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from stellarator_gk import (
     AdiabaticElectronParams,
@@ -37,13 +39,10 @@ from stellarator_gk import (
 )
 
 
-def _gyaradax_geometry_module():
-    path = Path(__file__).resolve().parents[1] / "relevant-codes/gyaradax/gyaradax/geometry.py"
-    spec = util.spec_from_file_location("gyaradax_reference_geometry", path)
-    module = util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+def _gyaradax_geometry_module(root: Path):
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return import_module("gyaradax.geometry.geom")
 
 
 def _cell_centered_parallel_grid(n_z: int):
@@ -66,8 +65,9 @@ def _ion(**updates):
     return SpeciesParams(**base)
 
 
-def test_reduced_gyaradax_geometry_parity_circular_and_s_alpha():
-    reference_module = _gyaradax_geometry_module()
+@pytest.mark.external
+def test_reduced_gyaradax_geometry_parity_circular_and_s_alpha(gyaradax_root: Path):
+    reference_module = _gyaradax_geometry_module(gyaradax_root)
     n_z = 12
     parallel = _cell_centered_parallel_grid(n_z)
     params = GeometryScalarParams(q=1.45, shat=0.65, eps=0.19)
@@ -312,11 +312,9 @@ def test_manufactured_ky_growth_scan_converges_with_resolution():
     assert fine < 1.0e-4
 
 
-def test_gx_cyclone_input_fixture_maps_to_solver_specs_and_geometry():
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
-    )
+@pytest.mark.external
+def test_gx_cyclone_input_fixture_maps_to_solver_specs_and_geometry(gx_root: Path):
+    path = gx_root / "benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
     data = tomllib.loads(path.read_text())
     dimensions = data["Dimensions"]
     domain = data["Domain"]

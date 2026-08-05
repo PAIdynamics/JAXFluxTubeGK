@@ -199,11 +199,11 @@ def test_gx_salpha_cyclone_target_matches_input_metadata():
     assert metadata["gx_hypercollision_model"] == "kz"
 
 
-def test_gx_cyclone_input_reference_records_domain_and_hypercollision_conventions():
-    path = (
-        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-        "itg_salpha_adiabatic_electrons.in"
-    )
+@pytest.mark.external
+def test_gx_cyclone_input_reference_records_domain_and_hypercollision_conventions(
+    gx_root: Path,
+):
+    path = gx_root / "benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
 
     reference = load_gx_cyclone_input_reference(path)
 
@@ -227,11 +227,11 @@ def test_gx_cyclone_input_reference_records_domain_and_hypercollision_convention
     np.testing.assert_allclose(reference.ky[-1], 0.55)
 
 
-def test_gx_cyclone_input_convention_report_separates_numeric_and_physics_gaps():
-    path = (
-        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-        "itg_salpha_adiabatic_electrons.in"
-    )
+@pytest.mark.external
+def test_gx_cyclone_input_convention_report_separates_numeric_and_physics_gaps(
+    gx_root: Path,
+):
+    path = gx_root / "benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
     reference = load_gx_cyclone_input_reference(path)
     target = gx_salpha_cyclone_growth_target()
 
@@ -282,12 +282,30 @@ def test_gx_cyclone_input_convention_report_separates_numeric_and_physics_gaps()
     assert metric_map["n_mu_or_nlaguerre"] == pytest.approx(8.0)
 
 
-def test_gx_growth_rate_reference_loads_time_averaged_cyclone_curve():
-    pytest.importorskip("netCDF4")
-    path = (
-        ROOT / "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-        "itg_salpha_adiabatic_electrons_correct.out.nc"
+def test_gx_growth_rate_reference_loads_synthetic_curve(tmp_path: Path):
+    netcdf = pytest.importorskip("netCDF4")
+    path = tmp_path / "synthetic_gx_growth.out.nc"
+    ky = np.arange(12, dtype=float) * 0.05
+    growth = np.asarray(
+        [0.0, 0.01, 0.03, 0.05, 0.075, 0.09, 0.09302951, 0.085, 0.07, 0.06, 0.054058794, 0.04]
     )
+    frequency = -0.2 - 0.1 * ky
+    with netcdf.Dataset(path, "w") as data:
+        data.createDimension("time", 4)
+        data.createDimension("ky", ky.size)
+        data.createDimension("kx", 1)
+        data.createDimension("ri", 2)
+        grids = data.createGroup("Grids")
+        diagnostics = data.createGroup("Diagnostics")
+        grids.createVariable("time", "f8", ("time",))[:] = np.arange(4, dtype=float)
+        grids.createVariable("ky", "f8", ("ky",))[:] = ky
+        omega = diagnostics.createVariable(
+            "omega_kxkyt", "f8", ("time", "ky", "kx", "ri")
+        )
+        values = np.zeros((4, ky.size, 1, 2), dtype=float)
+        values[..., 0, 0] = frequency
+        values[..., 0, 1] = growth
+        omega[:] = values
 
     reference = load_gx_growth_rate_reference(path)
     target = gx_growth_rate_target(
@@ -676,9 +694,11 @@ def test_calibrate_gx_growth_rate_reference_to_selected_cyclone_target():
     assert "growth calibrated" in calibrated.source
 
 
-def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
+@pytest.mark.external
+def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture(gx_root: Path):
     path = (
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root
+        / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
 
@@ -693,9 +713,11 @@ def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture():
     assert jnp.min(reference.bmag) > 0.0
 
 
-def test_gx_eik_loader_uses_gist_drift_column_order():
+@pytest.mark.external
+def test_gx_eik_loader_uses_gist_drift_column_order(gx_root: Path):
     path = (
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root
+        / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
     )
 
@@ -721,9 +743,11 @@ def test_gx_eik_loader_reads_desc_block_eik_fixture():
     assert jnp.all(jnp.isfinite(reference.gds2))
 
 
-def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
+@pytest.mark.external
+def test_gx_eik_geometry_gate_matches_solver_kperp_contract(gx_root: Path):
     path = (
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root
+        / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
     reference = load_gx_eik_geometry_reference(path)
@@ -739,9 +763,11 @@ def test_gx_eik_geometry_gate_matches_solver_kperp_contract():
     assert result.target.quantity == "max_abs_kperp2_error"
 
 
-def test_solver_geometry_to_eik_parity_report_matches_imported_geometry():
+@pytest.mark.external
+def test_solver_geometry_to_eik_parity_report_matches_imported_geometry(gx_root: Path):
     path = (
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root
+        / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
     reference = load_gx_eik_geometry_reference(path)
@@ -806,13 +832,14 @@ def test_desc_fixture_geometry_exports_to_gx_eik_contract():
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
-def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
+@pytest.mark.external
+def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures(gx_root: Path):
     paths = (
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000",
-        ROOT / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000",
     )
 
@@ -849,12 +876,15 @@ def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures():
     np.testing.assert_allclose(gate.observed_value, 0.0, atol=1.0e-13)
 
 
-def test_desc_gx_eik_reference_matches_external_block_fixture():
-    desc_root = ROOT / "relevant-codes/DESC"
+@pytest.mark.external
+def test_desc_gx_eik_reference_matches_external_block_fixture(desc_root: Path):
     if desc_root.exists() and str(desc_root) not in sys.path:
         sys.path.insert(0, str(desc_root))
-    pytest.importorskip("desc")
-    desc_path = ROOT / "relevant-codes/DESC/desc/examples/DSHAPE_output.h5"
+    try:
+        __import__("desc")
+    except ModuleNotFoundError:
+        pytest.fail(f"DESC could not be imported from configured root: {desc_root}")
+    desc_path = desc_root / "desc/examples/DSHAPE_output.h5"
     eik_path = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
 
     reference = build_desc_gx_eik_reference_from_path(
