@@ -1,6 +1,7 @@
 """Analytic and imported geometry backends."""
 
 from .analytic import AnalyticGeometry, build_circular_geometry, build_s_alpha_geometry, k_perp_squared
+from .array_provider import PhysicalArrayGeometryProvider, SyntheticGeometryProvider
 from .desc_adapter import (
     DESC_GEOMETRY_COMPUTE_KEYS,
     DescGeometryProvider,
@@ -82,10 +83,12 @@ __all__ = [
     "GxEikData",
     "GxEikGeometryProvider",
     "PhysicalFluxTubeGeometry",
+    "PhysicalArrayGeometryProvider",
     "STELLA_GEOMETRY_COLUMNS",
     "STELLA_GLOBAL_COLUMNS",
     "StellaGeometryData",
     "StellaGeometryProvider",
+    "SyntheticGeometryProvider",
     "build_boozer_parallel_grid",
     "build_circular_geometry",
     "build_desc_geometry_from_arrays",

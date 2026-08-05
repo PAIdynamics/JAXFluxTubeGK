@@ -97,6 +97,16 @@ resampling onto the requested endpoint-excluded grid. stella requests declare
 rejects duplicate periodic endpoints, retains the file's field-line span, and
 converts `b.Gz` consistently for the normalized coordinate.
 
+## Synthetic and in-memory arrays
+
+`SyntheticGeometryProvider` is the standalone differentiable provider used for
+interface and solver smoke tests. `PhysicalArrayGeometryProvider` adapts an
+in-memory mapping or callable that returns physical fields. It is the intended
+handoff for VMEC++ and GVEC field-line transformations in Priority 2: those
+adapters supply physical arrays, `iota`, shear, and provenance, while solver
+construction remains unchanged. The array provider rejects missing physical
+fields and never accepts precomputed `F`, `G`, `E_y`, `D_x`, or `D_y`.
+
 ## Caching
 
 The live provider call is canonical. Expensive callers may explicitly
