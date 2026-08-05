@@ -124,14 +124,13 @@ def test_mode_boundary_contract_is_independent_of_kx_extent():
     np.testing.assert_array_equal(base_connectivity.ixminus, stretched_connectivity.ixminus)
 
 
-def test_external_w7x_eik_preflight_handles_two_field_line_lengths():
+@pytest.mark.external
+def test_external_w7x_eik_preflight_handles_two_field_line_lengths(gx_root: Path):
     path = (
-        ROOT
-        / "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root
+        / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
-    if not path.exists():
-        pytest.skip("local GX/GIST W7X fixture is not available")
     reference = load_gx_eik_geometry_reference(path)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))

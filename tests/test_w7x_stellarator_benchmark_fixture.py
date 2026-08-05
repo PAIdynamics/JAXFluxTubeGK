@@ -13,11 +13,6 @@ from stellarator_gk import load_per_ky_mode_structure_fixture_csv
 
 ROOT = Path(__file__).resolve().parents[1]
 W7X_FIXTURE = ROOT / "fixtures/w7x_itg_reduced_benchmark"
-W7X_EIK_REFERENCE = (
-    ROOT
-    / "relevant-codes/gx/geometry_modules/vmec/tests/"
-    "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-)
 
 
 def test_committed_w7x_reduced_benchmark_fixture_contract():
@@ -80,9 +75,16 @@ def test_committed_w7x_reduced_benchmark_fixture_contract():
     assert all(np.isfinite(float(row["kperp2_average"])) for row in rows)
 
 
-def test_stellarator_linear_scan_example_accepts_gx_gist_eik_source(tmp_path):
-    if not W7X_EIK_REFERENCE.exists():
-        pytest.skip("local GX/GIST W7-X eik fixture is not available")
+@pytest.mark.external
+def test_stellarator_linear_scan_example_accepts_gx_gist_eik_source(
+    tmp_path,
+    gx_root: Path,
+):
+    eik_reference = (
+        gx_root
+        / "geometry_modules/vmec/tests/"
+        "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+    )
 
     output_dir = tmp_path / "w7x_eik_scan"
     env = dict(os.environ)
@@ -94,7 +96,7 @@ def test_stellarator_linear_scan_example_accepts_gx_gist_eik_source(tmp_path):
             "--geometry-source",
             "eik",
             "--eik-reference",
-            str(W7X_EIK_REFERENCE),
+            str(eik_reference),
             "--output-dir",
             str(output_dir),
             "--n-z",

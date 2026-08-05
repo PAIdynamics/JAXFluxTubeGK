@@ -6,7 +6,7 @@ to upgrade the reduced W7-X fixture into a full code-to-code gate.
 
 1. Copy the VMEC file into the run directory:
 
-   `cp relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc fixtures/gx_w7x_mode_structure_run/wout_w7x.nc`
+   `cp dependency://gx/benchmarks/linear/ITG_w7x/wout_w7x.nc fixtures/gx_w7x_mode_structure_run/wout_w7x.nc`
 
 2. Run GX externally:
 

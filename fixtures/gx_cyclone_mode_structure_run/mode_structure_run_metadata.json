@@ -15,5 +15,5 @@
   "nwrite_big": 1000,
   "prepared_input": "fixtures/gx_cyclone_mode_structure_run/itg_salpha_adiabatic_electrons.in",
   "run_command": "cd fixtures/gx_cyclone_mode_structure_run && path/to/gx itg_salpha_adiabatic_electrons.in",
-  "source_input": "relevant-codes/gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
+  "source_input": "dependency://gx/benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in"
 }

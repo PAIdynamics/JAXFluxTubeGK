@@ -156,7 +156,7 @@ def test_committed_gx_w7x_external_run_prep_metadata_is_portable():
     assert metadata["vmec_copied"] is False
     assert metadata["ky_values"] == "0.1,0.2,0.3"
     assert metadata["copy_vmec_command"].startswith(
-        "cp relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
+        "cp dependency://gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
     )
     assert "--ky-values 0.1,0.2,0.3" in metadata["comparison_command"]
     assert "path/to/gx" in metadata["run_command"]

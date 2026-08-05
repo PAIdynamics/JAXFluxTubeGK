@@ -174,7 +174,7 @@
       "vpar_max": 2.0
     }
   ],
-  "eik_reference": "relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+  "eik_reference": "dependency://gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
   "geometry_source": "GX/GIST W7-X eik",
   "readiness_json": "fixtures/w7x_itg_convergence_study/optimization_readiness.json",
   "summary_csv": "fixtures/w7x_itg_convergence_study/convergence_summary.csv",

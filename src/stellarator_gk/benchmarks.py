@@ -3269,7 +3269,7 @@ def rosenbluth_hinton_target() -> BenchmarkTarget:
         quantity="zonal_residual",
         reference_value=0.0711,
         tolerance=1.0e-3,
-        source="relevant-codes/gyaradax/docs/NOTES.md",
+        source="dependency://gyaradax/docs/NOTES.md",
         metadata=(
             ("q", 1.3),
             ("shat", 0.1592),
@@ -3298,7 +3298,7 @@ def cyclone_base_case_growth_target() -> BenchmarkTarget:
         quantity="selected_growth_rate",
         reference_value=0.179,
         tolerance=1.0e-2,
-        source="relevant-codes/gyaradax/docs/NOTES.md",
+        source="dependency://gyaradax/docs/NOTES.md",
         metadata=(
             ("q", 1.4),
             ("shat", 0.78),
@@ -3338,7 +3338,7 @@ def gx_salpha_cyclone_growth_target() -> BenchmarkTarget:
         reference_value=0.179,
         tolerance=1.0e-2,
         source=(
-            "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
+            "dependency://gx/benchmarks/linear/ITG_cyclone/"
             "itg_salpha_adiabatic_electrons.in"
         ),
         metadata=(
@@ -4855,11 +4855,9 @@ def run_cyclone_base_case_mode_structure_fixture(
     target = target or cyclone_base_case_growth_target()
     if calibrate_reference_growth:
         if reference is None:
-            reference = load_gx_growth_rate_reference(
-                Path(
-                    "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-                    "itg_salpha_adiabatic_electrons_correct.out.nc"
-                )
+            raise ValueError(
+                "calibrate_reference_growth requires reference or gx_reference_path; "
+                "external data is never resolved relative to the project checkout"
             )
         reference = calibrate_gx_growth_rate_reference_to_target(
             reference,
@@ -6165,12 +6163,12 @@ def run_cyclone_base_case_ky_scan_gate(
     if reference is not None and gx_reference_path is not None:
         raise ValueError("supply either reference or gx_reference_path, not both")
     if reference is None:
-        gx_reference_path = Path(
-            "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-            "itg_salpha_adiabatic_electrons_correct.out.nc"
-            if gx_reference_path is None
-            else gx_reference_path
-        )
+        if gx_reference_path is None:
+            raise ValueError(
+                "run_cyclone_base_case_ky_scan_gate requires reference or "
+                "gx_reference_path; external data is never resolved relative to "
+                "the project checkout"
+            )
         reference = load_gx_growth_rate_reference(gx_reference_path)
     target = target or cyclone_base_case_growth_target()
     if calibrate_reference_growth:
@@ -13808,7 +13806,7 @@ def build_desc_gx_eik_reference_from_path(
     """Evaluate DESC geometry using the GX DESC ``eik.out`` convention.
 
     This mirrors the field-line normalization in
-    ``relevant-codes/gx/geometry_modules/desc/gx_desc_geo.py`` while using the
+    ``dependency://gx/geometry_modules/desc/gx_desc_geo.py`` while using the
     current DESC coordinate API.  It is intentionally separate from the raw
     physical-array DESC adapter: this path produces the exact GS2/GX fields
     used by external ``eik.out`` parity tests.
@@ -14204,8 +14202,8 @@ def _import_desc_coordinate_helpers():
         from desc.grid import LinearGrid
     except ImportError as exc:
         raise ImportError(
-            "DESC is required for DESC/GX eik parity. Install desc-opt or add "
-            "relevant-codes/DESC to PYTHONPATH."
+            "DESC is required for DESC/GX eik parity. Install the pinned desc-opt "
+            "provider with scripts/bootstrap_dependencies.py."
         ) from exc
     return LinearGrid, get_rtz_grid
 

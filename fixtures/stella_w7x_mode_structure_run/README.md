@@ -5,7 +5,7 @@ for the external continuum-code mode-structure reference.
 
 Matched controls:
 
-- VMEC source: `relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc`
+- VMEC source: `dependency://gx/benchmarks/linear/ITG_w7x/wout_w7x.nc`
 - torflux: `0.64`
 - alpha0: `0.0`
 - nfield_periods: `34.752359999999996`

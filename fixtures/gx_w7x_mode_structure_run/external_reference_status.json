@@ -39,6 +39,6 @@
   "status": "blocked_missing_gx_executable",
   "vmec_destination": "fixtures/gx_w7x_mode_structure_run/wout_w7x.nc",
   "vmec_destination_exists": true,
-  "vmec_source": "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc",
+  "vmec_source": "dependency://gx/benchmarks/linear/ITG_w7x/wout_w7x.nc",
   "vmec_source_exists": true
 }

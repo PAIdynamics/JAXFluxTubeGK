@@ -130,7 +130,7 @@ def test_committed_stella_w7x_reference_input_matches_production_gate():
 
     assert metadata["benchmark_name"] == "w7x_itg_external_stella_mode_structure_reference"
     assert metadata["status"] == "prepared_stella_run_pending_execution"
-    assert metadata["vmec_source"] == "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
+    assert metadata["vmec_source"] == "dependency://gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
     assert metadata["vmec_source_sha256"] == (
         "7d3bc31a4dd599b30619444da740c64fba27be997a2aaa25f5f211387616ab86"
     )

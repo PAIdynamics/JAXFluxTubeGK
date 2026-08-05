@@ -17,7 +17,7 @@
   "benchmark_name": "w7x_itg_adiabatic_electrons_reduced",
   "external_geometry_reference": {
     "format": "GX/GIST/GS2 eik table",
-    "path": "relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
+    "path": "dependency://gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000",
     "sha256": "d9c85b1a9f9a43fd7ba8c6a799905a89723b82604328bfdee1087cb5018673ef"
   },
   "external_growth_frequency_mode_structure_reference": null,
@@ -39,7 +39,7 @@
     "nlaguerre": 8,
     "nperiod": 1,
     "ntheta": 256,
-    "path": "relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in",
+    "path": "dependency://gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in",
     "sha256": "d8f7d2f93ecd3a2b948fbf0214f815d32c8b98d81abf841cd2fa97cd92eaca3e",
     "torflux": 0.64,
     "vmec_file": "wout_w7x.nc",

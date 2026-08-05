@@ -3,8 +3,8 @@
 This fixture uses the local GX/GIST W7-X eik geometry reference and the GX
 `ITG_w7x` adiabatic-electron input deck as provenance:
 
-- geometry: `relevant-codes/gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000`
-- GX input: `relevant-codes/gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in`
+- geometry: `dependency://gx/geometry_modules/vmec/tests/gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000`
+- GX input: `dependency://gx/benchmarks/linear/ITG_w7x/itg_w7x_adiabatic_electrons.in`
 
 Regenerate the fixture from the repository root with:
 

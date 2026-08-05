@@ -416,7 +416,7 @@ def _run_script_text(input_name: str, output_dir: Path) -> str:
             "set -euo pipefail",
             'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
             _repo_root_shell_assignment(output_dir),
-            'STELLA_EXECUTABLE="${STELLA_EXECUTABLE:-${REPO_ROOT}/relevant-codes/stella/stella}"',
+            'STELLA_EXECUTABLE="${STELLA_EXECUTABLE:?Set STELLA_EXECUTABLE to the pinned stella binary}"',
             'cd "${SCRIPT_DIR}"',
             f'"${{STELLA_EXECUTABLE}}" {shlex.quote(input_name)}',
             "",
