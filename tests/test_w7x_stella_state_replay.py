@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
 from scripts.audit_w7x_ky03_rhs_model_balance import RHSTermSplit
 from scripts.replay_w7x_stella_state_in_solver import (
+    apply_stella_coefficient_contract,
     bundled_solver_rhs,
     phase_space_to_solver,
     replay_cases,
     selected_mode_from_solver,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_replay_velocity_grids_are_inside_stella_trace_domain():
@@ -28,6 +35,30 @@ def test_replay_velocity_grids_are_inside_stella_trace_domain():
         assert np.max(grid.vpar) <= 3.0
         assert np.min(grid.mu) >= 0.0366213
         assert np.max(grid.mu) <= 4.91707
+
+
+def test_replay_includes_source_derived_stella_coefficient_discriminator():
+    cases = {case.name: case for case in replay_cases()}
+    assert cases["replay_stella_coefficients_16x4"].parallel_derivative_model == "gkw_upwind"
+
+
+def test_non_discriminator_keeps_precompute_identity():
+    marker = object()
+    case = next(case for case in replay_cases() if case.name == "replay_open_16x4")
+    assert apply_stella_coefficient_contract(case, marker, None) is marker
+
+
+def test_committed_same_state_result_records_partial_improvement():
+    path = (
+        ROOT
+        / "fixtures/w7x_ky03_stella_state_replay/same_state_rhs_replay_status.json"
+    )
+    status = json.loads(path.read_text(encoding="utf-8"))
+    assert status["status"] == "same_state_rhs_parity_failed"
+    assert status["acceptance_case"] == "replay_stella_coefficients_16x4"
+    assert status["best_by_quantity"]["equilibrium_drive"]["relative_l2_error"] < 0.1
+    assert status["best_by_quantity"]["total_rhs"]["relative_l2_error"] < 0.3
+    assert status["best_by_quantity"]["mirror_force"]["relative_l2_error"] > 0.3
 
 
 def test_phase_space_order_round_trip():

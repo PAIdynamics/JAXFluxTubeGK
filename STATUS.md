@@ -302,6 +302,20 @@ inexact so prepared providers remain installed.
   structures remain mismatched.
 - Verified the complete standalone suite with x64 enabled: 352 tests passed and
   20 opt-in external tests were deselected. Focused Ruff checks also pass.
+- Added a same-state replay gate that interpolates each explicitly labeled
+  stella distribution and potential onto a contained 256×16×4 solver grid and
+  evaluates periodic and open-chain solver operators without a fitted state
+  scale. This separates operator errors from independently evolved eigenmodes.
+- Audited the pinned stella source and added a non-production coefficient
+  discriminator: open streaming, the traced mirror orientation, the stella
+  magnetic-drift factor 1/2, geometry-header `flux_fac`, and stella's
+  Maxwellian normalization. It reduces the total-RHS relative L2 error from
+  about 1.32 to 0.255. Equilibrium drive reaches 0.068, while streaming is
+  0.172, magnetic drift 0.173, and mirror force 0.398. The denominator remains
+  consistent to `4.6e-4` after its documented sign conversion, but the
+  distribution moment normalization remains unresolved. Production defaults
+  are unchanged until these conventions are represented by the public
+  geometry/state contracts and regression-tested across providers.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

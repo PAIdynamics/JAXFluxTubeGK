@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import replace
 import json
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ from scripts.compare_w7x_stella_rhs_trace_to_solver_balance import (
     weighted_complex_metrics,
 )
 from stellarator_gk import linear_residual
+from stellarator_gk.geometry import load_stella_geometry_data
 from stellarator_gk.physics import adiabatic_density_numerator
 
 
@@ -57,7 +59,31 @@ def replay_cases() -> tuple[RHSBalanceCase, ...]:
             parallel_derivative_model="gkw_upwind",
             **common,
         ),
+        RHSBalanceCase(
+            name="replay_stella_coefficients_16x4",
+            parallel_derivative_model="gkw_upwind",
+            **common,
+        ),
     )
+
+
+def apply_stella_coefficient_contract(case, precompute, stella_geometry: Path):
+    """Apply source-derived stella coefficient conventions for discrimination."""
+
+    if case.name != "replay_stella_coefficients_16x4":
+        return precompute
+    geometry_data = load_stella_geometry_data(stella_geometry)
+    flux_fac = geometry_data.global_value("flux_fac")
+    rhs = replace(
+        precompute.rhs,
+        mirror_force_coeff=-precompute.rhs.mirror_force_coeff,
+        magnetic_drift_frequency=0.5 * precompute.rhs.magnetic_drift_frequency,
+        E_y=jnp.full_like(precompute.rhs.E_y, flux_fac),
+        # stella puts normalization in its velocity quadrature and stores the
+        # Maxwellian factor as exp(-v^2); the solver stores pi^(-3/2) in F_M.
+        maxwellian=np.pi**1.5 * precompute.rhs.maxwellian,
+    )
+    return replace(precompute, rhs=rhs)
 
 
 def phase_space_to_solver(values: np.ndarray) -> jnp.ndarray:
@@ -126,6 +152,9 @@ def run_same_state_replay(
     rows: list[dict[str, Any]] = []
     for case in replay_cases():
         setup = _build_w7x_setup(case, Path(stella_geometry))
+        precompute = apply_stella_coefficient_contract(
+            case, setup["precompute"], Path(stella_geometry)
+        )
         target_z = np.asarray(setup["geometry"].z)
         target_vpar = np.asarray(setup["velocity"].vpar)
         target_mu = np.asarray(setup["velocity"].mu)
@@ -150,8 +179,8 @@ def run_same_state_replay(
                 stella["phi"][call], stella["z"], target_z, axis=0
             )
             phi = jnp.asarray(phi_values[:, None, None])
-            split = split_rhs_terms(state, phi, setup["precompute"].rhs)
-            total_rhs = linear_residual(state, precomputed=setup["precompute"], phi=phi)
+            split = split_rhs_terms(state, phi, precompute.rhs)
+            total_rhs = linear_residual(state, precomputed=precompute, phi=phi)
             candidate_arrays = bundled_solver_rhs(split, total_rhs)
 
             for quantity, candidate in candidate_arrays.items():
@@ -176,9 +205,9 @@ def run_same_state_replay(
                 )
 
             numerator = np.asarray(
-                adiabatic_density_numerator(state, setup["precompute"].field)
+                adiabatic_density_numerator(state, precompute.field)
             )[:, 0, 0]
-            denominator = np.asarray(setup["precompute"].field.denominator)[:, 0, 0]
+            denominator = np.asarray(precompute.field.denominator)[:, 0, 0]
             for quantity, candidate, scale in (
                 ("quasineutrality_numerator", numerator, 1.0),
                 ("quasineutrality_denominator", denominator, -1.0),
@@ -250,6 +279,8 @@ def _status(
     rows: list[dict[str, Any]], trace_path: Path, geometry_path: Path, tolerance: float
 ) -> dict[str, Any]:
     rhs_rows = [row for row in rows if not row["quantity"].startswith("quasineutrality")]
+    acceptance_case = "replay_stella_coefficients_16x4"
+    acceptance_rows = [row for row in rhs_rows if row["case"] == acceptance_case]
     best_by_quantity = {}
     for quantity in sorted({row["quantity"] for row in rows}):
         selected = min(
@@ -264,7 +295,7 @@ def _status(
             "best_fit_scale_real": selected["best_fit_scale_real"],
             "best_fit_scale_imag": selected["best_fit_scale_imag"],
         }
-    maximum = max(float(row["aligned_relative_l2_error"]) for row in rhs_rows)
+    maximum = max(float(row["aligned_relative_l2_error"]) for row in acceptance_rows)
     passed = maximum <= tolerance
     return {
         "schema": "stellarator_gk_w7x_same_state_rhs_replay_v1",
@@ -272,6 +303,10 @@ def _status(
         "passed": passed,
         "relative_l2_tolerance": tolerance,
         "max_rhs_relative_l2_error": maximum,
+        "acceptance_case": acceptance_case,
+        "max_all_discriminators_rhs_relative_l2_error": max(
+            float(row["aligned_relative_l2_error"]) for row in rhs_rows
+        ),
         "trace_source": str(trace_path),
         "geometry_source": str(geometry_path),
         "raw_trace_committed": False,
@@ -282,7 +317,10 @@ def _status(
             "Each solver RHS is evaluated on the same stella distribution and phi "
             "after interpolation onto a contained 16x4 finite-difference velocity grid. "
             "No fitted amplitude or phase is used; the quasineutrality denominator alone "
-            "uses the documented opposite-sign convention."
+            "uses the documented opposite-sign convention. The explicitly labeled "
+            "stella-coefficient case tests the source-derived mirror sign, magnetic-drift "
+            "factor 1/2, geometry-header flux_fac, and Maxwellian normalization without "
+            "changing production defaults."
         ),
         "next_action": (
             "isolate the largest same-state term discrepancy before rerunning the "
@@ -295,7 +333,7 @@ def _status(
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -306,7 +344,9 @@ def _fixture_readme(status: dict[str, Any]) -> str:
 This compact fixture records solver RHS operators applied directly to traced
 stella distribution and potential arrays. The external raw trace is not stored
 in the repository. Both periodic spectral and open GKW-upwind parallel models
-are reported on a 16×4 velocity grid contained inside the stella domain.
+are reported on a 16×4 velocity grid contained inside the stella domain. A
+third discriminator applies source-derived stella mirror, drift, and drive
+coefficients without changing the production geometry contract.
 
 Status: `{status['status']}`. Maximum RHS relative L2 error:
 `{status['max_rhs_relative_l2_error']:.8g}` (tolerance `{status['relative_l2_tolerance']}`).

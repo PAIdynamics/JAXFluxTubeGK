@@ -334,6 +334,20 @@ the solver's existing open-chain GKW-style upwind operator to test stella's
 resolved unconnected boundary contract; it is a discriminator, not a claim
 that the two discretizations are identical.
 
+Replay the external stella states directly through the solver operators:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/replay_w7x_stella_state_in_solver.py \
+  --trace /tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat
+```
+
+This writes only compact results. It compares periodic, open-chain, and an
+explicitly labeled source-derived stella coefficient discriminator on a
+velocity grid fully contained in the trace domain. The discriminator currently
+reduces total-RHS relative L2 error to about 0.255; it does not alter production
+defaults while the geometry and distribution-normalization contracts remain
+under validation.
+
 Prepare and run the patched stella RHS trace in a scratch tree:
 
 ```bash
