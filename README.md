@@ -2,10 +2,11 @@
 
 Differentiable local flux-tube gyrokinetics for stellarator design studies.
 
-This repository is a JAX-first implementation of a linear electrostatic
-flux-tube gyrokinetic solver.  The physics and sign conventions are aligned
-with GKW and Gyaradax; DESC, GX, stella, and local fixture data are used for
-geometry import, validation, and benchmark comparisons.
+This repository is a standalone JAX-first implementation of a linear
+electrostatic flux-tube gyrokinetic solver. The physics and sign conventions
+are aligned with GKW and Gyaradax. DESC, VMEC++, GVEC, GX, and stella are
+separately installed geometry providers or validation tools, not vendored
+runtime dependencies.
 
 The current production milestone is a trusted linear W7-X stellarator run.  The
 code can already run reduced stellarator scans, reduced optimization examples,
@@ -18,12 +19,16 @@ explicitly deferred.
 
 ![W7-X VMEC stellarator geometry](figures/w7x_vmec_geometry.png)
 
-This figure is generated from the GX W7-X VMEC equilibrium used by the
-stella/GX reference fixtures:
+Regenerate this figure from a user- or provider-supplied VMEC output:
 
 ```bash
-uv run python scripts/visualize_w7x_vmec_geometry.py
+uv run --no-sync python scripts/visualize_w7x_vmec_geometry.py \
+  --vmec /path/to/wout_w7x.nc
 ```
+
+The image is documentation output; the repository does not provide the W7-X
+equilibrium file. The planned canonical path will obtain the named W7-X design
+in memory from VMEC++ without requiring a stored `wout` file.
 
 ## Repository Map
 
@@ -32,7 +37,7 @@ src/stellarator_gk/      Python package and public solver API
 tests/                   Unit, validation, fixture, and regression tests
 examples/                User-facing runnable workflows and diagnostics
 scripts/                 Fixture generators, external-code prep, audit tools
-fixtures/                Committed reference inputs and validation artifacts
+fixtures/                Small numerical validation contracts
 figures/                 Generated CSV/PDF result artifacts for the paper
 docs/                    Short developer notes
 tex/                     Physics, numerics, and project TeX sources
@@ -56,14 +61,15 @@ uv sync --extra dev
 For stellarator geometry from MHD codes, prepare the pinned provider forks:
 
 ```bash
-python3 scripts/bootstrap_dependencies.py --profile mhd
+uv run --no-sync python scripts/bootstrap_dependencies.py --profile mhd
 ```
 
 This fetches, builds, and installs VMEC++, DESC, and GVEC outside the tracked
 source tree. Existing sibling clones can be reused without modifying them:
 
 ```bash
-python3 scripts/bootstrap_dependencies.py --profile mhd --local-root ..
+uv run --no-sync python scripts/bootstrap_dependencies.py \
+  --profile mhd --local-root ..
 ```
 
 GX, stella, GKW, and Gyaradax are validation dependencies and are prepared
@@ -75,8 +81,9 @@ For commands that consume these providers, use `.venv/bin/python` or
 `uv run --no-sync`; a normal exact `uv` sync intentionally restores the core
 lock and removes the external profile.
 
-Most commands below use `uv run`, so `uv` will also create/update the local
-environment as needed.
+Use `uv run --no-sync` after the initial sync when a command must not replace a
+prepared provider environment. Run `uv sync --extra dev` explicitly when you
+want to restore the standalone lock.
 
 For numerical parity tests and production-style diagnostics, enable JAX x64:
 
@@ -89,13 +96,13 @@ export JAX_ENABLE_X64=1
 Run the import smoke test:
 
 ```bash
-uv run pytest tests/test_import.py -q
+uv run --no-sync pytest tests/test_import.py -q
 ```
 
 Run the focused W7-X RHS comparison tests:
 
 ```bash
-JAX_ENABLE_X64=1 uv run pytest \
+JAX_ENABLE_X64=1 uv run --no-sync pytest \
   tests/test_w7x_ky03_rhs_model_balance.py \
   tests/test_w7x_stella_rhs_trace_comparison.py -q
 ```
@@ -103,7 +110,7 @@ JAX_ENABLE_X64=1 uv run pytest \
 Run the full test suite when changing shared solver behavior:
 
 ```bash
-JAX_ENABLE_X64=1 uv run pytest
+JAX_ENABLE_X64=1 uv run --no-sync pytest
 ```
 
 The default suite excludes explicitly marked external-code integrations and
@@ -113,8 +120,12 @@ checked roots explicitly; see [`docs/testing.md`](docs/testing.md).
 Run linting:
 
 ```bash
-uv run ruff check src tests examples scripts
+uv run --no-sync ruff check src tests examples scripts
 ```
+
+These are the same standalone boundaries exercised by GitHub Actions. The CI
+job also builds an sdist and wheel, installs the wheel into a fresh environment,
+and verifies that `stellarator_gk` imports without repository-relative files.
 
 Build the paper:
 
@@ -173,10 +184,15 @@ uv run --extra dev python examples/generate_validation_gate_figures.py
 
 ### W7-X Reduced Benchmark
 
-Regenerate the reduced W7-X benchmark fixture:
+Generate a reduced W7-X benchmark from explicit GX/GIST geometry and input
+paths:
 
 ```bash
-JAX_ENABLE_X64=1 uv run python scripts/generate_w7x_itg_reduced_benchmark.py
+JAX_ENABLE_X64=1 uv run --no-sync python \
+  scripts/generate_w7x_itg_reduced_benchmark.py \
+  --eik-reference /path/to/w7x.eik.out \
+  --gx-input /path/to/itg_w7x_adiabatic_electrons.in \
+  --output-dir /path/to/output
 ```
 
 Run the W7-X production-readiness ledger:
@@ -229,7 +245,10 @@ JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
 Prepare and run the patched stella RHS trace in a scratch tree:
 
 ```bash
-uv run python scripts/prepare_stella_w7x_rhs_trace_run.py --overwrite \
+uv run --no-sync python scripts/prepare_stella_w7x_rhs_trace_run.py \
+  --stella-source /path/to/revision-pinned/stella \
+  --vmec-file /path/to/wout_w7x.nc \
+  --overwrite \
   --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
 bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
 bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh

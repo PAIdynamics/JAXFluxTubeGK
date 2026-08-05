@@ -1,24 +1,12 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
 
-from scripts.prepare_gkw_cosine2_run import (
-    PATCHED_SELECTOR,
-    add_cosin2_branch,
-    add_initial_state_dump_exp_integration_patch,
-    add_igh_input_trace_linear_terms_patch,
-    add_multitime_velocity_slice_patch,
-    add_rhs_trace_exp_integration_patch,
-    add_rhs_trace_linear_terms_patch,
-    add_rhs_trace_matdat_patch,
-    add_selected_state_dump_patch,
-    add_state_trace_patch,
-    prepare_gkw_cosine2_run,
-    write_cosin2_input,
-)
 from stellarator_gk import (
     CycloneSourceTermTrace,
     CycloneOneWindowReplayReport,
@@ -46,6 +34,34 @@ from stellarator_gk import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_prepare_gkw_module():
+    path = ROOT / "scripts/prepare_gkw_cosine2_run.py"
+    spec = importlib.util.spec_from_file_location("prepare_gkw_cosine2_run", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_PREPARE_GKW = _load_prepare_gkw_module()
+PATCHED_SELECTOR = _PREPARE_GKW.PATCHED_SELECTOR
+add_cosin2_branch = _PREPARE_GKW.add_cosin2_branch
+add_initial_state_dump_exp_integration_patch = (
+    _PREPARE_GKW.add_initial_state_dump_exp_integration_patch
+)
+add_igh_input_trace_linear_terms_patch = _PREPARE_GKW.add_igh_input_trace_linear_terms_patch
+add_multitime_velocity_slice_patch = _PREPARE_GKW.add_multitime_velocity_slice_patch
+add_rhs_trace_exp_integration_patch = _PREPARE_GKW.add_rhs_trace_exp_integration_patch
+add_rhs_trace_linear_terms_patch = _PREPARE_GKW.add_rhs_trace_linear_terms_patch
+add_rhs_trace_matdat_patch = _PREPARE_GKW.add_rhs_trace_matdat_patch
+add_selected_state_dump_patch = _PREPARE_GKW.add_selected_state_dump_patch
+add_state_trace_patch = _PREPARE_GKW.add_state_trace_patch
+prepare_gkw_cosine2_run = _PREPARE_GKW.prepare_gkw_cosine2_run
+write_cosin2_input = _PREPARE_GKW.write_cosin2_input
 
 
 _MINIMAL_INIT = """subroutine init_fdisi
