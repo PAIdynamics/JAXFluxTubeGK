@@ -115,6 +115,23 @@ def default_adiabatic_electron_params(
     )
 
 
+def _velocity_measure(velocity_grid: VelocityGrid, B, phase_space_measure):
+    """Return the full ``(species,vpar,mu,z,kx,ky)`` integration measure."""
+
+    B = jnp.asarray(B)
+    if phase_space_measure is None:
+        w_v = jnp.asarray(velocity_grid.w_vpar)[None, :, None, None, None, None]
+        w_mu = jnp.asarray(velocity_grid.w_mu)[None, None, :, None, None, None]
+        return w_v * w_mu * B[None, None, None, :, None, None]
+    measure = jnp.asarray(phase_space_measure)
+    expected = (B.shape[0], velocity_grid.vpar.shape[0], velocity_grid.mu.shape[0])
+    if measure.shape != expected:
+        raise ValueError(
+            f"phase_space_measure has shape {measure.shape}; expected {expected} in (z,vpar,mu) order"
+        )
+    return jnp.transpose(measure, (1, 2, 0))[None, :, :, :, None, None]
+
+
 def build_adiabatic_quasineutrality_precompute(
     velocity_grid: VelocityGrid,
     B,
@@ -126,6 +143,7 @@ def build_adiabatic_quasineutrality_precompute(
     w_z=None,
     ixzero: int | None = None,
     iyzero: int | None = None,
+    phase_space_measure=None,
 ) -> AdiabaticQuasineutralityPrecompute:
     """Precompute velocity weights and field denominator for adiabatic electrons."""
 
@@ -137,12 +155,10 @@ def build_adiabatic_quasineutrality_precompute(
     bessel = _with_species_axis(flr_factors.bessel_j0, n_species, "bessel_j0", single_ndim=4)
     gamma = _with_species_axis(flr_factors.gamma0, n_species, "gamma0", single_ndim=3)
 
-    w_v = velocity_grid.w_vpar[None, :, None, None, None, None]
-    w_mu = velocity_grid.w_mu[None, None, :, None, None, None]
-    B_b = B[None, None, None, :, None, None]
+    measure = _velocity_measure(velocity_grid, B, phase_space_measure)
     density_charge = jnp.asarray([s.charge * s.density for s in species_tuple])
     density_charge = density_charge.reshape(n_species, 1, 1, 1, 1, 1)
-    phi_weight = density_charge * w_v * w_mu * B_b * bessel[:, None, :, :, :, :]
+    phi_weight = density_charge * measure * bessel[:, None, :, :, :, :]
 
     polarization_coeff = jnp.asarray(
         [s.charge**2 * s.density / s.temperature for s in species_tuple]
@@ -187,6 +203,7 @@ def build_kinetic_quasineutrality_precompute(
     iyzero: int | None = None,
     denominator_floor: float = 1.0e-14,
     regularize_constant_mode: bool = True,
+    phase_space_measure=None,
 ) -> KineticQuasineutralityPrecompute:
     """Precompute weights and denominator for a fully kinetic electrostatic solve."""
 
@@ -198,12 +215,10 @@ def build_kinetic_quasineutrality_precompute(
     bessel = _with_species_axis(flr_factors.bessel_j0, n_species, "bessel_j0", single_ndim=4)
     gamma = _with_species_axis(flr_factors.gamma0, n_species, "gamma0", single_ndim=3)
 
-    w_v = velocity_grid.w_vpar[None, :, None, None, None, None]
-    w_mu = velocity_grid.w_mu[None, None, :, None, None, None]
-    B_b = B[None, None, None, :, None, None]
+    measure = _velocity_measure(velocity_grid, B, phase_space_measure)
     density_charge = jnp.asarray([s.charge * s.density for s in species_tuple])
     density_charge = density_charge.reshape(n_species, 1, 1, 1, 1, 1)
-    phi_weight = density_charge * w_v * w_mu * B_b * bessel[:, None, :, :, :, :]
+    phi_weight = density_charge * measure * bessel[:, None, :, :, :, :]
 
     polarization_coeff = jnp.asarray(
         [s.charge**2 * s.density / s.temperature for s in species_tuple]

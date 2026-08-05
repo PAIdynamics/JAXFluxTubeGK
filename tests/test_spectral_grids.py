@@ -6,6 +6,7 @@ from stellarator_gk import (
     VelocityGridSpec,
     build_parallel_grid,
     build_velocity_grid,
+    build_velocity_grid_from_nodes,
 )
 
 
@@ -70,3 +71,25 @@ def test_modal_transforms_reconstruct_values():
 
     np.testing.assert_allclose(grid.vpar_inverse_modal_transform @ coeffs, values, atol=1e-12)
 
+
+def test_native_velocity_grid_accepts_arbitrary_monotone_quadrature():
+    grid = build_velocity_grid_from_nodes(
+        vpar=[-1.5, -0.2, 0.7, 2.0],
+        mu=[0.04, 0.3, 1.2],
+        w_vpar=[0.2, 0.7, 0.8, 0.3],
+        w_mu=[0.1, 0.4, 0.2],
+    )
+
+    assert grid.backend == "native"
+    np.testing.assert_allclose(grid.D_vpar @ grid.vpar**2, 2.0 * grid.vpar)
+    np.testing.assert_allclose(grid.D_mu @ grid.mu**2, 2.0 * grid.mu)
+
+
+def test_native_velocity_grid_rejects_nonmonotone_nodes():
+    with np.testing.assert_raises_regex(ValueError, "strictly increasing"):
+        build_velocity_grid_from_nodes(
+            vpar=[-1.0, 0.0, 1.0],
+            mu=[0.2, 0.1],
+            w_vpar=[1.0, 1.0, 1.0],
+            w_mu=[1.0, 1.0],
+        )

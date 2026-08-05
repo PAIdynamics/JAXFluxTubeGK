@@ -309,6 +309,11 @@ RHS, quasineutrality numerator/denominator, and accumulated log normalization.
 For unlike velocity grids, the comparison adapter performs separable linear
 complex interpolation onto a common target grid, rejects extrapolation, and
 uses that target grid's `w_z*w_vpar*w_mu` quadrature for error norms.
+For native solver coupling, `build_velocity_grid_from_nodes(...)` accepts
+provider-supplied monotone `vpar`/`mu` nodes and weights. A nonseparable or
+geometry-dependent integration measure can be passed as
+`phase_space_measure[z,vpar,mu]` to `build_linear_residual_precompute(...)`;
+built-in tensor-product grids retain their existing `B*w_vpar*w_mu` measure.
 To match the current stella trace time (`code_time=199.9`) and run the partial
 weighted comparison:
 

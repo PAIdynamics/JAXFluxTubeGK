@@ -21,6 +21,7 @@ from .grids import (
     build_mode_connectivity,
     build_parallel_grid,
     build_velocity_grid,
+    build_velocity_grid_from_nodes,
 )
 from .geometry import (
     AnalyticGeometry,
@@ -563,6 +564,7 @@ __all__ = [
     "build_s_alpha_geometry",
     "build_velocity_basis",
     "build_velocity_grid",
+    "build_velocity_grid_from_nodes",
     "benchmark_linear_residual",
     "benchmark_target_cost",
     "benchmark_target_residual",

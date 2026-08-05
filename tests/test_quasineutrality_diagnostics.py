@@ -94,6 +94,30 @@ def test_zero_distribution_gives_zero_phi():
     np.testing.assert_allclose(phi, 0.0, atol=0.0)
 
 
+def test_native_phase_space_measure_overrides_tensor_product_weights():
+    velocity, fourier, B, species, _precompute = _setup(zonal_correction=False)
+    flr = species_flr_factors(species, velocity.mu, B, jnp.zeros((B.size, 3, 2)))
+    measure = jnp.arange(B.size * velocity.vpar.size * velocity.mu.size, dtype=float)
+    measure = 0.01 * measure.reshape(B.size, velocity.vpar.size, velocity.mu.size) + 0.1
+    precompute = build_adiabatic_quasineutrality_precompute(
+        velocity,
+        B,
+        flr,
+        species,
+        AdiabaticElectronParams(1.0, 1.0, zonal_correction=False),
+        fourier_grid=fourier,
+        phase_space_measure=measure,
+    )
+    distribution = jnp.ones((velocity.vpar.size, velocity.mu.size, B.size, 3, 2))
+
+    numerator = adiabatic_density_numerator(distribution, precompute)
+
+    expected = jnp.broadcast_to(
+        jnp.sum(measure, axis=(1, 2))[:, None, None], numerator.shape
+    )
+    np.testing.assert_allclose(numerator, expected)
+
+
 def test_local_adiabatic_phi_solve_matches_formula_without_zonal_correction():
     velocity, _fourier, B, _species, precompute = _setup(zonal_correction=False)
     distribution = jnp.arange(velocity.vpar.shape[0] * velocity.mu.shape[0] * B.shape[0] * 3 * 2)

@@ -52,6 +52,70 @@ def build_velocity_grid(spec: VelocityGridSpec) -> VelocityGrid:
     )
 
 
+def build_velocity_grid_from_nodes(
+    *,
+    vpar,
+    mu,
+    w_vpar,
+    w_mu,
+    D_vpar=None,
+    D_mu=None,
+    dtype: str = "float64",
+    backend: str = "native",
+) -> VelocityGrid:
+    """Build a velocity grid from provider-supplied nodes and weights.
+
+    This is the provider-neutral path for native quadratures whose nodes do not
+    follow the built-in Chebyshev or GKW collocations. Derivative matrices use
+    barycentric differentiation unless supplied explicitly.
+    """
+
+    arrays = {
+        "vpar": np.asarray(vpar, dtype=float),
+        "mu": np.asarray(mu, dtype=float),
+        "w_vpar": np.asarray(w_vpar, dtype=float),
+        "w_mu": np.asarray(w_mu, dtype=float),
+    }
+    for name, values in arrays.items():
+        if values.ndim != 1 or values.size < 2:
+            raise ValueError(f"{name} must be a one-dimensional array with at least two entries")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"{name} must contain only finite values")
+    if arrays["w_vpar"].shape != arrays["vpar"].shape:
+        raise ValueError("w_vpar shape must match vpar")
+    if arrays["w_mu"].shape != arrays["mu"].shape:
+        raise ValueError("w_mu shape must match mu")
+    if np.any(np.diff(arrays["vpar"]) <= 0.0) or np.any(np.diff(arrays["mu"]) <= 0.0):
+        raise ValueError("native velocity nodes must be strictly increasing")
+    if np.any(arrays["w_vpar"] < 0.0) or np.any(arrays["w_mu"] < 0.0):
+        raise ValueError("native velocity weights must be nonnegative")
+    derivatives = {}
+    for name, supplied, nodes in (
+        ("D_vpar", D_vpar, arrays["vpar"]),
+        ("D_mu", D_mu, arrays["mu"]),
+    ):
+        matrix = _barycentric_derivative_matrix(nodes) if supplied is None else np.asarray(supplied)
+        if matrix.shape != (nodes.size, nodes.size) or not np.all(np.isfinite(matrix)):
+            raise ValueError(f"{name} must be a finite square matrix matching its nodes")
+        derivatives[name] = matrix
+    jax_dtype = jnp.dtype(dtype)
+    vpar_identity = np.eye(arrays["vpar"].size)
+    mu_identity = np.eye(arrays["mu"].size)
+    return VelocityGrid(
+        vpar=jnp.asarray(arrays["vpar"], dtype=jax_dtype),
+        mu=jnp.asarray(arrays["mu"], dtype=jax_dtype),
+        w_vpar=jnp.asarray(arrays["w_vpar"], dtype=jax_dtype),
+        w_mu=jnp.asarray(arrays["w_mu"], dtype=jax_dtype),
+        D_vpar=jnp.asarray(derivatives["D_vpar"], dtype=jax_dtype),
+        D_mu=jnp.asarray(derivatives["D_mu"], dtype=jax_dtype),
+        vpar_modal_transform=jnp.asarray(vpar_identity, dtype=jax_dtype),
+        vpar_inverse_modal_transform=jnp.asarray(vpar_identity, dtype=jax_dtype),
+        mu_modal_transform=jnp.asarray(mu_identity, dtype=jax_dtype),
+        mu_inverse_modal_transform=jnp.asarray(mu_identity, dtype=jax_dtype),
+        backend=str(backend),
+    )
+
+
 def build_parallel_grid(spec: ParallelGridSpec) -> ParallelGrid:
     """Build the parallel spectral grid for periodic or open field-line chains."""
 

@@ -60,6 +60,7 @@ def build_linear_residual_precompute(
     velocity_recurrence_velocity_model: str = "rms",
     mode_connectivity=None,
     parallel_derivative_model: str = "matrix",
+    phase_space_measure=None,
 ) -> LinearResidualPrecompute:
     """Build the coupled linear RHS and electrostatic field precompute."""
 
@@ -90,6 +91,7 @@ def build_linear_residual_precompute(
                 electron_params,
                 fourier_grid=fourier_grid,
                 w_z=geometry.w_z,
+                phase_space_measure=phase_space_measure,
             )
         else:
             field = build_kinetic_quasineutrality_precompute(
@@ -98,6 +100,7 @@ def build_linear_residual_precompute(
                 rhs.flr_factors,
                 species,
                 fourier_grid=fourier_grid,
+                phase_space_measure=phase_space_measure,
             )
     return LinearResidualPrecompute(
         rhs=rhs,
