@@ -470,6 +470,8 @@ def test_stella_out_nc_mode_structure_fixture_loader(tmp_path):
     np.testing.assert_allclose(fixture.z, zed / (2.0 * np.pi))
     np.testing.assert_allclose(fixture.growth_rate, [0.2, 0.6])
     np.testing.assert_allclose(fixture.frequency, [-0.3, -0.5])
+    assert dict(fixture.metadata)["omega_frequency_half_window_delta"] == 0.0
+    assert dict(fixture.metadata)["omega_growth_half_window_delta"] == 0.0
     np.testing.assert_allclose(
         fixture.phi[0],
         values[-1, 0, :, 1, 1, 0] + 1j * values[-1, 0, :, 1, 1, 1],
@@ -480,6 +482,16 @@ def test_stella_out_nc_mode_structure_fixture_loader(tmp_path):
 
     with pytest.raises(ValueError, match="requested stella ky values"):
         load_stella_mode_structure_fixture(path, ky_values=(0.2,))
+
+    with netcdf.Dataset(path, "a") as data:
+        data.variables["omega"][-1, 1, 2, 0] = 1.0
+    with pytest.raises(ValueError, match="omega window is not converged"):
+        load_stella_mode_structure_fixture(
+            path,
+            ikx=1,
+            ky_values=(0.3,),
+            omega_convergence_tolerance=0.02,
+        )
 
     missing_phi = tmp_path / "missing_phi.out.nc"
     with netcdf.Dataset(missing_phi, "w") as data:

@@ -44,6 +44,9 @@ def main() -> None:
         z_scale=_stella_z_scale(args.stella_z_coordinate),
         growth_scale=args.growth_scale,
         frequency_scale=args.frequency_scale,
+        omega_convergence_tolerance=(
+            None if args.allow_unconverged_omega else args.omega_convergence_tolerance
+        ),
     )
     write_per_ky_mode_structure_fixture_csv(args.output, fixture)
     print(
@@ -79,6 +82,12 @@ def _parse_args():
     parser.add_argument("--ky-tolerance", type=float, default=1.0e-8)
     parser.add_argument("--growth-scale", type=float, default=1.0)
     parser.add_argument("--frequency-scale", type=float, default=1.0)
+    parser.add_argument("--omega-convergence-tolerance", type=float, default=2.0e-2)
+    parser.add_argument(
+        "--allow-unconverged-omega",
+        action="store_true",
+        help="export a diagnostic fixture even when the two half-window means disagree",
+    )
     parser.add_argument("--keep-zonal", action="store_true")
     parser.add_argument(
         "--stella-z-coordinate",

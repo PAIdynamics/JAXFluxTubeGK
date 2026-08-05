@@ -254,11 +254,19 @@ validation work in Priority 3.
   stella Maxwellian conversion and traced source algebra remain explicit replay
   adapter conventions rather than hidden production defaults. Focused geometry,
   optimization, RHS, quasineutrality, and replay gates pass.
-- [ ] After term parity passes, rerun the W7-X mode-structure gate against the
-  matched stella fixture.
+- [x] After term parity passes, rerun the W7-X mode-structure gate against the
+  matched stella fixture. The corrected `t=200` production run keeps growth
+  within tolerance but leaves frequency/profile errors of 0.131/0.149. A clean
+  pinned stella rerun reproduces the fixture and proves its averaging window is
+  unconverged; a scratch `t=500` run converges `ky=0.3` to approximately
+  `(gamma, omega)=(0.01754, 0.04638)`, while the matched solver converges to
+  `(-0.00013, -0.05497)`. The remaining gap is therefore real, but must be
+  evaluated against converged per-ky reference windows.
 - [ ] Replace the reduced convergence ladder with production controls in
   parallel and velocity resolution, backend, modes, field-line length,
-  timestep, and growth window.
+  timestep, and growth window. The next focused discriminator is provider-native
+  32×8 velocity quadrature/FLR with stella-equivalent implicit parallel
+  treatment; do not substitute the rejected GKW open stencil.
 - [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
   production optimization blocked until the readiness ledger passes.
 - [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a

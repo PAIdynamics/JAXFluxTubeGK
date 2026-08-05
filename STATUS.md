@@ -375,6 +375,22 @@ inexact so prepared providers remain installed.
   its combined-coefficient fallback. The mapped mirror RHS orientation was
   corrected at the same provider boundary. Focused geometry, optimization,
   primitive, RHS, quasineutrality, and replay tests pass.
+- Reran the corrected production mode-structure case at `t=200`. Growth remains
+  inside the 0.02 tolerance, while maximum frequency/profile errors improve to
+  `0.1312` and `0.1491`; the gate remains open. The existing GKW open-upwind
+  discriminator is not suitable for stella: at `ky=0.3` it gives growth/frequency
+  near `0.086/-1.445`.
+- Built and ran the clean pinned stella dependency against the sibling GX W7-X
+  equilibrium without storing its output in the repository. It exactly
+  reproduces the committed `t=200` fixture, but the reference is transient:
+  over `t=100–200`, the `ky=0.3` omega/growth standard deviations are about
+  `0.072/0.074`. At `t=500`, the branch is stable near
+  `(gamma, omega)=(0.01754, 0.04638)`, whereas a matched converged solver run is
+  near `(-0.00013, -0.05497)` with profile error `0.1254`.
+- Hardened stella fixture export with a default 0.02 two-half-window omega
+  convergence check. Unconverged references now fail export unless explicitly
+  requested for diagnostics. The next production discriminator must address
+  native 32×8 velocity quadrature/FLR and stella's implicit parallel treatment.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

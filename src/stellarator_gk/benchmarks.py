@@ -4030,6 +4030,7 @@ def load_stella_mode_structure_fixture(
     z_offset: float = 0.0,
     growth_scale: float = 1.0,
     frequency_scale: float = 1.0,
+    omega_convergence_tolerance: float | None = None,
 ) -> PerKyModeStructureFixture:
     """Load a stella ``.out.nc`` complex-field diagnostic as a fixture.
 
@@ -4048,6 +4049,11 @@ def load_stella_mode_structure_fixture(
         raise ValueError("ky_tolerance must be nonnegative and finite")
     if not np.isfinite(z_scale) or not np.isfinite(z_offset):
         raise ValueError("z_scale and z_offset must be finite")
+    if omega_convergence_tolerance is not None and (
+        not np.isfinite(omega_convergence_tolerance)
+        or omega_convergence_tolerance <= 0.0
+    ):
+        raise ValueError("omega_convergence_tolerance must be positive and finite")
     dataset_cls = _import_netcdf_dataset()
     path = Path(path)
     with dataset_cls(path, mode="r") as data:
@@ -4137,6 +4143,8 @@ def load_stella_mode_structure_fixture(
 
     growth = np.full_like(selected_ky, np.nan, dtype=float)
     frequency = np.full_like(selected_ky, np.nan, dtype=float)
+    omega_growth_half_delta = np.nan
+    omega_frequency_half_delta = np.nan
     if omega_raw is not None:
         if omega_raw.shape[-1] != 2:
             raise ValueError("stella omega must include an ri=(omega,gamma) dimension")
@@ -4156,6 +4164,28 @@ def load_stella_mode_structure_fixture(
         )
         frequency = omega_frequency[omega_match]
         growth = omega_growth[omega_match]
+        omega_window = omega_raw[start:, ikx, :, :]
+        if drop_zonal:
+            omega_window = omega_window[:, nonzonal, :]
+        if omega_window.shape[0] < 2:
+            raise ValueError("stella omega convergence window requires at least two samples")
+        midpoint = omega_window.shape[0] // 2
+        first = np.mean(omega_window[:midpoint], axis=0)[omega_match]
+        second = np.mean(omega_window[midpoint:], axis=0)[omega_match]
+        omega_frequency_half_delta = float(
+            np.max(np.abs(frequency_scale * (second[:, 0] - first[:, 0])))
+        )
+        omega_growth_half_delta = float(
+            np.max(np.abs(growth_scale * (second[:, 1] - first[:, 1])))
+        )
+        if omega_convergence_tolerance is not None and max(
+            omega_frequency_half_delta, omega_growth_half_delta
+        ) > omega_convergence_tolerance:
+            raise ValueError(
+                "stella omega window is not converged: maximum half-window delta "
+                f"is {max(omega_frequency_half_delta, omega_growth_half_delta):.6g}, "
+                f"tolerance is {omega_convergence_tolerance:.6g}"
+            )
 
     return PerKyModeStructureFixture(
         ky=jnp.asarray(selected_ky, dtype=jnp.float64),
@@ -4180,6 +4210,9 @@ def load_stella_mode_structure_fixture(
             ("z_offset", float(z_offset)),
             ("growth_scale", float(growth_scale)),
             ("frequency_scale", float(frequency_scale)),
+            ("omega_frequency_half_window_delta", omega_frequency_half_delta),
+            ("omega_growth_half_window_delta", omega_growth_half_delta),
+            ("omega_convergence_tolerance", omega_convergence_tolerance),
         ),
     )
 

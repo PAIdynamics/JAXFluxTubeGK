@@ -282,9 +282,15 @@ JAX_ENABLE_X64=1 uv run python examples/run_w7x_mode_structure_gate.py \
   --resample-reference-to-observed-z
 ```
 
-Current status: growth is close at matched `t=200` controls, but the `ky=0.3`
-frequency/profile comparison remains open.  The active blocker is direct
-term-array parity between the solver and a patched stella RHS trace.
+Current status: same-state RHS parity passes, and the matched mode gate has been
+rerun. The old `t=200` reference is reproducible but its omega averaging window
+is not converged. A clean scratch `t=500` run converges stella's `ky=0.3` branch
+near `(gamma, omega)=(0.01754, 0.04638)`; the matched production solver instead
+converges near `(-0.00013, -0.05497)`, with a phase-aligned profile error near
+0.125. Reference export now rejects half-window omega changes above 0.02 by
+default; `--allow-unconverged-omega` is diagnostic-only. The active blocker is
+production native-velocity/FLR and implicit-parallel convergence, not an
+unresolved scalar RHS convention.
 
 ### W7-X `ky=0.3` RHS Trace Work
 
