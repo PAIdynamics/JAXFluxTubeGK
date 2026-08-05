@@ -1,15 +1,18 @@
 # STATUS
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 ## Executive Summary
 
-`optimal-fusion` contains a substantial JAX-first linear electrostatic
-flux-tube gyrokinetic implementation, but it is not yet a clean standalone
-stellarator-design package.  The numerical core is broadly exercised and the
-current audit found no new core numerical regression.  The immediate blocker
-is now the software boundary: tests and workflows still depend on paths from
-the removed in-repository copies of Gyaradax, GX, stella, and DESC.
+`optimal-fusion` is now a standalone JAX package at its core boundary. An exact
+development sync contains no MHD or reference-code provider, and the complete
+default suite, package build, fresh wheel install, and import all pass without
+sibling repositories. External validators are opt-in, revision checked, and
+receive explicit source, executable, equilibrium, or generated-data paths.
+
+The immediate work has moved to the public MHD geometry boundary: define one
+versioned provider contract, then implement a direct in-memory VMEC++ W7-X
+path. The externally validated W7-X scientific gate remains open.
 
 The target architecture is:
 
@@ -26,6 +29,11 @@ A pinned dependency preparation layer now exists. `dependencies.toml` records
 the exact PAIdynamics fork revisions, and `scripts/bootstrap_dependencies.py`
 supports managed fetch/build/install as well as read-only reuse of matching
 sibling clones.
+
+Priority 0 standalone work also added clean-clone CI, external pytest markers,
+installed-package smoke testing, path/revision provenance reporting, and a
+declared NetCDF4 development reader. Raw GKW state/RHS/matrix dumps were
+removed, reducing `fixtures/` from about 175 MiB to 5.2 MiB.
 
 ## Verified Implementation
 
@@ -116,37 +124,39 @@ can support the standalone production claim.
 
 ## Repository Audit
 
-### Verification on 2026-08-04
+### Standalone acceptance on 2026-08-05
 
 ```text
 ruff check src tests examples scripts: PASS
-JAX_ENABLE_X64=1 python -m pytest -q:
-  306 passed, 13 failed, 8 skipped in 544.46 s
+uv sync --extra dev: PASS (exact provider-free environment)
+uv pip check --python .venv/bin/python: 25 packages compatible
+JAX_ENABLE_X64=1 .venv/bin/python -m pytest -q:
+  305 passed, 14 external tests deselected in 359.61 s
+scripts/package_smoke_test.py --python 3.13:
+  sdist build, wheel build, fresh wheel install, and import: PASS
 ```
 
-All 13 failures are caused by removed hard-coded external paths:
+The prior 13 failures were replaced with synthetic contracts or opt-in external
+tests. The default suite has no source-tree or executable availability skips;
+external tests are deselected by the registered `external` marker. NetCDF4 is
+declared in the development extra, while provider packages remain installed by
+the pinned manifest bootstrapper.
 
-- 3 tests read Gyaradax geometry source directly;
-- 8 tests read GX Cyclone inputs or GX/GIST eik tables directly;
-- 2 tests read and patch stella source directly.
+### Repository boundary
 
-The eight skips cover unavailable optional NetCDF4/DESC integrations and local
-GX/GIST W7-X inputs.  No failure in this run identified a core JAX solver,
-physics, time-advance, objective, or differentiability regression.
-
-### Standalone/package gaps
-
-- 37 tracked files still contain `relevant-codes/...` references.
-- There is no CI configuration or pytest external-integration marker scheme.
-- `pyproject.toml` declares only core, `dev`, and a small `reference` extra; it
-  does not declare DESC, VMEC++, GVEC, or NetCDF4 integration extras.
-- `src/stellarator_gk.egg-info/` is tracked and is modified by local builds.
+- Active Python, scripts, tests, README files, and fixture metadata contain no
+  `relevant-codes/...` checkout-relative paths.
+- External workflows require explicit inputs and announce their absolute path,
+  enclosing Git revision, or unversioned status.
+- Clean-clone CI runs the provider-free standalone and packaging gates.
+- Generated egg-info is ignored and no longer tracked.
 - `benchmarks.py` is 16,564 lines and `__init__.py` eagerly re-exports much of
   the validation surface through the default package namespace.
-- `fixtures/` occupies about 175 MiB, mostly full GKW state/RHS/matrix dumps.
-- 173 tracked W7-X-related files occupy about 5 MiB.  Equilibrium and derived
-  geometry/run artifacts in this set should be removed after live providers
-  reproduce the required contracts.
+- `fixtures/` is 5.2 MiB with no individual file over 500 KiB. Full GKW
+  generated state/RHS/matrix dumps and their repository-coupled tests are gone.
+- Compact historical W7-X validation records remain temporarily; Priority 2
+  removes superseded geometry artifacts after the live provider reproduces
+  their contracts.
 - There are no installed console entry points for the solver workflows; the
   user interface is currently a collection of examples and scripts.
 
@@ -179,31 +189,30 @@ resolves DESC's JAX `<0.10` requirement rather than leaving the core lock's JAX
 Native validation builds remain platform dependent: GX requires CUDA and
 `GK_SYSTEM`, while stella and GKW may require site compiler/MPI/NetCDF setup.
 
-The local `.venv` was moved with the repository, leaving stale absolute
-shebangs in console scripts.  The audit therefore invoked pytest and Ruff with
-`python -m ...`.  This is a local environment relocation issue; clean-clone
-wheel/CI tests are still needed to validate the documented installation path.
+Provider forks remain manifest-installed instead of PEP 508 extras: their Git
+pins, native prerequisites, build commands, and executable discovery require
+the bootstrap ledger. Pure-Python file readers belong in project extras;
+NetCDF4 is now in `dev`. An exact later `uv sync --extra dev` intentionally
+removes providers and restores the standalone lock, while bootstrap syncs are
+inexact so prepared providers remain installed.
 
 ## Active Priorities
 
-1. Restore a green standalone test suite by removing the 13 direct source/input
-   dependencies and separating external integration tests with markers.
-2. Route integration tests and scripts through the bootstrap state or explicit
-   dependency paths instead of `relevant-codes/...`.
-3. Define the versioned `GeometryRequest` / `GeometryProvider` /
+1. Define the versioned `GeometryRequest` / `GeometryProvider` /
    `GeometryResult` contract, including the parallel grid and full metadata.
-4. Add VMEC++ as the first live named W7-X provider and expose the standard
+2. Add VMEC++ as the first live named W7-X provider and expose the standard
    W7-X input through a supported API/resource in the VMEC++ fork.
-5. Convert the in-memory VMEC output to physical flux-tube arrays without an
+3. Convert the in-memory VMEC output to physical flux-tube arrays without an
    intermediate committed `wout`/GX/GIST/stella file.
-6. Cross-check the live provider against independent GX and stella references,
+4. Cross-check the live provider against independent GX and stella references,
    then remove superseded tracked W7-X equilibrium/derived artifacts.
-7. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
+5. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
    convergence, CPU timing, and real MHD optimization gradients.
 
 ## Current Risks
 
-- A large passing test count masks that the default suite is not standalone.
+- External integrations can drift from their pinned forks or fail on local
+  native toolchains even though the provider-free suite remains green.
 - Geometry conventions are distributed across the package, benchmark module,
   examples, scripts, and fixture metadata.
 - `PhysicalFluxTubeGeometry` is not yet rich enough to be the stable MHD/GK
@@ -217,6 +226,21 @@ wheel/CI tests are still needed to validate the documented installation path.
   TEM production validation, and full shape optimization are deferred.
 
 ## Round Log
+
+### 2026-08-05: Priority 0 Standalone Boundary Complete
+
+- Replaced the 13 checkout-dependent failures with synthetic contracts or
+  opt-in revision-pinned integration tests.
+- Removed active `relevant-codes/...` defaults and required explicit external
+  workflow paths with path/revision provenance output.
+- Added the `external` pytest marker, provider-root fixtures, clean-clone CI,
+  package consistency checks, and an sdist/wheel installation smoke test.
+- Stopped tracking generated egg-info and declared NetCDF4 in the development
+  environment; documented why provider forks remain manifest-installed.
+- Removed approximately 170 MiB of raw GKW state, RHS, input, and matrix dumps;
+  retained synthetic loader tests and explicit external comparison workflows.
+- Verified Ruff, an exact provider-free sync, package compatibility, 305
+  standalone tests with 14 external tests deselected, and fresh wheel import.
 
 ### 2026-08-04: Standalone Architecture and Code Audit
 

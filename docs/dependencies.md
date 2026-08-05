@@ -4,6 +4,12 @@
 providing a reproducible preparation step in `scripts/bootstrap_dependencies.py`.
 All sources and exact fork commits are declared in `dependencies.toml`.
 
+Provider forks remain manifest-installed rather than PEP 508 extras. Their
+exact revisions, native prerequisites, build commands, and executable discovery
+cannot be represented reliably by a normal Python extra. Pure reader support
+needed by the standalone tests, including NetCDF4, is declared in the `dev`
+extra instead.
+
 ## Profiles
 
 - `core`: install only `optimal-fusion` and its development tools.

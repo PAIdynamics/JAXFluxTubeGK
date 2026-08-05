@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator GK Solver
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-05
 
 ## Goal
 
@@ -50,10 +50,8 @@ Repository cleanup already completed:
   kept under ignored `.dependencies/`, while sibling clones can be verified
   and reused without modification.
 
-Standalone gaps found in the current code:
+Standalone Priority 0 is complete. The next architectural gaps are:
 
-- 37 tracked files still mention `relevant-codes/...`; a clean-tree audit has
-  13 failing tests from missing Gyaradax, GX, and stella source/input paths;
 - geometry loaders are split between the package, benchmark helpers, and the
   stellarator scan example instead of sharing one public provider contract;
 - there is no first-class VMEC/VMEC++ `wout` or GVEC adapter, so W7-X geometry
@@ -61,36 +59,29 @@ Standalone gaps found in the current code:
 - the geometry contract does not yet carry a versioned statement of units,
   normalization, signs, radial coordinate, field-line topology, provenance,
   and differentiability;
-- the repository has no CI configuration, external-integration markers, or
-  installed-wheel test;
-- generated `src/stellarator_gk.egg-info/` metadata is tracked and changes as a
-  side effect of local builds;
 - `benchmarks.py` is 16,564 lines and the top-level `__init__.py` eagerly
   re-exports most of it, coupling the solver API to validation infrastructure;
-- tracked fixtures occupy about 175 MiB, mostly full GKW trace/matrix dumps;
-  173 tracked W7-X-related files occupy about 5 MiB and must be migrated to
-  live-provider integration tests where they represent equilibrium/geometry
-  artifacts.
+- compact historical W7-X validation records still need to migrate to live
+  providers as the direct W7-X path is implemented in Priority 2.
 
-Audit baseline on 2026-08-04:
+Standalone acceptance on 2026-08-05:
 
 - `ruff check src tests examples scripts`: pass;
-- full x64 pytest run: 306 passed, 13 failed, 8 skipped;
-- all 13 failures are missing removed external paths, not observed core
-  numerical regressions;
-- optional NetCDF4 and DESC checks skip because those integrations are not
-  declared in an installable project extra.
+- provider-free x64 pytest run after an exact `uv sync --extra dev`: 305 passed,
+  14 external tests deselected;
+- sdist and wheel build, fresh-environment wheel install, and import: pass;
+- fixtures reduced from about 175 MiB to 5.2 MiB; no fixture exceeds 500 KiB.
 
 ## Priority 0: Make the Repository Genuinely Standalone
 
-- [ ] Remove all hard-coded `relevant-codes/...` defaults from tracked Python,
+- [x] Remove all hard-coded `relevant-codes/...` defaults from tracked Python,
   tests, README files, and fixture metadata.  Never resolve a dependency by its
   location relative to the `optimal-fusion` checkout.
-- [ ] First restore a green standalone suite by fixing the 13 known failures:
+- [x] First restore a green standalone suite by fixing the 13 known failures:
   replace three Gyaradax source-reading tests, eight GX input/eik tests, and two
   stella source-patching tests with synthetic/compact contracts or explicitly
   configured integration tests.
-- [ ] Make external source trees explicit optional inputs such as
+- [x] Make external source trees explicit optional inputs such as
   `--desc-root`, `--gx-root`, `--stella-root`, `--gkw-root`, and executable or
   equilibrium paths.  Environment-variable fallbacks may be offered, but every
   workflow must print the resolved path and external revision.
@@ -98,37 +89,35 @@ Audit baseline on 2026-08-04:
   builds/installs Python MHD providers, compiles native validation codes on
   request, links discovered executables under `.dependencies/bin`, and writes
   a local revision/command ledger.
-- [ ] Keep only small, code-independent numerical validation contracts needed
+- [x] Keep only small, code-independent numerical validation contracts needed
   by the default test suite in `fixtures/`; record their origin, generating
-  dependency/version, configuration identifier, and command.  Do not commit
-  external implementation source, MHD equilibria, or generated geometry/run
-  output.
-- [ ] Separate tests into self-contained core/fixture tests and opt-in external
+  dependency/version, configuration identifier, and command. Do not commit
+  external implementation source or full generated run output. Historical
+  compact W7-X comparison records are temporary contracts; Priority 2 removes
+  superseded geometry artifacts after a live provider reproduces them.
+- [x] Separate tests into self-contained core/fixture tests and opt-in external
   integration tests with pytest markers.  Core tests must skip neither because
   a sibling checkout is absent nor because an external executable is absent.
-- [ ] Replace tests that read Gyaradax/GX/DESC source files with committed
+- [x] Replace tests that read Gyaradax/GX/DESC source files with committed
   numerical contracts or synthetic provider doubles.
-- [ ] Add a clean-clone CI job that installs only declared dependencies and
+- [x] Add a clean-clone CI job that installs only declared dependencies and
   runs import, unit, reduced W7-X fixture, and packaging tests with no sibling
   repositories available.
-- [ ] Add an sdist/wheel smoke test and verify installed-package workflows do
+- [x] Add an sdist/wheel smoke test and verify installed-package workflows do
   not depend on repository-relative files.
-- [ ] Stop tracking `src/stellarator_gk.egg-info/`; build metadata must be
+- [x] Stop tracking `src/stellarator_gk.egg-info/`; build metadata must be
   generated and ignored.
-- [ ] Decide whether provider packages should remain manifest-installed or
+- [x] Decide whether provider packages should remain manifest-installed or
   also be exposed as PEP 508 extras. Add NetCDF4/reader extras as needed. The
   bootstrapper now uses an inexact project sync to retain installed providers;
   document that a later exact `uv sync` intentionally restores the core lock.
 - [x] Ignore local external checkout directories and generated external-run
   outputs so they cannot be accidentally recommitted.
 
-Acceptance gate: from a fresh clone, `uv sync --extra dev` followed by the core
-test command passes without DESC, GX, stella, GKW, Gyaradax, VMEC++, or GVEC
-source trees.
-
-Dependency preparation is now available, but it does not satisfy this gate by
-itself: core tests must still be independent, and provider/validator tests must
-consume the bootstrap state or explicit paths rather than old relative paths.
+Acceptance gate: **passed**. From the exact core lock, `uv sync --extra dev`
+followed by the core test command passes without DESC, GX, stella, GKW,
+Gyaradax, VMEC++, or GVEC source trees. Provider/validator tests are opt-in and
+consume explicit revision-checked roots rather than checkout-relative paths.
 
 ## Priority 1: Define One Public MHD Geometry Interface
 
