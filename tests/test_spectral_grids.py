@@ -5,6 +5,7 @@ from stellarator_gk import (
     ParallelGridSpec,
     VelocityGridSpec,
     build_parallel_grid,
+    build_midpoint_gauss_laguerre_velocity_grid,
     build_velocity_grid,
     build_velocity_grid_from_nodes,
 )
@@ -92,4 +93,41 @@ def test_native_velocity_grid_rejects_nonmonotone_nodes():
             mu=[0.2, 0.1],
             w_vpar=[1.0, 1.0, 1.0],
             w_mu=[1.0, 1.0],
+        )
+
+
+def test_midpoint_gauss_laguerre_grid_has_zero_free_nodes_and_bare_quadrature():
+    grid = build_midpoint_gauss_laguerre_velocity_grid(
+        n_vpar=32,
+        n_mu=8,
+        vpar_max=3.0,
+        mu_max=4.5,
+    )
+
+    assert grid.backend == "midpoint_gauss_laguerre"
+    assert grid.vpar.shape == (32,)
+    assert grid.mu.shape == (8,)
+    assert not np.any(np.asarray(grid.vpar) == 0.0)
+    np.testing.assert_allclose(grid.vpar[0], -3.0)
+    np.testing.assert_allclose(grid.vpar[-1], 3.0)
+    np.testing.assert_allclose(grid.vpar, -grid.vpar[::-1])
+    np.testing.assert_allclose(grid.w_vpar, grid.w_vpar[::-1])
+    np.testing.assert_allclose(jnp.sum(grid.w_vpar), 6.0, rtol=1e-13)
+    np.testing.assert_allclose(grid.mu[-1], 4.5, rtol=1e-13)
+    laguerre_nodes, _ = np.polynomial.laguerre.laggauss(8)
+    mu_scale = 4.5 / laguerre_nodes[-1]
+    np.testing.assert_allclose(
+        jnp.sum(grid.w_mu * jnp.exp(-grid.mu / mu_scale)),
+        mu_scale,
+        rtol=1e-13,
+    )
+
+
+def test_midpoint_gauss_laguerre_grid_rejects_odd_parallel_resolution():
+    with np.testing.assert_raises_regex(ValueError, "even integer"):
+        build_midpoint_gauss_laguerre_velocity_grid(
+            n_vpar=31,
+            n_mu=8,
+            vpar_max=3.0,
+            mu_max=4.5,
         )

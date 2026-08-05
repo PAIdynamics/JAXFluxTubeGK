@@ -48,6 +48,7 @@ from stellarator_gk import (
     build_fourier_grid,
     build_linear_residual_precompute,
     build_mode_connectivity,
+    build_midpoint_gauss_laguerre_velocity_grid,
     build_parallel_grid,
     build_velocity_grid,
     estimate_linear_cfl_dt,
@@ -101,15 +102,23 @@ def main(argv: list[str] | None = None) -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     ky_values = _parse_float_tuple(args.ky_values)
     geometry, parallel, geometry_metadata = _load_geometry(args)
-    velocity = build_velocity_grid(
-        VelocityGridSpec(
+    if args.velocity_backend == "midpoint_gauss_laguerre":
+        velocity = build_midpoint_gauss_laguerre_velocity_grid(
             n_vpar=args.n_vpar,
             n_mu=args.n_mu,
             vpar_max=args.vpar_max,
             mu_max=args.mu_max,
-            backend=args.velocity_backend,
         )
-    )
+    else:
+        velocity = build_velocity_grid(
+            VelocityGridSpec(
+                n_vpar=args.n_vpar,
+                n_mu=args.n_mu,
+                vpar_max=args.vpar_max,
+                mu_max=args.mu_max,
+                backend=args.velocity_backend,
+            )
+        )
     fourier = build_fourier_grid(
         FourierGridSpec(
             n_kx=args.n_kx,
@@ -201,7 +210,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--mu-max", type=float, default=1.0)
     parser.add_argument(
         "--velocity-backend",
-        choices=("chebyshev", "finite_difference"),
+        choices=("chebyshev", "finite_difference", "midpoint_gauss_laguerre"),
         default="chebyshev",
     )
     parser.add_argument("--n-kx", type=int, default=3)

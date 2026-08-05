@@ -116,6 +116,59 @@ def build_velocity_grid_from_nodes(
     )
 
 
+def build_midpoint_gauss_laguerre_velocity_grid(
+    *,
+    n_vpar: int,
+    n_mu: int,
+    vpar_max: float,
+    mu_max: float,
+    dtype: str = "float64",
+) -> VelocityGrid:
+    """Build a zero-free velocity grid with Gauss--Laguerre mu quadrature.
+
+    The parallel nodes are symmetric, uniformly spaced, and shifted by half a
+    grid cell so that an even-sized grid contains neither a duplicated endpoint
+    nor a special point at zero.  Its weights use a symmetric hybrid of
+    Simpson's 3/8 rule at each boundary and composite Simpson quadrature in the
+    interior.  The Gauss--Laguerre nodes and weights are rescaled to ``mu_max``
+    and converted from the weighted ``exp(-x)`` integral to an ordinary
+    quadrature over mu.
+
+    This construction is provider-neutral, but matches the node and *bare*
+    quadrature conventions used by stella when given the same bounds.  Factors
+    belonging to a code's phase-space normalization (for example ``2 B`` or
+    ``1/sqrt(pi)``) deliberately remain outside the grid contract.
+    """
+
+    if n_vpar < 6 or n_vpar % 2:
+        raise ValueError("n_vpar must be an even integer of at least 6")
+    if n_mu < 2:
+        raise ValueError("n_mu must be at least 2")
+    if not np.isfinite(vpar_max) or vpar_max <= 0.0:
+        raise ValueError("vpar_max must be finite and positive")
+    if not np.isfinite(mu_max) or mu_max <= 0.0:
+        raise ValueError("mu_max must be finite and positive")
+
+    dvpar = 2.0 * float(vpar_max) / (n_vpar - 1)
+    positive = (np.arange(n_vpar // 2, dtype=float) + 0.5) * dvpar
+    vpar = np.concatenate((-positive[::-1], positive))
+    w_vpar = _symmetric_simpson_weights(n_vpar, dvpar)
+
+    laguerre_nodes, laguerre_weights = np.polynomial.laguerre.laggauss(n_mu)
+    laguerre_max = float(laguerre_nodes[-1])
+    mu = laguerre_nodes * (float(mu_max) / laguerre_max)
+    w_mu = laguerre_weights * np.exp(laguerre_nodes) * (float(mu_max) / laguerre_max)
+
+    return build_velocity_grid_from_nodes(
+        vpar=vpar,
+        mu=mu,
+        w_vpar=w_vpar,
+        w_mu=w_mu,
+        dtype=dtype,
+        backend="midpoint_gauss_laguerre",
+    )
+
+
 def build_parallel_grid(spec: ParallelGridSpec) -> ParallelGrid:
     """Build the parallel spectral grid for periodic or open field-line chains."""
 
@@ -339,6 +392,22 @@ def _barycentric_derivative_matrix(nodes: np.ndarray) -> np.ndarray:
                 matrix[i, j] = weights[j] / (weights[i] * diff[i, j])
         matrix[i, i] = -np.sum(matrix[i])
     return matrix
+
+
+def _symmetric_simpson_weights(n: int, spacing: float) -> np.ndarray:
+    """Return symmetric Simpson weights for an even, uniformly spaced grid."""
+
+    weights = np.zeros(n, dtype=float)
+    boundary = 0.375 * spacing
+    weights[:4] += boundary * np.asarray([1.0, 3.0, 3.0, 1.0])
+    for start in range(3, n - 1, 2):
+        weights[start : start + 3] += spacing / 3.0 * np.asarray([1.0, 4.0, 1.0])
+
+    mirrored = np.zeros(n, dtype=float)
+    mirrored[-4:] += boundary * np.asarray([1.0, 3.0, 3.0, 1.0])
+    for start in range(0, n - 4, 2):
+        mirrored[start : start + 3] += spacing / 3.0 * np.asarray([1.0, 4.0, 1.0])
+    return 0.5 * (weights + mirrored)
 
 
 def _build_ky_values(spec: FourierGridSpec) -> np.ndarray:
