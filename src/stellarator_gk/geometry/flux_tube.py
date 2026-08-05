@@ -85,10 +85,33 @@ class BoozerFieldLine(_PyTreeDataclass):
     alpha: object
     rho: object
     w_z: object
+    iota: object
+    shear: object = 0.0
+    nfp: int = 1
+    field_periods: float = 1.0
+    topology: str = "periodic"
+    endpoint_policy: str = "exclude"
+    twist_and_shift: bool = False
     radial_coordinate: str = "rho"
 
-    _dynamic_fields: ClassVar[tuple[str, ...]] = ("z", "theta", "phi", "alpha", "rho", "w_z")
-    _static_fields: ClassVar[tuple[str, ...]] = ("radial_coordinate",)
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "z",
+        "theta",
+        "phi",
+        "alpha",
+        "rho",
+        "w_z",
+        "iota",
+        "shear",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "nfp",
+        "field_periods",
+        "topology",
+        "endpoint_policy",
+        "twist_and_shift",
+        "radial_coordinate",
+    )
 
 
 @jax.tree_util.register_pytree_node_class
@@ -100,7 +123,10 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
     w_z: object
     theta: object
     phi: object
+    alpha: object
     rho: object
+    iota: object
+    shear: object
     B: object
     b_dot_grad_z: object
     grad_psi_sq: object
@@ -110,6 +136,13 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
     B_cross_gradB_dot_grad_alpha: object
     b_cross_kappa_dot_grad_psi: object
     b_cross_kappa_dot_grad_alpha: object
+    nfp: int = 1
+    field_periods: float = 1.0
+    topology: str = "periodic"
+    endpoint_policy: str = "exclude"
+    twist_and_shift: bool = False
+    normalization: str = "stellarator_gk_physical_v1"
+    provider: str = "precomputed"
     radial_coordinate: str = "rho"
     source: str = "precomputed"
 
@@ -118,7 +151,10 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
         "w_z",
         "theta",
         "phi",
+        "alpha",
         "rho",
+        "iota",
+        "shear",
         "B",
         "b_dot_grad_z",
         "grad_psi_sq",
@@ -129,7 +165,17 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
         "b_cross_kappa_dot_grad_psi",
         "b_cross_kappa_dot_grad_alpha",
     )
-    _static_fields: ClassVar[tuple[str, ...]] = ("radial_coordinate", "source")
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "nfp",
+        "field_periods",
+        "topology",
+        "endpoint_policy",
+        "twist_and_shift",
+        "normalization",
+        "provider",
+        "radial_coordinate",
+        "source",
+    )
 
 
 @jax.tree_util.register_pytree_node_class
@@ -206,7 +252,7 @@ def sample_boozer_field_line(
 
     phi = parallel_grid.z
     theta = spec.alpha0 + surface.iota * phi
-    alpha = theta - surface.iota * phi - spec.alpha0
+    alpha = theta - surface.iota * phi
     return BoozerFieldLine(
         z=parallel_grid.z,
         theta=theta,
@@ -214,6 +260,9 @@ def sample_boozer_field_line(
         alpha=alpha,
         rho=jnp.full_like(phi, spec.rho),
         w_z=parallel_grid.w_z,
+        iota=surface.iota,
+        nfp=surface.field_periods,
+        topology=parallel_grid.topology,
         radial_coordinate=spec.radial_coordinate,
     )
 
@@ -253,6 +302,12 @@ def build_desc_geometry_from_arrays(
     b_cross_kappa_dot_grad_psi,
     b_cross_kappa_dot_grad_alpha,
     alpha=None,
+    iota=1.0,
+    shear=0.0,
+    nfp: int = 1,
+    field_periods: float = 1.0,
+    endpoint_policy: str = "exclude",
+    twist_and_shift: bool = False,
     radial_coordinate: RadialCoordinate = "rho",
 ) -> FluxTubeGeometry:
     """Build solver geometry from DESC-sampled flux-tube arrays.
@@ -281,6 +336,13 @@ def build_desc_geometry_from_arrays(
         alpha=alpha_array,
         rho=rho_array,
         w_z=parallel_grid.w_z,
+        iota=jnp.asarray(iota),
+        shear=jnp.asarray(shear),
+        nfp=nfp,
+        field_periods=field_periods,
+        topology=parallel_grid.topology,
+        endpoint_policy=endpoint_policy,
+        twist_and_shift=twist_and_shift,
         radial_coordinate=radial_coordinate,
     )
     physical = build_physical_flux_tube_geometry_from_arrays(
@@ -315,6 +377,7 @@ def build_desc_geometry_from_arrays(
             shape,
         ),
         source="desc",
+        provider="desc",
     )
     return map_physical_to_internal_geometry(physical, parallel_grid)
 
@@ -332,6 +395,8 @@ def build_physical_flux_tube_geometry_from_arrays(
     b_cross_kappa_dot_grad_psi,
     b_cross_kappa_dot_grad_alpha,
     source: str = "precomputed",
+    provider: str = "precomputed",
+    normalization: str = "stellarator_gk_physical_v1",
 ) -> PhysicalFluxTubeGeometry:
     """Create a physical flux-tube geometry object from precomputed arrays."""
 
@@ -340,7 +405,10 @@ def build_physical_flux_tube_geometry_from_arrays(
         w_z=field_line.w_z,
         theta=field_line.theta,
         phi=field_line.phi,
+        alpha=field_line.alpha,
         rho=field_line.rho,
+        iota=jnp.asarray(field_line.iota),
+        shear=jnp.asarray(field_line.shear),
         B=jnp.asarray(B),
         b_dot_grad_z=jnp.asarray(b_dot_grad_z),
         grad_psi_sq=jnp.asarray(grad_psi_sq),
@@ -350,6 +418,13 @@ def build_physical_flux_tube_geometry_from_arrays(
         B_cross_gradB_dot_grad_alpha=jnp.asarray(B_cross_gradB_dot_grad_alpha),
         b_cross_kappa_dot_grad_psi=jnp.asarray(b_cross_kappa_dot_grad_psi),
         b_cross_kappa_dot_grad_alpha=jnp.asarray(b_cross_kappa_dot_grad_alpha),
+        nfp=field_line.nfp,
+        field_periods=field_line.field_periods,
+        topology=field_line.topology,
+        endpoint_policy=field_line.endpoint_policy,
+        twist_and_shift=field_line.twist_and_shift,
+        normalization=normalization,
+        provider=provider,
         radial_coordinate=field_line.radial_coordinate,
         source=source,
     )

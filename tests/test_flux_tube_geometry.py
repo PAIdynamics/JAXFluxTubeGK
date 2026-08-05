@@ -73,7 +73,7 @@ def test_sample_boozer_field_line_preserves_alpha_label():
     spec = FieldLineSpec(rho=0.25, alpha0=0.31)
     field_line = sample_boozer_field_line(surface, spec, grid)
 
-    np.testing.assert_allclose(field_line.alpha, 0.0, atol=1e-14)
+    np.testing.assert_allclose(field_line.alpha, spec.alpha0, atol=1e-14)
     np.testing.assert_allclose(field_line.theta, spec.alpha0 + surface.iota * field_line.phi)
     np.testing.assert_allclose(field_line.rho, 0.25)
 
