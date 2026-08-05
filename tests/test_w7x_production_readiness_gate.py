@@ -35,8 +35,17 @@ def _write_single_ky_fixture(path: Path, *, growth_rate: float) -> None:
     )
 
 
-def test_w7x_production_readiness_gate_blocks_on_missing_external_reference(tmp_path):
+def test_w7x_production_readiness_gate_blocks_on_missing_external_reference(
+    tmp_path, monkeypatch
+):
     module = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "path",
+        [entry for entry in sys.path if Path(entry or ".").resolve() != ROOT],
+    )
+    monkeypatch.delitem(sys.modules, "examples", raising=False)
+    monkeypatch.delitem(sys.modules, "examples.run_w7x_mode_structure_gate", raising=False)
     output = tmp_path / "production_readiness_gate.json"
     production_timing = tmp_path / "production_cpu_timing.json"
     production_timing.write_text(

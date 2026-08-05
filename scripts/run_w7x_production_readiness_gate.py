@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -181,7 +183,7 @@ def run_external_mode_structure_gate(
 ) -> dict[str, object]:
     """Run the external W7-X mode-structure gate and return its status JSON."""
 
-    from examples.run_w7x_mode_structure_gate import main as run_mode_gate
+    run_mode_gate = _load_mode_structure_gate_main()
 
     run_mode_gate(
         [
@@ -209,6 +211,20 @@ def run_external_mode_structure_gate(
         "max_frequency_error": status.get("max_frequency_error"),
         "max_profile_error": status.get("max_profile_error"),
     }
+
+
+def _load_mode_structure_gate_main():
+    """Load the repository example without relying on the current working directory."""
+
+    module_path = ROOT / "examples/run_w7x_mode_structure_gate.py"
+    module_name = "_optimal_fusion_run_w7x_mode_structure_gate"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load W7-X mode-structure gate from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module.main
 
 
 def evaluate_production_timing_artifact(
