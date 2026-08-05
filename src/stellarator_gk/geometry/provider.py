@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
+import json
 from pathlib import Path
 from typing import ClassVar, Protocol, runtime_checkable
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from ..types import ParallelGrid, _PyTreeDataclass
@@ -389,3 +391,141 @@ def cache_path_is_external(path: str | Path, *, repository_root: str | Path) -> 
     if resolved == root or root in resolved.parents:
         raise ValueError(f"geometry cache must be outside the source repository: {resolved}")
     return resolved
+
+
+def write_geometry_result_cache(
+    result: GeometryResult,
+    path: str | Path,
+    *,
+    repository_root: str | Path,
+    overwrite: bool = False,
+) -> Path:
+    """Serialize a validated result into an explicit external cache directory."""
+
+    validate_geometry_result(result)
+    cache = cache_path_is_external(path, repository_root=repository_root)
+    metadata_path = cache / "metadata.json"
+    arrays_path = cache / "arrays.npz"
+    if not overwrite and (metadata_path.exists() or arrays_path.exists()):
+        raise FileExistsError(f"geometry cache already exists: {cache}")
+    cache.mkdir(parents=True, exist_ok=True)
+
+    physical = result.physical
+    payload = {
+        "format": "stellarator_gk_geometry_cache_v1",
+        "schema_version": GEOMETRY_SCHEMA_VERSION,
+        "metadata": asdict(result.metadata),
+        "parallel_static": {
+            "backend": result.parallel_grid.backend,
+            "topology": result.parallel_grid.topology,
+        },
+        "physical_static": {
+            "nfp": physical.nfp,
+            "field_periods": physical.field_periods,
+            "topology": physical.topology,
+            "endpoint_policy": physical.endpoint_policy,
+            "twist_and_shift": physical.twist_and_shift,
+            "normalization": physical.normalization,
+            "provider": physical.provider,
+            "radial_coordinate": physical.radial_coordinate,
+            "source": physical.source,
+        },
+    }
+    metadata_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    np.savez_compressed(
+        arrays_path,
+        grid_z=np.asarray(result.parallel_grid.z),
+        grid_w_z=np.asarray(result.parallel_grid.w_z),
+        grid_D_z=np.asarray(result.parallel_grid.D_z),
+        grid_modal_transform=np.asarray(result.parallel_grid.modal_transform),
+        grid_inverse_modal_transform=np.asarray(result.parallel_grid.inverse_modal_transform),
+        **{
+            f"physical_{name}": np.asarray(getattr(physical, name))
+            for name in (*_PHYSICAL_ARRAY_FIELDS, "iota", "shear")
+        },
+    )
+    return cache
+
+
+def load_geometry_result_cache(
+    path: str | Path,
+    *,
+    request: GeometryRequest | None = None,
+) -> GeometryResult:
+    """Load an explicit cache as a non-differentiable provider result."""
+
+    cache = Path(path).expanduser().resolve()
+    metadata_path = cache / "metadata.json"
+    arrays_path = cache / "arrays.npz"
+    if not metadata_path.is_file() or not arrays_path.is_file():
+        raise ValueError(f"geometry cache requires metadata.json and arrays.npz: {cache}")
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if payload.get("format") != "stellarator_gk_geometry_cache_v1":
+        raise ValueError(f"unsupported geometry cache format in {metadata_path}")
+    if payload.get("schema_version") != GEOMETRY_SCHEMA_VERSION:
+        raise ValueError(
+            f"unsupported cached geometry schema {payload.get('schema_version')}; "
+            f"expected {GEOMETRY_SCHEMA_VERSION}"
+        )
+    metadata = _metadata_from_dict(payload["metadata"])
+    metadata = replace(metadata, differentiable=False)
+    parallel_static = payload["parallel_static"]
+    physical_static = payload["physical_static"]
+    with np.load(arrays_path, allow_pickle=False) as arrays:
+        required = {
+            "grid_z",
+            "grid_w_z",
+            "grid_D_z",
+            "grid_modal_transform",
+            "grid_inverse_modal_transform",
+            *(f"physical_{name}" for name in (*_PHYSICAL_ARRAY_FIELDS, "iota", "shear")),
+        }
+        missing = sorted(required.difference(arrays.files))
+        if missing:
+            raise ValueError(f"geometry cache is missing arrays: {missing}")
+        parallel = ParallelGrid(
+            z=jnp.asarray(arrays["grid_z"]),
+            w_z=jnp.asarray(arrays["grid_w_z"]),
+            D_z=jnp.asarray(arrays["grid_D_z"]),
+            modal_transform=jnp.asarray(arrays["grid_modal_transform"]),
+            inverse_modal_transform=jnp.asarray(arrays["grid_inverse_modal_transform"]),
+            backend=parallel_static["backend"],
+            topology=parallel_static["topology"],
+        )
+        dynamic = {
+            name: jnp.asarray(arrays[f"physical_{name}"])
+            for name in (*_PHYSICAL_ARRAY_FIELDS, "iota", "shear")
+        }
+    physical = PhysicalFluxTubeGeometry(
+        **dynamic,
+        **physical_static,
+    )
+    return validate_geometry_result(
+        GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata),
+        request=request,
+    )
+
+
+def _metadata_from_dict(payload: dict) -> GeometryMetadata:
+    normalization_data = dict(payload["normalization"])
+    normalization_data["field_units"] = tuple(
+        tuple(item) for item in normalization_data["field_units"]
+    )
+    linking_data = dict(payload["linking"])
+    linking_data["kx_shift"] = tuple(linking_data["kx_shift"])
+    return GeometryMetadata(
+        provenance=GeometryProvenance(**payload["provenance"]),
+        schema_version=payload["schema_version"],
+        radial_coordinate=payload["radial_coordinate"],
+        parallel_coordinate=payload["parallel_coordinate"],
+        parallel_coordinate_unit=payload["parallel_coordinate_unit"],
+        coordinate_period=payload["coordinate_period"],
+        nfp=payload["nfp"],
+        field_periods=payload["field_periods"],
+        topology=payload["topology"],
+        endpoint_policy=payload["endpoint_policy"],
+        normalization=GeometryNormalization(**normalization_data),
+        signs=GeometrySignConvention(**payload["signs"]),
+        linking=GeometryLinking(**linking_data),
+        differentiable=payload["differentiable"],
+    )

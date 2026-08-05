@@ -23,9 +23,11 @@ from stellarator_gk import (
     build_physical_flux_tube_geometry_from_arrays,
     cache_path_is_external,
     internal_geometry_from_result,
+    load_geometry_result_cache,
     resolve_geometry,
     sample_boozer_field_line,
     validate_geometry_result,
+    write_geometry_result_cache,
 )
 
 
@@ -159,6 +161,38 @@ def test_cache_paths_must_stay_outside_source_tree(tmp_path: Path):
 
     external = cache_path_is_external(tmp_path / "geometry-cache", repository_root=repository)
     assert external == (tmp_path / "geometry-cache").resolve()
+
+
+def test_geometry_cache_roundtrip_preserves_schema_and_arrays(tmp_path: Path):
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    cache = tmp_path / "cache" / "cosine-B"
+    request = GeometryRequest(configuration="cached-cosine-B", n_z=16)
+    result = resolve_geometry(_SyntheticProvider(), request)
+
+    written = write_geometry_result_cache(
+        result,
+        cache,
+        repository_root=repository,
+    )
+    loaded = load_geometry_result_cache(written, request=request)
+
+    assert written == cache.resolve()
+    assert (written / "metadata.json").is_file()
+    assert (written / "arrays.npz").is_file()
+    assert loaded.metadata.schema_version == result.metadata.schema_version
+    assert loaded.metadata.provenance == result.metadata.provenance
+    assert loaded.metadata.differentiable is False
+    np.testing.assert_allclose(loaded.parallel_grid.D_z, result.parallel_grid.D_z)
+    for name in result.physical._dynamic_fields:
+        np.testing.assert_allclose(getattr(loaded.physical, name), getattr(result.physical, name))
+    np.testing.assert_allclose(
+        internal_geometry_from_result(loaded).D_y,
+        internal_geometry_from_result(result).D_y,
+    )
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        write_geometry_result_cache(result, cache, repository_root=repository)
 
 
 def _grid_z(n_z: int):

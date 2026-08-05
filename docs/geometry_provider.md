@@ -104,3 +104,10 @@ serialize a result in a user cache, but the cache must be outside the source
 repository. `cache_path_is_external` enforces that boundary. A cached result
 must retain the complete schema/provenance record and pass the same validation
 as a live result; it is never required for a solver run.
+
+`write_geometry_result_cache(result, path, repository_root=...)` writes
+`metadata.json` plus compressed `arrays.npz`. It refuses an existing cache
+unless `overwrite=True`. `load_geometry_result_cache(path, request=...)`
+reconstructs the grid and physical model, checks the schema and optional
+request, and runs full validation. A loaded result is always marked
+non-differentiable because serialization severs the original JAX trace.

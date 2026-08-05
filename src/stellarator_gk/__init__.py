@@ -66,6 +66,7 @@ from .geometry import (
     k_perp_squared,
     load_desc_equilibrium,
     load_gx_eik_data,
+    load_geometry_result_cache,
     load_stella_geometry_data,
     map_physical_to_internal_geometry,
     resolve_geometry,
@@ -73,6 +74,7 @@ from .geometry import (
     sample_boozer_field_line,
     has_duplicate_stella_endpoint,
     validate_geometry_result,
+    write_geometry_result_cache,
 )
 from .diagnostics import (
     kxky_spectrum,
@@ -652,6 +654,7 @@ __all__ = [
     "load_stella_mode_structure_fixture",
     "load_desc_equilibrium",
     "load_gx_eik_data",
+    "load_geometry_result_cache",
     "load_stella_geometry_data",
     "magnetic_drift_frequency",
     "magnetic_drift_advection",
@@ -770,6 +773,7 @@ __all__ = [
     "write_cyclone_source_term_trace_csv",
     "write_cyclone_ky_scan_convention_audit_csv",
     "write_per_ky_mode_structure_fixture_csv",
+    "write_geometry_result_cache",
 ]
 
 __version__ = "0.1.0"

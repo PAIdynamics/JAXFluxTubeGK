@@ -40,8 +40,10 @@ from .provider import (
     build_geometry_metadata,
     cache_path_is_external,
     internal_geometry_from_result,
+    load_geometry_result_cache,
     resolve_geometry,
     validate_geometry_result,
+    write_geometry_result_cache,
 )
 from .gx_eik_adapter import (
     GxEikData,
@@ -102,6 +104,7 @@ __all__ = [
     "k_perp_squared",
     "load_desc_equilibrium",
     "load_gx_eik_data",
+    "load_geometry_result_cache",
     "load_stella_geometry_data",
     "map_physical_to_internal_geometry",
     "resolve_geometry",
@@ -109,4 +112,5 @@ __all__ = [
     "sample_boozer_field_line",
     "has_duplicate_stella_endpoint",
     "validate_geometry_result",
+    "write_geometry_result_cache",
 ]
