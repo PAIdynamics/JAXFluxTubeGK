@@ -128,6 +128,7 @@ def test_physical_to_internal_geometry_maps_drifts_and_mirror_term():
         B_cross_gradB_dot_grad_alpha=0.4 * ones,
         b_cross_kappa_dot_grad_psi=0.5 * ones,
         b_cross_kappa_dot_grad_alpha=0.6 * ones,
+        equilibrium_drive_scale=0.7 * ones,
     )
     geometry = map_physical_to_internal_geometry(physical, parallel)
     expected_G = 0.2 * jnp.sin(field_line.z) / B
@@ -137,7 +138,7 @@ def test_physical_to_internal_geometry_maps_drifts_and_mirror_term():
     np.testing.assert_allclose(geometry.G, expected_G, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(geometry.D_x, expected_D_x, rtol=1e-13, atol=1e-13)
     np.testing.assert_allclose(geometry.D_y, expected_D_y, rtol=1e-13, atol=1e-13)
-    np.testing.assert_allclose(geometry.E_y, 0.4 / B**2, rtol=1e-13, atol=1e-13)
+    np.testing.assert_allclose(geometry.E_y, 0.7, rtol=1e-13, atol=1e-13)
 
 
 def test_desc_geometry_builder_maps_arrays_and_validates_shapes():

@@ -81,7 +81,7 @@ Implemented in `src/stellarator_gk/`:
 
 Present today:
 
-- schema-v1 `GeometryRequest`, `GeometryProvider`, `GeometryResult`, and static
+- schema-v2 `GeometryRequest`, `GeometryProvider`, `GeometryResult`, and static
   metadata covering coordinates/units, signs, topology/linking, endpoint
   policy, normalization, differentiability, and provenance;
 - `PhysicalFluxTubeGeometry` carrying `alpha`, `iota`, shear, `nfp`, field
@@ -91,6 +91,9 @@ Present today:
   provider; GX/GIST eik and stella `.geometry` validation providers;
 - strict provider-boundary validation and explicit external cache round trips;
 - one physical-to-internal map for `F`, `G`, `E_y`, `D_x`, `D_y`, and metrics;
+- a distinct physical `equilibrium_drive_scale`; the stella adapter supplies
+  geometry-header `flux_fac` instead of conflating diamagnetic drive with
+  local grad-B drift geometry;
 - a reduced scan and solver-construction test that are provider independent;
 - packaged VMEC++ `w7x-standard` lookup followed by `vmecpp.run(...)` and an
   in-memory field-line transformation with no canonical NetCDF/GX/stella hop;
@@ -313,9 +316,16 @@ inexact so prepared providers remain installed.
   about 1.32 to 0.255. Equilibrium drive reaches 0.068, while streaming is
   0.172, magnetic drift 0.173, and mirror force 0.398. The denominator remains
   consistent to `4.6e-4` after its documented sign conversion, but the
-  distribution moment normalization remains unresolved. Production defaults
-  are unchanged until these conventions are represented by the public
-  geometry/state contracts and regression-tested across providers.
+  distribution moment normalization remains unresolved. At this stage the
+  discriminator remains separate from production except for the independently
+  confirmed equilibrium-drive scale described next.
+- Promoted the first confirmed convention into geometry schema v2: physical
+  providers may now supply `equilibrium_drive_scale`, and the stella adapter
+  maps its header `flux_fac` directly. Other providers retain their prior
+  drift-derived fallback pending native-coordinate validation, and external
+  schema-v1 caches must be regenerated.
+- Verified the schema-v2 migration with the complete standalone x64 suite:
+  358 tests passed and 20 opt-in external tests were deselected.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

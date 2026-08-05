@@ -136,12 +136,13 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
     B_cross_gradB_dot_grad_alpha: object
     b_cross_kappa_dot_grad_psi: object
     b_cross_kappa_dot_grad_alpha: object
+    equilibrium_drive_scale: object
     nfp: int = 1
     field_periods: float = 1.0
     topology: str = "periodic"
     endpoint_policy: str = "exclude"
     twist_and_shift: bool = False
-    normalization: str = "stellarator_gk_physical_v1"
+    normalization: str = "stellarator_gk_physical_v2"
     provider: str = "precomputed"
     radial_coordinate: str = "rho"
     source: str = "precomputed"
@@ -164,6 +165,7 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
         "B_cross_gradB_dot_grad_alpha",
         "b_cross_kappa_dot_grad_psi",
         "b_cross_kappa_dot_grad_alpha",
+        "equilibrium_drive_scale",
     )
     _static_fields: ClassVar[tuple[str, ...]] = (
         "nfp",
@@ -364,6 +366,7 @@ def build_physical_flux_tube_geometry_from_coordinate_arrays(
     B_cross_gradB_dot_grad_alpha,
     b_cross_kappa_dot_grad_psi,
     b_cross_kappa_dot_grad_alpha,
+    equilibrium_drive_scale=None,
     nfp: int = 1,
     field_periods: float = 1.0,
     endpoint_policy: str = "exclude",
@@ -371,7 +374,7 @@ def build_physical_flux_tube_geometry_from_coordinate_arrays(
     radial_coordinate: RadialCoordinate = "rho",
     source: str = "precomputed",
     provider: str = "precomputed",
-    normalization: str = "stellarator_gk_physical_v1",
+    normalization: str = "stellarator_gk_physical_v2",
 ) -> PhysicalFluxTubeGeometry:
     """Build the provider-neutral physical contract from coordinate arrays."""
 
@@ -415,6 +418,13 @@ def build_physical_flux_tube_geometry_from_coordinate_arrays(
         b_cross_kappa_dot_grad_alpha=_coerce_geometry_array(
             "b_cross_kappa_dot_grad_alpha", b_cross_kappa_dot_grad_alpha, shape
         ),
+        equilibrium_drive_scale=(
+            None
+            if equilibrium_drive_scale is None
+            else _coerce_geometry_array(
+                "equilibrium_drive_scale", equilibrium_drive_scale, shape
+            )
+        ),
         source=source,
         provider=provider,
         normalization=normalization,
@@ -433,12 +443,19 @@ def build_physical_flux_tube_geometry_from_arrays(
     B_cross_gradB_dot_grad_alpha,
     b_cross_kappa_dot_grad_psi,
     b_cross_kappa_dot_grad_alpha,
+    equilibrium_drive_scale=None,
     source: str = "precomputed",
     provider: str = "precomputed",
-    normalization: str = "stellarator_gk_physical_v1",
+    normalization: str = "stellarator_gk_physical_v2",
 ) -> PhysicalFluxTubeGeometry:
     """Create a physical flux-tube geometry object from precomputed arrays."""
 
+    B_array = jnp.asarray(B)
+    drive_scale = (
+        jnp.asarray(B_cross_gradB_dot_grad_alpha) / B_array**2
+        if equilibrium_drive_scale is None
+        else jnp.asarray(equilibrium_drive_scale)
+    )
     return PhysicalFluxTubeGeometry(
         z=field_line.z,
         w_z=field_line.w_z,
@@ -448,7 +465,7 @@ def build_physical_flux_tube_geometry_from_arrays(
         rho=field_line.rho,
         iota=jnp.asarray(field_line.iota),
         shear=jnp.asarray(field_line.shear),
-        B=jnp.asarray(B),
+        B=B_array,
         b_dot_grad_z=jnp.asarray(b_dot_grad_z),
         grad_psi_sq=jnp.asarray(grad_psi_sq),
         grad_alpha_sq=jnp.asarray(grad_alpha_sq),
@@ -457,6 +474,7 @@ def build_physical_flux_tube_geometry_from_arrays(
         B_cross_gradB_dot_grad_alpha=jnp.asarray(B_cross_gradB_dot_grad_alpha),
         b_cross_kappa_dot_grad_psi=jnp.asarray(b_cross_kappa_dot_grad_psi),
         b_cross_kappa_dot_grad_alpha=jnp.asarray(b_cross_kappa_dot_grad_alpha),
+        equilibrium_drive_scale=drive_scale,
         nfp=field_line.nfp,
         field_periods=field_line.field_periods,
         topology=field_line.topology,
@@ -487,7 +505,7 @@ def map_physical_to_internal_geometry(
         physical.B_cross_gradB_dot_grad_alpha
         + physical.B * physical.b_cross_kappa_dot_grad_alpha
     ) * drift_scale
-    E_y = physical.B_cross_gradB_dot_grad_alpha * drift_scale
+    E_y = physical.equilibrium_drive_scale
     return FluxTubeGeometry(
         z=physical.z,
         w_z=physical.w_z,

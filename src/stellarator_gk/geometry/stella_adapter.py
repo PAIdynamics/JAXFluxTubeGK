@@ -138,6 +138,7 @@ class StellaGeometryProvider:
             B_cross_gradB_dot_grad_alpha=B**2 * gb_alpha,
             b_cross_kappa_dot_grad_psi=np.zeros_like(B),
             b_cross_kappa_dot_grad_alpha=B * kappa_alpha,
+            equilibrium_drive_scale=np.full_like(B, data.global_value("flux_fac")),
             nfp=self.nfp,
             field_periods=request.field_periods,
             endpoint_policy=request.endpoint_policy,

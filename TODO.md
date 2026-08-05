@@ -238,9 +238,11 @@ validation work in Priority 3.
   reduces total-RHS error from 1.32 to 0.255 and brings equilibrium drive below
   0.1, but mirror (0.398), drift (0.173), streaming (0.172), and the
   distribution/quasineutrality normalization contract still require closure.
-- [ ] Promote the verified stella-native drive scale, Maxwellian/quadrature
-  normalization, drift factor, and mirror orientation into the provider-neutral
-  geometry/state contract; validate each change against the non-stella gates.
+- [x] Separate equilibrium-gradient drive scale from magnetic-drift geometry in
+  provider schema v2 and map stella's native `flux_fac` into that field.
+- [ ] Promote the remaining verified Maxwellian/quadrature normalization,
+  drift factor, and mirror orientation into provider-neutral geometry/state
+  contracts; validate each change against the non-stella gates.
 - [ ] After term parity passes, rerun the W7-X mode-structure gate against the
   matched stella fixture.
 - [ ] Replace the reduced convergence ladder with production controls in

@@ -15,8 +15,8 @@ from ..types import ParallelGrid, _PyTreeDataclass
 from .flux_tube import FluxTubeGeometry, PhysicalFluxTubeGeometry, map_physical_to_internal_geometry
 
 
-GEOMETRY_SCHEMA_VERSION = 1
-GEOMETRY_NORMALIZATION = "stellarator_gk_physical_v1"
+GEOMETRY_SCHEMA_VERSION = 2
+GEOMETRY_NORMALIZATION = "stellarator_gk_physical_v2"
 GEOMETRY_FIELD_UNITS = (
     ("z", "declared_parallel_coordinate"),
     ("theta", "radian"),
@@ -32,6 +32,7 @@ GEOMETRY_FIELD_UNITS = (
     ("B_cross_gradB_dot_grad_alpha", "B_ref^2/L_ref^2"),
     ("b_cross_kappa_dot_grad_psi", "psi_ref/L_ref^2"),
     ("b_cross_kappa_dot_grad_alpha", "1/L_ref^2"),
+    ("equilibrium_drive_scale", "normalized_diamagnetic_frequency/ky"),
     ("w_z", "radian"),
 )
 
@@ -54,6 +55,7 @@ _PHYSICAL_ARRAY_FIELDS = (
     "B_cross_gradB_dot_grad_alpha",
     "b_cross_kappa_dot_grad_psi",
     "b_cross_kappa_dot_grad_alpha",
+    "equilibrium_drive_scale",
 )
 
 

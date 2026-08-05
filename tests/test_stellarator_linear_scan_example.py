@@ -119,15 +119,15 @@ def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():
     assert np.isclose(z[-1], 0.5 - 1.0 / 256.0)
     assert metadata["field_line_periods"] > 6.9
     assert metadata["b_dot_grad_z_scaling"] == "F = stella b.Gz / (2*pi)"
-    assert metadata["equilibrium_drive_scaling"] == "E_y = normalized stella BxGB.Gy"
-    assert metadata["schema_version"] == 1
+    assert metadata["equilibrium_drive_scaling"] == "E_y = stella geometry-header flux_fac"
+    assert metadata["schema_version"] == 2
     assert metadata["provider"] == "stella-geometry"
     assert geometry.source == "stella-geometry"
     assert np.all(np.isfinite(np.asarray(geometry.B)))
     assert np.all(np.isfinite(np.asarray(geometry.F)))
     assert np.all(np.isfinite(np.asarray(geometry.G)))
     assert np.max(np.abs(np.asarray(geometry.E_y, dtype=float))) > 0.0
-    assert np.std(np.asarray(geometry.E_y, dtype=float)) > 0.0
+    np.testing.assert_allclose(geometry.E_y, 0.5)
 
 
 def test_stellarator_linear_scan_accepts_named_vmecpp_provider(monkeypatch):

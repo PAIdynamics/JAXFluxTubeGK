@@ -17,9 +17,9 @@ span, resolution, and dtype.
 `internal_geometry_from_result` after the provider boundary; providers do not
 construct solver coefficients such as `F`, `G`, `E_y`, `D_x`, or `D_y`.
 
-## Schema version 1
+## Schema version 2
 
-`GEOMETRY_SCHEMA_VERSION` is currently `1`. Serialized provider results must
+`GEOMETRY_SCHEMA_VERSION` is currently `2`. Serialized provider results must
 record this version and all `GeometryMetadata` fields:
 
 - provider name/version, source revision, configuration, source, and command;
@@ -29,7 +29,10 @@ record this version and all `GeometryMetadata` fields:
 - normalization name and the unit of every physical array;
 - whether continuous provider outputs are differentiable.
 
-The version-1 normalization is `stellarator_gk_physical_v1`. `theta`, `phi`,
+The version-2 normalization is `stellarator_gk_physical_v2`. It adds a physical
+`equilibrium_drive_scale`, keeping the diamagnetic-gradient coordinate scale
+separate from grad-B/curvature drift arrays. Providers that do not yet expose a
+native value retain the version-1 drift-derived fallback. `theta`, `phi`,
 and `alpha` are in radians; `z` uses the explicitly declared parallel
 coordinate and unit (for example `zeta` in radians or `zed_over_2pi` in turns).
 Magnetic field, length, and flux use provider-declared references
@@ -131,6 +134,9 @@ resampling onto the requested endpoint-excluded grid. stella requests declare
 `parallel_coordinate="zed_over_2pi"` with unit `turn`; the adapter drops and
 rejects duplicate periodic endpoints, retains the file's field-line span, and
 converts `b.Gz` consistently for the normalized coordinate.
+It also maps stella's geometry-header `flux_fac` to
+`equilibrium_drive_scale`; this is the coefficient used by stella's `wstar`
+term and is not the local `BxGB.Gy` magnetic-drift array.
 
 ## Synthetic and in-memory arrays
 

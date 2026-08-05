@@ -548,7 +548,7 @@ def _load_stella_geometry(args):
         "sampled_zeta_turns": data.field_periods,
         "field_line_periods": data.field_periods,
         "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
-        "equilibrium_drive_scaling": "E_y = normalized stella BxGB.Gy",
+        "equilibrium_drive_scaling": "E_y = stella geometry-header flux_fac",
         "schema_version": result.metadata.schema_version,
         "provider": result.metadata.provenance.provider,
         "nfp": result.metadata.nfp,
