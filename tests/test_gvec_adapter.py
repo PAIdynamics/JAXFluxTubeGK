@@ -5,6 +5,7 @@ from stellarator_gk import (
     GVEC_GEOMETRY_COMPUTE_KEYS,
     GeometryRequest,
     GvecGeometryProvider,
+    VmecppGeometryProvider,
     gvec_geometry_arrays_from_data,
     internal_geometry_from_result,
     resolve_geometry,
@@ -19,6 +20,7 @@ def _gvec_data(n_z=12):
         "diota_dr": 0.12,
         "dPhi_dr": 1.7,
         "Phi_edge": 1.0,
+        "chi_edge": 0.8,
         "r_minor": 1.0,
         "grad_rho": np.tile([1.0, 0.0, 0.0], (n_z, 1)),
         "grad_theta_P": np.tile([0.1, 1.0, 0.0], (n_z, 1)),
@@ -42,8 +44,10 @@ class _FakeGvecState:
         self.compute_calls = []
 
     def evaluate(self, *names, **_coordinates):
-        assert names == ("iota",)
-        return {"iota": self.data["iota"]}
+        if names == ("iota",):
+            return {"iota": self.data["iota"]}
+        assert names == ("Phi", "chi")
+        return {"Phi": self.data["Phi_edge"], "chi": self.data["chi_edge"]}
 
     def compute(self, evaluated, *names):
         self.compute_calls.append(names)
@@ -161,3 +165,53 @@ def test_installed_gvec_evaluates_live_pest_field_line(gvec_root):
     assert result.metadata.provenance.revision == "08ea5bd54e08572770e560d9ca88fe594bc8fd01"
     assert result.physical.nfp == 2
     assert np.all(np.asarray(result.physical.B) > 0.0)
+
+
+@pytest.mark.external
+def test_gvec_matches_vmec_on_common_w7x_equilibrium(gvec_root, vmecpp_root):
+    del vmecpp_root  # The fixture verifies the installed VMEC++ revision.
+    case = gvec_root / "test-CI/examples/w7x_from_vmec_initLA_F"
+    request = GeometryRequest(
+        configuration="w7x-common-equilibrium",
+        radial_value=0.6,
+        alpha=0.0,
+        n_z=64,
+        z_min=-np.pi / 5.0,
+        z_max=np.pi / 5.0,
+    )
+    vmec = resolve_geometry(
+        VmecppGeometryProvider(wout_path=case / "wout_d23p4_tm.nc"), request
+    )
+    gvec = resolve_geometry(
+        GvecGeometryProvider(parameter_file=case / "parameter.ini"), request
+    )
+
+    relative_errors = {}
+    scale_factors = {}
+    for name in (
+        "B",
+        "b_dot_grad_z",
+        "grad_psi_sq",
+        "grad_alpha_sq",
+        "grad_psi_dot_grad_alpha",
+        "B_cross_gradB_dot_grad_psi",
+        "B_cross_gradB_dot_grad_alpha",
+        "b_cross_kappa_dot_grad_psi",
+        "b_cross_kappa_dot_grad_alpha",
+    ):
+        actual = np.asarray(getattr(gvec.physical, name))
+        expected = np.asarray(getattr(vmec.physical, name))
+        relative_errors[name] = np.linalg.norm(actual - expected) / np.linalg.norm(expected)
+        scale_factors[name] = np.dot(actual, expected) / np.dot(expected, expected)
+
+    # This GVEC case is the finite-element initialization projected from the
+    # exact same wout, before a GVEC minimization. Low-order invariants should
+    # agree tightly; the looser all-term bound records projection error while
+    # still detecting coordinate/sign/normalization regressions.
+    assert relative_errors["B"] < 0.08
+    assert relative_errors["b_dot_grad_z"] < 0.05
+    assert relative_errors["grad_psi_sq"] < 0.08
+    assert max(relative_errors.values()) < 0.75
+    assert all(0.2 < scale < 1.3 for scale in scale_factors.values())
+    np.testing.assert_allclose(gvec.physical.iota, vmec.physical.iota, rtol=1.0e-10)
+    np.testing.assert_allclose(gvec.physical.shear, vmec.physical.shear, rtol=5.0e-6)

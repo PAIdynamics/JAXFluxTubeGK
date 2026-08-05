@@ -69,19 +69,29 @@ class GvecGeometryProvider:
             factory = self.state_factory or _import_gvec().State
             state = factory(self.parameter_file, self.state_file)
         zeta = np.linspace(request.z_min, request.z_max, request.n_z, endpoint=False)
+        flux_data = state.evaluate(
+            "Phi",
+            "chi",
+            rho=np.asarray([1.0]),
+            theta=None,
+            zeta=None,
+        )
+        toroidal_sign = _positive_orientation(_scalar(flux_data, "Phi"))
+        poloidal_sign = _positive_orientation(_scalar(flux_data, "chi"))
         iota_data = state.evaluate(
             "iota",
             rho=np.asarray([request.radial_value]),
             theta=None,
             zeta=None,
         )
-        iota = _scalar(iota_data, "iota")
-        theta_pest = request.alpha + iota * zeta
+        iota = poloidal_sign / toroidal_sign * _scalar(iota_data, "iota")
+        theta_pest = poloidal_sign * (request.alpha + iota * zeta)
+        gvec_zeta = toroidal_sign * zeta
         evaluations_pest = self.evaluations_pest or _import_gvec().EvaluationsPEST
         evaluated = evaluations_pest(
             rho=np.asarray([request.radial_value]),
             theta_P=theta_pest[None, None, :],
-            zeta=zeta,
+            zeta=gvec_zeta,
             state=state,
         )
         state.compute(evaluated, *GVEC_GEOMETRY_COMPUTE_KEYS)
@@ -90,6 +100,8 @@ class GvecGeometryProvider:
             zeta=zeta,
             rho=request.radial_value,
             alpha=request.alpha,
+            poloidal_sign=poloidal_sign,
+            toroidal_sign=toroidal_sign,
         )
         parallel = build_parallel_grid(
             ParallelGridSpec(
@@ -143,13 +155,17 @@ def gvec_geometry_arrays_from_data(
     zeta,
     rho: float,
     alpha: float,
+    poloidal_sign: float = 1.0,
+    toroidal_sign: float = 1.0,
 ) -> dict[str, object]:
     """Map computed GVEC vectors to the physical flux-tube array contract."""
 
     zeta = np.asarray(zeta, dtype=float)
     shape = zeta.shape
-    iota = _scalar(data, "iota")
-    diota_dr = _scalar(data, "diota_dr")
+    iota = poloidal_sign / toroidal_sign * _scalar(data, "iota")
+    diota_dr = poloidal_sign / toroidal_sign * _scalar(data, "diota_dr")
+    # GVEC imports VMEC's signgs-oriented toroidal flux directly. Coordinate
+    # orientation and flux orientation are therefore independent here.
     d_phi_dr = _scalar(data, "dPhi_dr")
     phi_edge = _scalar(data, "Phi_edge")
     length_reference = _scalar(data, "r_minor")
@@ -160,8 +176,8 @@ def gvec_geometry_arrays_from_data(
     field_reference = 2.0 * abs(phi_edge) / length_reference**2
 
     grad_rho = _vector(data, "grad_rho", shape)
-    grad_theta_pest = _vector(data, "grad_theta_P", shape)
-    grad_zeta = _vector(data, "grad_zeta", shape)
+    grad_theta_pest = poloidal_sign * _vector(data, "grad_theta_P", shape)
+    grad_zeta = toroidal_sign * _vector(data, "grad_zeta", shape)
     B_vector = _vector(data, "B", shape)
     B = _array(data, "mod_B", shape)
     grad_B = _vector(data, "grad_mod_B", shape)
@@ -226,6 +242,12 @@ def _scalar(data, name):
     if array.shape != ():
         raise ValueError(f"GVEC quantity {name!r} must be scalar; got {array.shape}")
     return float(array)
+
+
+def _positive_orientation(flux: float) -> float:
+    if abs(flux) < 1.0e-14:
+        raise ValueError("GVEC edge flux must be nonzero to determine coordinate orientation")
+    return 1.0 if flux > 0.0 else -1.0
 
 
 def _value(data, name):
