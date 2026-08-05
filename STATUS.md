@@ -342,6 +342,16 @@ inexact so prepared providers remain installed.
   four significant digits, so the next trace must expose native in-memory
   mirror/drift coefficients rather than reconstructing derivatives from that
   lossy table.
+- Extended the external trace to v4 with one native in-memory snapshot of the
+  mirror, drift, equilibrium-drive, and streaming coefficients. The raw 413 MiB
+  trace remains outside the repository; its compact summary records all five
+  coefficient arrays and their pinned stella provenance.
+- Made the streaming trace loader accept interleaved coefficient records from a
+  single explicitly labeled RHS call. Using the native mirror coefficient with
+  the source-matched upwind stencil reconstructs stella's native 256×32×8
+  mirror term within 0.004 relative L2. The 32×4 solver-grid comparison is 0.243,
+  so its residual is now attributed to interpolating a coefficient-state
+  product onto a different mu grid rather than to the mirror convention itself.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

@@ -122,19 +122,32 @@ def stella_third_order_upwind_matrix(n: int, spacing: float, sign: int) -> np.nd
     return matrix
 
 
-def apply_stella_mirror_stencil(case, state, split, rhs_precompute) -> RHSTermSplit:
+def apply_stella_mirror_stencil(
+    case, state, split, rhs_precompute, *, native_coefficient=None
+) -> RHSTermSplit:
     """Replace the generic mirror derivative with stella's explicit stencil."""
 
     if not case.name.startswith("replay_stella_coefficients_"):
         return split
     state_array = jnp.asarray(state)
-    coefficient = jnp.asarray(rhs_precompute.mirror_force_coeff)
-    if coefficient.ndim == 3:
-        if coefficient.shape[0] != 1:
-            raise ValueError("same-state stella replay requires one kinetic species")
-        coefficient = coefficient[0]
-    if coefficient.ndim != 2:
-        raise ValueError("mirror coefficient must have (mu,z) order")
+    if native_coefficient is None:
+        coefficient = jnp.asarray(rhs_precompute.mirror_force_coeff)
+        if coefficient.ndim == 3:
+            if coefficient.shape[0] != 1:
+                raise ValueError("same-state stella replay requires one kinetic species")
+            coefficient = coefficient[0]
+        if coefficient.ndim != 2:
+            raise ValueError("mirror coefficient must have (mu,z) order")
+        coefficient_full = coefficient[None, :, :]
+    else:
+        coefficient_trace = np.asarray(native_coefficient)
+        if coefficient_trace.shape != (
+            state_array.shape[2],
+            state_array.shape[0],
+            state_array.shape[1],
+        ):
+            raise ValueError("native mirror coefficient must have (z,vpar,mu) order")
+        coefficient_full = jnp.asarray(np.transpose(coefficient_trace, (1, 2, 0)))
     n_vpar = state_array.shape[0]
     # Coefficient shape is (mu,z); its sign is independent of positive mu.
     spacing = float(case.vpar_max * 2.0 / case.n_vpar)
@@ -144,10 +157,10 @@ def apply_stella_mirror_stencil(case, state, split, rhs_precompute) -> RHSTermSp
     }
     derivatives = []
     for iz in range(state_array.shape[2]):
-        sign = 1 if float(coefficient[0, iz]) >= 0.0 else -1
+        sign = 1 if float(jnp.real(coefficient_full[0, 0, iz])) >= 0.0 else -1
         derivatives.append(jnp.einsum("ij,jmxy->imxy", matrices[sign], state_array[:, :, iz]))
     derivative = jnp.stack(derivatives, axis=2)
-    mirror = coefficient[None, :, :, None, None] * derivative
+    mirror = coefficient_full[..., None, None] * derivative
     index = split.names.index("mirror_force")
     terms = list(split.terms)
     terms[index] = mirror
@@ -170,6 +183,36 @@ def selected_mode_from_solver(values: Any) -> np.ndarray:
     if array.ndim != 5 or array.shape[-2:] != (1, 1):
         raise ValueError("solver replay output must contain exactly one Fourier mode")
     return np.transpose(array[..., 0, 0], (2, 0, 1))
+
+
+def native_stella_mirror_reconstruction(stella: dict[str, Any]) -> dict[str, float]:
+    """Check the traced mirror coefficient/stencil before any grid interpolation."""
+
+    coefficient = np.asarray(stella["native_coefficients"]["mirror_force"])
+    spacing = float(stella["vpar"][1] - stella["vpar"][0])
+    matrices = {
+        sign: stella_third_order_upwind_matrix(len(stella["vpar"]), spacing, sign)
+        for sign in (-1, 1)
+    }
+    weights = (
+        np.asarray(stella["w_vpar"])[None, :, None]
+        * np.asarray(stella["w_mu"])[:, None, :]
+    )
+    errors = []
+    for state, reference in zip(
+        stella["distribution"], stella["mirror_force"], strict=True
+    ):
+        candidate = np.empty_like(state)
+        for iz in range(state.shape[0]):
+            sign = 1 if coefficient[iz, 0, 0].real >= 0.0 else -1
+            candidate[iz] = coefficient[iz] * (matrices[sign] @ state[iz])
+        reference_norm = np.sqrt(np.sum(weights * np.abs(reference) ** 2))
+        error_norm = np.sqrt(np.sum(weights * np.abs(reference - candidate) ** 2))
+        errors.append(float(error_norm / reference_norm))
+    return {
+        "max_relative_l2_error": max(errors),
+        "rhs_calls_checked": len(errors),
+    }
 
 
 def bundled_solver_rhs(split: Any, total_rhs: Any) -> dict[str, np.ndarray]:
@@ -213,8 +256,11 @@ def run_same_state_replay(
     if not trace_path.is_file():
         raise FileNotFoundError(trace_path)
     summary = json.loads(Path(stella_summary).read_text(encoding="utf-8"))
-    if summary.get("trace_format") != "stellarator_gk_stella_rhs_trace_v3":
-        raise ValueError("same-state replay requires an explicitly labeled v3 trace")
+    if summary.get("trace_format") not in {
+        "stellarator_gk_stella_rhs_trace_v3",
+        "stellarator_gk_stella_rhs_trace_v4",
+    }:
+        raise ValueError("same-state replay requires an explicitly labeled v3/v4 trace")
     stella = load_stella_array_trace(trace_path, summary)
 
     rows: list[dict[str, Any]] = []
@@ -231,6 +277,17 @@ def run_same_state_replay(
             "w_vpar": np.asarray(setup["velocity"].w_vpar),
             "w_mu": np.asarray(setup["velocity"].w_mu),
         }
+        native_mirror = None
+        if "mirror_force" in stella["native_coefficients"]:
+            native_mirror = interpolate_phase_space_to_grid(
+                stella["native_coefficients"]["mirror_force"],
+                source_z=stella["z"],
+                source_vpar=stella["vpar"],
+                source_mu=stella["mu"],
+                target_z=target_z,
+                target_vpar=target_vpar,
+                target_mu=target_mu,
+            )
 
         for call in range(int(stella["rhs_call_count"])):
             mapped_state = interpolate_phase_space_to_grid(
@@ -248,7 +305,13 @@ def run_same_state_replay(
             )
             phi = jnp.asarray(phi_values[:, None, None])
             split = split_rhs_terms(state, phi, precompute.rhs)
-            split = apply_stella_mirror_stencil(case, state, split, precompute.rhs)
+            split = apply_stella_mirror_stencil(
+                case,
+                state,
+                split,
+                precompute.rhs,
+                native_coefficient=native_mirror,
+            )
             if case.name.startswith("replay_stella_coefficients_"):
                 total_rhs = sum(split.terms, jnp.zeros_like(state))
             else:
@@ -312,7 +375,13 @@ def run_same_state_replay(
     status_path = output_dir / "same_state_rhs_replay_status.json"
     readme_path = output_dir / "README.md"
     _write_csv(csv_path, rows)
-    status = _status(rows, trace_path, Path(stella_geometry), tolerance)
+    status = _status(
+        rows,
+        trace_path,
+        Path(stella_geometry),
+        tolerance,
+        native_mirror=native_stella_mirror_reconstruction(stella),
+    )
     status_path.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
     readme_path.write_text(_fixture_readme(status), encoding="utf-8")
     return {"comparison_csv": str(csv_path), "status_json": str(status_path)}
@@ -348,7 +417,12 @@ def _fixed_and_best_fit_metrics(reference, candidate, *, alignment_scale, **weig
 
 
 def _status(
-    rows: list[dict[str, Any]], trace_path: Path, geometry_path: Path, tolerance: float
+    rows: list[dict[str, Any]],
+    trace_path: Path,
+    geometry_path: Path,
+    tolerance: float,
+    *,
+    native_mirror: dict[str, float],
 ) -> dict[str, Any]:
     rhs_rows = [row for row in rows if not row["quantity"].startswith("quasineutrality")]
     acceptance_case = "replay_stella_coefficients_32x4"
@@ -382,6 +456,7 @@ def _status(
         "trace_source": str(trace_path),
         "geometry_source": str(geometry_path),
         "raw_trace_committed": False,
+        "native_grid_mirror_reconstruction": native_mirror,
         "rhs_calls": sorted({int(row["rhs_call"]) for row in rows}),
         "cases": sorted({str(row["case"]) for row in rows}),
         "best_by_quantity": best_by_quantity,
@@ -417,10 +492,14 @@ def _fixture_readme(status: dict[str, Any]) -> str:
 This compact fixture records solver RHS operators applied directly to traced
 stella distribution and potential arrays. The external raw trace is not stored
 in the repository. Both periodic spectral and open GKW-upwind parallel models
-are reported on a 16×4 velocity grid contained inside the stella domain. A
-two additional discriminators apply source-derived stella mirror, drift, and
+are reported on a 16×4 velocity grid contained inside the stella domain. Two
+additional discriminators apply source-derived stella mirror, drift, and
 drive coefficients at 16×4 and an exact-node 32×4 velocity resolution without
 changing the remaining production geometry conventions.
+
+The v4 trace also verifies the mirror operator directly on stella's native
+256×32×8 grid before interpolation. Its maximum reconstruction error is
+`{status['native_grid_mirror_reconstruction']['max_relative_l2_error']:.8g}`.
 
 Status: `{status['status']}`. Acceptance-case maximum RHS relative L2 error:
 `{status['max_rhs_relative_l2_error']:.8g}` (tolerance `{status['relative_l2_tolerance']}`).

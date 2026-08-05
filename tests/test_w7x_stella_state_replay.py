@@ -62,7 +62,11 @@ def test_committed_same_state_result_records_partial_improvement():
     assert status["acceptance_case"] == "replay_stella_coefficients_32x4"
     assert status["best_by_quantity"]["equilibrium_drive"]["relative_l2_error"] < 0.1
     assert status["best_by_quantity"]["total_rhs"]["relative_l2_error"] < 0.3
-    assert status["best_by_quantity"]["mirror_force"]["relative_l2_error"] > 0.3
+    assert 0.2 < status["best_by_quantity"]["mirror_force"]["relative_l2_error"] < 0.3
+    assert (
+        status["native_grid_mirror_reconstruction"]["max_relative_l2_error"]
+        < 4.0e-3
+    )
 
 
 def test_phase_space_order_round_trip():

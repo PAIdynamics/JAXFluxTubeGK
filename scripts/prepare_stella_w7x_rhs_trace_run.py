@@ -11,9 +11,11 @@ explicit RHS path by default.  The production stella W7-X comparison input keeps
 those two terms implicit, so it cannot expose their deltas inside
 ``add_explicit_gyrokinetic_terms``.  stella's explicit RHS is native ``rhs*dt``;
 the trace preserves that unit so the Python comparator can decide when to
-divide by ``code_dt``. Trace format v3 records stella's velocity quadrature
+divide by ``code_dt``. Trace format v4 records stella's velocity quadrature
 weights, an explicit RHS-call index, quasineutrality numerator/denominator,
-and the native state scale for direct array-weighted parity checks.
+the native state scale, and one copy of stella's native in-memory mirror,
+drift, drive, and streaming coefficients for direct array-weighted parity
+checks without reconstructing coefficients from rounded text geometry.
 """
 
 from __future__ import annotations
@@ -327,6 +329,7 @@ def _patch_add_explicit_imports_and_locals(text: str) -> str:
         "         stellarator_gk_trace_rhs_call = stellarator_gk_trace_rhs_call + 1\n"
         "         call stellarator_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)\n"
         "         call stellarator_gk_write_phi_trace(istep, phi)\n"
+        "         call stellarator_gk_write_native_coefficients(istep)\n"
         "      end if\n"
         "\n"
     )
@@ -494,6 +497,52 @@ STELLA_RHS_TRACE_HELPERS = r"""
 
    end subroutine stellarator_gk_write_phi_trace
 
+   subroutine stellarator_gk_write_native_coefficients(istep)
+
+      use mp, only: proc0
+      use parallelisation_layouts, only: vmu_lo
+      use parallelisation_layouts, only: iv_idx, imu_idx, is_idx
+      use grids_time, only: code_dt
+      use grids_z, only: nzgrid
+      use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu
+      use arrays, only: wdrifty_g, wdrifty_phi, wstar
+      use gk_mirror, only: mirror
+      use gk_parallel_streaming, only: stream
+
+      implicit none
+
+      integer, intent(in) :: istep
+      integer :: iz, ivmu, iv, imu, is
+
+      if (.not. proc0) return
+      if (stellarator_gk_trace_rhs_call /= 1) return
+      call stellarator_gk_open_trace_file()
+      do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
+         iv = iv_idx(vmu_lo, ivmu)
+         imu = imu_idx(vmu_lo, ivmu)
+         is = is_idx(vmu_lo, ivmu)
+         do iz = -nzgrid, nzgrid
+            call stellarator_gk_write_trace_row('coefficient', 'mirror_force', istep, iz, 1, &
+                 ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
+                 cmplx(mirror(1, iz, imu, is) / code_dt, 0.0))
+            call stellarator_gk_write_trace_row('coefficient', 'magnetic_drift_g_y', istep, iz, 1, &
+                 ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
+                 cmplx(wdrifty_g(1, iz, ivmu) / code_dt, 0.0))
+            call stellarator_gk_write_trace_row('coefficient', 'magnetic_drift_phi_y', istep, iz, 1, &
+                 ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
+                 cmplx(wdrifty_phi(1, iz, ivmu) / code_dt, 0.0))
+            call stellarator_gk_write_trace_row('coefficient', 'equilibrium_drive', istep, iz, 1, &
+                 ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
+                 cmplx(wstar(1, iz, ivmu) / code_dt, 0.0))
+            call stellarator_gk_write_trace_row('coefficient', 'parallel_streaming', istep, iz, 1, &
+                 ivmu, iv, imu, is, vpa(iv), mu(imu), wgts_vpa(iv), wgts_mu(1, iz, imu), &
+                 cmplx(stream(1, iz, iv, is) / code_dt, 0.0))
+         end do
+      end do
+      close (stellarator_gk_trace_unit)
+
+   end subroutine stellarator_gk_write_native_coefficients
+
    subroutine stellarator_gk_open_trace_file()
 
       implicit none
@@ -609,7 +658,7 @@ def _metadata_payload(
         "trace_ky_value": 0.3,
         "trace_kx_value": 0.0,
         "rhs_units": "stella_native_rhs_times_code_dt",
-        "trace_format": "stellarator_gk_stella_rhs_trace_v3",
+        "trace_format": "stellarator_gk_stella_rhs_trace_v4",
         "velocity_weight_columns": ("wgts_vpa", "wgts_mu"),
         "rhs_call_column": "rhs_call",
         "force_explicit_stream_mirror": bool(force_explicit_stream_mirror),
@@ -627,6 +676,11 @@ def _metadata_payload(
             "quasineutrality_numerator",
             "quasineutrality_denominator",
             "native_state_scale",
+            "native_mirror_force_coefficient",
+            "native_magnetic_drift_g_y_coefficient",
+            "native_magnetic_drift_phi_y_coefficient",
+            "native_equilibrium_drive_coefficient",
+            "native_parallel_streaming_coefficient",
             "mirror_force",
             "magnetic_drift_y",
             "magnetic_drift_x",

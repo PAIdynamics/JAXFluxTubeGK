@@ -220,13 +220,13 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
                 inferred_stage = occurrences.get(key, 0)
                 if "rhs_call" in header:
                     stage = int(fields[header["rhs_call"]]) - 1
-                    if stage != inferred_stage:
+                    if stage < 0 or stage > inferred_stage:
                         raise ValueError(
                             f"stella rhs_call is not contiguous for {key}: {stage + 1}"
                         )
                 else:
                     stage = inferred_stage
-                occurrences[key] = stage + 1
+                occurrences[key] = max(inferred_stage, stage + 1)
                 if key[0] == "normalization":
                     target = scalar_records
                     shape = (1,)
@@ -236,7 +236,9 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
                 else:
                     target = phase_records
                     shape = phase_shape
-                target.setdefault(key, []).append(np.zeros(shape, dtype=np.complex128))
+                records = target.setdefault(key, [])
+                if stage == len(records):
+                    records.append(np.zeros(shape, dtype=np.complex128))
                 last_key = key
             iz = int(fields[header["iz"]]) - iz_min
             value = float(fields[header["real"]]) + 1j * float(fields[header["imag"]])
@@ -264,7 +266,10 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
         ("rhs_delta", "parallel_streaming"),
         ("rhs_total", "total"),
     )
-    if summary.get("trace_format") == "stellarator_gk_stella_rhs_trace_v3":
+    if summary.get("trace_format") in (
+        "stellarator_gk_stella_rhs_trace_v3",
+        "stellarator_gk_stella_rhs_trace_v4",
+    ):
         required += (
             ("quasineutrality", "numerator"),
             ("quasineutrality", "denominator"),
@@ -320,6 +325,17 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
             if ("normalization", "native_state_scale") in scalar_records
             else None
         ),
+        "native_coefficients": {
+            term: phase(("coefficient", term))[0]
+            for term in (
+                "mirror_force",
+                "magnetic_drift_g_y",
+                "magnetic_drift_phi_y",
+                "equilibrium_drive",
+                "parallel_streaming",
+            )
+            if ("coefficient", term) in phase_records
+        },
         "rhs_call_count": call_counts.pop(),
     }
 
@@ -549,7 +565,10 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
             )
             if available is None
         ]
-        has_explicit_calls = stella.get("trace_format") == "stellarator_gk_stella_rhs_trace_v3"
+        has_explicit_calls = stella.get("trace_format") in (
+            "stellarator_gk_stella_rhs_trace_v3",
+            "stellarator_gk_stella_rhs_trace_v4",
+        )
         contract["rhs_calls_explicitly_labeled"] = has_explicit_calls
         contract["direct_array_parity_ready"] = has_explicit_calls and not contract[
             "missing_array_records"

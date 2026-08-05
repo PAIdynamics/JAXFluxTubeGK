@@ -13,7 +13,7 @@
   ],
   "missing_record_terms": [],
   "provenance": {
-    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/stella/COMPILATION/build_cmake/COMPILATION/stella",
+    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v4/stella/COMPILATION/build_cmake/COMPILATION/stella",
     "stella_revision": "564ca09b89904c231421c17c00068a9362061278",
     "stella_source": "/Users/mohsensadr/Codes/GitHub/fusion/stella"
   },
@@ -28,6 +28,281 @@
     2000
   ],
   "term_summaries": [
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 58.935341379686996,
+      "max_abs": 1.5151227496750113,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": -929.6485550806196,
+      "term": "equilibrium_drive",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 10.590530904457479,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 172.4637786053792,
+      "max_abs": 4.372998381714929,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 11224.999545135688,
+      "term": "magnetic_drift_g_y",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 84.97628314179394,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 2.97107131352496,
+      "max_abs": 0.10040904776926066,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 114.86716699030791,
+      "term": "magnetic_drift_phi_y",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 0.6985843250218101,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 21.05939008889503,
+      "max_abs": 0.32025008297986174,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 3.075136451286919e-14,
+      "term": "mirror_force",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 12.441748828567869,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 5.645268421023442,
+      "max_abs": 0.036947287209923095,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": -1.1393663790215669e-14,
+      "term": "parallel_streaming",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 2.2434655357449675,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
     {
       "imu_range": [
         0,
@@ -634,10 +909,12 @@
       ]
     }
   ],
-  "total_rows": 1383948,
-  "trace_format": "stellarator_gk_stella_rhs_trace_v3",
-  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "total_rows": 1712908,
+  "trace_format": "stellarator_gk_stella_rhs_trace_v4",
+  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v4/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "v3_missing_record_terms": [],
   "v3_required_record_terms_present": true,
+  "v4_missing_record_terms": [],
+  "v4_required_record_terms_present": true,
   "velocity_weight_columns_present": true
 }

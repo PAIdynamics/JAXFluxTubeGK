@@ -98,6 +98,14 @@ V3_REQUIRED_RECORD_TERMS = REQUIRED_RECORD_TERMS + (
     ("quasineutrality", "denominator"),
     ("normalization", "native_state_scale"),
 )
+V4_COEFFICIENT_RECORD_TERMS = (
+    ("coefficient", "mirror_force"),
+    ("coefficient", "magnetic_drift_g_y"),
+    ("coefficient", "magnetic_drift_phi_y"),
+    ("coefficient", "equilibrium_drive"),
+    ("coefficient", "parallel_streaming"),
+)
+V4_REQUIRED_RECORD_TERMS = V3_REQUIRED_RECORD_TERMS + V4_COEFFICIENT_RECORD_TERMS
 
 
 @dataclass
@@ -298,6 +306,13 @@ def summarize_trace(
         for record, term in sorted(V3_REQUIRED_RECORD_TERMS)
         if (record, term) not in present
     ]
+    v4_missing = [
+        {"record": record, "term": term}
+        for record, term in sorted(V4_REQUIRED_RECORD_TERMS)
+        if (record, term) not in present
+    ]
+    if trace_format == "stellarator_gk_stella_rhs_trace_v3" and not v4_missing:
+        trace_format = "stellarator_gk_stella_rhs_trace_v4"
     summary = {
         "trace_path": str(trace_path),
         "trace_format": trace_format,
@@ -314,6 +329,8 @@ def summarize_trace(
         "missing_record_terms": missing,
         "v3_required_record_terms_present": not v3_missing,
         "v3_missing_record_terms": v3_missing,
+        "v4_required_record_terms_present": not v4_missing,
+        "v4_missing_record_terms": v4_missing,
         "term_summaries": [
             accumulators[key].as_dict(*key)
             for key in sorted(accumulators)
