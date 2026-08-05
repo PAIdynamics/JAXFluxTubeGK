@@ -65,6 +65,13 @@ path. Exactly one must be supplied. File loading and DESC grid construction are
 contained inside `get_geometry`; after `resolve_geometry` returns, solver code
 uses the same provider-neutral result as every other backend:
 
+Install the supported optional backend with `uv sync --extra desc` (or the
+complete MHD environment with `uv sync --extra mhd`). Corresponding `vmecpp`
+and `gvec` extras are also declared for selective installations. Exact fork
+revisions remain pinned by `dependencies.toml` and the bootstrap workflow. The
+provider imports DESC lazily and never modifies `PYTHONPATH` or assumes a source
+checkout.
+
 ```python
 provider = DescGeometryProvider(path="/path/to/equilibrium.h5")
 request = GeometryRequest(

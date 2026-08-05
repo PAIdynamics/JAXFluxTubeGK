@@ -306,7 +306,7 @@ def _desc_field_line_grid(
     get_rtz_grid: Callable | None,
 ):
     get_rtz_grid = get_rtz_grid or _import_desc_get_rtz_grid()
-    return get_rtz_grid(eq, rho, alpha, np.asarray(zeta), coordinates="raz", iota=iota)
+    return get_rtz_grid(eq, rho, alpha, zeta, coordinates="raz", iota=iota)
 
 
 def _desc_iota(eq, rho, *, linear_grid_cls):

@@ -14,6 +14,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+desc = [
+  "desc-opt",
+]
+gvec = [
+  "gvec",
+]
+vmecpp = [
+  "vmecpp",
+]
 dev = [
   "matplotlib>=3.8",
   "netCDF4>=1.7",
@@ -23,6 +32,11 @@ dev = [
 reference = [
   "einops>=0.8",
   "omegaconf>=2.3",
+]
+mhd = [
+  "desc-opt",
+  "gvec",
+  "vmecpp",
 ]
 
 [tool.setuptools.packages.find]

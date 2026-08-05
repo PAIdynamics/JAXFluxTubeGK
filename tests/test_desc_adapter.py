@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -27,12 +28,13 @@ class _FakeDescGrid:
 
 
 class _FakeEquilibrium:
-    def __init__(self):
+    def __init__(self, amplitude=0.05):
         self.compute_calls = []
+        self.amplitude = amplitude
 
     def compute(self, names, grid):
         self.compute_calls.append(tuple(names))
-        return _fake_desc_data(grid.nodes[:, 2])
+        return _fake_desc_data(grid.nodes[:, 2], amplitude=self.amplitude)
 
 
 class _FakeLoader:
@@ -48,15 +50,15 @@ class _FakeLoader:
 def _fake_get_rtz_grid(eq, rho, alpha, zeta, *, coordinates, iota):
     assert coordinates == "raz"
     np.testing.assert_allclose(iota, 0.72)
-    zeta = np.asarray(zeta)
+    zeta = jnp.asarray(zeta)
     theta = alpha + iota * zeta
-    nodes = np.column_stack([np.full_like(zeta, rho), theta, zeta])
+    nodes = jnp.column_stack([jnp.full_like(zeta, rho), theta, zeta])
     return _FakeDescGrid(nodes)
 
 
-def _fake_desc_data(zeta):
+def _fake_desc_data(zeta, *, amplitude=0.05):
     zeta = jnp.asarray(zeta)
-    B = 1.3 + 0.05 * jnp.cos(zeta)
+    B = 1.3 + amplitude * jnp.cos(zeta)
     B_vector = jnp.column_stack(
         [
             0.1 * jnp.sin(zeta),
@@ -218,6 +220,29 @@ def test_desc_object_provider_returns_shared_physical_contract():
     assert result.physical.provider == "desc"
     np.testing.assert_allclose(geometry.B, result.physical.B)
     assert jnp.all(jnp.isfinite(geometry.G))
+
+
+def test_desc_object_provider_retains_gradient_into_reduced_geometry_objective():
+    request = GeometryRequest(configuration="fake-desc-gradient", n_z=9, alpha=0.1)
+
+    def objective(amplitude):
+        result = resolve_geometry(
+            DescGeometryProvider(
+                equilibrium=_FakeEquilibrium(amplitude),
+                iota=0.72,
+                differentiable=True,
+                get_rtz_grid=_fake_get_rtz_grid,
+            ),
+            request,
+            validate=False,
+        )
+        geometry = internal_geometry_from_result(result)
+        return jnp.sum(geometry.B**2 + 0.1 * geometry.g_yy)
+
+    derivative = jax.jit(jax.grad(objective))(0.05)
+
+    assert jnp.isfinite(derivative)
+    assert abs(float(derivative)) > 0.0
 
 
 def test_desc_path_provider_loads_only_at_provider_boundary():
