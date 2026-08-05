@@ -13560,7 +13560,7 @@ def run_stellarator_geometry_preflight(
     positive magnetic field and metric diagonals, representative
     nonnegative ``k_perp^2``, the GX/GS2 eik export contract, and an optional
     finite-difference mirror-force consistency check
-    ``G = -F d_z B / B``.  The finite-difference check is intentionally looser
+    ``G = F d_z B / B``.  The finite-difference check is intentionally looser
     than the eik export gate because it compares the spectral derivative used
     by the solver with an independent fourth-order sampled-grid derivative.
     """
@@ -16427,7 +16427,7 @@ def _finite_difference_mirror_force_error(geometry):
                 - 8.0 * np.roll(B, 1)
                 + np.roll(B, 2)
             ) / (12.0 * dz)
-    finite_difference_G = -F * dB_dz / B
+    finite_difference_G = F * dB_dz / B
     return jnp.asarray(np.max(np.abs(G - finite_difference_G)), dtype=jnp.float64)
 
 
