@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("external dependencies")
-    for name in ("gyaradax", "gx", "desc", "stella", "gkw"):
+    for name in ("gyaradax", "gx", "desc", "vmecpp", "gvec", "stella", "gkw"):
         group.addoption(
             f"--{name}-root",
             type=Path,
@@ -72,6 +72,16 @@ def gx_root(request: pytest.FixtureRequest) -> Path:
 @pytest.fixture
 def desc_root(request: pytest.FixtureRequest) -> Path:
     return _dependency_root(request, "desc")
+
+
+@pytest.fixture
+def vmecpp_root(request: pytest.FixtureRequest) -> Path:
+    return _dependency_root(request, "vmecpp")
+
+
+@pytest.fixture
+def gvec_root(request: pytest.FixtureRequest) -> Path:
+    return _dependency_root(request, "gvec")
 
 
 @pytest.fixture

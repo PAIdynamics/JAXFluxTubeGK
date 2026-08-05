@@ -60,6 +60,7 @@ from .stella_adapter import (
     has_duplicate_stella_endpoint,
     load_stella_geometry_data,
 )
+from .vmecpp_adapter import VmecppGeometryProvider, vmec_field_line_from_wout
 
 __all__ = [
     "AnalyticGeometry",
@@ -89,6 +90,7 @@ __all__ = [
     "StellaGeometryData",
     "StellaGeometryProvider",
     "SyntheticGeometryProvider",
+    "VmecppGeometryProvider",
     "build_boozer_parallel_grid",
     "build_circular_geometry",
     "build_desc_geometry_from_arrays",
@@ -116,4 +118,5 @@ __all__ = [
     "has_duplicate_stella_endpoint",
     "validate_geometry_result",
     "write_geometry_result_cache",
+    "vmec_field_line_from_wout",
 ]

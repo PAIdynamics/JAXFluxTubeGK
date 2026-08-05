@@ -50,6 +50,7 @@ from .geometry import (
     StellaGeometryData,
     StellaGeometryProvider,
     SyntheticGeometryProvider,
+    VmecppGeometryProvider,
     build_boozer_parallel_grid,
     build_circular_geometry,
     build_desc_geometry_from_arrays,
@@ -77,6 +78,7 @@ from .geometry import (
     has_duplicate_stella_endpoint,
     validate_geometry_result,
     write_geometry_result_cache,
+    vmec_field_line_from_wout,
 )
 from .diagnostics import (
     kxky_spectrum,
@@ -491,6 +493,7 @@ __all__ = [
     "VelocityGridSpec",
     "VelocitySliceConventionAudit",
     "VelocitySlicePhaseAudit",
+    "VmecppGeometryProvider",
     "AnalyticGeometry",
     "audit_cyclone_selected_ky_gap",
     "audit_cyclone_velocity_space_slice",
@@ -778,6 +781,7 @@ __all__ = [
     "write_cyclone_ky_scan_convention_audit_csv",
     "write_per_ky_mode_structure_fixture_csv",
     "write_geometry_result_cache",
+    "vmec_field_line_from_wout",
 ]
 
 __version__ = "0.1.0"

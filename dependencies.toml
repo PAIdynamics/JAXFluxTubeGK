@@ -11,7 +11,7 @@ all = ["vmecpp", "desc", "gvec", "gyaradax", "gx", "stella", "gkw"]
 [dependencies.vmecpp]
 role = "mhd-provider"
 url = "https://github.com/PAIdynamics/vmecpp.git"
-revision = "ccdeec53e048f086d71b2ffa35070238e3c70373"
+revision = "065ba90a147853f86326f31510d1debbfa424f5a"
 source_dir = "vmecpp"
 install = "python"
 import_name = "vmecpp"
