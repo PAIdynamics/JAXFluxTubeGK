@@ -309,6 +309,25 @@ RHS, quasineutrality numerator/denominator, and accumulated log normalization.
 For unlike velocity grids, the comparison adapter performs separable linear
 complex interpolation onto a common target grid, rejects extrapolation, and
 uses that target grid's `w_z*w_vpar*w_mu` quadrature for error norms.
+To match the current stella trace time (`code_time=199.9`) and run the partial
+weighted comparison:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
+  --n-windows 1999 \
+  --output-dir /tmp/stellarator_gk_w7x_ky03_solver_balance_t1999 \
+  --array-output /tmp/stellarator_gk_w7x_ky03_solver_arrays_t1999.npz
+uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
+  --require-raw-trace \
+  --solver-balance-dir /tmp/stellarator_gk_w7x_ky03_solver_balance_t1999 \
+  --solver-array /tmp/stellarator_gk_w7x_ky03_solver_arrays_t1999.npz \
+  --output-dir /tmp/stellarator_gk_w7x_ky03_comparison_t1999 \
+  --array-comparison-output /tmp/stellarator_gk_w7x_ky03_array_comparison_t1999.csv
+```
+
+The current v2 trace contains three unlabeled RHS calls and lacks stella-side
+quasineutrality numerator/denominator and normalization records. The comparator
+reports all three calls separately and keeps full parity blocked.
 
 Prepare and run the patched stella RHS trace in a scratch tree:
 

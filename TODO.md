@@ -229,6 +229,9 @@ validation work in Priority 3.
 - [ ] Compare velocity-weighted complex arrays for distribution, parallel
   streaming, mirror force, magnetic drift, equilibrium drive, field-drive
   terms, total RHS, quasineutrality numerator/denominator, and normalization.
+  The v2 trace now supports partial weighted comparisons for the distribution
+  and available RHS bundles; add explicit call/stage, quasineutrality, and
+  normalization records before closing this item.
 - [ ] Inspect the parallel-streaming derivative/linking convention first if
   weighted arrays confirm the current scalar mismatch.
 - [ ] After term parity passes, rerun the W7-X mode-structure gate against the

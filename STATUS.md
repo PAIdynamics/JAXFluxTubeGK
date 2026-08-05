@@ -275,6 +275,16 @@ inexact so prepared providers remain installed.
   `z/vpar/mu`, strict rejection of extrapolation, target-grid quadrature, and
   weighted errors both before and after one global complex amplitude/phase
   alignment.
+- Emitted an external solver archive at the trace-matched `t=199.9` and added
+  streaming loading of the 329 MiB raw stella trace. The partial comparison
+  covers distribution, streaming/field-drive, mirror, drift/field-drive,
+  equilibrium drive, and total RHS for all three inferred stella RHS calls.
+- Restricted comparison to the common target domain (256 z, 16 vpar, 7 mu
+  nodes). Distribution-derived complex alignment leaves relative L2 errors
+  near one for every available quantity and every inferred call, confirming a
+  structural/convention mismatch rather than a scalar normalization offset.
+  Full parity remains blocked because v2 does not label its three calls and
+  lacks stella quasineutrality numerator/denominator and normalization arrays.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

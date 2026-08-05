@@ -1,16 +1,18 @@
 """Compare the W7-X stella ``ky=0.3`` RHS trace with solver balance artifacts.
 
-The patched stella trace contains complex selected-mode arrays, but the current
-committed solver-side fixture contains scalar term-balance summaries rather
-than full solver arrays.  This comparator therefore does the strongest honest
-check currently possible from committed artifacts:
+The patched stella trace contains complex selected-mode arrays, while the
+committed solver-side fixture intentionally contains only compact scalar
+summaries. This comparator supports both that standalone fallback and an
+external solver array archive:
 
 * ingest the raw stella trace when it is available, otherwise use the committed
   compact summary;
 * convert stella RHS deltas from native ``rhs*dt`` to continuous-time RHS
   norms;
 * compare scale-free term/total norm ratios against the solver-side balance;
-* report the remaining blockers for direct array parity.
+* optionally interpolate stella arrays onto the solver overlap grid and report
+  weighted complex errors for every inferred RHS call;
+* report the remaining blockers for full array parity.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ DEFAULT_STELLA_SUMMARY = (
 )
 DEFAULT_SOLVER_BALANCE = ROOT / "fixtures/w7x_ky03_rhs_model_balance"
 DEFAULT_OUTPUT_DIR = ROOT / "fixtures/w7x_ky03_stella_rhs_trace_comparison"
+DEFAULT_ARRAY_COMPARISON = Path("/tmp/stellarator_gk_w7x_ky03_array_comparison.csv")
 
 TERM_GROUPS = (
     {
@@ -126,7 +129,9 @@ def interpolate_phase_space_to_grid(
     return result
 
 
-def weighted_complex_metrics(reference, candidate, *, w_z, w_vpar, w_mu):
+def weighted_complex_metrics(
+    reference, candidate, *, w_z, w_vpar, w_mu, alignment_scale=None
+):
     """Return target-grid weighted complex error with optimal phase/scale fit."""
 
     reference = np.asarray(reference)
@@ -146,7 +151,12 @@ def weighted_complex_metrics(reference, candidate, *, w_z, w_vpar, w_mu):
     reference_norm = _weighted_l2(reference, weights)
     candidate_norm = _weighted_l2(candidate, weights)
     denominator = np.sum(weights * np.abs(candidate) ** 2)
-    scale = 0.0j if denominator == 0.0 else np.sum(weights * np.conj(candidate) * reference) / denominator
+    fitted_scale = (
+        0.0j
+        if denominator == 0.0
+        else np.sum(weights * np.conj(candidate) * reference) / denominator
+    )
+    scale = fitted_scale if alignment_scale is None else complex(alignment_scale)
     aligned_error = _weighted_l2(reference - scale * candidate, weights)
     raw_error = _weighted_l2(reference - candidate, weights)
     return {
@@ -156,6 +166,7 @@ def weighted_complex_metrics(reference, candidate, *, w_z, w_vpar, w_mu):
         "aligned_relative_l2_error": _safe_ratio(aligned_error, reference_norm),
         "alignment_scale_real": float(np.real(scale)),
         "alignment_scale_imag": float(np.imag(scale)),
+        "alignment_scale_source": "fitted" if alignment_scale is None else "provided",
     }
 
 
@@ -175,6 +186,175 @@ def _weighted_l2(values, weights) -> float:
     return float(np.sqrt(np.sum(weights * np.abs(values) ** 2)))
 
 
+def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
+    """Load all inferred RHS-call occurrences from the external stella v2 trace."""
+
+    state_summary = _stella_terms(summary)[("pdf_g", "input_pdf")]
+    iz_min, iz_max = (int(value) for value in state_summary["iz_range"])
+    n_z_raw = iz_max - iz_min + 1
+    n_vpar = int(state_summary["iv_range"][1] - state_summary["iv_range"][0] + 1)
+    n_mu = int(state_summary["imu_range"][1] - state_summary["imu_range"][0] + 1)
+    phase_shape = (n_z_raw, n_vpar, n_mu)
+    phase_records: dict[tuple[str, str], list[np.ndarray]] = {}
+    field_records: dict[tuple[str, str], list[np.ndarray]] = {}
+    occurrences: dict[tuple[str, str], int] = {}
+    vpar = np.full(n_vpar, np.nan)
+    mu = np.full(n_mu, np.nan)
+    w_vpar = np.full(n_vpar, np.nan)
+    w_mu = np.full((n_z_raw, n_mu), np.nan)
+    last_key = None
+    stage = -1
+    header = None
+
+    with Path(trace_path).open(encoding="utf-8") as handle:
+        for line in handle:
+            fields = line.split()
+            if not fields:
+                continue
+            if header is None:
+                header = {name: index for index, name in enumerate(fields)}
+                continue
+            key = (fields[header["record"]], fields[header["term"]])
+            if key != last_key:
+                stage = occurrences.get(key, 0)
+                occurrences[key] = stage + 1
+                target = field_records if key[0] == "phi" else phase_records
+                shape = (n_z_raw,) if key[0] == "phi" else phase_shape
+                target.setdefault(key, []).append(np.zeros(shape, dtype=np.complex128))
+                last_key = key
+            iz = int(fields[header["iz"]]) - iz_min
+            value = float(fields[header["real"]]) + 1j * float(fields[header["imag"]])
+            if key[0] == "phi":
+                field_records[key][stage][iz] = value
+                continue
+            iv = int(fields[header["iv"]]) - 1
+            imu = int(fields[header["imu"]]) - 1
+            phase_records[key][stage][iz, iv, imu] = value
+            vpar[iv] = float(fields[header["vpa"]])
+            mu[imu] = float(fields[header["mu"]])
+            w_vpar[iv] = float(fields[header["wgts_vpa"]])
+            w_mu[iz, imu] = float(fields[header["wgts_mu"]])
+
+    required = (
+        ("pdf_g", "input_pdf"),
+        ("phi", "field_phi"),
+        ("rhs_delta", "mirror_force"),
+        ("rhs_delta", "magnetic_drift_y"),
+        ("rhs_delta", "magnetic_drift_x"),
+        ("rhs_delta", "equilibrium_drive_wstar"),
+        ("rhs_delta", "parallel_streaming"),
+        ("rhs_total", "total"),
+    )
+    missing = [key for key in required if key not in phase_records and key not in field_records]
+    if missing:
+        raise ValueError(f"raw stella trace is missing array records: {missing}")
+    call_counts = {occurrences[key] for key in required}
+    if len(call_counts) != 1:
+        raise ValueError(f"stella record call counts differ: {occurrences}")
+    if not all(np.all(np.isfinite(values)) for values in (vpar, mu, w_vpar, w_mu)):
+        raise ValueError("stella coordinates or quadrature weights are incomplete")
+
+    code_dt = _single_float(summary["code_dts"])
+    z_indices = np.arange(iz_min, iz_max + 1)
+    z = z_indices[:-1] / float(n_z_raw - 1)
+
+    def phase(key, *, rhs=False):
+        values = np.stack(phase_records[key], axis=0)[:, :-1]
+        return values / code_dt if rhs else values
+
+    return {
+        "z": z,
+        "vpar": vpar,
+        "mu": mu,
+        "w_vpar": w_vpar,
+        "w_mu": w_mu[:-1],
+        "distribution": phase(("pdf_g", "input_pdf")),
+        "phi": np.stack(field_records[("phi", "field_phi")], axis=0)[:, :-1],
+        "mirror_force": phase(("rhs_delta", "mirror_force"), rhs=True),
+        "magnetic_drift": phase(("rhs_delta", "magnetic_drift_y"), rhs=True)
+        + phase(("rhs_delta", "magnetic_drift_x"), rhs=True),
+        "equilibrium_drive": phase(("rhs_delta", "equilibrium_drive_wstar"), rhs=True),
+        "parallel_streaming": phase(("rhs_delta", "parallel_streaming"), rhs=True),
+        "total_rhs": phase(("rhs_total", "total"), rhs=True),
+        "rhs_call_count": call_counts.pop(),
+    }
+
+
+def compare_stella_solver_arrays(stella: dict[str, Any], solver_array: Path):
+    """Compare trace arrays on the solver grid restricted to stella's domain."""
+
+    with np.load(solver_array) as archive:
+        solver = {name: np.asarray(archive[name]) for name in archive.files}
+    solver_z = np.asarray(solver["z"], dtype=float)
+    solver_vpar = np.asarray(solver["vpar"], dtype=float)
+    solver_mu = np.asarray(solver["mu"], dtype=float)
+    vmask = (solver_vpar >= stella["vpar"][0]) & (solver_vpar <= stella["vpar"][-1])
+    mumask = (solver_mu >= stella["mu"][0]) & (solver_mu <= stella["mu"][-1])
+    if not np.any(vmask) or not np.any(mumask):
+        raise ValueError("stella and solver velocity grids have no common target nodes")
+    target_vpar = solver_vpar[vmask]
+    target_mu = solver_mu[mumask]
+    weights = {
+        "w_z": solver["w_z"],
+        "w_vpar": solver["w_vpar"][vmask],
+        "w_mu": solver["w_mu"][mumask],
+    }
+    solver_arrays = {
+        "distribution": solver["distribution"][:, vmask][:, :, mumask],
+        "parallel_streaming": (
+            solver["rhs_parallel_streaming"] + solver["rhs_parallel_field_drive"]
+        )[:, vmask][:, :, mumask],
+        "mirror_force": solver["rhs_mirror_force"][:, vmask][:, :, mumask],
+        "magnetic_drift": (
+            solver["rhs_magnetic_drift"] + solver["rhs_drift_field_drive"]
+        )[:, vmask][:, :, mumask],
+        "equilibrium_drive": solver["rhs_equilibrium_drive"][:, vmask][:, :, mumask],
+        "total_rhs": solver["total_rhs"][:, vmask][:, :, mumask],
+    }
+    rows = []
+    for rhs_call in range(int(stella["rhs_call_count"])):
+        mapped = {
+            name: interpolate_phase_space_to_grid(
+                stella[name][rhs_call],
+                source_z=stella["z"],
+                source_vpar=stella["vpar"],
+                source_mu=stella["mu"],
+                target_z=solver_z,
+                target_vpar=target_vpar,
+                target_mu=target_mu,
+            )
+            for name in solver_arrays
+        }
+        distribution_metrics = weighted_complex_metrics(
+            mapped["distribution"], solver_arrays["distribution"], **weights
+        )
+        alignment_scale = complex(
+            distribution_metrics["alignment_scale_real"],
+            distribution_metrics["alignment_scale_imag"],
+        )
+        for name, candidate in solver_arrays.items():
+            metrics = (
+                distribution_metrics
+                if name == "distribution"
+                else weighted_complex_metrics(
+                    mapped[name], candidate, alignment_scale=alignment_scale, **weights
+                )
+            )
+            rows.append(
+                {
+                    "rhs_call": rhs_call + 1,
+                    "quantity": name,
+                    "target_n_z": solver_z.size,
+                    "target_n_vpar": target_vpar.size,
+                    "target_n_mu": target_mu.size,
+                    "solver_vpar_nodes_excluded": int(np.count_nonzero(~vmask)),
+                    "solver_mu_nodes_excluded": int(np.count_nonzero(~mumask)),
+                    **metrics,
+                }
+            )
+    return rows
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     result = compare_w7x_stella_rhs_trace_to_solver_balance(
@@ -183,9 +363,13 @@ def main(argv: list[str] | None = None) -> int:
         solver_balance_dir=args.solver_balance_dir,
         output_dir=args.output_dir,
         require_raw_trace=args.require_raw_trace,
+        solver_array=args.solver_array,
+        array_comparison_output=args.array_comparison_output,
     )
     print(result["status_json"])
     print(result["term_comparison_csv"])
+    if result.get("array_comparison_csv"):
+        print(result["array_comparison_csv"])
     return 0
 
 
@@ -196,6 +380,8 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
     solver_balance_dir: Path = DEFAULT_SOLVER_BALANCE,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     require_raw_trace: bool = False,
+    solver_array: Path | None = None,
+    array_comparison_output: Path = DEFAULT_ARRAY_COMPARISON,
 ) -> dict[str, str]:
     """Write comparison artifacts and return their paths."""
 
@@ -234,6 +420,45 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
         trace_path=trace_path,
     )
 
+    array_rows = None
+    if solver_array is not None:
+        if not raw_trace_used:
+            raise ValueError("--solver-array requires the raw stella --trace")
+        stella_arrays = load_stella_array_trace(trace_path, stella)
+        array_rows = compare_stella_solver_arrays(stella_arrays, Path(solver_array))
+        _write_csv(array_comparison_output, array_rows)
+        contract["array_comparisons_available"] = sorted(
+            {str(row["quantity"]) for row in array_rows}
+        )
+        contract["inferred_stella_rhs_calls"] = len(stella_arrays["distribution"])
+        contract["missing_array_records"] = [
+            "stella_quasineutrality_numerator",
+            "stella_quasineutrality_denominator",
+            "stella_log_normalization",
+        ]
+        contract["array_parity_blockers"] = [
+            "stella trace does not label the three inferred RHS calls/stages",
+            "stella trace lacks quasineutrality numerator/denominator and normalization arrays",
+            "trace forces stella mirror/streaming explicit, unlike the production growth run",
+        ]
+        status["array_parity_blockers"] = contract["array_parity_blockers"]
+        status["status"] = "partial_weighted_array_comparison"
+        status["comparison_kind"] = "weighted_complex_arrays_on_solver_overlap_grid"
+        status["array_comparison_csv"] = str(array_comparison_output)
+        status["stella_rhs_call_selection"] = "all inferred calls reported separately"
+        status["interpretation"] = (
+            "The external solver archive enables weighted complex comparisons for "
+            "the distribution and every RHS bundle present in stella v2. One "
+            "distribution-fitted complex scale is reused for all terms. Full parity "
+            "is not yet claimable because the three stella calls are unlabeled and "
+            "quasineutrality/normalization records are absent."
+        )
+        status["passed"] = False
+        status["next_action"] = (
+            "add explicit RHS-call/stage and quasineutrality/normalization records "
+            "to the stella trace before setting array-parity tolerances"
+        )
+
     term_csv = output_dir / "term_norm_comparison.csv"
     status_json = output_dir / "stella_solver_rhs_trace_comparison_status.json"
     contract_json = output_dir / "array_contract.json"
@@ -241,11 +466,14 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
     _write_json(status_json, status)
     _write_json(contract_json, contract)
     _write_readme(output_dir)
-    return {
+    result = {
         "status_json": str(status_json),
         "term_comparison_csv": str(term_csv),
         "array_contract_json": str(contract_json),
     }
+    if array_rows is not None:
+        result["array_comparison_csv"] = str(array_comparison_output)
+    return result
 
 
 def _term_comparison_rows(
@@ -596,6 +824,12 @@ def _write_readme(output_dir: Path) -> None:
                 "complex interpolation, forbids extrapolation, and evaluates weighted",
                 "errors with the chosen target grid's `w_z*w_vpar*w_mu` quadrature.",
                 "",
+                "When `--solver-array` is supplied, `weighted_array_comparison.csv`",
+                "retains compact metrics for every inferred stella RHS call. Raw",
+                "stella and solver arrays remain external. The current v2 result is",
+                "partial because stella call/stage labels, quasineutrality arrays,",
+                "and normalization are not present.",
+                "",
             )
         ),
         encoding="utf-8",
@@ -609,6 +843,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--solver-balance-dir", type=Path, default=DEFAULT_SOLVER_BALANCE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--require-raw-trace", action="store_true")
+    parser.add_argument(
+        "--solver-array",
+        type=Path,
+        help="external solver selected-mode .npz archive for weighted array comparison",
+    )
+    parser.add_argument(
+        "--array-comparison-output",
+        type=Path,
+        default=DEFAULT_ARRAY_COMPARISON,
+        help="external CSV path for weighted array metrics",
+    )
     return parser.parse_args(argv)
 
 

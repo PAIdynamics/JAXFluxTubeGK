@@ -1,12 +1,19 @@
 {
+  "array_comparisons_available": [
+    "distribution",
+    "equilibrium_drive",
+    "magnetic_drift",
+    "mirror_force",
+    "parallel_streaming",
+    "total_rhs"
+  ],
   "array_parity_blockers": [
-    "stella and committed solver balance use different n_vpar",
-    "stella and committed solver balance use different vpar ranges",
-    "stella and committed solver balance use different mu grids/ranges",
-    "committed solver balance fixture stores scalar term summaries, not full term arrays",
-    "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
+    "stella trace does not label the three inferred RHS calls/stages",
+    "stella trace lacks quasineutrality numerator/denominator and normalization arrays",
+    "trace forces stella mirror/streaming explicit, unlike the production growth run"
   ],
   "direct_array_parity_ready": false,
+  "inferred_stella_rhs_calls": 3,
   "interpolation_adapter": {
     "available": true,
     "axis_order": [
@@ -18,56 +25,61 @@
     "method": "separable_linear_complex_interpolation",
     "weighting": "use_quadrature_of_the_chosen_target_grid"
   },
+  "missing_array_records": [
+    "stella_quasineutrality_numerator",
+    "stella_quasineutrality_denominator",
+    "stella_log_normalization"
+  ],
   "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
   "solver_case": {
     "case": "gkw_fd_16x8",
     "dominant_rhs_terms": [
       {
-        "projection_imag": -0.14901027861041238,
-        "projection_real": 0.6617238928258995,
-        "rhs_fraction_of_total_l2": 1.025496413478766,
+        "projection_imag": -0.0009157691272875395,
+        "projection_real": 0.9179586934798801,
+        "rhs_fraction_of_total_l2": 1.1158931985507965,
         "term": "parallel_streaming"
       },
       {
-        "projection_imag": 0.10882082710860805,
-        "projection_real": 0.3739232334587812,
-        "rhs_fraction_of_total_l2": 0.6145983268791836,
-        "term": "equilibrium_drive"
-      },
-      {
-        "projection_imag": 0.019936630648215357,
-        "projection_real": -0.05420963418308981,
-        "rhs_fraction_of_total_l2": 0.5071044096465919,
+        "projection_imag": 0.004616680176143997,
+        "projection_real": 0.039523823322325596,
+        "rhs_fraction_of_total_l2": 0.5303131662346988,
         "term": "magnetic_drift"
       },
       {
-        "projection_imag": -0.0005075078930672237,
-        "projection_real": 0.0028389777475387092,
-        "rhs_fraction_of_total_l2": 0.24474079576398658,
+        "projection_imag": 0.0015662610101228552,
+        "projection_real": 0.01426002858573576,
+        "rhs_fraction_of_total_l2": 0.3258458442398417,
         "term": "mirror_force"
+      },
+      {
+        "projection_imag": -0.0025719316697929004,
+        "projection_real": 0.020748859398996466,
+        "rhs_fraction_of_total_l2": 0.13966802717184643,
+        "term": "parallel_field_drive"
       }
     ],
     "dt": 0.02,
-    "estimated_cfl_dt": 0.1773798134085247,
-    "final_frequency": 0.03402234365722446,
-    "final_growth_rate": 0.01891601735193212,
-    "final_log_normalization": -1.386387114666568,
-    "final_raw_amplitude": 1.0023998379278982,
+    "estimated_cfl_dt": 0.17744894516511428,
+    "final_frequency": -0.11326648561581625,
+    "final_growth_rate": 0.0012772583140781809,
+    "final_log_normalization": -3.18601507320886,
+    "final_raw_amplitude": 1.0006929777848805,
     "geometry_source": "stella-geometry",
     "n_mu": 8,
     "n_vpar": 16,
-    "n_windows": 2000,
+    "n_windows": 1999,
     "parallel_derivative_model": "matrix",
-    "quasineutrality_residual_rms": 1.0328158654060863e-16,
+    "quasineutrality_residual_rms": 1.0261217872182776e-16,
     "rhs_reconstruction_max_abs_error": 0.0,
     "stella_geometry": "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
     "stella_tend": 200.0,
     "steps_per_window": 5,
-    "total_rhs_rms": 0.035687906850676215,
-    "total_time": 200.0,
+    "total_rhs_rms": 0.07105699924641688,
+    "total_time": 199.9,
     "velocity_backend": "finite_difference",
-    "wall_seconds": 80.08467837492935
+    "wall_seconds": 140.8825999170076
   },
   "solver_n_z": 256,
   "solver_terms_available": [

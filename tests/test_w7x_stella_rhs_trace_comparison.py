@@ -252,13 +252,71 @@ def test_weighted_complex_metrics_remove_global_complex_scale():
     assert abs(metrics["alignment_scale_imag"] - 2.0) < 1.0e-14
 
 
+def test_stella_array_loader_infers_calls_drops_endpoint_and_converts_rhs(tmp_path):
+    module = _load_module()
+    path = tmp_path / "trace.dat"
+    header = (
+        "record step term iky ikx iz it ivmu iv imu is vpa mu "
+        "wgts_vpa wgts_mu code_time code_dt real imag"
+    )
+    lines = [header]
+    records = (
+        ("pdf_g", "input_pdf"),
+        ("phi", "field_phi"),
+        ("rhs_delta", "mirror_force"),
+        ("rhs_delta", "magnetic_drift_y"),
+        ("rhs_delta", "magnetic_drift_x"),
+        ("rhs_delta", "equilibrium_drive_wstar"),
+        ("rhs_delta", "parallel_streaming"),
+        ("rhs_total", "total"),
+    )
+    for call in range(2):
+        for record, term in records:
+            for iz in (-1, 0, 1):
+                is_field = record == "phi"
+                value = 100.0 * call + 10.0 + iz
+                lines.append(
+                    f"{record} 20 {term} 4 1 {iz} 1 0 "
+                    f"{0 if is_field else 1} {0 if is_field else 1} "
+                    f"{0 if is_field else 1} "
+                    f"{0.0 if is_field else -1.0} {0.0 if is_field else 0.5} "
+                    f"{0.0 if is_field else 2.0} {0.0 if is_field else 3.0 + iz} "
+                    f"1.9 0.1 {value} {-value}"
+                )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    common = {
+        "iz_range": [-1, 1],
+        "iv_range": [1, 1],
+        "imu_range": [1, 1],
+        "vpa_range": [-1.0, -1.0],
+        "mu_range": [0.5, 0.5],
+    }
+    summary = {
+        "code_dts": [0.1],
+        "term_summaries": [
+            {"record": record, "term": term, **common} for record, term in records
+        ],
+    }
+
+    trace = module.load_stella_array_trace(path, summary)
+
+    assert trace["rhs_call_count"] == 2
+    assert trace["distribution"].shape == (2, 2, 1, 1)
+    np.testing.assert_array_equal(trace["z"], [-0.5, 0.0])
+    np.testing.assert_array_equal(trace["w_mu"], [[2.0], [3.0]])
+    assert trace["distribution"][1, 0, 0, 0] == 109.0 - 109.0j
+    assert trace["mirror_force"][0, 0, 0, 0] == 90.0 - 90.0j
+
+
 def test_committed_stella_rhs_trace_comparison_contract():
     status = json.loads((COMPARISON / "stella_solver_rhs_trace_comparison_status.json").read_text())
     contract = json.loads((COMPARISON / "array_contract.json").read_text())
     rows = tuple(csv.DictReader((COMPARISON / "term_norm_comparison.csv").open()))
     by_group = {row["comparison_group"]: row for row in rows}
 
-    assert status["status"] == "blocked_array_contract_mismatch"
+    weighted_rows = tuple(csv.DictReader((COMPARISON / "weighted_array_comparison.csv").open()))
+
+    assert status["status"] == "partial_weighted_array_comparison"
     assert status["raw_trace_used"] is True
     assert status["stella_required_record_terms_present"] is True
     assert status["direct_array_parity_ready"] is False
@@ -267,6 +325,18 @@ def test_committed_stella_rhs_trace_comparison_contract():
     assert contract["stella_endpoint_drop_applied"] is True
     assert contract["stella_n_vpar"] == 32
     assert contract["solver_case"]["n_vpar"] == 16
+    assert contract["inferred_stella_rhs_calls"] == 3
+    assert contract["missing_array_records"]
+    assert len(weighted_rows) == 18
+    assert {row["quantity"] for row in weighted_rows} == {
+        "distribution",
+        "parallel_streaming",
+        "mirror_force",
+        "magnetic_drift",
+        "equilibrium_drive",
+        "total_rhs",
+    }
+    assert min(float(row["aligned_relative_l2_error"]) for row in weighted_rows) > 0.99
     assert float(by_group["parallel_streaming_bundle"]["stella_rhs_fraction_of_total_l2"]) > 0.0
     assert float(by_group["mirror_force"]["stella_rhs_fraction_of_total_l2"]) > 0.0
     assert float(by_group["total_rhs"]["stella_rhs_fraction_of_total_l2"]) == 1.0
