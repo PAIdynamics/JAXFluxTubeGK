@@ -49,6 +49,14 @@ def test_semi_lagrangian_mirror_step_translates_linear_profile():
 
     np.testing.assert_allclose(advanced[1:-1, 0, 0, 0, 0], vpar[1:-1] + 0.1)
 
+    with_species_axis = semi_lagrangian_mirror_step(
+        state,
+        0.25,
+        vpar,
+        coefficient[None, ...],
+    )
+    np.testing.assert_allclose(with_species_axis, advanced)
+
 
 def test_split_mirror_integrator_matches_characteristic_for_zero_rhs():
     vpar = jnp.linspace(-2.0, 2.0, 9)

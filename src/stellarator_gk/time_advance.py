@@ -127,6 +127,8 @@ def semi_lagrangian_mirror_step(state, dt, vpar, mirror_coefficient):
     state = jnp.asarray(state)
     vpar = jnp.asarray(vpar)
     coefficient = jnp.asarray(mirror_coefficient)
+    if coefficient.ndim == 3 and coefficient.shape[0] == 1:
+        coefficient = coefficient[0]
     if state.ndim != 5:
         raise ValueError("state must have shape (vpar,mu,z,kx,ky)")
     if coefficient.shape != state.shape[1:3]:
