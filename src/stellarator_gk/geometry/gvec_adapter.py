@@ -13,7 +13,13 @@ import numpy as np
 from ..grids import build_parallel_grid
 from ..types import ParallelGridSpec
 from .flux_tube import build_physical_flux_tube_geometry_from_coordinate_arrays
-from .provider import GeometryProvenance, GeometryRequest, GeometryResult, build_geometry_metadata
+from .provider import (
+    GeometryNormalization,
+    GeometryProvenance,
+    GeometryRequest,
+    GeometryResult,
+    build_geometry_metadata,
+)
 
 
 GVEC_GEOMETRY_COMPUTE_KEYS = (
@@ -23,6 +29,8 @@ GVEC_GEOMETRY_COMPUTE_KEYS = (
     "iota",
     "diota_dr",
     "dPhi_dr",
+    "Phi_edge",
+    "r_minor",
     "B",
     "mod_B",
     "grad_mod_B",
@@ -119,6 +127,11 @@ class GvecGeometryProvider:
                 command="pyGVEC EvaluationsPEST + State.compute",
             ),
             nfp=nfp,
+            normalization=GeometryNormalization(
+                length_reference="GVEC effective minor radius r_minor (meter)",
+                magnetic_field_reference="2*abs(GVEC Phi_edge)/r_minor^2 (tesla)",
+                flux_reference="toroidal flux / (2*pi) (weber)",
+            ),
             differentiable=False,
         )
         return GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata)
@@ -138,8 +151,13 @@ def gvec_geometry_arrays_from_data(
     iota = _scalar(data, "iota")
     diota_dr = _scalar(data, "diota_dr")
     d_phi_dr = _scalar(data, "dPhi_dr")
+    phi_edge = _scalar(data, "Phi_edge")
+    length_reference = _scalar(data, "r_minor")
     if abs(d_phi_dr) < 1.0e-14:
         raise ValueError("GVEC dPhi_dr vanishes on the requested surface")
+    if length_reference <= 0.0 or abs(phi_edge) < 1.0e-14:
+        raise ValueError("GVEC r_minor and Phi_edge must define positive references")
+    field_reference = 2.0 * abs(phi_edge) / length_reference**2
 
     grad_rho = _vector(data, "grad_rho", shape)
     grad_theta_pest = _vector(data, "grad_theta_P", shape)
@@ -163,15 +181,23 @@ def gvec_geometry_arrays_from_data(
         "rho": rho,
         "iota": iota,
         "shear": -rho * diota_dr / iota,
-        "B": B,
-        "b_dot_grad_z": _dot(b, grad_zeta),
-        "grad_psi_sq": _dot(grad_psi, grad_psi),
-        "grad_alpha_sq": _dot(grad_alpha, grad_alpha),
-        "grad_psi_dot_grad_alpha": _dot(grad_psi, grad_alpha),
-        "B_cross_gradB_dot_grad_psi": _dot(B_cross_grad_B, grad_psi),
-        "B_cross_gradB_dot_grad_alpha": _dot(B_cross_grad_B, grad_alpha),
-        "b_cross_kappa_dot_grad_psi": _dot(b_cross_kappa, grad_psi),
-        "b_cross_kappa_dot_grad_alpha": _dot(b_cross_kappa, grad_alpha),
+        "B": B / field_reference,
+        "b_dot_grad_z": length_reference * _dot(b, grad_zeta),
+        "grad_psi_sq": _dot(grad_psi, grad_psi)
+        / (length_reference**2 * field_reference**2),
+        "grad_alpha_sq": length_reference**2 * _dot(grad_alpha, grad_alpha),
+        "grad_psi_dot_grad_alpha": _dot(grad_psi, grad_alpha) / field_reference,
+        "B_cross_gradB_dot_grad_psi": _dot(B_cross_grad_B, grad_psi)
+        / field_reference**3,
+        "B_cross_gradB_dot_grad_alpha": (
+            length_reference**2
+            * _dot(B_cross_grad_B, grad_alpha)
+            / field_reference**2
+        ),
+        "b_cross_kappa_dot_grad_psi": _dot(b_cross_kappa, grad_psi)
+        / field_reference,
+        "b_cross_kappa_dot_grad_alpha": length_reference**2
+        * _dot(b_cross_kappa, grad_alpha),
     }
 
 

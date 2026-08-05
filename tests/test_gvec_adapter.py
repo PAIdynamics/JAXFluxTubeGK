@@ -18,6 +18,8 @@ def _gvec_data(n_z=12):
         "iota": 0.82,
         "diota_dr": 0.12,
         "dPhi_dr": 1.7,
+        "Phi_edge": 1.0,
+        "r_minor": 1.0,
         "grad_rho": np.tile([1.0, 0.0, 0.0], (n_z, 1)),
         "grad_theta_P": np.tile([0.1, 1.0, 0.0], (n_z, 1)),
         "grad_zeta": np.tile([0.0, 0.0, 0.4], (n_z, 1)),
@@ -70,7 +72,8 @@ def test_gvec_data_mapping_produces_physical_arrays():
     )
 
     np.testing.assert_allclose(arrays["theta"] - arrays["iota"] * arrays["phi"], 0.15)
-    np.testing.assert_allclose(arrays["grad_psi_sq"], 1.7**2)
+    np.testing.assert_allclose(arrays["grad_psi_sq"], (1.7 / 2.0) ** 2)
+    np.testing.assert_allclose(arrays["B"], _gvec_data(request.n_z)["mod_B"] / 2.0)
     assert arrays["B"].shape == (12,)
     assert all(np.all(np.isfinite(np.asarray(value))) for value in arrays.values())
 
@@ -99,6 +102,8 @@ def test_gvec_provider_uses_pest_evaluation_and_common_contract():
     assert calls[0]["theta_P"].shape == (1, 1, 12)
     assert result.metadata.provenance.provider == "gvec"
     assert result.metadata.provenance.revision == "fake-gvec-revision"
+    assert result.metadata.normalization.length_reference.startswith("GVEC")
+    assert "Phi_edge" in result.metadata.normalization.magnetic_field_reference
     assert result.physical.nfp == 5
     assert geometry.B.shape == (12,)
     assert np.all(np.isfinite(np.asarray(geometry.D_x)))
