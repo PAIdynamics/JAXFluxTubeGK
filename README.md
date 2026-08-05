@@ -341,12 +341,12 @@ JAX_ENABLE_X64=1 uv run python scripts/replay_w7x_stella_state_in_solver.py \
   --trace /tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat
 ```
 
-This writes only compact results. It compares periodic, open-chain, and an
-explicitly labeled source-derived stella coefficient discriminator on a
-velocity grid fully contained in the trace domain. The discriminator currently
-reduces total-RHS relative L2 error to about 0.255; it does not alter production
-defaults while the geometry and distribution-normalization contracts remain
-under validation.
+This writes only compact results. It compares periodic, open-chain, and
+explicitly labeled source-derived stella coefficient discriminators on grids
+fully contained in the trace domain. The exact-vpar-node 32×4 discriminator
+currently reduces total-RHS relative L2 error to about 0.237. The confirmed
+`flux_fac` drive scale is now part of geometry schema v2; the remaining drift,
+mirror, and distribution-normalization conventions are still diagnostic-only.
 
 Prepare and run the patched stella RHS trace in a scratch tree:
 

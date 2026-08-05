@@ -235,8 +235,9 @@ validation work in Priority 3.
   weighted arrays confirm the current scalar mismatch.
 - [x] Replay each labeled stella state through the solver RHS on a contained
   common velocity grid. The source-derived stella coefficient discriminator
-  reduces total-RHS error from 1.32 to 0.255 and brings equilibrium drive below
-  0.1, but mirror (0.398), drift (0.173), streaming (0.172), and the
+  reduces total-RHS error from 1.32 to 0.237 and brings equilibrium drive below
+  0.1. An exact-stella-node 32×4 discriminator improves drift to 0.164 and
+  streaming to 0.115, but mirror remains 0.411 and the
   distribution/quasineutrality normalization contract still require closure.
 - [x] Separate equilibrium-gradient drive scale from magnetic-drift geometry in
   provider schema v2 and map stella's native `flux_fac` into that field.

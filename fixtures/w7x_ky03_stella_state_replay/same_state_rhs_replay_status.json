@@ -3,8 +3,8 @@
   "status": "same_state_rhs_parity_failed",
   "passed": false,
   "relative_l2_tolerance": 0.1,
-  "max_rhs_relative_l2_error": 0.39806884131856735,
-  "acceptance_case": "replay_stella_coefficients_16x4",
+  "max_rhs_relative_l2_error": 0.4105297275122281,
+  "acceptance_case": "replay_stella_coefficients_32x4",
   "max_all_discriminators_rhs_relative_l2_error": 2.056022002515255,
   "trace_source": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "geometry_source": "/Users/mohsensadr/Codes/GitHub/fusion/optimal-fusion/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
@@ -17,7 +17,8 @@
   "cases": [
     "replay_open_16x4",
     "replay_periodic_16x4",
-    "replay_stella_coefficients_16x4"
+    "replay_stella_coefficients_16x4",
+    "replay_stella_coefficients_32x4"
   ],
   "best_by_quantity": {
     "equilibrium_drive": {
@@ -29,12 +30,12 @@
       "best_fit_scale_imag": 7.556006417597794e-19
     },
     "magnetic_drift": {
-      "case": "replay_stella_coefficients_16x4",
+      "case": "replay_stella_coefficients_32x4",
       "rhs_call": 3,
-      "relative_l2_error": 0.17278825679365423,
-      "best_fit_relative_l2_error": 0.16240209474271172,
-      "best_fit_scale_real": 0.9438327184853442,
-      "best_fit_scale_imag": -0.005532132798567499
+      "relative_l2_error": 0.16449875449142537,
+      "best_fit_relative_l2_error": 0.15585315166491517,
+      "best_fit_scale_real": 0.9497615357684043,
+      "best_fit_scale_imag": 0.006061200608203379
     },
     "mirror_force": {
       "case": "replay_stella_coefficients_16x4",
@@ -45,12 +46,12 @@
       "best_fit_scale_imag": -0.018524407753493666
     },
     "parallel_streaming": {
-      "case": "replay_stella_coefficients_16x4",
+      "case": "replay_stella_coefficients_32x4",
       "rhs_call": 1,
-      "relative_l2_error": 0.17184267106055376,
-      "best_fit_relative_l2_error": 0.1581870427704712,
-      "best_fit_scale_real": 0.9612257123714645,
-      "best_fit_scale_imag": -0.052728777285096715
+      "relative_l2_error": 0.11544706575128849,
+      "best_fit_relative_l2_error": 0.11436682085428179,
+      "best_fit_scale_real": 0.9944292635532076,
+      "best_fit_scale_imag": -0.014757111143242624
     },
     "quasineutrality_denominator": {
       "case": "replay_periodic_16x4",
@@ -69,12 +70,12 @@
       "best_fit_scale_imag": 0.030514397288901162
     },
     "total_rhs": {
-      "case": "replay_stella_coefficients_16x4",
+      "case": "replay_stella_coefficients_32x4",
       "rhs_call": 3,
-      "relative_l2_error": 0.2544937715598389,
-      "best_fit_relative_l2_error": 0.2439257040979688,
-      "best_fit_scale_real": 0.943009108292411,
-      "best_fit_scale_imag": -0.0417395075846534
+      "relative_l2_error": 0.23666866731152006,
+      "best_fit_relative_l2_error": 0.23388370934231487,
+      "best_fit_scale_real": 0.9693681336774997,
+      "best_fit_scale_imag": -0.019101488051992195
     }
   },
   "interpretation": "Each solver RHS is evaluated on the same stella distribution and phi after interpolation onto a contained 16x4 finite-difference velocity grid. No fitted amplitude or phase is used; the quasineutrality denominator alone uses the documented opposite-sign convention. The explicitly labeled stella-coefficient case tests the source-derived mirror sign, magnetic-drift factor 1/2, geometry-header flux_fac, and Maxwellian normalization without changing production defaults.",

@@ -326,6 +326,12 @@ inexact so prepared providers remain installed.
   schema-v1 caches must be regenerated.
 - Verified the schema-v2 migration with the complete standalone x64 suite:
   358 tests passed and 20 opt-in external tests were deselected.
+- Added a 32×4 same-state replay whose parallel-velocity nodes exactly match
+  stella's 32 nodes from -3 to 3. It improves the source-derived discriminator's
+  streaming error to 0.115, magnetic drift to 0.164, and total RHS to 0.237,
+  while mirror remains about 0.411. The mirror gap is therefore not explained
+  by the earlier 16-node interpolation and remains the leading term-level
+  blocker.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

@@ -64,13 +64,22 @@ def replay_cases() -> tuple[RHSBalanceCase, ...]:
             parallel_derivative_model="gkw_upwind",
             **common,
         ),
+        RHSBalanceCase(
+            name="replay_stella_coefficients_32x4",
+            n_vpar=32,
+            n_mu=4,
+            velocity_backend="finite_difference",
+            vpar_max=96.0 / 31.0,
+            mu_max=3.0,
+            parallel_derivative_model="gkw_upwind",
+        ),
     )
 
 
 def apply_stella_coefficient_contract(case, precompute, stella_geometry: Path):
     """Apply source-derived stella coefficient conventions for discrimination."""
 
-    if case.name != "replay_stella_coefficients_16x4":
+    if not case.name.startswith("replay_stella_coefficients_"):
         return precompute
     geometry_data = load_stella_geometry_data(stella_geometry)
     flux_fac = geometry_data.global_value("flux_fac")
@@ -279,7 +288,7 @@ def _status(
     rows: list[dict[str, Any]], trace_path: Path, geometry_path: Path, tolerance: float
 ) -> dict[str, Any]:
     rhs_rows = [row for row in rows if not row["quantity"].startswith("quasineutrality")]
-    acceptance_case = "replay_stella_coefficients_16x4"
+    acceptance_case = "replay_stella_coefficients_32x4"
     acceptance_rows = [row for row in rhs_rows if row["case"] == acceptance_case]
     best_by_quantity = {}
     for quantity in sorted({row["quantity"] for row in rows}):
@@ -315,7 +324,8 @@ def _status(
         "best_by_quantity": best_by_quantity,
         "interpretation": (
             "Each solver RHS is evaluated on the same stella distribution and phi "
-            "after interpolation onto a contained 16x4 finite-difference velocity grid. "
+            "after interpolation onto contained 16x4 and exact-vpar-node 32x4 "
+            "finite-difference velocity grids. "
             "No fitted amplitude or phase is used; the quasineutrality denominator alone "
             "uses the documented opposite-sign convention. The explicitly labeled "
             "stella-coefficient case tests the source-derived mirror sign, magnetic-drift "
@@ -345,10 +355,11 @@ This compact fixture records solver RHS operators applied directly to traced
 stella distribution and potential arrays. The external raw trace is not stored
 in the repository. Both periodic spectral and open GKW-upwind parallel models
 are reported on a 16×4 velocity grid contained inside the stella domain. A
-third discriminator applies source-derived stella mirror, drift, and drive
-coefficients without changing the production geometry contract.
+two additional discriminators apply source-derived stella mirror, drift, and
+drive coefficients at 16×4 and an exact-node 32×4 velocity resolution without
+changing the remaining production geometry conventions.
 
-Status: `{status['status']}`. Maximum RHS relative L2 error:
+Status: `{status['status']}`. Acceptance-case maximum RHS relative L2 error:
 `{status['max_rhs_relative_l2_error']:.8g}` (tolerance `{status['relative_l2_tolerance']}`).
 """
 
