@@ -52,6 +52,11 @@ from .gx_eik_adapter import (
     load_gx_eik_data,
     resample_gx_eik_data,
 )
+from .gvec_adapter import (
+    GVEC_GEOMETRY_COMPUTE_KEYS,
+    GvecGeometryProvider,
+    gvec_geometry_arrays_from_data,
+)
 from .stella_adapter import (
     STELLA_GEOMETRY_COLUMNS,
     STELLA_GLOBAL_COLUMNS,
@@ -83,6 +88,8 @@ __all__ = [
     "GeometrySignConvention",
     "GxEikData",
     "GxEikGeometryProvider",
+    "GVEC_GEOMETRY_COMPUTE_KEYS",
+    "GvecGeometryProvider",
     "PhysicalFluxTubeGeometry",
     "PhysicalArrayGeometryProvider",
     "STELLA_GEOMETRY_COLUMNS",
@@ -116,6 +123,7 @@ __all__ = [
     "resample_gx_eik_data",
     "sample_boozer_field_line",
     "has_duplicate_stella_endpoint",
+    "gvec_geometry_arrays_from_data",
     "validate_geometry_result",
     "write_geometry_result_cache",
     "vmec_field_line_from_wout",
