@@ -121,6 +121,19 @@ def test_midpoint_gauss_laguerre_grid_has_zero_free_nodes_and_bare_quadrature():
         mu_scale,
         rtol=1e-13,
     )
+    np.testing.assert_allclose(
+        grid.D_vpar @ grid.vpar**4,
+        4.0 * grid.vpar**3,
+        rtol=2e-12,
+        atol=2e-12,
+    )
+    np.testing.assert_allclose(
+        grid.D_mu @ grid.mu**4,
+        4.0 * grid.mu**3,
+        rtol=2e-11,
+        atol=2e-11,
+    )
+    assert np.max(np.abs(np.asarray(grid.D_vpar))) < 100.0
 
 
 def test_midpoint_gauss_laguerre_grid_rejects_odd_parallel_resolution():

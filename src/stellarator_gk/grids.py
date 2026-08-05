@@ -164,6 +164,8 @@ def build_midpoint_gauss_laguerre_velocity_grid(
         mu=mu,
         w_vpar=w_vpar,
         w_mu=w_mu,
+        D_vpar=_local_polynomial_derivative_matrix(vpar),
+        D_mu=_local_polynomial_derivative_matrix(mu),
         dtype=dtype,
         backend="midpoint_gauss_laguerre",
     )
@@ -391,6 +393,23 @@ def _barycentric_derivative_matrix(nodes: np.ndarray) -> np.ndarray:
             if i != j:
                 matrix[i, j] = weights[j] / (weights[i] * diff[i, j])
         matrix[i, i] = -np.sum(matrix[i])
+    return matrix
+
+
+def _local_polynomial_derivative_matrix(
+    nodes: np.ndarray,
+    stencil_size: int = 5,
+) -> np.ndarray:
+    """Differentiate on arbitrary nodes with bounded local barycentric stencils."""
+
+    nodes = np.asarray(nodes, dtype=float)
+    width = min(int(stencil_size), nodes.size)
+    matrix = np.zeros((nodes.size, nodes.size), dtype=float)
+    for row in range(nodes.size):
+        start = min(max(row - width // 2, 0), nodes.size - width)
+        stop = start + width
+        local = _barycentric_derivative_matrix(nodes[start:stop])
+        matrix[row, start:stop] = local[row - start]
     return matrix
 
 
