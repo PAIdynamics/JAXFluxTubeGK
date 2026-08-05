@@ -266,6 +266,11 @@ inexact so prepared providers remain installed.
 - Applied the shared endpoint-excluded convention to trace arrays by dropping
   stella's upper periodic z endpoint; the comparison grid is now 256 points,
   matching the solver geometry grid.
+- Added an opt-in solver selected-mode array archive with canonical
+  `(z, vpar, mu)` ordering, explicit quadrature, distribution, potential, all
+  split RHS terms, total RHS, quasineutrality numerator/denominator, and
+  accumulated normalization. Large archives are required to remain outside
+  the repository.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

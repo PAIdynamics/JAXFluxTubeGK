@@ -295,6 +295,18 @@ JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
   --output-dir fixtures/w7x_ky03_rhs_model_balance
 ```
 
+For direct array comparison, emit the single selected case to external scratch
+storage (large numerical traces are deliberately refused inside the repository):
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
+  --array-output /tmp/stellarator_gk_w7x_ky03_solver_arrays.npz
+```
+
+The archive uses `(z, vpar, mu)` phase-space order and contains coordinates,
+quadrature weights, the distribution, potential, individual RHS terms, total
+RHS, quasineutrality numerator/denominator, and accumulated log normalization.
+
 Prepare and run the patched stella RHS trace in a scratch tree:
 
 ```bash
@@ -320,10 +332,9 @@ uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
   --require-raw-trace
 ```
 
-The current comparator reports `blocked_array_contract_mismatch`: the weighted
-v2 stella trace and committed solver balance fixture use different velocity
-grids, and the solver fixture stores scalar summaries rather than full arrays.
-The next step is a solver-side full-array trace on a compatible grid.
+The committed comparator remains a compact scalar diagnostic. Direct weighted
+array parity uses the external raw stella trace and the opt-in solver archive;
+neither large array artifact belongs in Git.
 
 ### External GX W7-X Cross-Check
 

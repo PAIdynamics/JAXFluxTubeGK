@@ -12,5 +12,10 @@ Files:
 - `geometry_model_balance.csv`: z-local geometry, FLR, drift, and field inputs.
 - `rhs_model_balance_status.json`: diagnostic status and next action.
 
+For direct parity, pass `--array-output` with an external `.npz` path. The
+opt-in archive stores `(z, vpar, mu)` complex arrays, coordinates, quadrature
+weights, quasineutrality data, and normalization; it is deliberately not a
+committed fixture.
+
 This is a solver-side diagnostic.  A production parity claim still 
 requires a matched stella source-term or distribution/RHS trace.

@@ -65,6 +65,76 @@ def test_scan_args_hold_w7x_ky03_controls_fixed():
     assert scan_args[scan_args.index("--n-windows") + 1] == "2000"
 
 
+def test_selected_mode_phase_space_uses_z_vpar_mu_axis_order():
+    module = _load_module()
+    values = np.arange(2 * 3 * 4 * 2 * 2).reshape(2, 3, 4, 2, 2)
+
+    selected = module._selected_mode_phase_space(values, ix=1, iy=0)
+
+    assert selected.shape == (4, 2, 3)
+    np.testing.assert_array_equal(selected, np.transpose(values[..., 1, 0], (2, 0, 1)))
+
+
+def test_selected_mode_array_trace_records_arrays_weights_and_metadata(tmp_path):
+    module = _load_module()
+    shape = (4, 2, 3)
+    distribution = np.arange(np.prod(shape)).reshape(shape) * (1.0 + 2.0j)
+    output = tmp_path / "selected_mode.npz"
+
+    module.write_selected_mode_array_trace(
+        output,
+        z=np.linspace(-0.5, 0.25, shape[0]),
+        vpar=np.asarray([-1.0, 1.0]),
+        mu=np.asarray([0.1, 0.5, 0.9]),
+        w_z=np.full(shape[0], 0.25),
+        w_vpar=np.asarray([1.0, 1.0]),
+        w_mu=np.asarray([0.2, 0.3, 0.5]),
+        distribution=distribution,
+        phi=np.ones(shape[0], dtype=complex),
+        rhs_terms={"parallel_streaming": 2.0 * distribution},
+        total_rhs=2.0 * distribution,
+        quasineutrality_numerator=np.arange(shape[0], dtype=complex),
+        quasineutrality_denominator=-np.ones(shape[0]),
+        log_normalization=3.5,
+        metadata={"schema": "test", "axis_order": ["z", "vpar", "mu"]},
+    )
+
+    with np.load(output) as trace:
+        metadata = json.loads(str(trace["metadata_json"]))
+        np.testing.assert_array_equal(trace["distribution"], distribution)
+        np.testing.assert_array_equal(trace["rhs_parallel_streaming"], 2.0 * distribution)
+        np.testing.assert_array_equal(trace["w_mu"], [0.2, 0.3, 0.5])
+        assert trace["distribution"].shape == shape
+        assert float(trace["log_normalization"]) == 3.5
+        assert metadata["axis_order"] == ["z", "vpar", "mu"]
+        assert metadata["rhs_terms"] == ["parallel_streaming"]
+
+
+def test_array_output_must_be_external_and_use_npz(tmp_path):
+    module = _load_module()
+
+    with np.testing.assert_raises_regex(ValueError, "outside the repository"):
+        module._validate_external_array_output(ROOT / "trace.npz")
+    with np.testing.assert_raises_regex(ValueError, "\\.npz suffix"):
+        module.write_selected_mode_array_trace(
+            tmp_path / "trace.dat",
+            z=np.zeros(1),
+            vpar=np.zeros(1),
+            mu=np.zeros(1),
+            w_z=np.ones(1),
+            w_vpar=np.ones(1),
+            w_mu=np.ones(1),
+            distribution=np.zeros((1, 1, 1)),
+            phi=np.zeros(1),
+            rhs_terms={},
+            total_rhs=np.zeros((1, 1, 1)),
+            quasineutrality_numerator=np.zeros(1),
+            quasineutrality_denominator=np.zeros(1),
+            log_normalization=0.0,
+            metadata={},
+        )
+
+
 def test_selected_term_balance_projections_sum_to_total():
     module = _load_module()
     term_a = jnp.ones((2, 1, 3, 1, 1), dtype=jnp.complex128)

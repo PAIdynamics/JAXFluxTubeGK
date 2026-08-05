@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         cases=cases,
         stella_geometry=args.stella_geometry,
+        array_output=args.array_output,
     )
     print(summary["status_json"])
     print(summary["term_balance_csv"])
@@ -127,9 +128,14 @@ def run_w7x_ky03_rhs_model_balance(
     output_dir: Path,
     cases: tuple[RHSBalanceCase, ...],
     stella_geometry: Path = DEFAULT_STELLA_GEOMETRY,
+    array_output: Path | None = None,
 ) -> dict[str, object]:
     """Run cases, write RHS-balance artifacts, and return a compact summary."""
 
+    if array_output is not None:
+        if len(cases) != 1:
+            raise ValueError("--array-output requires exactly one selected case")
+        _validate_external_array_output(array_output)
     output_dir.mkdir(parents=True, exist_ok=True)
     case_summaries = []
     term_rows = []
@@ -182,6 +188,43 @@ def run_w7x_ky03_rhs_model_balance(
             evolved["state"],
             setup["precompute"].field,
         )
+        if array_output is not None:
+            ix = setup["fourier"].ixzero
+            field = setup["precompute"].field
+            write_selected_mode_array_trace(
+                array_output,
+                z=setup["geometry"].z,
+                vpar=setup["velocity"].vpar,
+                mu=setup["velocity"].mu,
+                w_z=setup["geometry"].w_z,
+                w_vpar=setup["velocity"].w_vpar,
+                w_mu=setup["velocity"].w_mu,
+                distribution=_selected_mode_phase_space(evolved["state"], ix=ix, iy=0),
+                phi=np.asarray(evolved["phi"])[:, ix, 0],
+                rhs_terms={
+                    name: _selected_mode_phase_space(term, ix=ix, iy=0)
+                    for name, term in zip(split.names, split.terms, strict=True)
+                },
+                total_rhs=_selected_mode_phase_space(total_rhs, ix=ix, iy=0),
+                quasineutrality_numerator=np.asarray(
+                    adiabatic_density_numerator(evolved["state"], field)
+                )[:, ix, 0],
+                quasineutrality_denominator=np.asarray(field.denominator)[:, ix, 0],
+                log_normalization=evolved["log_normalization"][0],
+                metadata={
+                    "schema": "stellarator_gk_selected_mode_array_trace_v1",
+                    "case": case.name,
+                    "ky": FOCUS_KY,
+                    "kx": 0.0,
+                    "axis_order": ["z", "vpar", "mu"],
+                    "geometry_source": setup["geometry_metadata"]["geometry_source"],
+                    "stella_geometry": _display_path(stella_geometry),
+                    "normalization": (
+                        "stored arrays are the final renormalized solver state; "
+                        "log_normalization restores its accumulated amplitude"
+                    ),
+                },
+            )
         wall_seconds = perf_counter() - start
         case_summary = {
             "case": case.name,
@@ -244,7 +287,84 @@ def run_w7x_ky03_rhs_model_balance(
         "metadata_json": str(metadata_json),
         "term_balance_csv": str(term_balance_csv),
         "case_summaries": case_summaries,
+        "array_output": str(array_output) if array_output is not None else None,
     }
+
+
+def write_selected_mode_array_trace(
+    path: Path,
+    *,
+    z,
+    vpar,
+    mu,
+    w_z,
+    w_vpar,
+    w_mu,
+    distribution,
+    phi,
+    rhs_terms: dict[str, object],
+    total_rhs,
+    quasineutrality_numerator,
+    quasineutrality_denominator,
+    log_normalization,
+    metadata: dict[str, object],
+) -> None:
+    """Write a compact, opt-in selected-mode trace with explicit coordinates."""
+
+    path = Path(path)
+    if path.suffix != ".npz":
+        raise ValueError("selected-mode array output must use the .npz suffix")
+    shape = (len(z), len(vpar), len(mu))
+    arrays = {
+        "z": np.asarray(z, dtype=float),
+        "vpar": np.asarray(vpar, dtype=float),
+        "mu": np.asarray(mu, dtype=float),
+        "w_z": np.asarray(w_z, dtype=float),
+        "w_vpar": np.asarray(w_vpar, dtype=float),
+        "w_mu": np.asarray(w_mu, dtype=float),
+        "distribution": _require_shape(distribution, shape, "distribution"),
+        "phi": _require_shape(phi, (shape[0],), "phi"),
+        "total_rhs": _require_shape(total_rhs, shape, "total_rhs"),
+        "quasineutrality_numerator": _require_shape(
+            quasineutrality_numerator, (shape[0],), "quasineutrality_numerator"
+        ),
+        "quasineutrality_denominator": _require_shape(
+            quasineutrality_denominator, (shape[0],), "quasineutrality_denominator"
+        ),
+        "log_normalization": np.asarray(log_normalization, dtype=float),
+    }
+    for name, values in rhs_terms.items():
+        arrays[f"rhs_{name}"] = _require_shape(values, shape, f"rhs_{name}")
+    trace_metadata = dict(metadata)
+    trace_metadata["rhs_terms"] = list(rhs_terms)
+    trace_metadata["array_keys"] = sorted(arrays)
+    arrays["metadata_json"] = np.asarray(json.dumps(trace_metadata, sort_keys=True))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+
+
+def _selected_mode_phase_space(values, *, ix: int, iy: int, species: int = 0):
+    """Select one species/mode and return the canonical ``(z,vpar,mu)`` order."""
+
+    array = np.asarray(values)
+    if array.ndim == 6:
+        array = array[species]
+    if array.ndim != 5:
+        raise ValueError("phase-space array must have 5 or 6 dimensions")
+    return np.transpose(array[..., ix, iy], (2, 0, 1))
+
+
+def _require_shape(values, expected: tuple[int, ...], name: str):
+    array = np.asarray(values)
+    if array.shape != expected:
+        raise ValueError(f"{name} has shape {array.shape}; expected {expected}")
+    return array
+
+
+def _validate_external_array_output(path: Path) -> None:
+    resolved = Path(path).expanduser().resolve()
+    if resolved.is_relative_to(ROOT.resolve()):
+        raise ValueError("--array-output must be outside the repository; use /tmp or a cache path")
 
 
 @dataclass(frozen=True)
@@ -689,6 +809,14 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--n-windows", type=int, help="override case window count")
     parser.add_argument("--steps-per-window", type=int, help="override case steps per window")
     parser.add_argument("--dt", type=float, help="override case timestep")
+    parser.add_argument(
+        "--array-output",
+        type=Path,
+        help=(
+            "write the selected-mode full-array trace to an external .npz path; "
+            "requires exactly one case and refuses repository-local paths"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -793,6 +921,11 @@ def _write_readme(output_dir: Path) -> None:
                 "- `rhs_density_balance.csv`: z profiles of quasineutrality numerator rates.",
                 "- `geometry_model_balance.csv`: z-local geometry, FLR, drift, and field inputs.",
                 "- `rhs_model_balance_status.json`: diagnostic status and next action.",
+                "",
+                "For direct parity, pass `--array-output` with an external `.npz` ",
+                "path. The opt-in archive stores `(z, vpar, mu)` complex arrays, ",
+                "coordinates, quadrature weights, quasineutrality data, and ",
+                "normalization; it is deliberately not a committed fixture.",
                 "",
                 "This is a solver-side diagnostic.  A production parity claim still ",
                 "requires a matched stella source-term or distribution/RHS trace.",
