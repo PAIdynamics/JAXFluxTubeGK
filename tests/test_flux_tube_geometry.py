@@ -131,13 +131,17 @@ def test_physical_to_internal_geometry_maps_drifts_and_mirror_term():
         equilibrium_drive_scale=0.7 * ones,
     )
     geometry = map_physical_to_internal_geometry(physical, parallel)
-    expected_G = 0.2 * jnp.sin(field_line.z) / B
+    expected_G = -0.2 * jnp.sin(field_line.z) / B
     expected_D_x = (0.3 + B * 0.5) / B**2
     expected_D_y = (0.4 + B * 0.6) / B**2
 
     np.testing.assert_allclose(geometry.G, expected_G, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(geometry.D_x, expected_D_x, rtol=1e-13, atol=1e-13)
     np.testing.assert_allclose(geometry.D_y, expected_D_y, rtol=1e-13, atol=1e-13)
+    np.testing.assert_allclose(geometry.D_x_gradB, 0.3 / B**2)
+    np.testing.assert_allclose(geometry.D_y_gradB, 0.4 / B**2)
+    np.testing.assert_allclose(geometry.D_x_curvature, 0.5 / B)
+    np.testing.assert_allclose(geometry.D_y_curvature, 0.6 / B)
     np.testing.assert_allclose(geometry.E_y, 0.7, rtol=1e-13, atol=1e-13)
 
 
@@ -146,7 +150,7 @@ def test_desc_geometry_builder_maps_arrays_and_validates_shapes():
     arrays = _desc_like_arrays(parallel)
     geometry = build_desc_geometry_from_arrays(parallel, **arrays)
     B = arrays["B"]
-    expected_G = -arrays["b_dot_grad_z"] * (parallel.D_z @ B) / B
+    expected_G = arrays["b_dot_grad_z"] * (parallel.D_z @ B) / B
     expected_D_x = (
         arrays["B_cross_gradB_dot_grad_psi"] + B * arrays["b_cross_kappa_dot_grad_psi"]
     ) / B**2

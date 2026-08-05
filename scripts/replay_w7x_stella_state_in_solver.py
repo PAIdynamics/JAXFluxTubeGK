@@ -21,6 +21,7 @@ import numpy as np
 
 from scripts.audit_w7x_ky03_rhs_model_balance import (
     DEFAULT_STELLA_GEOMETRY,
+    FOCUS_KY,
     RHSBalanceCase,
     RHSTermSplit,
     _build_w7x_setup,
@@ -33,7 +34,13 @@ from scripts.compare_w7x_stella_rhs_trace_to_solver_balance import (
     load_stella_array_trace,
     weighted_complex_metrics,
 )
-from stellarator_gk import linear_residual
+from stellarator_gk import (
+    AdiabaticElectronParams,
+    SpeciesParams,
+    build_linear_residual_precompute,
+    build_velocity_grid_from_nodes,
+    linear_residual,
+)
 from stellarator_gk.geometry import load_stella_geometry_data
 from stellarator_gk.physics import adiabatic_density_numerator
 
@@ -74,26 +81,74 @@ def replay_cases() -> tuple[RHSBalanceCase, ...]:
             mu_max=3.0,
             parallel_derivative_model="gkw_upwind",
         ),
+        RHSBalanceCase(
+            name="replay_stella_native_32x8",
+            n_vpar=32,
+            n_mu=8,
+            velocity_backend="finite_difference",
+            vpar_max=96.0 / 31.0,
+            mu_max=5.0,
+            parallel_derivative_model="gkw_upwind",
+        ),
     )
 
 
 def apply_stella_coefficient_contract(case, precompute, stella_geometry: Path):
     """Apply source-derived stella coefficient conventions for discrimination."""
 
-    if not case.name.startswith("replay_stella_coefficients_"):
+    if not case.name.startswith(("replay_stella_coefficients_", "replay_stella_native_")):
         return precompute
     geometry_data = load_stella_geometry_data(stella_geometry)
     flux_fac = geometry_data.global_value("flux_fac")
     rhs = replace(
         precompute.rhs,
-        mirror_force_coeff=-precompute.rhs.mirror_force_coeff,
-        magnetic_drift_frequency=0.5 * precompute.rhs.magnetic_drift_frequency,
         E_y=jnp.full_like(precompute.rhs.E_y, flux_fac),
         # stella puts normalization in its velocity quadrature and stores the
         # Maxwellian factor as exp(-v^2); the solver stores pi^(-3/2) in F_M.
         maxwellian=np.pi**1.5 * precompute.rhs.maxwellian,
     )
     return replace(precompute, rhs=rhs)
+
+
+def build_native_stella_setup(case, stella_geometry: Path, stella: dict[str, Any]):
+    """Build the standard W7-X setup on traced native velocity nodes and measure."""
+
+    setup = _build_w7x_setup(case, stella_geometry)
+    velocity = build_velocity_grid_from_nodes(
+        vpar=stella["vpar"],
+        mu=stella["mu"],
+        w_vpar=stella["w_vpar"],
+        w_mu=np.mean(stella["w_mu"], axis=0),
+    )
+    species = SpeciesParams(
+        charge=1.0,
+        mass=1.0,
+        density=1.0,
+        temperature=1.0,
+        density_gradient=1.0,
+        temperature_gradient=3.0,
+    )
+    electrons = AdiabaticElectronParams(
+        density=1.0,
+        temperature=1.0,
+        zonal_correction=False,
+    )
+    measure = (
+        np.asarray(stella["w_vpar"])[None, :, None]
+        * np.asarray(stella["w_mu"])[:, None, :]
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        setup["parallel"],
+        setup["fourier"],
+        setup["geometry"],
+        species,
+        electron_params=electrons,
+        mode_connectivity=setup["connectivity"],
+        parallel_derivative_model=case.parallel_derivative_model,
+        phase_space_measure=measure,
+    )
+    return {**setup, "velocity": velocity, "precompute": precompute}
 
 
 def stella_third_order_upwind_matrix(n: int, spacing: float, sign: int) -> np.ndarray:
@@ -122,12 +177,36 @@ def stella_third_order_upwind_matrix(n: int, spacing: float, sign: int) -> np.nd
     return matrix
 
 
+def stella_second_order_centered_matrix(n: int, spacing: float, sign: int) -> np.ndarray:
+    """Reproduce stella's centered z derivative with open zero ghost values."""
+
+    if n < 3:
+        raise ValueError("stella centered derivative requires at least three nodes")
+    if spacing <= 0.0:
+        raise ValueError("grid spacing must be positive")
+    if sign not in (-1, 1):
+        raise ValueError("upwind sign must be -1 or 1")
+    matrix = np.zeros((n, n), dtype=float)
+    for row in range(1, n - 1):
+        matrix[row, row - 1] = -0.5 / spacing
+        matrix[row, row + 1] = 0.5 / spacing
+    if sign > 0:
+        matrix[0, 0] = -1.0 / spacing
+        matrix[0, 1] = 1.0 / spacing
+        matrix[-1, -2] = -0.5 / spacing
+    else:
+        matrix[0, 1] = 0.5 / spacing
+        matrix[-1, -2] = -1.0 / spacing
+        matrix[-1, -1] = 1.0 / spacing
+    return matrix
+
+
 def apply_stella_mirror_stencil(
     case, state, split, rhs_precompute, *, native_coefficient=None
 ) -> RHSTermSplit:
     """Replace the generic mirror derivative with stella's explicit stencil."""
 
-    if not case.name.startswith("replay_stella_coefficients_"):
+    if not case.name.startswith(("replay_stella_coefficients_", "replay_stella_native_")):
         return split
     state_array = jnp.asarray(state)
     if native_coefficient is None:
@@ -164,6 +243,114 @@ def apply_stella_mirror_stencil(
     index = split.names.index("mirror_force")
     terms = list(split.terms)
     terms[index] = mirror
+    return RHSTermSplit(names=split.names, terms=tuple(terms))
+
+
+def apply_stella_native_drift_algebra(
+    case,
+    state,
+    phi,
+    split,
+    native_coefficients: dict[str, np.ndarray],
+) -> RHSTermSplit:
+    """Replace drift pieces with stella's traced coefficient algebra."""
+
+    if not case.name.startswith("replay_stella_native_"):
+        return split
+    state_array = jnp.asarray(state)
+    phi_array = jnp.asarray(phi)
+
+    def coefficient(name):
+        values = np.asarray(native_coefficients[name])
+        return jnp.asarray(np.transpose(values, (1, 2, 0)))[..., None, None]
+
+    gyroaverage = coefficient("gyroaverage_j0")
+    derivative_y = 1j * FOCUS_KY
+    drift_g = derivative_y * coefficient("magnetic_drift_g_y") * state_array
+    drift_phi = (
+        derivative_y
+        * coefficient("magnetic_drift_phi_y")
+        * gyroaverage
+        * phi_array[None, None, :, :, :]
+    )
+    terms = list(split.terms)
+    terms[split.names.index("magnetic_drift")] = drift_g
+    terms[split.names.index("drift_field_drive")] = drift_phi
+    return RHSTermSplit(names=split.names, terms=tuple(terms))
+
+
+def apply_stella_native_streaming_algebra(
+    case,
+    state,
+    phi,
+    split,
+    rhs_precompute,
+    stella: dict[str, Any],
+    call: int,
+) -> RHSTermSplit:
+    """Replace streaming pieces using stella's 257-point open-chain stencil."""
+
+    if not case.name.startswith("replay_stella_native_"):
+        return split
+    state_array = np.asarray(state)[..., 0, 0]
+    phi_array = np.asarray(phi)[:, 0, 0]
+    state_full = np.concatenate(
+        (state_array, stella["upper_endpoint"]["distribution"][call][:, :, None]),
+        axis=2,
+    )
+    phi_full = np.concatenate(
+        (phi_array, [stella["upper_endpoint"]["phi"][call]])
+    )
+    coefficient = np.transpose(
+        np.asarray(stella["native_coefficients"]["parallel_streaming"]),
+        (1, 2, 0),
+    )
+    coefficient_full = np.concatenate(
+        (
+            coefficient,
+            stella["upper_endpoint"]["native_coefficients"]["parallel_streaming"][
+                :, :, None
+            ],
+        ),
+        axis=2,
+    )
+    gyroaverage = np.transpose(
+        np.asarray(stella["native_coefficients"]["gyroaverage_j0"]),
+        (1, 2, 0),
+    )
+    gyroaverage_full = np.concatenate(
+        (
+            gyroaverage,
+            stella["upper_endpoint"]["native_coefficients"]["gyroaverage_j0"][
+                :, :, None
+            ],
+        ),
+        axis=2,
+    )
+    spacing = 2.0 * np.pi / (state_full.shape[2] - 1)
+    distribution_derivative = np.empty_like(state_full)
+    field_derivative = np.empty_like(state_full)
+    for iv in range(state_full.shape[0]):
+        sign = 1 if coefficient_full[iv, 0, 0].real >= 0.0 else -1
+        upwind = stella_third_order_upwind_matrix(state_full.shape[2], spacing, sign)
+        centered = stella_second_order_centered_matrix(state_full.shape[2], spacing, sign)
+        distribution_derivative[iv] = np.einsum("ij,mj->mi", upwind, state_full[iv])
+        field_values = gyroaverage_full[iv] * phi_full[None, :]
+        field_derivative[iv] = np.einsum("ij,mj->mi", centered, field_values)
+    maxwellian = np.asarray(rhs_precompute.maxwellian)
+    if maxwellian.ndim == 4:
+        maxwellian = maxwellian[0]
+    streaming = coefficient * (
+        distribution_derivative[:, :, :-1]
+        + maxwellian * field_derivative[:, :, :-1]
+    )
+    terms = list(split.terms)
+    terms[split.names.index("gkw_parallel_streaming_recurrence")] = jnp.asarray(
+        streaming[..., None, None]
+    )
+    terms[split.names.index("gkw_parallel_field_drive")] = jnp.zeros_like(
+        terms[split.names.index("gkw_parallel_field_drive")]
+    )
     return RHSTermSplit(names=split.names, terms=tuple(terms))
 
 
@@ -290,7 +477,11 @@ def run_same_state_replay(
 
     rows: list[dict[str, Any]] = []
     for case in replay_cases():
-        setup = _build_w7x_setup(case, Path(stella_geometry))
+        setup = (
+            build_native_stella_setup(case, Path(stella_geometry), stella)
+            if case.name.startswith("replay_stella_native_")
+            else _build_w7x_setup(case, Path(stella_geometry))
+        )
         precompute = apply_stella_coefficient_contract(
             case, setup["precompute"], Path(stella_geometry)
         )
@@ -300,7 +491,11 @@ def run_same_state_replay(
         weights = {
             "w_z": np.asarray(setup["geometry"].w_z),
             "w_vpar": np.asarray(setup["velocity"].w_vpar),
-            "w_mu": np.asarray(setup["velocity"].w_mu),
+            "w_mu": (
+                np.asarray(stella["w_mu"])
+                if case.name.startswith("replay_stella_native_")
+                else np.asarray(setup["velocity"].w_mu)
+            ),
         }
         native_mirror = None
         if "mirror_force" in stella["native_coefficients"]:
@@ -337,7 +532,23 @@ def run_same_state_replay(
                 precompute.rhs,
                 native_coefficient=native_mirror,
             )
-            if case.name.startswith("replay_stella_coefficients_"):
+            split = apply_stella_native_drift_algebra(
+                case,
+                state,
+                phi,
+                split,
+                stella["native_coefficients"],
+            )
+            split = apply_stella_native_streaming_algebra(
+                case,
+                state,
+                phi,
+                split,
+                precompute.rhs,
+                stella,
+                call,
+            )
+            if case.name.startswith(("replay_stella_coefficients_", "replay_stella_native_")):
                 total_rhs = sum(split.terms, jnp.zeros_like(state))
             else:
                 total_rhs = linear_residual(state, precomputed=precompute, phi=phi)
@@ -452,7 +663,7 @@ def _status(
     native_quasineutrality: dict[str, float],
 ) -> dict[str, Any]:
     rhs_rows = [row for row in rows if not row["quantity"].startswith("quasineutrality")]
-    acceptance_case = "replay_stella_coefficients_32x4"
+    acceptance_case = "replay_stella_native_32x8"
     acceptance_rows = [row for row in rhs_rows if row["case"] == acceptance_case]
     best_by_quantity = {}
     for quantity in sorted({row["quantity"] for row in rows}):
@@ -490,13 +701,15 @@ def _status(
         "best_by_quantity": best_by_quantity,
         "interpretation": (
             "Each solver RHS is evaluated on the same stella distribution and phi "
-            "after interpolation onto contained 16x4 and exact-vpar-node 32x4 "
-            "finite-difference velocity grids. "
+            "on contained 16x4 and exact-vpar-node 32x4 finite-difference grids, "
+            "plus a provider-native 32x8 grid with its full z-dependent phase-space "
+            "measure. "
             "No fitted amplitude or phase is used; the quasineutrality denominator alone "
-            "uses the documented opposite-sign convention. The explicitly labeled "
-            "stella-coefficient case tests the source-derived mirror sign, magnetic-drift "
-            "factor 1/2, geometry-header flux_fac, and Maxwellian normalization without "
-            "changing production defaults."
+            "uses the documented opposite-sign convention. The native acceptance case "
+            "tests traced gyroaverage and drift coefficients, source mirror and parallel "
+            "stencils, geometry-header flux_fac, and Maxwellian normalization. Provider "
+            "geometry now preserves separate grad-B and curvature drives and the verified "
+            "mirror orientation; traced coefficient replacement remains diagnostic-only."
         ),
         "next_action": (
             "isolate the largest same-state term discrepancy before rerunning the "
@@ -522,8 +735,13 @@ stella distribution and potential arrays. The external raw trace is not stored
 in the repository. Both periodic spectral and open GKW-upwind parallel models
 are reported on a 16×4 velocity grid contained inside the stella domain. Two
 additional discriminators apply source-derived stella mirror, drift, and
-drive coefficients at 16×4 and an exact-node 32×4 velocity resolution without
-changing the remaining production geometry conventions.
+drive coefficients at 16×4 and an exact-node 32×4 velocity resolution. The
+acceptance case runs on stella's native 32×8 nodes and z-dependent phase-space
+measure, with traced coefficient arrays and source stencils used only for the
+same-state diagnostic.
+
+Provider-neutral production geometry now preserves separate grad-B and
+curvature drift components and uses the verified mirror-force orientation.
 
 The v4 trace also verifies the mirror operator directly on stella's native
 256×32×8 grid before interpolation. Its maximum reconstruction error is

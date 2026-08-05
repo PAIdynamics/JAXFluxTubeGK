@@ -358,6 +358,23 @@ inexact so prepared providers remain installed.
   `1.2e-15` relative L2. This rules out an unknown amplitude normalization: the
   solver-grid numerator mismatch comes from mapping stella's native velocity
   measure and FLR product to a different uniform-mu quadrature.
+- Added a provider-neutral arbitrary-node velocity-grid interface and optional
+  z-dependent phase-space measure for quasineutrality. The native 256×32×8
+  replay can therefore retain stella's quadrature without committing W7-X state
+  or adding a solver-specific production dependency.
+- Reconstructed stella's traced drift algebra to machine precision and its
+  257-point source parallel stencil in the diagnostic adapter. Together with
+  the native mirror stencil, gyroaverage, and measure, the same-state acceptance
+  case now passes: its maximum RHS relative L2 error is `0.0439222`, below the
+  `0.1` gate. The largest remaining term is streaming at about `0.0392`; mirror
+  is `0.00370`, equilibrium drive `0.000847`, and drift is at roundoff.
+- Identified and fixed a production drift error: combining grad-B and curvature
+  geometry before multiplying by `(v_parallel^2 + mu B)` created unphysical
+  cross terms. Physical providers now preserve the two components and evaluate
+  `v_parallel^2 D_curvature + mu B D_gradB`; legacy analytic geometry retains
+  its combined-coefficient fallback. The mapped mirror RHS orientation was
+  corrected at the same provider boundary. Focused geometry, optimization,
+  primitive, RHS, quasineutrality, and replay tests pass.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

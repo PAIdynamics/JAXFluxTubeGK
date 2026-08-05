@@ -183,17 +183,45 @@ def magnetic_drift_frequency(
     kx,
     ky,
     species: SpeciesParams | tuple[SpeciesParams, ...],
+    *,
+    D_x_gradB=None,
+    D_y_gradB=None,
+    D_x_curvature=None,
+    D_y_curvature=None,
 ):
-    """Return ``omega_d = (v_parallel^2 + mu B) (kx D_x + ky D_y) / Z_s``."""
+    """Return the magnetic-drift frequency with separated physical drives."""
 
     if isinstance(species, tuple):
         return jnp.stack(
-            [magnetic_drift_frequency(vpar, mu, B, D_x, D_y, kx, ky, item) for item in species]
+            [
+                magnetic_drift_frequency(
+                    vpar,
+                    mu,
+                    B,
+                    D_x,
+                    D_y,
+                    kx,
+                    ky,
+                    item,
+                    D_x_gradB=D_x_gradB,
+                    D_y_gradB=D_y_gradB,
+                    D_x_curvature=D_x_curvature,
+                    D_y_curvature=D_y_curvature,
+                )
+                for item in species
+            ]
         )
     charge = _nonzero_charge(species)
     vpar_b, mu_b, B_b = _velocity_5d(vpar, mu, B)
-    kdotD = _kdot_geometry(D_x, D_y, kx, ky)
-    return (vpar_b**2 + mu_b * B_b) * kdotD / charge
+    separated = (D_x_gradB, D_y_gradB, D_x_curvature, D_y_curvature)
+    if all(value is None for value in separated):
+        kdotD = _kdot_geometry(D_x, D_y, kx, ky)
+        return (vpar_b**2 + mu_b * B_b) * kdotD / charge
+    if any(value is None for value in separated):
+        raise ValueError("all separated grad-B and curvature drift components are required")
+    kdot_gradB = _kdot_geometry(D_x_gradB, D_y_gradB, kx, ky)
+    kdot_curvature = _kdot_geometry(D_x_curvature, D_y_curvature, kx, ky)
+    return (vpar_b**2 * kdot_curvature + mu_b * B_b * kdot_gradB) / charge
 
 
 def mirror_force_coefficient(mu, B, G, species: SpeciesParams | tuple[SpeciesParams, ...]):

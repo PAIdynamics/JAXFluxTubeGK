@@ -182,6 +182,25 @@ def test_gradient_drift_mirror_and_parallel_coefficients():
         drift[1, 2, 3, 0, 1],
         (vpar[1] ** 2 + mu[2] * B[3]) * (kx[0] * D_x[3] + ky[1] * D_y[3]),
     )
+    separated = magnetic_drift_frequency(
+        vpar,
+        mu,
+        B,
+        D_x,
+        D_y,
+        kx,
+        ky,
+        species,
+        D_x_gradB=0.4 * D_x,
+        D_y_gradB=0.4 * D_y,
+        D_x_curvature=0.6 * D_x,
+        D_y_curvature=0.6 * D_y,
+    )
+    np.testing.assert_allclose(
+        separated[1, 2, 3, 0, 1],
+        vpar[1] ** 2 * 0.6 * (kx[0] * D_x[3] + ky[1] * D_y[3])
+        + mu[2] * B[3] * 0.4 * (kx[0] * D_x[3] + ky[1] * D_y[3]),
+    )
     np.testing.assert_allclose(mirror[2, 3], thermal_speed(species) * mu[2] * B[3] * G[3])
     np.testing.assert_allclose(parallel[1, 3], thermal_speed(species) * vpar[1] * F[3])
 

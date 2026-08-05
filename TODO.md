@@ -229,8 +229,8 @@ validation work in Priority 3.
 - [x] Compare velocity-weighted complex arrays for distribution, parallel
   streaming, mirror force, magnetic drift, equilibrium drive, field-drive
   terms, total RHS, quasineutrality numerator/denominator, and normalization.
-  The complete contract is now executable and currently fails numerical parity;
-  keep downstream mode-structure and production gates blocked.
+  The provider-native 32×8 same-state acceptance case now passes its 0.1
+  relative-L2 tolerance with a maximum RHS error of 0.04393.
 - [x] Inspect the parallel-streaming derivative/linking convention first if
   weighted arrays confirm the current scalar mismatch.
 - [x] Replay each labeled stella state through the solver RHS on a contained
@@ -243,14 +243,17 @@ validation work in Priority 3.
   uniform four-node mu grid the mirror error is 0.243, identifying interpolation
   of coefficient-state products as the remaining mirror comparison floor. The
   native gyroaverage plus z-dependent stella velocity weights also reconstruct
-  its quasineutrality numerator to machine precision. The remaining numerator
-  gap is therefore a cross-grid velocity-measure contract, not an unknown state
-  scale; the solver needs an explicit native-quadrature adapter before parity.
+  its quasineutrality numerator to machine precision. An explicit arbitrary-node
+  velocity-grid builder and z-dependent phase-space measure now preserve that
+  provider-native quadrature contract without storing W7-X state in the solver.
 - [x] Separate equilibrium-gradient drive scale from magnetic-drift geometry in
   provider schema v2 and map stella's native `flux_fac` into that field.
-- [ ] Promote the remaining verified Maxwellian/quadrature normalization,
-  drift factor, and mirror orientation into provider-neutral geometry/state
-  contracts; validate each change against the non-stella gates.
+- [x] Promote the verified provider-neutral conventions: arbitrary velocity
+  nodes and quadrature, a z-dependent phase-space measure, separate grad-B and
+  curvature drift components, and the mapped mirror-force orientation. The
+  stella Maxwellian conversion and traced source algebra remain explicit replay
+  adapter conventions rather than hidden production defaults. Focused geometry,
+  optimization, RHS, quasineutrality, and replay gates pass.
 - [ ] After term parity passes, rerun the W7-X mode-structure gate against the
   matched stella fixture.
 - [ ] Replace the reduced convergence ladder with production controls in

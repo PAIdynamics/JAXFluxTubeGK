@@ -268,6 +268,20 @@ def test_weighted_complex_metrics_remove_global_complex_scale():
     assert abs(metrics["alignment_scale_imag"] - 2.0) < 1.0e-14
 
 
+def test_weighted_complex_metrics_accept_z_dependent_mu_weights():
+    reference = np.ones((2, 2, 2), dtype=complex)
+    candidate = reference.copy()
+    metrics = _load_module().weighted_complex_metrics(
+        reference,
+        candidate,
+        w_z=[0.5, 0.5],
+        w_vpar=[1.0, 2.0],
+        w_mu=[[0.1, 0.2], [0.3, 0.4]],
+    )
+
+    assert metrics["raw_relative_l2_error"] == 0.0
+
+
 def test_stella_array_loader_infers_calls_drops_endpoint_and_converts_rhs(tmp_path):
     module = _load_module()
     path = tmp_path / "trace.dat"

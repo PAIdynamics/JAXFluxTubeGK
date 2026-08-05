@@ -458,14 +458,18 @@ def _apply_toy_equilibrium_coefficients(geometry, knobs: OptimizationKnobs):
     magnetic_scale = beta_scale * (1.0 + 0.02 * modulation)
     metric_scale = pressure_scale * (1.0 + 0.01 * modulation)
     drift_scale = 1.0 + 0.01 * knobs.beta + 0.005 * knobs.pressure_gradient
-    return replace(
-        geometry,
-        B=geometry.B * magnetic_scale,
-        D_x=geometry.D_x * drift_scale,
-        D_y=geometry.D_y * drift_scale,
-        g_xy=geometry.g_xy * metric_scale,
-        g_yy=geometry.g_yy * metric_scale,
-    )
+    updates = {
+        "B": geometry.B * magnetic_scale,
+        "D_x": geometry.D_x * drift_scale,
+        "D_y": geometry.D_y * drift_scale,
+        "g_xy": geometry.g_xy * metric_scale,
+        "g_yy": geometry.g_yy * metric_scale,
+    }
+    for name in ("D_x_gradB", "D_y_gradB", "D_x_curvature", "D_y_curvature"):
+        value = getattr(geometry, name, None)
+        if value is not None:
+            updates[name] = value * drift_scale
+    return replace(geometry, **updates)
 
 
 def _species_from_optimization_knobs(

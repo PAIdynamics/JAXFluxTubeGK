@@ -138,13 +138,21 @@ def weighted_complex_metrics(
     candidate = np.asarray(candidate)
     if reference.shape != candidate.shape:
         raise ValueError("reference and candidate arrays must have matching shapes")
-    expected = (len(w_z), len(w_vpar), len(w_mu))
+    w_mu_array = np.asarray(w_mu, dtype=float)
+    n_mu = w_mu_array.shape[-1] if w_mu_array.ndim in (1, 2) else 0
+    expected = (len(w_z), len(w_vpar), n_mu)
     if reference.shape != expected:
         raise ValueError(f"weighted array shape is {reference.shape}; expected {expected}")
+    if w_mu_array.ndim == 1:
+        mu_weights = w_mu_array[None, None, :]
+    elif w_mu_array.ndim == 2 and w_mu_array.shape == (len(w_z), n_mu):
+        mu_weights = w_mu_array[:, None, :]
+    else:
+        raise ValueError("w_mu must have (mu,) or (z,mu) shape")
     weights = (
         np.asarray(w_z, dtype=float)[:, None, None]
         * np.asarray(w_vpar, dtype=float)[None, :, None]
-        * np.asarray(w_mu, dtype=float)[None, None, :]
+        * mu_weights
     )
     if np.any(weights < 0.0) or not np.all(np.isfinite(weights)):
         raise ValueError("quadrature weights must be finite and nonnegative")
@@ -297,6 +305,10 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
         values = np.stack(phase_records[key], axis=0)[:, :-1]
         return values / code_dt if rhs else values
 
+    def phase_upper_endpoint(key, *, rhs=False):
+        values = np.stack(phase_records[key], axis=0)[:, -1]
+        return values / code_dt if rhs else values
+
     return {
         "z": z,
         "vpar": vpar,
@@ -337,6 +349,15 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
                 "gyroaverage_j0",
             )
             if ("coefficient", term) in phase_records
+        },
+        "upper_endpoint": {
+            "distribution": phase_upper_endpoint(("pdf_g", "input_pdf")),
+            "phi": np.stack(field_records[("phi", "field_phi")], axis=0)[:, -1],
+            "native_coefficients": {
+                term: phase_upper_endpoint(("coefficient", term))[0]
+                for term in ("parallel_streaming", "gyroaverage_j0")
+                if ("coefficient", term) in phase_records
+            },
         },
         "rhs_call_count": call_counts.pop(),
     }

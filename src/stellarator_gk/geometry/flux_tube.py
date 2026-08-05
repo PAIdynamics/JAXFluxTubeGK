@@ -199,6 +199,10 @@ class FluxTubeGeometry(_PyTreeDataclass):
     g_xx: object
     g_xy: object
     g_yy: object
+    D_x_gradB: object | None = None
+    D_y_gradB: object | None = None
+    D_x_curvature: object | None = None
+    D_y_curvature: object | None = None
     radial_coordinate: str = "rho"
     source: str = "precomputed"
 
@@ -217,6 +221,10 @@ class FluxTubeGeometry(_PyTreeDataclass):
         "g_xx",
         "g_xy",
         "g_yy",
+        "D_x_gradB",
+        "D_y_gradB",
+        "D_x_curvature",
+        "D_y_curvature",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("radial_coordinate", "source")
 
@@ -495,7 +503,9 @@ def map_physical_to_internal_geometry(
 
     dB_dz = parallel_grid.D_z @ physical.B
     F = physical.b_dot_grad_z
-    G = -F * dB_dz / physical.B
+    # ``G`` is the coefficient used on the RHS, where the mirror term is
+    # ``+ v_th * mu * (b·grad B) * partial_vpar g``.
+    G = F * dB_dz / physical.B
     drift_scale = 1.0 / physical.B**2
     D_x = (
         physical.B_cross_gradB_dot_grad_psi
@@ -505,6 +515,10 @@ def map_physical_to_internal_geometry(
         physical.B_cross_gradB_dot_grad_alpha
         + physical.B * physical.b_cross_kappa_dot_grad_alpha
     ) * drift_scale
+    D_x_gradB = physical.B_cross_gradB_dot_grad_psi * drift_scale
+    D_y_gradB = physical.B_cross_gradB_dot_grad_alpha * drift_scale
+    D_x_curvature = physical.B * physical.b_cross_kappa_dot_grad_psi * drift_scale
+    D_y_curvature = physical.B * physical.b_cross_kappa_dot_grad_alpha * drift_scale
     E_y = physical.equilibrium_drive_scale
     return FluxTubeGeometry(
         z=physical.z,
@@ -518,6 +532,10 @@ def map_physical_to_internal_geometry(
         E_y=E_y,
         D_x=D_x,
         D_y=D_y,
+        D_x_gradB=D_x_gradB,
+        D_y_gradB=D_y_gradB,
+        D_x_curvature=D_x_curvature,
+        D_y_curvature=D_y_curvature,
         g_xx=physical.grad_psi_sq,
         g_xy=physical.grad_psi_dot_grad_alpha,
         g_yy=physical.grad_alpha_sq,
