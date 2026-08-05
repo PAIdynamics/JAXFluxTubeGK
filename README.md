@@ -344,9 +344,12 @@ JAX_ENABLE_X64=1 uv run python scripts/replay_w7x_stella_state_in_solver.py \
 This writes only compact results. It compares periodic, open-chain, and
 explicitly labeled source-derived stella coefficient discriminators on grids
 fully contained in the trace domain. The exact-vpar-node 32×4 discriminator
-currently reduces total-RHS relative L2 error to about 0.237. The confirmed
+currently reduces total-RHS relative L2 error to about 0.231. The confirmed
 `flux_fac` drive scale is now part of geometry schema v2; the remaining drift,
 mirror, and distribution-normalization conventions are still diagnostic-only.
+The replay also reproduces stella's explicit third-order upwind mirror stencil;
+the residual mirror error is coefficient-level and requires a native in-memory
+coefficient trace rather than the rounded exported geometry table.
 
 Prepare and run the patched stella RHS trace in a scratch tree:
 

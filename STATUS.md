@@ -332,6 +332,16 @@ inexact so prepared providers remain installed.
   while mirror remains about 0.411. The mirror gap is therefore not explained
   by the earlier 16-node interpolation and remains the leading term-level
   blocker.
+- Reproduced stella's explicit mirror derivative exactly: sign-dependent
+  third-order upwinding, first/third-order zero-value boundary closures, and
+  the same uniform velocity spacing. The mirror raw error only falls from
+  about 0.411 to 0.396, although its best-fit structural error improves to
+  0.204 with a scale near 0.74; total RHS improves to 0.231. The remaining gap
+  is therefore in the coefficient/geometry normalization rather than the
+  velocity stencil. The committed stella geometry table carries only about
+  four significant digits, so the next trace must expose native in-memory
+  mirror/drift coefficients rather than reconstructing derivatives from that
+  lossy table.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

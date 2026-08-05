@@ -237,7 +237,9 @@ validation work in Priority 3.
   common velocity grid. The source-derived stella coefficient discriminator
   reduces total-RHS error from 1.32 to 0.237 and brings equilibrium drive below
   0.1. An exact-stella-node 32×4 discriminator improves drift to 0.164 and
-  streaming to 0.115, but mirror remains 0.411 and the
+  streaming to 0.115. Reproducing stella's sign-dependent third-order upwind
+  mirror stencil improves its fitted structural error to 0.204, but the raw
+  mirror error remains 0.396 with a fitted coefficient scale near 0.74. The
   distribution/quasineutrality normalization contract still require closure.
 - [x] Separate equilibrium-gradient drive scale from magnetic-drift geometry in
   provider schema v2 and map stella's native `flux_fac` into that field.

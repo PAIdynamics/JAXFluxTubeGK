@@ -8,5 +8,5 @@ two additional discriminators apply source-derived stella mirror, drift, and
 drive coefficients at 16×4 and an exact-node 32×4 velocity resolution without
 changing the remaining production geometry conventions.
 
-Status: `same_state_rhs_parity_failed`. Maximum RHS relative L2 error:
-`0.41052973` (tolerance `0.1`).
+Status: `same_state_rhs_parity_failed`. Acceptance-case maximum RHS relative L2 error:
+`0.39558905` (tolerance `0.1`).

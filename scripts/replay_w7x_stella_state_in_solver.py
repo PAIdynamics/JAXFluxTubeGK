@@ -22,6 +22,7 @@ import numpy as np
 from scripts.audit_w7x_ky03_rhs_model_balance import (
     DEFAULT_STELLA_GEOMETRY,
     RHSBalanceCase,
+    RHSTermSplit,
     _build_w7x_setup,
     split_rhs_terms,
 )
@@ -93,6 +94,64 @@ def apply_stella_coefficient_contract(case, precompute, stella_geometry: Path):
         maxwellian=np.pi**1.5 * precompute.rhs.maxwellian,
     )
     return replace(precompute, rhs=rhs)
+
+
+def stella_third_order_upwind_matrix(n: int, spacing: float, sign: int) -> np.ndarray:
+    """Reproduce stella's explicit zero-BC third-order upwind derivative."""
+
+    if n < 4:
+        raise ValueError("stella third-order upwind derivative requires at least four nodes")
+    if spacing <= 0.0:
+        raise ValueError("velocity spacing must be positive")
+    if sign not in (-1, 1):
+        raise ValueError("upwind sign must be -1 or 1")
+    matrix = np.zeros((n, n), dtype=float)
+    start, end = (0, n - 1) if sign == -1 else (n - 1, 0)
+    matrix[start, start] = -sign / spacing
+    adjacent = start - sign
+    matrix[adjacent, adjacent - sign] = -sign * 2.0 / (6.0 * spacing)
+    matrix[adjacent, adjacent] = -sign * 3.0 / (6.0 * spacing)
+    matrix[adjacent, adjacent + sign] = sign * 6.0 / (6.0 * spacing)
+    matrix[end, end + sign] = sign / spacing
+    matrix[end, end] = -sign / spacing
+    for row in range(start - 2 * sign, end + sign, -sign):
+        matrix[row, row - sign] = -sign * 2.0 / (6.0 * spacing)
+        matrix[row, row] = -sign * 3.0 / (6.0 * spacing)
+        matrix[row, row + sign] = sign * 6.0 / (6.0 * spacing)
+        matrix[row, row + 2 * sign] = -sign / (6.0 * spacing)
+    return matrix
+
+
+def apply_stella_mirror_stencil(case, state, split, rhs_precompute) -> RHSTermSplit:
+    """Replace the generic mirror derivative with stella's explicit stencil."""
+
+    if not case.name.startswith("replay_stella_coefficients_"):
+        return split
+    state_array = jnp.asarray(state)
+    coefficient = jnp.asarray(rhs_precompute.mirror_force_coeff)
+    if coefficient.ndim == 3:
+        if coefficient.shape[0] != 1:
+            raise ValueError("same-state stella replay requires one kinetic species")
+        coefficient = coefficient[0]
+    if coefficient.ndim != 2:
+        raise ValueError("mirror coefficient must have (mu,z) order")
+    n_vpar = state_array.shape[0]
+    # Coefficient shape is (mu,z); its sign is independent of positive mu.
+    spacing = float(case.vpar_max * 2.0 / case.n_vpar)
+    matrices = {
+        sign: jnp.asarray(stella_third_order_upwind_matrix(n_vpar, spacing, sign))
+        for sign in (-1, 1)
+    }
+    derivatives = []
+    for iz in range(state_array.shape[2]):
+        sign = 1 if float(coefficient[0, iz]) >= 0.0 else -1
+        derivatives.append(jnp.einsum("ij,jmxy->imxy", matrices[sign], state_array[:, :, iz]))
+    derivative = jnp.stack(derivatives, axis=2)
+    mirror = coefficient[None, :, :, None, None] * derivative
+    index = split.names.index("mirror_force")
+    terms = list(split.terms)
+    terms[index] = mirror
+    return RHSTermSplit(names=split.names, terms=tuple(terms))
 
 
 def phase_space_to_solver(values: np.ndarray) -> jnp.ndarray:
@@ -189,7 +248,11 @@ def run_same_state_replay(
             )
             phi = jnp.asarray(phi_values[:, None, None])
             split = split_rhs_terms(state, phi, precompute.rhs)
-            total_rhs = linear_residual(state, precomputed=precompute, phi=phi)
+            split = apply_stella_mirror_stencil(case, state, split, precompute.rhs)
+            if case.name.startswith("replay_stella_coefficients_"):
+                total_rhs = sum(split.terms, jnp.zeros_like(state))
+            else:
+                total_rhs = linear_residual(state, precomputed=precompute, phi=phi)
             candidate_arrays = bundled_solver_rhs(split, total_rhs)
 
             for quantity, candidate in candidate_arrays.items():

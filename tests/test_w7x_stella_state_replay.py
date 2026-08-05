@@ -12,6 +12,7 @@ from scripts.replay_w7x_stella_state_in_solver import (
     phase_space_to_solver,
     replay_cases,
     selected_mode_from_solver,
+    stella_third_order_upwind_matrix,
 )
 
 
@@ -68,6 +69,26 @@ def test_phase_space_order_round_trip():
     expected = np.arange(3 * 4 * 2).reshape(3, 4, 2).astype(complex)
     actual = selected_mode_from_solver(phase_space_to_solver(expected))
     np.testing.assert_array_equal(actual, expected)
+
+
+def test_stella_upwind_matrix_matches_zero_boundary_source_stencil():
+    values = np.asarray([1.0, 2.0, 4.0, 8.0, 16.0])
+    positive = stella_third_order_upwind_matrix(5, 0.5, 1) @ values
+    negative = stella_third_order_upwind_matrix(5, 0.5, -1) @ values
+    assert positive[-1] == -32.0
+    assert positive[0] == 2.0
+    assert negative[0] == 2.0
+    assert negative[-1] == 16.0
+
+
+def test_stella_upwind_matrix_is_exact_for_interior_cubic():
+    nodes = np.arange(8, dtype=float)
+    values = nodes**3
+    exact = 3.0 * nodes**2
+    for sign in (-1, 1):
+        actual = stella_third_order_upwind_matrix(8, 1.0, sign) @ values
+        interior = slice(2, -2)
+        np.testing.assert_allclose(actual[interior], exact[interior], atol=1.0e-13)
 
 
 def test_semantic_bundles_include_field_drive():

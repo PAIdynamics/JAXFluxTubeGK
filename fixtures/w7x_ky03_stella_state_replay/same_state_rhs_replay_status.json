@@ -3,7 +3,7 @@
   "status": "same_state_rhs_parity_failed",
   "passed": false,
   "relative_l2_tolerance": 0.1,
-  "max_rhs_relative_l2_error": 0.4105297275122281,
+  "max_rhs_relative_l2_error": 0.3955890513292704,
   "acceptance_case": "replay_stella_coefficients_32x4",
   "max_all_discriminators_rhs_relative_l2_error": 2.056022002515255,
   "trace_source": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
@@ -38,12 +38,12 @@
       "best_fit_scale_imag": 0.006061200608203379
     },
     "mirror_force": {
-      "case": "replay_stella_coefficients_16x4",
+      "case": "replay_stella_coefficients_32x4",
       "rhs_call": 3,
-      "relative_l2_error": 0.39798774245108487,
-      "best_fit_relative_l2_error": 0.36350575270995655,
-      "best_fit_scale_real": 0.8527902349728154,
-      "best_fit_scale_imag": -0.018524407753493666
+      "relative_l2_error": 0.39549770855961974,
+      "best_fit_relative_l2_error": 0.20357547572035448,
+      "best_fit_scale_real": 0.7432854858886769,
+      "best_fit_scale_imag": -0.020360957198629934
     },
     "parallel_streaming": {
       "case": "replay_stella_coefficients_32x4",
@@ -72,12 +72,12 @@
     "total_rhs": {
       "case": "replay_stella_coefficients_32x4",
       "rhs_call": 3,
-      "relative_l2_error": 0.23666866731152006,
-      "best_fit_relative_l2_error": 0.23388370934231487,
-      "best_fit_scale_real": 0.9693681336774997,
-      "best_fit_scale_imag": -0.019101488051992195
+      "relative_l2_error": 0.23117948877518288,
+      "best_fit_relative_l2_error": 0.2296984466989723,
+      "best_fit_scale_real": 0.9753851182779067,
+      "best_fit_scale_imag": -0.008928949931629376
     }
   },
-  "interpretation": "Each solver RHS is evaluated on the same stella distribution and phi after interpolation onto a contained 16x4 finite-difference velocity grid. No fitted amplitude or phase is used; the quasineutrality denominator alone uses the documented opposite-sign convention. The explicitly labeled stella-coefficient case tests the source-derived mirror sign, magnetic-drift factor 1/2, geometry-header flux_fac, and Maxwellian normalization without changing production defaults.",
+  "interpretation": "Each solver RHS is evaluated on the same stella distribution and phi after interpolation onto contained 16x4 and exact-vpar-node 32x4 finite-difference velocity grids. No fitted amplitude or phase is used; the quasineutrality denominator alone uses the documented opposite-sign convention. The explicitly labeled stella-coefficient case tests the source-derived mirror sign, magnetic-drift factor 1/2, geometry-header flux_fac, and Maxwellian normalization without changing production defaults.",
   "next_action": "isolate the largest same-state term discrepancy before rerunning the mode-structure and production gates"
 }
