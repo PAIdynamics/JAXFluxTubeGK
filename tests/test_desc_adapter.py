@@ -270,6 +270,34 @@ def test_desc_path_provider_cannot_claim_differentiability():
         DescGeometryProvider(path="fake.h5", differentiable=True)
 
 
+def test_desc_named_provider_uses_installed_configuration_hook():
+    calls = []
+
+    def named_loader(name):
+        calls.append(name)
+        equilibrium = _FakeEquilibrium()
+        equilibrium.NFP = 5
+        return equilibrium
+
+    result = resolve_geometry(
+        DescGeometryProvider(
+            iota=0.72,
+            named_loader=named_loader,
+            get_rtz_grid=_fake_get_rtz_grid,
+        ),
+        GeometryRequest(configuration="W7-X", n_z=9, alpha=0.1),
+    )
+
+    assert calls == ["W7-X"]
+    assert result.physical.nfp == 5
+    assert result.metadata.provenance.source == "installed DESC named configuration W7-X"
+
+
+def test_desc_provider_rejects_ambiguous_sources():
+    with pytest.raises(ValueError, match="at most one"):
+        DescGeometryProvider(equilibrium=object(), path="equilibrium.h5")
+
+
 def test_load_desc_equilibrium_selects_equilibrium_from_path_like_family():
     eq0 = _FakeEquilibrium()
     eq1 = _FakeEquilibrium()
@@ -352,3 +380,23 @@ def test_extracted_desc_fixture_loads_through_geometry_contract():
     assert jnp.all(geometry.g_yy > 0.0)
     np.testing.assert_allclose(np.mean(data["B"]), 0.21211534648269842, rtol=1e-13)
     np.testing.assert_allclose(np.mean(data["b_dot_grad_z"]), 0.27287213902435115, rtol=1e-13)
+
+
+@pytest.mark.external
+def test_installed_desc_evaluates_named_w7x(desc_root):
+    result = resolve_geometry(
+        DescGeometryProvider(revision="512f93cfc892b64a65b72f2ac5e9b856d9f9f24a"),
+        GeometryRequest(
+            configuration="W7-X",
+            radial_value=0.5,
+            alpha=0.0,
+            n_z=8,
+            z_min=-np.pi / 5.0,
+            z_max=np.pi / 5.0,
+        ),
+    )
+
+    assert desc_root.name == "DESC"
+    assert result.metadata.provenance.provider == "desc"
+    assert result.physical.nfp == 5
+    assert np.all(np.asarray(result.physical.B) > 0.0)

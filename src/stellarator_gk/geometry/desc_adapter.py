@@ -48,18 +48,19 @@ class DescGeometryProvider:
     family_index: int = -1
     iota: float | None = None
     zeta_offset: float = 0.0
-    nfp: int = 1
+    nfp: int | None = None
     provider_version: str = "unknown"
     revision: str = "unknown"
     differentiable: bool = False
     loader: Callable | None = None
     get_rtz_grid: Callable | None = None
     linear_grid_cls: type | None = None
+    named_loader: Callable | None = None
 
     def __post_init__(self) -> None:
-        if (self.equilibrium is None) == (self.path is None):
-            raise ValueError("DescGeometryProvider requires exactly one of equilibrium or path")
-        if self.nfp < 1:
+        if self.equilibrium is not None and self.path is not None:
+            raise ValueError("DescGeometryProvider accepts at most one of equilibrium or path")
+        if self.nfp is not None and self.nfp < 1:
             raise ValueError("DescGeometryProvider nfp must be at least 1")
         if self.path is not None and self.differentiable:
             raise ValueError("file-backed DESC geometry cannot be marked differentiable")
@@ -78,12 +79,16 @@ class DescGeometryProvider:
         )
         equilibrium = self.equilibrium
         if equilibrium is None:
-            equilibrium = load_desc_equilibrium(
-                self.path,
-                file_format=self.file_format,
-                index=self.family_index,
-                loader=self.loader,
-            )
+            if self.path is None:
+                named_loader = self.named_loader or _import_desc_example_get()
+                equilibrium = named_loader(request.configuration)
+            else:
+                equilibrium = load_desc_equilibrium(
+                    self.path,
+                    file_format=self.file_format,
+                    index=self.family_index,
+                    loader=self.loader,
+                )
         iota = (
             _desc_iota(equilibrium, request.radial_value, linear_grid_cls=self.linear_grid_cls)
             if self.iota is None
@@ -99,13 +104,22 @@ class DescGeometryProvider:
             get_rtz_grid=self.get_rtz_grid,
             linear_grid_cls=self.linear_grid_cls,
         )
-        source = "in-memory DESC equilibrium" if self.path is None else str(Path(self.path))
+        # DESC's solved coordinate inversion leaves roundoff in the computed
+        # alpha array. The public field-line label is the exact requested value.
+        arrays["alpha"] = request.alpha
+        if self.path is not None:
+            source = str(Path(self.path))
+        elif self.equilibrium is not None:
+            source = "in-memory DESC equilibrium"
+        else:
+            source = f"installed DESC named configuration {request.configuration}"
+        nfp = self.nfp if self.nfp is not None else _desc_nfp(equilibrium)
         physical = build_physical_flux_tube_geometry_from_coordinate_arrays(
             parallel,
             **arrays,
             iota=iota,
             shear=0.0,
-            nfp=self.nfp,
+            nfp=nfp,
             field_periods=request.field_periods,
             endpoint_policy=request.endpoint_policy,
             radial_coordinate=request.radial_coordinate,
@@ -121,7 +135,7 @@ class DescGeometryProvider:
                 source=source,
                 configuration=request.configuration,
             ),
-            nfp=self.nfp,
+            nfp=nfp,
             differentiable=self.differentiable,
         )
         return GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata)
@@ -364,6 +378,25 @@ def _import_desc_linear_grid():
             "pass --desc-root to the extraction script, or supply iota explicitly."
         ) from exc
     return module.LinearGrid
+
+
+def _import_desc_example_get():
+    try:
+        module = importlib.import_module("desc.examples")
+    except ImportError as exc:
+        raise ImportError(
+            "DESC is required for named equilibrium geometry; install the 'desc' "
+            "or 'mhd' extra"
+        ) from exc
+    return module.get
+
+
+def _desc_nfp(eq) -> int:
+    for name in ("NFP", "nfp"):
+        value = getattr(eq, name, None)
+        if value is not None:
+            return int(value)
+    return 1
 
 
 def _coerce_scalar_or_1d(name: str, value):
