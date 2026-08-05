@@ -36,3 +36,15 @@ Prepare pinned dependencies before integration testing when needed:
 ```bash
 .venv/bin/python scripts/bootstrap_dependencies.py --profile validation --local-root ..
 ```
+
+## Package smoke test
+
+Build both distributions, install the wheel into a temporary isolated
+environment, and import it from outside the checkout:
+
+```bash
+.venv/bin/python scripts/package_smoke_test.py --python 3.13
+```
+
+CI runs lint, the standalone suite, and this packaging check without sibling
+repositories or external provider installations.
