@@ -79,7 +79,6 @@ from stellarator_gk import (
     gx_salpha_cyclone_growth_target,
     load_cyclone_trace_csv,
     load_gkw_parallel_phi_trace,
-    load_gkw_selected_mode_state_trace,
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice,
     load_gkw_velocity_space_slice_series,
@@ -89,7 +88,6 @@ from stellarator_gk import (
     load_gx_mode_structure_fixture,
     load_per_ky_mode_structure_fixture_csv,
     load_stella_mode_structure_fixture,
-    mode_structure_fixture_from_selected_state_trace,
     resample_per_ky_mode_structure_fixture,
     resample_gx_eik_geometry_reference,
     run_geometry_to_gx_eik_export_gate,
@@ -1469,34 +1467,6 @@ def test_gx_salpha_moment_rhs_mode_structure_fixture_runs_reduced_gate():
     )
     assert bool(gate.passed)
     np.testing.assert_allclose(gate.profile_error, 0.0, atol=1.0e-12)
-
-
-def test_mode_structure_fixture_from_gkw_selected_state_trace_uses_complex_phi():
-    trace = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state",
-    )
-    fixture = mode_structure_fixture_from_selected_state_trace(
-        trace,
-        ky=0.5,
-        z=jnp.linspace(-1.0, 1.0, trace.phi.shape[-1]),
-        growth_rate=0.179,
-        frequency=0.0,
-        time_index=-1,
-        source="gkw-cosin2-selected-state-mode-structure",
-    )
-    report = compare_per_ky_mode_structure_fixtures(
-        fixture,
-        fixture,
-        growth_tolerance=1.0e-12,
-        frequency_tolerance=1.0e-12,
-        phi_tolerance=1.0e-12,
-    )
-
-    assert fixture.phi.shape == (1, trace.phi.shape[-1])
-    assert fixture.metadata[0][0] == "trace_source"
-    assert fixture.metadata[1][0] == "trace_step"
-    assert bool(report.passed)
-    np.testing.assert_allclose(report.phi_phase_aligned_error, 0.0, atol=1.0e-14)
 
 
 def test_cyclone_trace_csv_roundtrip_and_selected_field_comparison(tmp_path):

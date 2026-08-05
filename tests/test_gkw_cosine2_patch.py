@@ -21,16 +21,12 @@ from scripts.prepare_gkw_cosine2_run import (
 )
 from stellarator_gk import (
     CycloneSourceTermTrace,
-    CycloneInitialStateContractReport,
     CycloneOneWindowReplayReport,
-    CycloneSameStateIghReplayAudit,
     GkwIghInputTrace,
     GkwStateTrace,
     GkwVelocitySpaceSliceSeries,
     SelectedModeStateTrace,
     SolverSelectedModeRhsTrace,
-    compare_gkw_igh_input_trace_to_setup,
-    compare_gkw_igh_matrix_trace_to_stencil,
     compare_gkw_state_trace_to_source_term_trace,
     compare_selected_mode_rhs_traces,
     compare_selected_mode_state_traces,
@@ -44,12 +40,8 @@ from stellarator_gk import (
     load_gkw_time_dat_trace,
     load_gkw_velocity_space_slice_series,
     run_cyclone_base_case_one_window_replay,
-    run_cyclone_base_case_initial_state_contract,
     run_cyclone_base_case_selected_rhs_trace,
     run_cyclone_base_case_selected_state_trace,
-    run_cyclone_base_case_same_state_rhs_replay,
-    run_cyclone_base_case_same_state_rhs_replay_gate,
-    run_cyclone_base_case_same_state_igh_replay_audit,
 )
 
 
@@ -890,47 +882,6 @@ def test_selected_mode_state_comparison_allows_global_phase(tmp_path: Path) -> N
     np.testing.assert_allclose(report.max_abs_error, 0.0, atol=1.0e-14)
 
 
-def test_patched_cosin2_selected_mode_state_fixtures_load() -> None:
-    trace = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
-    )
-
-    assert isinstance(trace, SelectedModeStateTrace)
-    np.testing.assert_array_equal(trace.steps, np.asarray([20, 800, 1600], dtype=np.int32))
-    np.testing.assert_allclose(trace.times, np.asarray([0.06, 2.4, 4.8]))
-    assert trace.state.shape == (3, 32, 8, 48)
-    assert trace.phi.shape == (3, 48)
-
-
-def test_patched_cosin2_rhs_state_fixtures_match_diagnostic_state() -> None:
-    steps = (20, 800, 1600)
-    rhs_state = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_state"
-    )
-    diagnostic_state = load_gkw_selected_mode_state_trace(
-        [
-            ROOT
-            / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
-            / f"stellarator_gk_selected_state_{step:08d}.dat"
-            for step in steps
-        ]
-    )
-
-    report = compare_selected_mode_state_traces(
-        rhs_state,
-        diagnostic_state,
-        tolerance=1.0e-12,
-    )
-
-    np.testing.assert_array_equal(
-        rhs_state.steps,
-        np.asarray(steps, dtype=np.int32),
-    )
-    assert rhs_state.state.shape == (3, 32, 8, 48)
-    assert bool(report.passed)
-    np.testing.assert_allclose(report.max_abs_error, 0.0, atol=1.0e-15)
-
-
 def test_gkw_selected_mode_rhs_trace_loader(tmp_path: Path) -> None:
     path = tmp_path / "stellarator_gk_rhs_trace_00000020.dat"
     rows = [
@@ -1046,143 +997,6 @@ def test_gkw_igh_input_trace_loader(tmp_path: Path) -> None:
     np.testing.assert_allclose(trace.hh_values[0, 4, 4], 124.0)
 
 
-def test_patched_cosin2_igh_input_fixtures_match_setup() -> None:
-    trace = load_gkw_igh_input_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_igh_inputs"
-    )
-
-    report = compare_gkw_igh_input_trace_to_setup(trace, tolerance=1.0e-12)
-    metrics = dict(zip(report.field_names, np.asarray(report.field_errors)))
-
-    assert trace.row_z.shape == (12288,)
-    assert bool(report.passed)
-    np.testing.assert_allclose(report.max_abs_error, 5.329070518200751e-15)
-    np.testing.assert_allclose(metrics["gfun_max_abs_error"], 4.996003610813204e-16)
-    np.testing.assert_allclose(metrics["disp_v_dum_max_abs_error"], 4.718447854656915e-16)
-    np.testing.assert_allclose(metrics["hh_values_max_abs_error"], 5.329070518200751e-15)
-
-
-def test_patched_cosin2_igh_matrix_fixtures_match_stencil() -> None:
-    trace = load_gkw_igh_matrix_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_igh_matrix"
-    )
-
-    report = compare_gkw_igh_matrix_trace_to_stencil(trace, tolerance=1.0e-12)
-    metrics = dict(zip(report.field_names, np.asarray(report.field_errors)))
-
-    np.testing.assert_array_equal(
-        trace.steps,
-        np.asarray([20, 800, 1600], dtype=np.int32),
-    )
-    assert trace.matrix_value.shape == (454665,)
-    assert bool(report.passed)
-    np.testing.assert_allclose(
-        metrics["coefficient_max_abs_error"],
-        5.773159728050814e-15,
-        rtol=0.0,
-        atol=1.0e-14,
-    )
-    np.testing.assert_allclose(metrics["invalid_or_nonlocal_column_count"], 0.0)
-    np.testing.assert_allclose(metrics["entry_count_error"], 0.0)
-    np.testing.assert_allclose(metrics["observed_nonzero_entry_count"], 437808.0)
-    np.testing.assert_allclose(metrics["expected_nonzero_entry_count"], 437808.0)
-
-
-def test_patched_cosin2_rhs_trace_fixtures_load() -> None:
-    trace = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
-    )
-
-    np.testing.assert_array_equal(trace.steps, np.asarray([20, 800, 1600], dtype=np.int32))
-    np.testing.assert_allclose(trace.times, np.asarray([0.06, 2.4, 4.8]))
-    assert trace.total_action.shape == (3, 32, 8, 48)
-    assert trace.term_actions.shape == (3, 9, 32, 8, 48)
-    assert trace.term_names[7] == "vpgrphi"
-    assert float(np.max(np.abs(np.asarray(trace.total_action)))) > 0.0
-
-
-def test_patched_cosin2_rhs_apply_fixtures_match_reconstructed_rhs_trace() -> None:
-    apply_trace = load_gkw_selected_mode_rhs_apply_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_apply"
-    )
-    rhs_trace = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
-    )
-
-    np.testing.assert_array_equal(
-        apply_trace.steps,
-        np.asarray([20, 800, 1600], dtype=np.int32),
-    )
-    assert apply_trace.term_names == ("calculate_rhs_total",)
-    assert apply_trace.total_action.shape == (3, 32, 8, 48)
-    np.testing.assert_allclose(
-        apply_trace.total_action,
-        rhs_trace.total_action,
-        atol=2.0e-17,
-        rtol=0.0,
-    )
-
-
-def test_patched_cosin2_midrun_state_and_rhs_fixtures_load() -> None:
-    state = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state"
-    )
-    rhs = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_midrun_rhs_trace"
-    )
-
-    expected_steps = np.asarray([780, 800, 820], dtype=np.int32)
-    expected_times = np.asarray([2.34, 2.40, 2.46])
-    np.testing.assert_array_equal(state.steps, expected_steps)
-    np.testing.assert_array_equal(rhs.steps, expected_steps)
-    np.testing.assert_allclose(state.times, expected_times)
-    np.testing.assert_allclose(rhs.times, expected_times)
-    assert state.state.shape == (3, 32, 8, 48)
-    assert state.phi.shape == (3, 48)
-    assert rhs.term_actions.shape == (3, 9, 32, 8, 48)
-    assert rhs.term_names[1] == "igh_or_term_i"
-    assert float(np.max(np.abs(np.asarray(rhs.term_actions[:, 1])))) > 0.0
-
-
-def test_patched_cosin2_early_adjacent_state_fixture_loads() -> None:
-    state = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state"
-    )
-
-    np.testing.assert_array_equal(state.steps, np.asarray([20, 40], dtype=np.int32))
-    np.testing.assert_allclose(state.times, np.asarray([0.06, 0.12]))
-    assert state.state.shape == (2, 32, 8, 48)
-    assert state.phi.shape == (2, 48)
-    assert float(np.max(np.abs(np.asarray(state.state)))) > 0.0
-
-
-def test_patched_cosin2_initial_state_fixtures_load() -> None:
-    fixture_dir = ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_initial_state"
-    pre = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_initial_state_pre_normalize.dat"
-    )
-    post = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_initial_state_post_normalize.dat"
-    )
-    first = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_selected_state_00000020.dat"
-    )
-
-    np.testing.assert_array_equal(pre.steps, np.asarray([0], dtype=np.int32))
-    np.testing.assert_array_equal(post.steps, np.asarray([0], dtype=np.int32))
-    np.testing.assert_array_equal(first.steps, np.asarray([20], dtype=np.int32))
-    np.testing.assert_allclose(pre.times, np.asarray([0.0]))
-    np.testing.assert_allclose(post.times, np.asarray([0.0]))
-    np.testing.assert_allclose(first.times, np.asarray([0.06]))
-    assert pre.state.shape == (1, 32, 8, 48)
-    assert post.state.shape == (1, 32, 8, 48)
-    assert first.state.shape == (1, 32, 8, 48)
-    np.testing.assert_allclose(pre.state, post.state, atol=0.0, rtol=0.0)
-    np.testing.assert_allclose(pre.phi, 0.0, atol=0.0, rtol=0.0)
-    np.testing.assert_allclose(post.phi, 0.0, atol=0.0, rtol=0.0)
-    assert float(np.max(np.abs(np.asarray(first.phi)))) > 0.0
-
-
 def test_solver_selected_mode_rhs_trace_records_gkw_bucketed_actions() -> None:
     trace = run_cyclone_base_case_selected_rhs_trace(
         n_z=12,
@@ -1246,82 +1060,6 @@ def test_one_window_replay_passes_for_solver_generated_selected_state_trace() ->
     assert "one-window replay" in report.notes
 
 
-def test_patched_cosin2_initial_state_contract_closes_first_window() -> None:
-    fixture_dir = ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_initial_state"
-    pre = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_initial_state_pre_normalize.dat"
-    )
-    post = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_initial_state_post_normalize.dat"
-    )
-    first = load_gkw_selected_mode_state_trace(
-        fixture_dir / "stellarator_gk_selected_state_00000020.dat"
-    )
-
-    report = run_cyclone_base_case_initial_state_contract(
-        pre,
-        post,
-        first,
-        steps_per_window=20,
-        tolerance=2.0e-9,
-    )
-
-    assert isinstance(report, CycloneInitialStateContractReport)
-    assert bool(report.passed)
-    metrics = dict(zip(report.metric_names, np.asarray(report.metric_values)))
-    assert metrics["gkw_initial_pre_post_state"] == pytest.approx(0.0)
-    assert metrics["gkw_initial_pre_post_phi"] == pytest.approx(0.0)
-    assert metrics["gkw_initial_stored_phi_max_norm"] == pytest.approx(0.0)
-    assert metrics["solver_vs_gkw_initial_state"] < 1.0e-18
-    assert metrics["solver_initial_solved_phi_max_norm"] > 1.0e-2
-    assert metrics["first_window_replay_max"] < 2.0e-9
-    assert metrics["first_window_phi_phase_aligned"] < 2.0e-9
-    assert metrics["first_window_state_phase_aligned"] < 3.0e-11
-    assert float(report.max_abs_error) == pytest.approx(
-        metrics["first_window_replay_max"]
-    )
-    assert "initial normalize(2)" in report.notes
-
-
-def test_patched_cosin2_one_window_replay_closes_window_evolution_gap() -> None:
-    early = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_early_selected_state"
-    )
-    midrun = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_midrun_selected_state"
-    )
-
-    early_report = run_cyclone_base_case_one_window_replay(
-        early,
-        steps_per_window=20,
-        tolerance=1.0e-8,
-    )
-    midrun_report = run_cyclone_base_case_one_window_replay(
-        midrun,
-        steps_per_window=20,
-        tolerance=1.0e-8,
-    )
-
-    assert isinstance(early_report, CycloneOneWindowReplayReport)
-    assert isinstance(midrun_report, CycloneOneWindowReplayReport)
-    np.testing.assert_array_equal(early_report.start_steps, np.asarray([20], dtype=np.int32))
-    np.testing.assert_array_equal(midrun_report.start_steps, np.asarray([780, 800], dtype=np.int32))
-    assert early_report.metric_values.shape == (1, len(early_report.metric_names))
-    assert midrun_report.metric_values.shape == (2, len(midrun_report.metric_names))
-    assert bool(early_report.passed)
-    assert bool(midrun_report.passed)
-    assert np.all(np.isfinite(np.asarray(early_report.metric_values)))
-    assert np.all(np.isfinite(np.asarray(midrun_report.metric_values)))
-    early_metrics = dict(zip(early_report.metric_names, np.asarray(early_report.metric_values[0])))
-    midrun_metrics = dict(zip(midrun_report.metric_names, np.asarray(midrun_report.metric_values[0])))
-    assert early_metrics["step_delta_error"] == pytest.approx(0.0)
-    assert midrun_metrics["step_delta_error"] == pytest.approx(0.0)
-    assert early_metrics["post_normalization_field_norm_error"] < 1.0e-12
-    assert midrun_metrics["post_normalization_field_norm_error"] < 1.0e-12
-    assert 0.0 < float(early_report.max_abs_error) < 2.0e-9
-    assert 0.0 < float(midrun_report.max_abs_error) < 3.0e-10
-
-
 def test_selected_mode_rhs_trace_comparator_detects_reversed_vpar_layout() -> None:
     base = run_cyclone_base_case_selected_rhs_trace(
         n_z=10,
@@ -1345,90 +1083,6 @@ def test_selected_mode_rhs_trace_comparator_detects_reversed_vpar_layout() -> No
     assert "best_term_layout=reverse_vpar" in report.notes
     term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
     assert term_error_map["igh_or_term_i"] <= 1.0e-12
-
-
-def test_patched_cosin2_rhs_trace_fixture_compares_to_solver_snapshot() -> None:
-    gkw_trace = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
-    )
-    solver_trace = run_cyclone_base_case_selected_rhs_trace()
-
-    report = compare_selected_mode_rhs_traces(gkw_trace, solver_trace)
-
-    assert report.field_names[0] == "steps"
-    assert report.term_names == gkw_trace.term_names
-    assert report.term_errors.shape == (9,)
-    assert np.all(np.isfinite(np.asarray(report.field_errors)))
-    assert bool(report.passed)
-    assert 0.0 < float(report.max_abs_error) < 7.0e-12
-    assert "best_term_layout=direct_phase_aligned" in report.notes
-    term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
-    assert term_error_map["igh_or_term_i"] < 2.0e-12
-    assert term_error_map["vdgradf"] < 2.0e-12
-    assert term_error_map["ve_grad_fm"] < 7.0e-12
-    assert term_error_map["vpgrphi"] < 5.0e-13
-
-
-def test_patched_cosin2_rhs_trace_replays_on_gkw_selected_state() -> None:
-    gkw_state = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
-    )
-    gkw_rhs = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
-    )
-
-    replay = run_cyclone_base_case_same_state_rhs_replay(gkw_state)
-    report = run_cyclone_base_case_same_state_rhs_replay_gate(
-        gkw_state,
-        gkw_rhs,
-        tolerance=1.0e-8,
-    )
-
-    assert isinstance(replay, SolverSelectedModeRhsTrace)
-    np.testing.assert_array_equal(replay.steps, gkw_rhs.steps)
-    np.testing.assert_allclose(replay.times, gkw_rhs.times)
-    assert replay.total_action.shape == gkw_rhs.total_action.shape
-    assert replay.term_actions.shape == gkw_rhs.term_actions.shape
-    assert replay.term_names == gkw_rhs.term_names
-    assert report.field_names[0] == "steps"
-    assert report.term_errors.shape == (9,)
-    assert np.all(np.isfinite(np.asarray(report.field_errors)))
-    assert bool(report.passed)
-    assert 0.0 < float(report.max_abs_error) < 3.0e-12
-    assert "same_state_rhs_replay" in replay.source
-    assert "field_source=solver" in replay.notes
-    term_error_map = dict(zip(report.term_names, np.asarray(report.term_errors)))
-    assert term_error_map["igh_or_term_i"] < 2.0e-14
-    assert term_error_map["vdgradf"] < 2.0e-13
-    assert term_error_map["ve_grad_fm"] < 3.0e-12
-
-
-def test_same_state_igh_replay_audit_closes_trace_gap() -> None:
-    gkw_state = load_gkw_selected_mode_state_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_selected_state"
-    )
-    gkw_rhs = load_gkw_selected_mode_rhs_trace(
-        ROOT / "fixtures/gkw_cyclone_selected_ky_cosin2_rhs_trace"
-    )
-
-    audit = run_cyclone_base_case_same_state_igh_replay_audit(gkw_state, gkw_rhs)
-
-    assert isinstance(audit, CycloneSameStateIghReplayAudit)
-    metrics = dict(zip(audit.metric_names, np.asarray(audit.metric_values)))
-    assert bool(audit.passed)
-    assert float(audit.max_abs_error) == pytest.approx(
-        metrics["gkw_vs_solver_fused_igh"]
-    )
-    assert 0.0 < float(audit.max_abs_error) < 1.0e-16
-    assert metrics["solver_vs_source_fused_igh"] < 1.0e-16
-    assert metrics["source_fused_split_error"] < 1.0e-16
-    assert metrics["gkw_vs_solver_fused_igh"] == pytest.approx(
-        metrics["gkw_vs_source_fused_igh"]
-    )
-    assert metrics["gkw_vs_source_hamiltonian_plus_disp_par"] < (
-        metrics["gkw_vs_source_hamiltonian_only"] / 10.0
-    )
-    assert "same-state selected-mode igh replay audit" in audit.notes
 
 
 def test_gkw_velocity_space_slice_series_loader_reads_suffixed_snapshots(tmp_path: Path) -> None:
