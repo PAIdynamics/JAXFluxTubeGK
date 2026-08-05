@@ -5,7 +5,6 @@
     "stella and committed solver balance use different vpar ranges",
     "stella and committed solver balance use different mu grids/ranges",
     "committed solver balance fixture stores scalar term summaries, not full term arrays",
-    "stella trace currently stores vpa/mu coordinates but not velocity quadrature weights",
     "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
   ],
   "direct_array_parity_ready": false,
@@ -100,18 +99,18 @@
   "stella_step": 2000,
   "stella_total_rhs_rows": 197376,
   "stella_total_rows": 1382403,
-  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v1",
-  "stella_velocity_weight_columns_present": false,
+  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v2",
+  "stella_velocity_weight_columns_present": true,
   "stella_vpa_range": [
     -3.0,
     3.0
   ],
   "stella_wgts_mu_range": [
-    null,
-    null
+    0.17230844574454418,
+    4.913278506590646
   ],
   "stella_wgts_vpa_range": [
-    null,
-    null
+    0.038674285968999425,
+    0.13422252189240977
   ]
 }

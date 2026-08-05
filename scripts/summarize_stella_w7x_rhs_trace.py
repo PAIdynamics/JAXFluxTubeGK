@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import json
 from math import hypot, sqrt
 from pathlib import Path
+import subprocess
 from typing import Iterable, TypeVar
 
 
@@ -172,6 +173,7 @@ def summarize_trace(
     trace_path: Path,
     *,
     required_record_terms: Iterable[tuple[str, str]] = REQUIRED_RECORD_TERMS,
+    provenance: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """Return a compact JSON-ready summary of a stella RHS trace file."""
 
@@ -253,7 +255,7 @@ def summarize_trace(
         for record, term in sorted(required)
         if (record, term) not in present
     ]
-    return {
+    summary = {
         "trace_path": str(trace_path),
         "trace_format": trace_format,
         "rhs_units": "stella_native_rhs_times_code_dt",
@@ -271,11 +273,17 @@ def summarize_trace(
             for key in sorted(accumulators)
         ],
     }
+    if provenance is not None:
+        summary["provenance"] = dict(provenance)
+    return summary
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    summary = summarize_trace(args.trace)
+    summary = summarize_trace(
+        args.trace,
+        provenance=_stella_provenance(args.stella_source, args.stella_executable),
+    )
     text = json.dumps(summary, indent=2, sort_keys=True) + "\n"
     if args.output is None:
         print(text, end="")
@@ -284,6 +292,27 @@ def main(argv: list[str] | None = None) -> int:
         args.output.write_text(text, encoding="utf-8")
         print(args.output)
     return 0
+
+
+def _stella_provenance(source: Path, executable: Path) -> dict[str, str]:
+    source = source.resolve()
+    executable = executable.resolve()
+    if not (source / ".git").exists():
+        raise ValueError(f"stella source is not a Git checkout: {source}")
+    if not executable.is_file():
+        raise FileNotFoundError(executable)
+    revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=source,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    return {
+        "stella_source": str(source),
+        "stella_executable": str(executable),
+        "stella_revision": revision,
+    }
 
 
 def _minmax(current_min: T | None, current_max: T | None, value: T) -> tuple[T, T]:
@@ -295,6 +324,8 @@ def _minmax(current_min: T | None, current_max: T | None, value: T) -> tuple[T, 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("trace", type=Path)
+    parser.add_argument("--stella-source", type=Path, required=True)
+    parser.add_argument("--stella-executable", type=Path, required=True)
     parser.add_argument("--output", type=Path)
     return parser.parse_args(argv)
 

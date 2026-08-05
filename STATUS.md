@@ -134,8 +134,9 @@ The scientific W7-X gate remains open:
 - the `ky=0.3` real-frequency and phase-aligned mode-profile comparison remains
   outside tolerance;
 - the solver-side RHS balance reconstructs and is streaming dominated;
-- direct stella-vs-solver term-array comparison remains blocked by incompatible
-  velocity/z contracts and missing weights in the retained v1 trace summary;
+- the retained stella trace summary is now format v2 with velocity quadrature
+  weights; direct term-array comparison remains blocked by incompatible
+  velocity/z contracts and the missing solver-side full-array trace;
 - production convergence, CPU timing, and MHD design optimization remain
   blocked behind external W7-X parity.
 
@@ -249,6 +250,18 @@ inexact so prepared providers remain installed.
   TEM production validation, and full shape optimization are deferred.
 
 ## Round Log
+
+### 2026-08-05: Priority 3 Weighted stella Trace
+
+- Built a non-destructively patched stella copy from revision
+  `564ca09b89904c231421c17c00068a9362061278` and ran the matched W7-X
+  `ky=0.3`, `t=200` explicit-term trace using the scratch executable recorded
+  in the compact result provenance.
+- Replaced the retained v1 summary with a v2 record covering 1,382,403 rows,
+  all required RHS terms, `wgts_vpa`, and z-dependent `wgts_mu` on stella's
+  257×32×8 raw grid. The 329 MiB raw trace remains outside the repository.
+- Made the summarization command require explicit stella source and executable
+  paths and record the exact source commit.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

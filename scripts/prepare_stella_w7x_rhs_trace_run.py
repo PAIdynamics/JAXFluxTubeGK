@@ -23,6 +23,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,6 +148,8 @@ def prepare_stella_w7x_rhs_trace_run(
     run_script = output_root / "run_stella_rhs_trace.sh"
     metadata_file = output_root / "rhs_trace_run_metadata.json"
     metadata = _metadata_payload(
+        stella_source=stella_source,
+        vmec_source=vmec_file,
         output_root=output_root,
         patched_source_root=patched_source_root,
         patched_explicit=patched_explicit,
@@ -541,6 +544,8 @@ def _ignore_stella_copy_entries(_directory: str, names: list[str]) -> set[str]:
 
 def _metadata_payload(
     *,
+    stella_source: Path,
+    vmec_source: Path,
     output_root: Path,
     patched_source_root: Path,
     patched_explicit: Path,
@@ -559,6 +564,12 @@ def _metadata_payload(
     return {
         "benchmark_name": "w7x_ky03_stella_rhs_trace_run",
         "status": "prepared_patched_stella_run_pending_execution",
+        "stella_source": _display_path(stella_source),
+        "stella_source_revision": _git_revision(stella_source),
+        "stella_executable": _display_path(
+            patched_source_root / "COMPILATION/build_cmake/COMPILATION/stella"
+        ),
+        "vmec_source": _display_path(vmec_source),
         "output_root": _display_path(output_root),
         "patched_source_root": _display_path(patched_source_root),
         "patched_explicit_source": _display_path(patched_explicit),
@@ -575,6 +586,8 @@ def _metadata_payload(
         "trace_ky_value": 0.3,
         "trace_kx_value": 0.0,
         "rhs_units": "stella_native_rhs_times_code_dt",
+        "trace_format": "stellarator_gk_stella_rhs_trace_v2",
+        "velocity_weight_columns": ("wgts_vpa", "wgts_mu"),
         "force_explicit_stream_mirror": bool(force_explicit_stream_mirror),
         "trace_input_note": (
             "mirror and parallel streaming are forced explicit for this RHS term "
@@ -599,6 +612,18 @@ def _metadata_payload(
             "the trace against fixtures/w7x_ky03_rhs_model_balance/"
         ),
     }
+
+
+def _git_revision(path: Path) -> str:
+    result = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=path,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
 def _build_script_text() -> str:

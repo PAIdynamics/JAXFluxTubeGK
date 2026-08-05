@@ -312,16 +312,18 @@ Summarize and compare the trace:
 ```bash
 uv run python scripts/summarize_stella_w7x_rhs_trace.py \
   /tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat \
+  --stella-source /path/to/revision-pinned/stella \
+  --stella-executable \
+    /tmp/stellarator_gk_stella_w7x_rhs_trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
   --output fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json
 uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
   --require-raw-trace
 ```
 
-The current comparator reports `blocked_array_contract_mismatch`: the raw stella
-trace and committed solver balance fixture use different velocity grids and the
-current raw trace lacks velocity quadrature weights.  The next step is a v2
-stella trace with velocity weights plus a solver-side full-array trace on a
-compatible grid.
+The current comparator reports `blocked_array_contract_mismatch`: the weighted
+v2 stella trace and committed solver balance fixture use different velocity
+grids, and the solver fixture stores scalar summaries rather than full arrays.
+The next step is a solver-side full-array trace on a compatible grid.
 
 ### External GX W7-X Cross-Check
 

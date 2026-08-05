@@ -5,7 +5,6 @@
     "stella and committed solver balance use different vpar ranges",
     "stella and committed solver balance use different mu grids/ranges",
     "committed solver balance fixture stores scalar term summaries, not full term arrays",
-    "stella trace currently stores vpa/mu coordinates but not velocity quadrature weights",
     "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
   ],
   "benchmark_name": "w7x_ky03_stella_rhs_trace_comparison",

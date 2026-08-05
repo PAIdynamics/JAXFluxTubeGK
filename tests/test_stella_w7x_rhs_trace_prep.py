@@ -157,8 +157,16 @@ def test_prepare_rhs_trace_run_writes_minimal_patched_tree(tmp_path: Path):
     assert prepared.trace_iky == 4
     assert prepared.trace_ikx == 1
     assert metadata["status"] == "prepared_patched_stella_run_pending_execution"
+    assert metadata["stella_source"] == str(fake_source)
+    assert metadata["stella_source_revision"] == "unknown"
+    assert metadata["stella_executable"].endswith(
+        "stella/COMPILATION/build_cmake/COMPILATION/stella"
+    )
+    assert metadata["vmec_source"] == str(vmec)
     assert metadata["trace_step"] == 20
     assert metadata["rhs_units"] == "stella_native_rhs_times_code_dt"
+    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v2"
+    assert metadata["velocity_weight_columns"] == ["wgts_vpa", "wgts_mu"]
     assert metadata["force_explicit_stream_mirror"] is True
     assert metadata["trace_output"].endswith("stellarator_gk_w7x_ky03_rhs_trace.dat")
     assert prepared.build_script.read_text().startswith("#!/usr/bin/env bash")

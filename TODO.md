@@ -220,7 +220,7 @@ validation work in Priority 3.
 
 ## Priority 3: Preserve and Close the W7-X Scientific Validation Gate
 
-- [ ] Rerun the patched sibling stella RHS trace in format v2 with `wgts_vpa`
+- [x] Rerun the patched sibling stella RHS trace in format v2 with `wgts_vpa`
   and z-dependent `wgts_mu`; require an explicit stella source/executable path
   and record its commit.
 - [ ] Drop the duplicate periodic stella z endpoint before array comparison.
