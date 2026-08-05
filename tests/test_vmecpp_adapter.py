@@ -9,6 +9,7 @@ from stellarator_gk import (
     VmecppGeometryProvider,
     internal_geometry_from_result,
     load_stella_geometry_data,
+    load_gx_eik_data,
     resolve_geometry,
     vmec_field_line_from_wout,
 )
@@ -233,3 +234,102 @@ def test_direct_vmec_w7x_matches_independent_stella_geometry_terms(gx_root):
     )
     assert result.metadata.nfp == 5
     assert result.metadata.endpoint_policy == "exclude"
+
+
+@pytest.mark.external
+def test_direct_vmec_w7x_matches_same_surface_gx_gist_terms(gx_root):
+    eik = load_gx_eik_data(
+        gx_root
+        / "geometry_modules/vmec/tests/"
+        "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
+    )
+    stride = 10
+    theta = eik.theta[:-1:stride]
+    q = eik.header[4]
+    iota = 1.0 / q
+    rho = np.sqrt(eik.header[5])
+    request = GeometryRequest(
+        configuration="gx-w7x-standard-same-surface",
+        radial_value=rho,
+        alpha=0.0,
+        n_z=theta.size,
+        z_min=float(theta[0] / iota),
+        z_max=float(eik.theta[-1] / iota),
+        field_periods=float((eik.theta[-1] - eik.theta[0]) / (2.0 * np.pi * iota)),
+    )
+    result = resolve_geometry(
+        VmecppGeometryProvider(
+            wout_path=gx_root / "geometry_modules/vmec/tests/wout_w7x_standardConfig.nc",
+            revision="bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5",
+        ),
+        request,
+    )
+    physical = result.physical
+    B = np.asarray(physical.B)
+    s = rho**2
+    sqrt_s = rho
+    direct_shat = float(physical.shear)
+    shat = eik.header[2]
+    sign_psi = 1.0
+    direct = {
+        "bmag": B,
+        "gradpar": -iota * np.asarray(physical.b_dot_grad_z),
+        "gds2": s * np.asarray(physical.grad_alpha_sq),
+        "gds21": -shat * np.asarray(physical.grad_psi_dot_grad_alpha),
+        "gds22": shat**2 / s * np.asarray(physical.grad_psi_sq),
+        "gbdrift": (
+            -sign_psi
+            * 2.0
+            * sqrt_s
+            * np.asarray(physical.B_cross_gradB_dot_grad_alpha)
+            / B**3
+        ),
+        "gbdrift0": (
+            -sign_psi
+            * 2.0
+            * shat
+            / sqrt_s
+            * np.asarray(physical.B_cross_gradB_dot_grad_psi)
+            / B**3
+        ),
+        "cvdrift": (
+            -sign_psi
+            * 2.0
+            * sqrt_s
+            * np.asarray(physical.b_cross_kappa_dot_grad_alpha)
+            / B
+        ),
+        "cvdrift0": (
+            -sign_psi
+            * 2.0
+            * shat
+            / sqrt_s
+            * np.asarray(physical.b_cross_kappa_dot_grad_psi)
+            / B
+        ),
+    }
+    relative_errors = {
+        name: float(
+            np.linalg.norm(values - np.asarray(getattr(eik, name))[:-1:stride])
+            / np.linalg.norm(np.asarray(getattr(eik, name))[:-1:stride])
+        )
+        for name, values in direct.items()
+    }
+    scales = {
+        name: float(
+            np.dot(values, np.asarray(getattr(eik, name))[:-1:stride])
+            / np.dot(
+                np.asarray(getattr(eik, name))[:-1:stride],
+                np.asarray(getattr(eik, name))[:-1:stride],
+            )
+        )
+        for name, values in direct.items()
+    }
+    assert relative_errors["bmag"] < 1.0e-2
+    assert relative_errors["gradpar"] < 1.0e-1
+    assert max(relative_errors.values()) < 2.0e-1, relative_errors
+    assert all(0.6 < scale < 1.4 for scale in scales.values()), scales
+    assert result.metadata.nfp == 5
+    assert result.metadata.endpoint_policy == "exclude"
+    assert np.isclose(result.metadata.field_periods, request.field_periods)
+    assert np.isclose(direct_shat, shat, rtol=2.0e-1)
