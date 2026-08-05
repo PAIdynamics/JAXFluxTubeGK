@@ -352,6 +352,12 @@ inexact so prepared providers remain installed.
   mirror term within 0.004 relative L2. The 32×4 solver-grid comparison is 0.243,
   so its residual is now attributed to interpolating a coefficient-state
   product onto a different mu grid rather than to the mirror convention itself.
+- Extended the external trace contract to v5 with stella's native gyroaverage
+  `J0`. Combining that array with the traced distribution, `wgts_vpa`, and
+  z-dependent `wgts_mu` reconstructs all three quasineutrality numerators within
+  `1.2e-15` relative L2. This rules out an unknown amplitude normalization: the
+  solver-grid numerator mismatch comes from mapping stella's native velocity
+  measure and FLR product to a different uniform-mu quadrature.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

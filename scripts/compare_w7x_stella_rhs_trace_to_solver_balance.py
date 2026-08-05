@@ -269,6 +269,7 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
     if summary.get("trace_format") in (
         "stellarator_gk_stella_rhs_trace_v3",
         "stellarator_gk_stella_rhs_trace_v4",
+        "stellarator_gk_stella_rhs_trace_v5",
     ):
         required += (
             ("quasineutrality", "numerator"),
@@ -333,6 +334,7 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
                 "magnetic_drift_phi_y",
                 "equilibrium_drive",
                 "parallel_streaming",
+                "gyroaverage_j0",
             )
             if ("coefficient", term) in phase_records
         },

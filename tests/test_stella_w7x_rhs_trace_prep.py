@@ -79,6 +79,7 @@ def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Pat
     assert "'coefficient', 'mirror_force'" in text
     assert "'coefficient', 'magnetic_drift_g_y'" in text
     assert "'coefficient', 'equilibrium_drive'" in text
+    assert "'coefficient', 'gyroaverage_j0'" in text
     assert "denominator_fields(stellarator_gk_trace_iky" in text
     assert "'quasineutrality', 'numerator'" in text
     assert "'quasineutrality', 'denominator'" in text
@@ -177,7 +178,7 @@ def test_prepare_rhs_trace_run_writes_minimal_patched_tree(tmp_path: Path):
     assert metadata["vmec_source"] == str(vmec)
     assert metadata["trace_step"] == 20
     assert metadata["rhs_units"] == "stella_native_rhs_times_code_dt"
-    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v4"
+    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
     assert metadata["velocity_weight_columns"] == ["wgts_vpa", "wgts_mu"]
     assert metadata["rhs_call_column"] == "rhs_call"
     assert metadata["force_explicit_stream_mirror"] is True

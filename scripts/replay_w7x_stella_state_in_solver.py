@@ -215,6 +215,30 @@ def native_stella_mirror_reconstruction(stella: dict[str, Any]) -> dict[str, flo
     }
 
 
+def native_stella_quasineutrality_reconstruction(
+    stella: dict[str, Any],
+) -> dict[str, float]:
+    """Reconstruct stella's density numerator with its native J0 and weights."""
+
+    gyroaverage = np.asarray(stella["native_coefficients"]["gyroaverage_j0"])
+    weights = (
+        np.asarray(stella["w_vpar"])[None, :, None]
+        * np.asarray(stella["w_mu"])[:, None, :]
+    )
+    errors = []
+    for state, reference in zip(
+        stella["distribution"],
+        stella["quasineutrality_numerator"],
+        strict=True,
+    ):
+        candidate = np.sum(weights * gyroaverage * state, axis=(1, 2))
+        errors.append(float(np.linalg.norm(reference - candidate) / np.linalg.norm(reference)))
+    return {
+        "max_relative_l2_error": max(errors),
+        "rhs_calls_checked": len(errors),
+    }
+
+
 def bundled_solver_rhs(split: Any, total_rhs: Any) -> dict[str, np.ndarray]:
     """Map solver implementation terms to the semantic stella trace bundles."""
 
@@ -259,8 +283,9 @@ def run_same_state_replay(
     if summary.get("trace_format") not in {
         "stellarator_gk_stella_rhs_trace_v3",
         "stellarator_gk_stella_rhs_trace_v4",
+        "stellarator_gk_stella_rhs_trace_v5",
     }:
-        raise ValueError("same-state replay requires an explicitly labeled v3/v4 trace")
+        raise ValueError("same-state replay requires an explicitly labeled v3/v4/v5 trace")
     stella = load_stella_array_trace(trace_path, summary)
 
     rows: list[dict[str, Any]] = []
@@ -381,6 +406,7 @@ def run_same_state_replay(
         Path(stella_geometry),
         tolerance,
         native_mirror=native_stella_mirror_reconstruction(stella),
+        native_quasineutrality=native_stella_quasineutrality_reconstruction(stella),
     )
     status_path.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
     readme_path.write_text(_fixture_readme(status), encoding="utf-8")
@@ -423,6 +449,7 @@ def _status(
     tolerance: float,
     *,
     native_mirror: dict[str, float],
+    native_quasineutrality: dict[str, float],
 ) -> dict[str, Any]:
     rhs_rows = [row for row in rows if not row["quantity"].startswith("quasineutrality")]
     acceptance_case = "replay_stella_coefficients_32x4"
@@ -457,6 +484,7 @@ def _status(
         "geometry_source": str(geometry_path),
         "raw_trace_committed": False,
         "native_grid_mirror_reconstruction": native_mirror,
+        "native_grid_quasineutrality_reconstruction": native_quasineutrality,
         "rhs_calls": sorted({int(row["rhs_call"]) for row in rows}),
         "cases": sorted({str(row["case"]) for row in rows}),
         "best_by_quantity": best_by_quantity,
@@ -500,6 +528,11 @@ changing the remaining production geometry conventions.
 The v4 trace also verifies the mirror operator directly on stella's native
 256×32×8 grid before interpolation. Its maximum reconstruction error is
 `{status['native_grid_mirror_reconstruction']['max_relative_l2_error']:.8g}`.
+
+The v5 trace similarly reconstructs stella's quasineutrality numerator with
+its native gyroaverage and z-dependent velocity weights. Its maximum relative
+L2 error is
+`{status['native_grid_quasineutrality_reconstruction']['max_relative_l2_error']:.8g}`.
 
 Status: `{status['status']}`. Acceptance-case maximum RHS relative L2 error:
 `{status['max_rhs_relative_l2_error']:.8g}` (tolerance `{status['relative_l2_tolerance']}`).

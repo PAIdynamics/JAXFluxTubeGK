@@ -6,11 +6,15 @@
   "max_rhs_relative_l2_error": 0.2432683851700033,
   "acceptance_case": "replay_stella_coefficients_32x4",
   "max_all_discriminators_rhs_relative_l2_error": 2.056022002515255,
-  "trace_source": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v4/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "trace_source": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "geometry_source": "/Users/mohsensadr/Codes/GitHub/fusion/optimal-fusion/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
   "raw_trace_committed": false,
   "native_grid_mirror_reconstruction": {
     "max_relative_l2_error": 0.0037034624220949035,
+    "rhs_calls_checked": 3
+  },
+  "native_grid_quasineutrality_reconstruction": {
+    "max_relative_l2_error": 1.1969874060709704e-15,
     "rhs_calls_checked": 3
   },
   "rhs_calls": [

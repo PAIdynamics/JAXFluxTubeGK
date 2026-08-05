@@ -12,5 +12,10 @@ The v4 trace also verifies the mirror operator directly on stella's native
 256×32×8 grid before interpolation. Its maximum reconstruction error is
 `0.0037034624`.
 
+The v5 trace similarly reconstructs stella's quasineutrality numerator with
+its native gyroaverage and z-dependent velocity weights. Its maximum relative
+L2 error is
+`1.1969874e-15`.
+
 Status: `same_state_rhs_parity_failed`. Acceptance-case maximum RHS relative L2 error:
 `0.24326839` (tolerance `0.1`).

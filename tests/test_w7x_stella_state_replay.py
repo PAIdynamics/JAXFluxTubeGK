@@ -67,6 +67,10 @@ def test_committed_same_state_result_records_partial_improvement():
         status["native_grid_mirror_reconstruction"]["max_relative_l2_error"]
         < 4.0e-3
     )
+    assert (
+        status["native_grid_quasineutrality_reconstruction"]["max_relative_l2_error"]
+        < 2.0e-15
+    )
 
 
 def test_phase_space_order_round_trip():

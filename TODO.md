@@ -242,7 +242,10 @@ validation work in Priority 3.
   native-grid term within 0.004 relative L2. After interpolation to the solver's
   uniform four-node mu grid the mirror error is 0.243, identifying interpolation
   of coefficient-state products as the remaining mirror comparison floor. The
-  distribution/quasineutrality normalization contract still requires closure.
+  native gyroaverage plus z-dependent stella velocity weights also reconstruct
+  its quasineutrality numerator to machine precision. The remaining numerator
+  gap is therefore a cross-grid velocity-measure contract, not an unknown state
+  scale; the solver needs an explicit native-quadrature adapter before parity.
 - [x] Separate equilibrium-gradient drive scale from magnetic-drift geometry in
   provider schema v2 and map stella's native `flux_fac` into that field.
 - [ ] Promote the remaining verified Maxwellian/quadrature normalization,

@@ -138,6 +138,28 @@ def test_summarize_trace_infers_v4_from_native_coefficients(tmp_path: Path):
 
     assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v4"
     assert summary["v4_required_record_terms_present"] is True
+    assert summary["v5_required_record_terms_present"] is False
+
+
+def test_summarize_trace_infers_v5_from_native_gyroaverage(tmp_path: Path):
+    module = _load_module()
+    trace = tmp_path / "trace_v5.dat"
+    header = (
+        "record step rhs_call term iky ikx iz it ivmu iv imu is vpa mu "
+        "wgts_vpa wgts_mu code_time code_dt real imag"
+    )
+    row = "{record} 20 1 {term} 4 1 -1 1 0 1 1 1 -1.0 0.5 0.2 0.3 1.9 0.1 1.0 0.0"
+    required = module.V5_REQUIRED_RECORD_TERMS
+    trace.write_text(
+        "\n".join([header, *(row.format(record=record, term=term) for record, term in required)])
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = module.summarize_trace(trace, required_record_terms=required)
+
+    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
+    assert summary["v5_required_record_terms_present"] is True
 
 
 def test_summarize_trace_reports_missing_required_terms(tmp_path: Path):
@@ -172,10 +194,11 @@ def test_committed_w7x_rhs_trace_summary_contract():
     assert summary["steps"] == [2000]
     assert summary["iky_values"] == [4]
     assert summary["ikx_values"] == [1]
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v4"
+    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
     assert summary["rhs_calls"] == [1, 2, 3]
     assert summary["v3_required_record_terms_present"] is True
     assert summary["v4_required_record_terms_present"] is True
+    assert summary["v5_required_record_terms_present"] is True
     assert summary["velocity_weight_columns_present"] is True
     assert summary["provenance"]["stella_revision"] == (
         "564ca09b89904c231421c17c00068a9362061278"
@@ -192,3 +215,4 @@ def test_committed_w7x_rhs_trace_summary_contract():
     assert terms[("quasineutrality", "denominator")]["rows"] == 771
     assert terms[("normalization", "native_state_scale")]["rows"] == 3
     assert terms[("coefficient", "mirror_force")]["rows"] == 65792
+    assert terms[("coefficient", "gyroaverage_j0")]["rows"] == 65792

@@ -13,7 +13,7 @@
   ],
   "missing_record_terms": [],
   "provenance": {
-    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v4/stella/COMPILATION/build_cmake/COMPILATION/stella",
+    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/stella/COMPILATION/build_cmake/COMPILATION/stella",
     "stella_revision": "564ca09b89904c231421c17c00068a9362061278",
     "stella_source": "/Users/mohsensadr/Codes/GitHub/fusion/stella"
   },
@@ -74,6 +74,61 @@
         3.0
       ],
       "weighted_velocity_l2_norm": 10.590530904457479,
+      "wgts_mu_range": [
+        0.17230844574454418,
+        4.913278506590646
+      ],
+      "wgts_vpa_range": [
+        0.038674285968999425,
+        0.13422252189240977
+      ]
+    },
+    {
+      "imu_range": [
+        1,
+        8
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        1,
+        32
+      ],
+      "ivmu_range": [
+        0,
+        255
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 207.4077630694451,
+      "max_abs": 0.9996855553736695,
+      "mu_range": [
+        0.03662129632879369,
+        4.917073821493017
+      ],
+      "record": "coefficient",
+      "rhs_call_range": [
+        1,
+        1
+      ],
+      "rows": 65792,
+      "species_range": [
+        1,
+        1
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 49292.014083460745,
+      "term": "gyroaverage_j0",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        -3.0,
+        3.0
+      ],
+      "weighted_velocity_l2_norm": 72.58218769046537,
       "wgts_mu_range": [
         0.17230844574454418,
         4.913278506590646
@@ -909,12 +964,14 @@
       ]
     }
   ],
-  "total_rows": 1712908,
-  "trace_format": "stellarator_gk_stella_rhs_trace_v4",
-  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v4/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "total_rows": 1778700,
+  "trace_format": "stellarator_gk_stella_rhs_trace_v5",
+  "trace_path": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "v3_missing_record_terms": [],
   "v3_required_record_terms_present": true,
   "v4_missing_record_terms": [],
   "v4_required_record_terms_present": true,
+  "v5_missing_record_terms": [],
+  "v5_required_record_terms_present": true,
   "velocity_weight_columns_present": true
 }

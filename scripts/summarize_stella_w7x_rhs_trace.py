@@ -106,6 +106,7 @@ V4_COEFFICIENT_RECORD_TERMS = (
     ("coefficient", "parallel_streaming"),
 )
 V4_REQUIRED_RECORD_TERMS = V3_REQUIRED_RECORD_TERMS + V4_COEFFICIENT_RECORD_TERMS
+V5_REQUIRED_RECORD_TERMS = V4_REQUIRED_RECORD_TERMS + (("coefficient", "gyroaverage_j0"),)
 
 
 @dataclass
@@ -313,6 +314,13 @@ def summarize_trace(
     ]
     if trace_format == "stellarator_gk_stella_rhs_trace_v3" and not v4_missing:
         trace_format = "stellarator_gk_stella_rhs_trace_v4"
+    v5_missing = [
+        {"record": record, "term": term}
+        for record, term in sorted(V5_REQUIRED_RECORD_TERMS)
+        if (record, term) not in present
+    ]
+    if trace_format == "stellarator_gk_stella_rhs_trace_v4" and not v5_missing:
+        trace_format = "stellarator_gk_stella_rhs_trace_v5"
     summary = {
         "trace_path": str(trace_path),
         "trace_format": trace_format,
@@ -331,6 +339,8 @@ def summarize_trace(
         "v3_missing_record_terms": v3_missing,
         "v4_required_record_terms_present": not v4_missing,
         "v4_missing_record_terms": v4_missing,
+        "v5_required_record_terms_present": not v5_missing,
+        "v5_missing_record_terms": v5_missing,
         "term_summaries": [
             accumulators[key].as_dict(*key)
             for key in sorted(accumulators)
