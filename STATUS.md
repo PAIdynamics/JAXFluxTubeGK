@@ -271,6 +271,10 @@ inexact so prepared providers remain installed.
   split RHS terms, total RHS, quasineutrality numerator/denominator, and
   accumulated normalization. Large archives are required to remain outside
   the repository.
+- Added the cross-grid adapter contract: separable complex interpolation in
+  `z/vpar/mu`, strict rejection of extrapolation, target-grid quadrature, and
+  weighted errors both before and after one global complex amplitude/phase
+  alignment.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

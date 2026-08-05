@@ -224,7 +224,7 @@ validation work in Priority 3.
   and z-dependent `wgts_mu`; require an explicit stella source/executable path
   and record its commit.
 - [x] Drop the duplicate periodic stella z endpoint before array comparison.
-- [ ] Emit a solver-side selected-mode full-array trace on a stella-compatible
+- [x] Emit a solver-side selected-mode full-array trace on a stella-compatible
   `z/vpa/mu` grid, or add a documented interpolation and weighting adapter.
 - [ ] Compare velocity-weighted complex arrays for distribution, parallel
   streaming, mirror force, magnetic drift, equilibrium drive, field-drive

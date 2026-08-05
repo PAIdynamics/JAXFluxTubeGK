@@ -81,6 +81,100 @@ def drop_stella_periodic_endpoint(z_indices, *arrays, axis: int = 0):
     return (z_indices[:-1], *trimmed)
 
 
+def interpolate_phase_space_to_grid(
+    values,
+    *,
+    source_z,
+    source_vpar,
+    source_mu,
+    target_z,
+    target_vpar,
+    target_mu,
+):
+    """Linearly map a complex ``(z,vpar,mu)`` array without extrapolation.
+
+    The target velocity grid must lie inside the source grid.  This makes the
+    scientific loss explicit: callers comparing unlike stella/solver grids
+    should map the finer/ wider trace onto their chosen common domain and use
+    that target grid's quadrature weights.
+    """
+
+    array = np.asarray(values)
+    source_axes = tuple(
+        np.asarray(axis, dtype=float) for axis in (source_z, source_vpar, source_mu)
+    )
+    target_axes = tuple(
+        np.asarray(axis, dtype=float) for axis in (target_z, target_vpar, target_mu)
+    )
+    expected = tuple(axis.size for axis in source_axes)
+    if array.shape != expected:
+        raise ValueError(f"phase-space array has shape {array.shape}; expected {expected}")
+    for name, source, target in zip(
+        ("z", "vpar", "mu"), source_axes, target_axes, strict=True
+    ):
+        if source.ndim != 1 or target.ndim != 1 or np.any(np.diff(source) <= 0.0):
+            raise ValueError(f"{name} coordinates must be one-dimensional and increasing")
+        tolerance = 32.0 * np.finfo(float).eps * max(1.0, np.max(np.abs(source)))
+        if target.size and (
+            np.min(target) < source[0] - tolerance or np.max(target) > source[-1] + tolerance
+        ):
+            raise ValueError(f"target {name} coordinates require extrapolation")
+
+    result = array
+    for axis, (source, target) in enumerate(zip(source_axes, target_axes, strict=True)):
+        result = _interpolate_complex_axis(result, source, target, axis=axis)
+    return result
+
+
+def weighted_complex_metrics(reference, candidate, *, w_z, w_vpar, w_mu):
+    """Return target-grid weighted complex error with optimal phase/scale fit."""
+
+    reference = np.asarray(reference)
+    candidate = np.asarray(candidate)
+    if reference.shape != candidate.shape:
+        raise ValueError("reference and candidate arrays must have matching shapes")
+    expected = (len(w_z), len(w_vpar), len(w_mu))
+    if reference.shape != expected:
+        raise ValueError(f"weighted array shape is {reference.shape}; expected {expected}")
+    weights = (
+        np.asarray(w_z, dtype=float)[:, None, None]
+        * np.asarray(w_vpar, dtype=float)[None, :, None]
+        * np.asarray(w_mu, dtype=float)[None, None, :]
+    )
+    if np.any(weights < 0.0) or not np.all(np.isfinite(weights)):
+        raise ValueError("quadrature weights must be finite and nonnegative")
+    reference_norm = _weighted_l2(reference, weights)
+    candidate_norm = _weighted_l2(candidate, weights)
+    denominator = np.sum(weights * np.abs(candidate) ** 2)
+    scale = 0.0j if denominator == 0.0 else np.sum(weights * np.conj(candidate) * reference) / denominator
+    aligned_error = _weighted_l2(reference - scale * candidate, weights)
+    raw_error = _weighted_l2(reference - candidate, weights)
+    return {
+        "reference_weighted_l2": reference_norm,
+        "candidate_weighted_l2": candidate_norm,
+        "raw_relative_l2_error": _safe_ratio(raw_error, reference_norm),
+        "aligned_relative_l2_error": _safe_ratio(aligned_error, reference_norm),
+        "alignment_scale_real": float(np.real(scale)),
+        "alignment_scale_imag": float(np.imag(scale)),
+    }
+
+
+def _interpolate_complex_axis(values, source, target, *, axis: int):
+    moved = np.moveaxis(np.asarray(values), axis, 0)
+    flat = moved.reshape(moved.shape[0], -1)
+    interpolated = np.empty((len(target), flat.shape[1]), dtype=np.result_type(values, complex))
+    for column in range(flat.shape[1]):
+        interpolated[:, column] = np.interp(target, source, flat[:, column].real) + 1j * np.interp(
+            target, source, flat[:, column].imag
+        )
+    shaped = interpolated.reshape((len(target), *moved.shape[1:]))
+    return np.moveaxis(shaped, 0, axis)
+
+
+def _weighted_l2(values, weights) -> float:
+    return float(np.sqrt(np.sum(weights * np.abs(values) ** 2)))
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     result = compare_w7x_stella_rhs_trace_to_solver_balance(
@@ -284,6 +378,13 @@ def _array_contract_payload(
         "solver_n_z": solver_n_z,
         "solver_velocity_contract": solver_velocity,
         "solver_terms_available": sorted(solver_rows),
+        "interpolation_adapter": {
+            "available": True,
+            "method": "separable_linear_complex_interpolation",
+            "extrapolation": "forbidden",
+            "weighting": "use_quadrature_of_the_chosen_target_grid",
+            "axis_order": ["z", "vpar", "mu"],
+        },
         "direct_array_parity_ready": False,
         "array_parity_blockers": blockers,
     }
@@ -491,7 +592,9 @@ def _write_readme(output_dir: Path) -> None:
                 "RHS norms and compares scale-free term/total norm ratios. It does",
                 "not claim direct array parity yet, because the committed solver",
                 "fixture stores scalar term summaries and uses a different velocity",
-                "grid from the stella trace.",
+                "grid from the stella trace. The array adapter uses separable linear",
+                "complex interpolation, forbids extrapolation, and evaluates weighted",
+                "errors with the chosen target grid's `w_z*w_vpar*w_mu` quadrature.",
                 "",
             )
         ),

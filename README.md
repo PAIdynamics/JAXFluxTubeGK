@@ -306,6 +306,9 @@ JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
 The archive uses `(z, vpar, mu)` phase-space order and contains coordinates,
 quadrature weights, the distribution, potential, individual RHS terms, total
 RHS, quasineutrality numerator/denominator, and accumulated log normalization.
+For unlike velocity grids, the comparison adapter performs separable linear
+complex interpolation onto a common target grid, rejects extrapolation, and
+uses that target grid's `w_z*w_vpar*w_mu` quadrature for error norms.
 
 Prepare and run the patched stella RHS trace in a scratch tree:
 

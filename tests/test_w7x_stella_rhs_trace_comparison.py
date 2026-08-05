@@ -191,6 +191,67 @@ def test_drop_stella_periodic_endpoint_trims_requested_array_axis():
     np.testing.assert_array_equal(trimmed_state, state[:, :-1, :])
 
 
+def test_phase_space_adapter_interpolates_complex_values_on_target_grid():
+    module = _load_module()
+    source_z = np.asarray([-0.5, 0.0, 0.5])
+    source_vpar = np.asarray([-2.0, 0.0, 2.0])
+    source_mu = np.asarray([0.0, 1.0])
+    z, vpar, mu = np.meshgrid(source_z, source_vpar, source_mu, indexing="ij")
+    values = (z + 2.0 * vpar + 3.0 * mu) + 1j * (4.0 * z - vpar + mu)
+
+    result = module.interpolate_phase_space_to_grid(
+        values,
+        source_z=source_z,
+        source_vpar=source_vpar,
+        source_mu=source_mu,
+        target_z=np.asarray([-0.25, 0.25]),
+        target_vpar=np.asarray([-1.0, 1.0]),
+        target_mu=np.asarray([0.25, 0.75]),
+    )
+
+    target = np.meshgrid(
+        [-0.25, 0.25], [-1.0, 1.0], [0.25, 0.75], indexing="ij"
+    )
+    expected = (target[0] + 2.0 * target[1] + 3.0 * target[2]) + 1j * (
+        4.0 * target[0] - target[1] + target[2]
+    )
+    np.testing.assert_allclose(result, expected)
+
+
+def test_phase_space_adapter_rejects_extrapolation():
+    module = _load_module()
+
+    with np.testing.assert_raises_regex(ValueError, "target vpar.*extrapolation"):
+        module.interpolate_phase_space_to_grid(
+            np.zeros((2, 2, 2)),
+            source_z=[0.0, 1.0],
+            source_vpar=[-1.0, 1.0],
+            source_mu=[0.0, 1.0],
+            target_z=[0.0],
+            target_vpar=[-2.0],
+            target_mu=[0.5],
+        )
+
+
+def test_weighted_complex_metrics_remove_global_complex_scale():
+    module = _load_module()
+    reference = np.arange(1, 9).reshape(2, 2, 2) * (1.0 + 0.5j)
+    candidate = reference / (2.0j)
+
+    metrics = module.weighted_complex_metrics(
+        reference,
+        candidate,
+        w_z=[0.25, 0.75],
+        w_vpar=[1.0, 2.0],
+        w_mu=[0.4, 0.6],
+    )
+
+    assert metrics["raw_relative_l2_error"] > 0.0
+    assert metrics["aligned_relative_l2_error"] < 1.0e-14
+    assert abs(metrics["alignment_scale_real"]) < 1.0e-14
+    assert abs(metrics["alignment_scale_imag"] - 2.0) < 1.0e-14
+
+
 def test_committed_stella_rhs_trace_comparison_contract():
     status = json.loads((COMPARISON / "stella_solver_rhs_trace_comparison_status.json").read_text())
     contract = json.loads((COMPARISON / "array_contract.json").read_text())

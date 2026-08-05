@@ -7,6 +7,17 @@
     "trace forces stella mirror/streaming explicit, unlike the production stella growth run"
   ],
   "direct_array_parity_ready": false,
+  "interpolation_adapter": {
+    "available": true,
+    "axis_order": [
+      "z",
+      "vpar",
+      "mu"
+    ],
+    "extrapolation": "forbidden",
+    "method": "separable_linear_complex_interpolation",
+    "weighting": "use_quadrature_of_the_chosen_target_grid"
+  },
   "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
   "solver_case": {
