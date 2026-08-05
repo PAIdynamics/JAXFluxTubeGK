@@ -3,6 +3,7 @@
 from .analytic import AnalyticGeometry, build_circular_geometry, build_s_alpha_geometry, k_perp_squared
 from .desc_adapter import (
     DESC_GEOMETRY_COMPUTE_KEYS,
+    DescGeometryProvider,
     build_desc_geometry_from_equilibrium,
     build_desc_geometry_from_path,
     desc_geometry_arrays_from_data,
@@ -18,6 +19,7 @@ from .flux_tube import (
     PhysicalFluxTubeGeometry,
     build_boozer_parallel_grid,
     build_desc_geometry_from_arrays,
+    build_physical_flux_tube_geometry_from_coordinate_arrays,
     build_physical_flux_tube_geometry_from_arrays,
     evaluate_boozer_magnetic_field,
     map_physical_to_internal_geometry,
@@ -47,6 +49,7 @@ __all__ = [
     "BoozerFieldLine",
     "BoozerSurface",
     "DESC_GEOMETRY_COMPUTE_KEYS",
+    "DescGeometryProvider",
     "FieldLineSpec",
     "FluxTubeGeometry",
     "GEOMETRY_FIELD_UNITS",
@@ -67,6 +70,7 @@ __all__ = [
     "build_desc_geometry_from_equilibrium",
     "build_desc_geometry_from_path",
     "build_geometry_metadata",
+    "build_physical_flux_tube_geometry_from_coordinate_arrays",
     "build_physical_flux_tube_geometry_from_arrays",
     "build_s_alpha_geometry",
     "desc_geometry_arrays_from_data",

@@ -6,6 +6,8 @@ import pytest
 
 from stellarator_gk import (
     DESC_GEOMETRY_COMPUTE_KEYS,
+    DescGeometryProvider,
+    GeometryRequest,
     build_boozer_parallel_grid,
     build_desc_geometry_from_arrays,
     build_desc_geometry_from_equilibrium,
@@ -14,6 +16,8 @@ from stellarator_gk import (
     desc_geometry_arrays_from_equilibrium,
     desc_geometry_arrays_from_path,
     load_desc_equilibrium,
+    internal_geometry_from_result,
+    resolve_geometry,
 )
 
 
@@ -185,6 +189,60 @@ def test_build_desc_geometry_from_equilibrium_returns_internal_geometry():
     assert geometry.F.shape == parallel.z.shape
     assert jnp.all(jnp.isfinite(geometry.G))
     assert jnp.all(geometry.g_xx > 0.0)
+
+
+def test_desc_object_provider_returns_shared_physical_contract():
+    request = GeometryRequest(
+        configuration="fake-desc",
+        radial_value=0.5,
+        alpha=0.1,
+        n_z=9,
+    )
+    provider = DescGeometryProvider(
+        equilibrium=_FakeEquilibrium(),
+        iota=0.72,
+        provider_version="test",
+        revision="fake-revision",
+        differentiable=True,
+        get_rtz_grid=_fake_get_rtz_grid,
+    )
+
+    result = resolve_geometry(provider, request)
+    geometry = internal_geometry_from_result(result)
+
+    assert result.metadata.provenance.provider == "desc"
+    assert result.metadata.provenance.revision == "fake-revision"
+    assert result.metadata.differentiable is True
+    np.testing.assert_allclose(result.physical.alpha, 0.1)
+    np.testing.assert_allclose(result.physical.iota, 0.72)
+    assert result.physical.provider == "desc"
+    np.testing.assert_allclose(geometry.B, result.physical.B)
+    assert jnp.all(jnp.isfinite(geometry.G))
+
+
+def test_desc_path_provider_loads_only_at_provider_boundary():
+    loader = _FakeLoader([_FakeEquilibrium()])
+    provider = DescGeometryProvider(
+        path="fake_family.h5",
+        file_format="hdf5",
+        iota=0.72,
+        loader=loader,
+        get_rtz_grid=_fake_get_rtz_grid,
+    )
+
+    result = resolve_geometry(
+        provider,
+        GeometryRequest(configuration="file-desc", n_z=9, alpha=0.1),
+    )
+
+    assert loader.calls == [("fake_family.h5", "hdf5")]
+    assert result.metadata.differentiable is False
+    assert result.metadata.provenance.source == "fake_family.h5"
+
+
+def test_desc_path_provider_cannot_claim_differentiability():
+    with pytest.raises(ValueError, match="file-backed DESC geometry"):
+        DescGeometryProvider(path="fake.h5", differentiable=True)
 
 
 def test_load_desc_equilibrium_selects_equilibrium_from_path_like_family():

@@ -318,24 +318,73 @@ def build_desc_geometry_from_arrays(
     contract.  Scalars are broadcast to the parallel grid for reduced tests.
     """
 
+    physical = build_physical_flux_tube_geometry_from_coordinate_arrays(
+        parallel_grid,
+        theta=theta,
+        phi=phi,
+        alpha=jnp.zeros_like(parallel_grid.z) if alpha is None else alpha,
+        rho=rho,
+        iota=iota,
+        shear=shear,
+        B=B,
+        b_dot_grad_z=b_dot_grad_z,
+        grad_psi_sq=grad_psi_sq,
+        grad_alpha_sq=grad_alpha_sq,
+        grad_psi_dot_grad_alpha=grad_psi_dot_grad_alpha,
+        B_cross_gradB_dot_grad_psi=B_cross_gradB_dot_grad_psi,
+        B_cross_gradB_dot_grad_alpha=B_cross_gradB_dot_grad_alpha,
+        b_cross_kappa_dot_grad_psi=b_cross_kappa_dot_grad_psi,
+        b_cross_kappa_dot_grad_alpha=b_cross_kappa_dot_grad_alpha,
+        nfp=nfp,
+        field_periods=field_periods,
+        endpoint_policy=endpoint_policy,
+        twist_and_shift=twist_and_shift,
+        radial_coordinate=radial_coordinate,
+        source="desc",
+        provider="desc",
+    )
+    return map_physical_to_internal_geometry(physical, parallel_grid)
+
+
+def build_physical_flux_tube_geometry_from_coordinate_arrays(
+    parallel_grid: ParallelGrid,
+    *,
+    theta,
+    phi,
+    alpha,
+    rho,
+    iota,
+    shear,
+    B,
+    b_dot_grad_z,
+    grad_psi_sq,
+    grad_alpha_sq,
+    grad_psi_dot_grad_alpha,
+    B_cross_gradB_dot_grad_psi,
+    B_cross_gradB_dot_grad_alpha,
+    b_cross_kappa_dot_grad_psi,
+    b_cross_kappa_dot_grad_alpha,
+    nfp: int = 1,
+    field_periods: float = 1.0,
+    endpoint_policy: str = "exclude",
+    twist_and_shift: bool = False,
+    radial_coordinate: RadialCoordinate = "rho",
+    source: str = "precomputed",
+    provider: str = "precomputed",
+    normalization: str = "stellarator_gk_physical_v1",
+) -> PhysicalFluxTubeGeometry:
+    """Build the provider-neutral physical contract from coordinate arrays."""
+
     if radial_coordinate not in ("rho", "psi", "x"):
         raise ValueError("radial_coordinate must be 'rho', 'psi', or 'x'")
     shape = parallel_grid.z.shape
-    theta_array = _coerce_geometry_array("theta", theta, shape)
-    phi_array = _coerce_geometry_array("phi", phi, shape)
-    rho_array = _coerce_geometry_array("rho", rho, shape)
-    alpha_array = (
-        jnp.zeros_like(parallel_grid.z)
-        if alpha is None
-        else _coerce_geometry_array("alpha", alpha, shape)
-    )
     field_line = BoozerFieldLine(
         z=parallel_grid.z,
-        theta=theta_array,
-        phi=phi_array,
-        alpha=alpha_array,
-        rho=rho_array,
         w_z=parallel_grid.w_z,
+        theta=_coerce_geometry_array("theta", theta, shape),
+        phi=_coerce_geometry_array("phi", phi, shape),
+        alpha=_coerce_geometry_array("alpha", alpha, shape),
+        rho=_coerce_geometry_array("rho", rho, shape),
         iota=jnp.asarray(iota),
         shear=jnp.asarray(shear),
         nfp=nfp,
@@ -345,41 +394,31 @@ def build_desc_geometry_from_arrays(
         twist_and_shift=twist_and_shift,
         radial_coordinate=radial_coordinate,
     )
-    physical = build_physical_flux_tube_geometry_from_arrays(
+    return build_physical_flux_tube_geometry_from_arrays(
         field_line=field_line,
         B=_coerce_geometry_array("B", B, shape),
         b_dot_grad_z=_coerce_geometry_array("b_dot_grad_z", b_dot_grad_z, shape),
         grad_psi_sq=_coerce_geometry_array("grad_psi_sq", grad_psi_sq, shape),
         grad_alpha_sq=_coerce_geometry_array("grad_alpha_sq", grad_alpha_sq, shape),
         grad_psi_dot_grad_alpha=_coerce_geometry_array(
-            "grad_psi_dot_grad_alpha",
-            grad_psi_dot_grad_alpha,
-            shape,
+            "grad_psi_dot_grad_alpha", grad_psi_dot_grad_alpha, shape
         ),
         B_cross_gradB_dot_grad_psi=_coerce_geometry_array(
-            "B_cross_gradB_dot_grad_psi",
-            B_cross_gradB_dot_grad_psi,
-            shape,
+            "B_cross_gradB_dot_grad_psi", B_cross_gradB_dot_grad_psi, shape
         ),
         B_cross_gradB_dot_grad_alpha=_coerce_geometry_array(
-            "B_cross_gradB_dot_grad_alpha",
-            B_cross_gradB_dot_grad_alpha,
-            shape,
+            "B_cross_gradB_dot_grad_alpha", B_cross_gradB_dot_grad_alpha, shape
         ),
         b_cross_kappa_dot_grad_psi=_coerce_geometry_array(
-            "b_cross_kappa_dot_grad_psi",
-            b_cross_kappa_dot_grad_psi,
-            shape,
+            "b_cross_kappa_dot_grad_psi", b_cross_kappa_dot_grad_psi, shape
         ),
         b_cross_kappa_dot_grad_alpha=_coerce_geometry_array(
-            "b_cross_kappa_dot_grad_alpha",
-            b_cross_kappa_dot_grad_alpha,
-            shape,
+            "b_cross_kappa_dot_grad_alpha", b_cross_kappa_dot_grad_alpha, shape
         ),
-        source="desc",
-        provider="desc",
+        source=source,
+        provider=provider,
+        normalization=normalization,
     )
-    return map_physical_to_internal_geometry(physical, parallel_grid)
 
 
 def build_physical_flux_tube_geometry_from_arrays(

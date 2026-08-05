@@ -55,6 +55,30 @@ Call validation outside `jax.jit`/`jax.grad`, then pass the returned result into
 the differentiable physical-to-internal map. Validation intentionally converts
 arrays to NumPy so malformed external data fails before compilation.
 
+## DESC adapter
+
+`DescGeometryProvider` accepts either an in-memory DESC equilibrium or a DESC
+path. Exactly one must be supplied. File loading and DESC grid construction are
+contained inside `get_geometry`; after `resolve_geometry` returns, solver code
+uses the same provider-neutral result as every other backend:
+
+```python
+provider = DescGeometryProvider(path="/path/to/equilibrium.h5")
+request = GeometryRequest(
+    configuration="my-equilibrium",
+    radial_value=0.5,
+    alpha=0.0,
+    n_z=64,
+)
+result = resolve_geometry(provider, request)
+geometry = internal_geometry_from_result(result)
+```
+
+An in-memory provider may explicitly declare `differentiable=True` when its
+DESC evaluation preserves JAX traces. A path-backed provider cannot make that
+claim. Both forms record provider version, revision, source, and configuration
+in the result metadata.
+
 ## Caching
 
 The live provider call is canonical. Expensive callers may explicitly

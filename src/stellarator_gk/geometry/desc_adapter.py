@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 import jax.numpy as jnp
 import numpy as np
 
-from ..types import ParallelGrid
-from .flux_tube import build_desc_geometry_from_arrays
+from ..grids import build_parallel_grid
+from ..types import ParallelGrid, ParallelGridSpec
+from .flux_tube import (
+    build_desc_geometry_from_arrays,
+    build_physical_flux_tube_geometry_from_coordinate_arrays,
+)
+from .provider import (
+    GeometryProvenance,
+    GeometryRequest,
+    GeometryResult,
+    build_geometry_metadata,
+)
 
 DESC_GEOMETRY_COMPUTE_KEYS = (
     "|B|",
@@ -25,6 +36,95 @@ DESC_GEOMETRY_COMPUTE_KEYS = (
     "phi",
     "alpha",
 )
+
+
+@dataclass(frozen=True)
+class DescGeometryProvider:
+    """DESC object/path adapter implementing the public provider protocol."""
+
+    equilibrium: object | None = None
+    path: str | Path | None = None
+    file_format: str | None = None
+    family_index: int = -1
+    iota: float | None = None
+    zeta_offset: float = 0.0
+    nfp: int = 1
+    provider_version: str = "unknown"
+    revision: str = "unknown"
+    differentiable: bool = False
+    loader: Callable | None = None
+    get_rtz_grid: Callable | None = None
+    linear_grid_cls: type | None = None
+
+    def __post_init__(self) -> None:
+        if (self.equilibrium is None) == (self.path is None):
+            raise ValueError("DescGeometryProvider requires exactly one of equilibrium or path")
+        if self.nfp < 1:
+            raise ValueError("DescGeometryProvider nfp must be at least 1")
+        if self.path is not None and self.differentiable:
+            raise ValueError("file-backed DESC geometry cannot be marked differentiable")
+
+    def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        if request.radial_coordinate != "rho":
+            raise ValueError("DESC provider currently requires radial_coordinate='rho'")
+        parallel = build_parallel_grid(
+            ParallelGridSpec(
+                n_z=request.n_z,
+                z_min=request.z_min,
+                z_max=request.z_max,
+                topology=request.topology,
+                dtype=request.dtype,
+            )
+        )
+        equilibrium = self.equilibrium
+        if equilibrium is None:
+            equilibrium = load_desc_equilibrium(
+                self.path,
+                file_format=self.file_format,
+                index=self.family_index,
+                loader=self.loader,
+            )
+        iota = (
+            _desc_iota(equilibrium, request.radial_value, linear_grid_cls=self.linear_grid_cls)
+            if self.iota is None
+            else self.iota
+        )
+        arrays = desc_geometry_arrays_from_equilibrium(
+            equilibrium,
+            parallel,
+            rho=request.radial_value,
+            alpha=request.alpha,
+            iota=iota,
+            zeta_offset=self.zeta_offset,
+            get_rtz_grid=self.get_rtz_grid,
+            linear_grid_cls=self.linear_grid_cls,
+        )
+        source = "in-memory DESC equilibrium" if self.path is None else str(Path(self.path))
+        physical = build_physical_flux_tube_geometry_from_coordinate_arrays(
+            parallel,
+            **arrays,
+            iota=iota,
+            shear=0.0,
+            nfp=self.nfp,
+            field_periods=request.field_periods,
+            endpoint_policy=request.endpoint_policy,
+            radial_coordinate=request.radial_coordinate,
+            source=source,
+            provider="desc",
+        )
+        metadata = build_geometry_metadata(
+            request,
+            provenance=GeometryProvenance(
+                provider="desc",
+                provider_version=self.provider_version,
+                revision=self.revision,
+                source=source,
+                configuration=request.configuration,
+            ),
+            nfp=self.nfp,
+            differentiable=self.differentiable,
+        )
+        return GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata)
 
 
 def load_desc_equilibrium(
@@ -153,6 +253,7 @@ def build_desc_geometry_from_equilibrium(
 ):
     """Build internal solver geometry by sampling a DESC equilibrium."""
 
+    iota = _desc_iota(eq, rho, linear_grid_cls=linear_grid_cls) if iota is None else iota
     arrays = desc_geometry_arrays_from_equilibrium(
         eq,
         parallel_grid,
@@ -163,7 +264,7 @@ def build_desc_geometry_from_equilibrium(
         get_rtz_grid=get_rtz_grid,
         linear_grid_cls=linear_grid_cls,
     )
-    return build_desc_geometry_from_arrays(parallel_grid, **arrays)
+    return build_desc_geometry_from_arrays(parallel_grid, **arrays, iota=iota)
 
 
 def build_desc_geometry_from_path(
@@ -182,20 +283,17 @@ def build_desc_geometry_from_path(
 ):
     """Load a DESC equilibrium file and build internal solver geometry."""
 
-    arrays = desc_geometry_arrays_from_path(
-        path,
+    eq = load_desc_equilibrium(path, file_format=file_format, index=index, loader=loader)
+    return build_desc_geometry_from_equilibrium(
+        eq,
         parallel_grid,
         rho=rho,
         alpha=alpha,
         iota=iota,
         zeta_offset=zeta_offset,
-        file_format=file_format,
-        index=index,
-        loader=loader,
         get_rtz_grid=get_rtz_grid,
         linear_grid_cls=linear_grid_cls,
     )
-    return build_desc_geometry_from_arrays(parallel_grid, **arrays)
 
 
 def _desc_field_line_grid(
