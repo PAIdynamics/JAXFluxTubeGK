@@ -8,6 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
+from stellarator_gk import SyntheticGeometryProvider
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -126,6 +128,35 @@ def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():
     assert np.all(np.isfinite(np.asarray(geometry.G)))
     assert np.max(np.abs(np.asarray(geometry.E_y, dtype=float))) > 0.0
     assert np.std(np.asarray(geometry.E_y, dtype=float)) > 0.0
+
+
+def test_stellarator_linear_scan_accepts_named_vmecpp_provider(monkeypatch):
+    module = _load_scan_module()
+    monkeypatch.setattr(
+        module,
+        "VmecppGeometryProvider",
+        lambda **_kwargs: SyntheticGeometryProvider(nfp=5),
+    )
+    args = module._parse_args(
+        [
+            "--geometry-provider",
+            "vmecpp",
+            "--configuration",
+            "w7x-standard",
+            "--rho",
+            "0.8",
+            "--n-z",
+            "16",
+        ]
+    )
+
+    geometry, parallel, metadata = module._load_geometry(args)
+
+    assert metadata["geometry_source"] == "vmecpp"
+    assert metadata["configuration"] == "w7x-standard"
+    assert metadata["nfp"] == 5
+    assert parallel.z.shape == (16,)
+    assert geometry.B.shape == (16,)
 
 
 def test_late_window_frequency_uses_unaliased_short_phase_increments():

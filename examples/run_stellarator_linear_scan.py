@@ -20,7 +20,6 @@ import argparse
 import csv
 import json
 import os
-import sys
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
@@ -44,6 +43,7 @@ from stellarator_gk import (
     STELLA_GLOBAL_COLUMNS,
     StellaGeometryProvider,
     VelocityGridSpec,
+    VmecppGeometryProvider,
     build_desc_geometry_from_arrays,
     build_fourier_grid,
     build_linear_residual_precompute,
@@ -98,9 +98,6 @@ GEOMETRY_FIELDS = (
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    if args.desc_root is not None:
-        sys.path.insert(0, str(args.desc_root.resolve()))
-
     args.output_dir.mkdir(parents=True, exist_ok=True)
     ky_values = _parse_float_tuple(args.ky_values)
     geometry, parallel, geometry_metadata = _load_geometry(args)
@@ -152,11 +149,12 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--output-dir", type=Path, default=Path("runs/dshape_linear_scan"))
     parser.add_argument(
         "--geometry-source",
-        choices=("fixture", "desc-path", "eik", "stella-geometry"),
+        "--geometry-provider",
+        choices=("fixture", "desc-path", "vmecpp", "eik", "stella-geometry"),
         default="fixture",
         help=(
-            "use the bundled .npz fixture, evaluate DESC, sample a GX/GIST/GS2 eik "
-            "table, or import a stella .geometry table"
+            "use the bundled .npz fixture, evaluate DESC or VMEC++, sample a "
+            "GX/GIST/GS2 eik table, or import a stella .geometry table"
         ),
     )
     parser.add_argument(
@@ -166,11 +164,9 @@ def _parse_args(argv: list[str] | None = None):
         help="DESC-sampled .npz fixture for --geometry-source fixture",
     )
     parser.add_argument("--desc-path", type=Path, help="DESC HDF5/pickle equilibrium path")
-    parser.add_argument(
-        "--desc-root",
-        type=Path,
-        help="optional DESC checkout to prepend to sys.path",
-    )
+    parser.add_argument("--configuration", default="w7x-standard")
+    parser.add_argument("--vmec-wout", type=Path, help="optional user VMEC wout file")
+    parser.add_argument("--vmec-max-threads", type=int)
     parser.add_argument("--file-format", choices=("hdf5", "pickle"), help="DESC file format")
     parser.add_argument("--family-index", type=int, default=-1)
     parser.add_argument("--eik-reference", type=Path, help="GX/GIST/GS2 eik geometry table")
@@ -319,6 +315,9 @@ def _load_geometry(args):
     if args.geometry_source == "stella-geometry":
         return _load_stella_geometry(args)
 
+    if args.geometry_source == "vmecpp":
+        return _load_vmecpp_geometry(args)
+
     if args.desc_path is None:
         raise ValueError("--desc-path is required for --geometry-source desc-path")
     n_z = 33 if args.n_z is None else args.n_z
@@ -357,6 +356,52 @@ def _load_geometry(args):
         "zeta_center": args.zeta_center,
         "schema_version": result.metadata.schema_version,
         "provider": result.metadata.provenance.provider,
+    }
+
+
+def _load_vmecpp_geometry(args):
+    n_z = 33 if args.n_z is None else args.n_z
+    named_w7x = args.vmec_wout is None and args.configuration.lower() in {
+        "w7-x",
+        "w7x",
+        "w7x-standard",
+    }
+    nfp = 5 if named_w7x else args.nfp
+    request = GeometryRequest(
+        configuration=args.configuration,
+        radial_coordinate="rho",
+        radial_value=args.rho,
+        alpha=args.alpha,
+        parallel_coordinate="zeta",
+        parallel_coordinate_unit="radian",
+        n_z=n_z,
+        z_min=args.zeta_center - np.pi * args.field_line_periods / nfp,
+        z_max=args.zeta_center + np.pi * args.field_line_periods / nfp,
+        field_periods=args.field_line_periods,
+    )
+    result = resolve_geometry(
+        VmecppGeometryProvider(
+            wout_path=args.vmec_wout,
+            max_threads=args.vmec_max_threads,
+        ),
+        request,
+    )
+    geometry = internal_geometry_from_result(result)
+    return geometry, result.parallel_grid, {
+        "geometry_source": "vmecpp",
+        "configuration": args.configuration,
+        "vmec_wout": None if args.vmec_wout is None else str(args.vmec_wout),
+        "source": result.metadata.provenance.source,
+        "rho": args.rho,
+        "alpha": args.alpha,
+        "n_z": n_z,
+        "nfp": result.metadata.nfp,
+        "field_line_periods": args.field_line_periods,
+        "zeta_center": args.zeta_center,
+        "schema_version": result.metadata.schema_version,
+        "provider": result.metadata.provenance.provider,
+        "provider_version": result.metadata.provenance.provider_version,
+        "revision": result.metadata.provenance.revision,
     }
 
 
