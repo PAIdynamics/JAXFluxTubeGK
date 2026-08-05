@@ -30,11 +30,11 @@ Implemented and tested:
 
 - core PyTree types, grids, mode connectivity, linear electrostatic RHS, field
   solve, time advance, diagnostics, objectives, and fixed-topology gradients;
-- an MHD-neutral physical geometry object (`PhysicalFluxTubeGeometry`) and a
-  map from physical arrays to the solver's internal coefficients;
-- precomputed-array and DESC-array/object/path adapters in the package, plus
-  GX/GIST eik loaders in `benchmarks.py` and stella `.geometry` parsing in the
-  reduced scan example;
+- a versioned MHD-neutral `GeometryProvider` contract, extended physical
+  geometry model, strict validation, and one map from physical arrays to the
+  solver's internal coefficients;
+- synthetic, physical-array, DESC object/path, GX/GIST eik, and stella
+  `.geometry` providers, plus explicit external caching and provenance;
 - reduced RH, Cyclone, GKW/Gyaradax, DESC/eik, W7-X, stella, and GX validation
   infrastructure;
 - reduced stellarator scans and optimization examples.
@@ -50,15 +50,11 @@ Repository cleanup already completed:
   kept under ignored `.dependencies/`, while sibling clones can be verified
   and reused without modification.
 
-Standalone Priority 0 is complete. The next architectural gaps are:
+Standalone Priority 0 and geometry-interface Priority 1 are complete. The next
+architectural gaps are:
 
-- geometry loaders are split between the package, benchmark helpers, and the
-  stellarator scan example instead of sharing one public provider contract;
 - there is no first-class VMEC/VMEC++ `wout` or GVEC adapter, so W7-X geometry
   is currently obtained indirectly from GX/GIST or stella artifacts;
-- the geometry contract does not yet carry a versioned statement of units,
-  normalization, signs, radial coordinate, field-line topology, provenance,
-  and differentiability;
 - `benchmarks.py` is 16,564 lines and the top-level `__init__.py` eagerly
   re-exports most of it, coupling the solver API to validation infrastructure;
 - compact historical W7-X validation records still need to migrate to live
@@ -67,7 +63,7 @@ Standalone Priority 0 is complete. The next architectural gaps are:
 Standalone acceptance on 2026-08-05:
 
 - `ruff check src tests examples scripts`: pass;
-- provider-free x64 pytest run after an exact `uv sync --extra dev`: 305 passed,
+- provider-free x64 pytest run after an exact `uv sync --extra dev`: 329 passed,
   14 external tests deselected;
 - sdist and wheel build, fresh-environment wheel install, and import: pass;
 - fixtures reduced from about 175 MiB to 5.2 MiB; no fixture exceeds 500 KiB.
@@ -121,37 +117,38 @@ consume explicit revision-checked roots rather than checkout-relative paths.
 
 ## Priority 1: Define One Public MHD Geometry Interface
 
-- [ ] Define and document a small public `GeometryProvider` protocol that
+- [x] Define and document a small public `GeometryProvider` protocol that
   accepts a `GeometryRequest` and returns a `GeometryResult` containing the
   `ParallelGrid`, `PhysicalFluxTubeGeometry`, and metadata.  Solvers must
   consume this contract rather than knowing which MHD code produced it.
-- [ ] Version the serialized geometry schema and specify coordinates, units,
+- [x] Version the serialized geometry schema and specify coordinates, units,
   normalization, sign conventions, radial coordinate, `alpha`, field periods,
   periodic endpoint policy, twist-and-shift/linking data, quadrature weights,
   and provenance.
-- [ ] Extend the current physical geometry model, which drops field-line
-  `alpha` and lacks `iota`, `nfp`, topology/linking, normalization, and provider
-  metadata, before treating it as the public inter-code contract.
-- [ ] Separate static topology/file I/O from differentiable arrays.  State
+- [x] Extend the physical geometry model to retain field-line `alpha`, `iota`,
+  `nfp`, topology/linking, normalization, and provider metadata before treating
+  it as the public inter-code contract.
+- [x] Separate static topology/file I/O from differentiable arrays.  State
   clearly which provider outputs can carry gradients back to equilibrium
   parameters and test those claims with `jax.grad`.
-- [ ] Move GX/GIST eik and stella `.geometry` parsing out of examples/benchmark
+- [x] Move GX/GIST eik and stella `.geometry` parsing out of examples/benchmark
   code into focused optional adapter modules that produce the same physical
   contract.
-- [ ] Add schema validation with actionable errors for missing fields,
+- [x] Add schema validation with actionable errors for missing fields,
   incompatible normalization, non-finite arrays, duplicate endpoints, and
   inconsistent grid sizes.
-- [ ] Allow optional user-controlled serialization/caching of provider output
+- [x] Allow optional user-controlled serialization/caching of provider output
   for expensive runs, but keep it outside the source tree and make the live
   provider API the canonical path.  The solver must not require a separately
   stored geometry file.
-- [ ] Keep solver-internal coefficients (`F`, `G`, `E_y`, `D_x`, `D_y`, metric
+- [x] Keep solver-internal coefficients (`F`, `G`, `E_y`, `D_x`, `D_y`, metric
   terms) derived in one tested location; providers should expose physical
   quantities, not duplicate solver conventions.
 
-Acceptance gate: one solver run can switch among synthetic, DESC, VMEC, GVEC,
-GX/GIST, and stella providers without changing solver construction after the
-provider call.
+Acceptance gate: **passed at the interface level**. One solver-construction
+path switches among synthetic, DESC/VMEC++/GVEC physical-array handoffs,
+GX/GIST, and stella without provider-specific solver branches. Priority 2
+replaces the VMEC++/GVEC array handoffs with live MHD transformations.
 
 ## Priority 2: Add Clean MHD Providers and a Direct W7-X Path
 

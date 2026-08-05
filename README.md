@@ -166,6 +166,40 @@ The scan can also read:
 These runs are useful integration checks.  They are not production
 stellarator-optimization claims unless the readiness gates pass.
 
+## Public Geometry Provider API
+
+All geometry backends return the same versioned physical contract before the
+solver derives its internal coefficients:
+
+```python
+from stellarator_gk import (
+    GeometryRequest,
+    SyntheticGeometryProvider,
+    internal_geometry_from_result,
+    resolve_geometry,
+)
+
+request = GeometryRequest(
+    configuration="standalone-cosine-B",
+    radial_value=0.5,
+    alpha=0.0,
+    n_z=32,
+)
+result = resolve_geometry(SyntheticGeometryProvider(), request)
+geometry = internal_geometry_from_result(result)
+```
+
+`DescGeometryProvider`, `GxEikGeometryProvider`, and
+`StellaGeometryProvider` can replace the synthetic provider without changing
+solver construction. VMEC++ and GVEC will supply the same physical-array
+handoff in Priority 2. File I/O and validation happen before JAX tracing;
+continuous in-memory provider arrays can retain gradients.
+
+Optional geometry caches are explicit and must be outside the source tree.
+They preserve the schema and provenance but are non-differentiable after
+reload. See [`docs/geometry_provider.md`](docs/geometry_provider.md) for the
+complete units, signs, topology, validation, and caching contract.
+
 ## Common Workflows
 
 ### Validation Gates

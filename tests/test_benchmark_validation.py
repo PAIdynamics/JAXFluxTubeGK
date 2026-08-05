@@ -237,7 +237,7 @@ def test_reduced_stellarator_fixture_matches_precomputed_reference_arrays():
         + physical.B * physical.b_cross_kappa_dot_grad_alpha
     ) / physical.B**2
 
-    np.testing.assert_allclose(field_line.alpha, 0.0, atol=1e-14)
+    np.testing.assert_allclose(field_line.alpha, 0.4, atol=1e-14)
     np.testing.assert_allclose(geometry.B, B, rtol=2e-13, atol=2e-13)
     np.testing.assert_allclose(geometry.D_x, expected_D_x, rtol=2e-13, atol=2e-13)
     np.testing.assert_allclose(geometry.D_y, expected_D_y, rtol=2e-13, atol=2e-13)

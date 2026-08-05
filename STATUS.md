@@ -10,9 +10,10 @@ default suite, package build, fresh wheel install, and import all pass without
 sibling repositories. External validators are opt-in, revision checked, and
 receive explicit source, executable, equilibrium, or generated-data paths.
 
-The immediate work has moved to the public MHD geometry boundary: define one
-versioned provider contract, then implement a direct in-memory VMEC++ W7-X
-path. The externally validated W7-X scientific gate remains open.
+The public MHD geometry boundary is now schema-versioned and provider neutral.
+The immediate work is a direct in-memory VMEC++ W7-X provider followed by the
+GVEC transformation and real-MHD gradient checks. The externally validated
+W7-X scientific gate remains open.
 
 The target architecture is:
 
@@ -34,6 +35,11 @@ Priority 0 standalone work also added clean-clone CI, external pytest markers,
 installed-package smoke testing, path/revision provenance reporting, and a
 declared NetCDF4 development reader. Raw GKW state/RHS/matrix dumps were
 removed, reducing `fixtures/` from about 175 MiB to 5.2 MiB.
+
+Priority 1 added the common request/provider/result API, extended physical
+geometry metadata, DESC/GX/stella adapters, validation, external caching, and a
+provider-independent solver path. Its implementation and conventions are
+documented in `docs/geometry_provider.md`.
 
 ## Verified Implementation
 
@@ -66,19 +72,20 @@ Implemented in `src/stellarator_gk/`:
 
 Present today:
 
-- `PhysicalFluxTubeGeometry` and `FluxTubeGeometry` array containers;
-- direct construction from physical/precomputed arrays;
-- lazy DESC object/path extraction through `eq.compute`;
-- GX/GIST eik parsing and parity logic inside the large benchmark module;
-- stella `.geometry` parsing inside `examples/run_stellarator_linear_scan.py`.
+- schema-v1 `GeometryRequest`, `GeometryProvider`, `GeometryResult`, and static
+  metadata covering coordinates/units, signs, topology/linking, endpoint
+  policy, normalization, differentiability, and provenance;
+- `PhysicalFluxTubeGeometry` carrying `alpha`, `iota`, shear, `nfp`, field
+  periods, topology, normalization, and provider identity as a JAX PyTree;
+- synthetic and generic physical-array providers, DESC object/path provider,
+  GX/GIST eik provider, and stella `.geometry` provider;
+- strict provider-boundary validation and explicit external cache round trips;
+- one physical-to-internal map for `F`, `G`, `E_y`, `D_x`, `D_y`, and metrics;
+- a reduced scan and solver-construction test that are provider independent.
 
 Not present today:
 
-- a `GeometryProvider` protocol or provider registry;
-- a request/result metadata model covering normalization, `alpha`, `iota`,
-  field periods, topology/linking, provenance, and differentiability;
 - a VMEC/VMEC++ adapter, a GVEC adapter, or direct named W7-X provider;
-- a single package-level path shared by DESC, VMEC++, GVEC, GX/GIST, and stella;
 - a demonstrated gradient from real MHD equilibrium/design parameters through
   geometry into the GK objective.
 
@@ -131,7 +138,7 @@ ruff check src tests examples scripts: PASS
 uv sync --extra dev: PASS (exact provider-free environment)
 uv pip check --python .venv/bin/python: 25 packages compatible
 JAX_ENABLE_X64=1 .venv/bin/python -m pytest -q:
-  305 passed, 14 external tests deselected in 359.61 s
+  329 passed, 14 external tests deselected in 478.45 s
 scripts/package_smoke_test.py --python 3.13:
   sdist build, wheel build, fresh wheel install, and import: PASS
 ```
@@ -198,13 +205,13 @@ inexact so prepared providers remain installed.
 
 ## Active Priorities
 
-1. Define the versioned `GeometryRequest` / `GeometryProvider` /
-   `GeometryResult` contract, including the parallel grid and full metadata.
-2. Add VMEC++ as the first live named W7-X provider and expose the standard
+1. Add VMEC++ as the first live named W7-X provider and expose the standard
    W7-X input through a supported API/resource in the VMEC++ fork.
-3. Convert the in-memory VMEC output to physical flux-tube arrays without an
+2. Convert the in-memory VMEC output to physical flux-tube arrays without an
    intermediate committed `wout`/GX/GIST/stella file.
-4. Cross-check the live provider against independent GX and stella references,
+3. Add the corresponding live GVEC transformation and a real-MHD gradient
+   check through the provider result.
+4. Cross-check the live providers against independent GX and stella references,
    then remove superseded tracked W7-X equilibrium/derived artifacts.
 5. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
    convergence, CPU timing, and real MHD optimization gradients.
@@ -213,10 +220,8 @@ inexact so prepared providers remain installed.
 
 - External integrations can drift from their pinned forks or fail on local
   native toolchains even though the provider-free suite remains green.
-- Geometry conventions are distributed across the package, benchmark module,
-  examples, scripts, and fixture metadata.
-- `PhysicalFluxTubeGeometry` is not yet rich enough to be the stable MHD/GK
-  interface because field-line and normalization metadata are missing.
+- Real VMEC++ and GVEC outputs still need transformations into the now-stable
+  physical provider contract.
 - The current W7-X claim is fixture-driven rather than provider-driven.
 - The fixed-step initial-value objective may change branches or become
   ill-conditioned during design optimization; branch/gradient checks are not
@@ -226,6 +231,25 @@ inexact so prepared providers remain installed.
   TEM production validation, and full shape optimization are deferred.
 
 ## Round Log
+
+### 2026-08-05: Priority 1 Public Geometry Interface Complete
+
+- Added schema-v1 request/provider/result types with explicit units,
+  normalization, signs, coordinates, endpoint policy, topology/linking, and
+  provenance.
+- Extended physical geometry with `alpha`, `iota`, shear, `nfp`, field periods,
+  normalization, topology, endpoint policy, and provider identity while
+  retaining continuous arrays as JAX leaves.
+- Added actionable validation, differentiability tests, and external cache
+  serialization that preserves provenance and never claims gradients after I/O.
+- Added DESC object/path, GX/GIST eik, stella geometry, synthetic, and generic
+  physical-array providers; moved eik/stella parsing into focused modules.
+- Routed the reduced scan and a common linear-residual smoke run through the
+  provider-neutral result and canonical physical-to-internal mapper.
+- Verified Ruff and the complete suite: 329 passed, 14 external tests
+  deselected. The only initial acceptance failure was a stale assertion for the
+  corrected `alpha = theta - iota * phi` field-line label and passed after the
+  contract assertion was updated.
 
 ### 2026-08-05: Priority 0 Standalone Boundary Complete
 
