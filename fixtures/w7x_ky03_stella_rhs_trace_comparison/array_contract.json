@@ -1,6 +1,5 @@
 {
   "array_parity_blockers": [
-    "stella trace includes the duplicate periodic z endpoint; drop iz=max before array comparison",
     "stella and committed solver balance use different n_vpar",
     "stella and committed solver balance use different vpar ranges",
     "stella and committed solver balance use different mu grids/ranges",
@@ -87,6 +86,8 @@
     ]
   },
   "stella_code_dt": 0.1,
+  "stella_endpoint_drop_applied": true,
+  "stella_endpoint_policy": "exclude_upper_periodic_endpoint",
   "stella_mu_range": [
     0.03662129632879369,
     4.917073821493017

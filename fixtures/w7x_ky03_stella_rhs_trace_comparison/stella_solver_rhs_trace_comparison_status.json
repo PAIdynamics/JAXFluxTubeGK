@@ -1,6 +1,5 @@
 {
   "array_parity_blockers": [
-    "stella trace includes the duplicate periodic z endpoint; drop iz=max before array comparison",
     "stella and committed solver balance use different n_vpar",
     "stella and committed solver balance use different vpar ranges",
     "stella and committed solver balance use different mu grids/ranges",

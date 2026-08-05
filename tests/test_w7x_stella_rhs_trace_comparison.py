@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPARISON = ROOT / "fixtures/w7x_ky03_stella_rhs_trace_comparison"
@@ -108,7 +110,10 @@ def test_array_contract_reports_shape_and_fixture_blockers(tmp_path: Path):
     assert contract["direct_array_parity_ready"] is False
     assert contract["stella_n_z_raw"] == 3
     assert contract["stella_n_z_after_endpoint_drop"] == 2
-    assert any("duplicate periodic z endpoint" in item for item in contract["array_parity_blockers"])
+    assert contract["stella_endpoint_drop_applied"] is True
+    assert not any(
+        "duplicate periodic z endpoint" in item for item in contract["array_parity_blockers"]
+    )
     assert any("different n_vpar" in item for item in contract["array_parity_blockers"])
     assert any("scalar term summaries" in item for item in contract["array_parity_blockers"])
     assert any("velocity quadrature weights" in item for item in contract["array_parity_blockers"])
@@ -173,6 +178,19 @@ def test_array_contract_accepts_v2_velocity_weight_columns(tmp_path: Path):
     assert not any("velocity quadrature weights" in item for item in contract["array_parity_blockers"])
 
 
+def test_drop_stella_periodic_endpoint_trims_requested_array_axis():
+    module = _load_module()
+    z_indices = np.arange(-2, 3)
+    state = np.arange(2 * 5 * 3).reshape(2, 5, 3)
+
+    trimmed_z, trimmed_state = module.drop_stella_periodic_endpoint(
+        z_indices, state, axis=1
+    )
+
+    np.testing.assert_array_equal(trimmed_z, np.arange(-2, 2))
+    np.testing.assert_array_equal(trimmed_state, state[:, :-1, :])
+
+
 def test_committed_stella_rhs_trace_comparison_contract():
     status = json.loads((COMPARISON / "stella_solver_rhs_trace_comparison_status.json").read_text())
     contract = json.loads((COMPARISON / "array_contract.json").read_text())
@@ -185,6 +203,7 @@ def test_committed_stella_rhs_trace_comparison_contract():
     assert status["direct_array_parity_ready"] is False
     assert contract["stella_n_z_raw"] == 257
     assert contract["stella_n_z_after_endpoint_drop"] == 256
+    assert contract["stella_endpoint_drop_applied"] is True
     assert contract["stella_n_vpar"] == 32
     assert contract["solver_case"]["n_vpar"] == 16
     assert float(by_group["parallel_streaming_bundle"]["stella_rhs_fraction_of_total_l2"]) > 0.0

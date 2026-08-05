@@ -223,7 +223,7 @@ validation work in Priority 3.
 - [x] Rerun the patched sibling stella RHS trace in format v2 with `wgts_vpa`
   and z-dependent `wgts_mu`; require an explicit stella source/executable path
   and record its commit.
-- [ ] Drop the duplicate periodic stella z endpoint before array comparison.
+- [x] Drop the duplicate periodic stella z endpoint before array comparison.
 - [ ] Emit a solver-side selected-mode full-array trace on a stella-compatible
   `z/vpa/mu` grid, or add a documented interpolation and weighting adapter.
 - [ ] Compare velocity-weighted complex arrays for distribution, parallel

@@ -23,6 +23,8 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TRACE = Path(
@@ -60,6 +62,23 @@ TERM_GROUPS = (
         "note": "diamagnetic/equilibrium-gradient drive",
     },
 )
+
+
+def drop_stella_periodic_endpoint(z_indices, *arrays, axis: int = 0):
+    """Drop stella's duplicated upper z endpoint from trace arrays."""
+
+    z_indices = np.asarray(z_indices, dtype=int)
+    if z_indices.ndim != 1 or z_indices.size < 2:
+        raise ValueError("stella z indices must be a one-dimensional periodic grid")
+    if not np.array_equal(np.diff(z_indices), np.ones(z_indices.size - 1, dtype=int)):
+        raise ValueError("stella z indices must be contiguous and ordered")
+    trimmed = []
+    for values in arrays:
+        array = np.asarray(values)
+        if array.shape[axis] != z_indices.size:
+            raise ValueError("trace array z axis does not match stella z indices")
+        trimmed.append(np.take(array, np.arange(z_indices.size - 1), axis=axis))
+    return (z_indices[:-1], *trimmed)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -215,11 +234,10 @@ def _array_contract_payload(
     solver_case = _focus_solver_case(solver_status)
     solver_n_z = _solver_n_z(solver_metadata)
     blockers = []
+    endpoint_drop_applied = False
     if stella_n_z_raw != solver_n_z:
         if stella_n_z_raw == solver_n_z + 1:
-            blockers.append(
-                "stella trace includes the duplicate periodic z endpoint; drop iz=max before array comparison"
-            )
+            endpoint_drop_applied = True
         else:
             blockers.append("stella and solver z dimensions do not match")
     if stella_n_vpar != int(solver_case["n_vpar"]):
@@ -249,7 +267,11 @@ def _array_contract_payload(
         "stella_step": _single_int(stella_summary.get("steps", ())),
         "stella_code_dt": _single_float(stella_summary.get("code_dts", ())),
         "stella_n_z_raw": stella_n_z_raw,
-        "stella_n_z_after_endpoint_drop": stella_n_z_raw - 1,
+        "stella_n_z_after_endpoint_drop": (
+            stella_n_z_raw - 1 if endpoint_drop_applied else stella_n_z_raw
+        ),
+        "stella_endpoint_policy": "exclude_upper_periodic_endpoint",
+        "stella_endpoint_drop_applied": endpoint_drop_applied,
         "stella_n_vpar": stella_n_vpar,
         "stella_n_mu": stella_n_mu,
         "stella_vpa_range": state["vpa_range"],

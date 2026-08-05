@@ -135,8 +135,9 @@ The scientific W7-X gate remains open:
   outside tolerance;
 - the solver-side RHS balance reconstructs and is streaming dominated;
 - the retained stella trace summary is now format v2 with velocity quadrature
-  weights; direct term-array comparison remains blocked by incompatible
-  velocity/z contracts and the missing solver-side full-array trace;
+  weights; the upper periodic z endpoint is now excluded before comparison,
+  while direct term-array parity remains blocked by the velocity contract and
+  missing solver-side full-array trace;
 - production convergence, CPU timing, and MHD design optimization remain
   blocked behind external W7-X parity.
 
@@ -262,6 +263,9 @@ inexact so prepared providers remain installed.
   257×32×8 raw grid. The 329 MiB raw trace remains outside the repository.
 - Made the summarization command require explicit stella source and executable
   paths and record the exact source commit.
+- Applied the shared endpoint-excluded convention to trace arrays by dropping
+  stella's upper periodic z endpoint; the comparison grid is now 256 points,
+  matching the solver geometry grid.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 
