@@ -285,6 +285,14 @@ inexact so prepared providers remain installed.
   structural/convention mismatch rather than a scalar normalization offset.
   Full parity remains blocked because v2 does not label its three calls and
   lacks stella quasineutrality numerator/denominator and normalization arrays.
+- Audited the parallel boundary contract: stella resolves its default to
+  zero/unconnected boundaries for the nonzonal `ky=0.3` mode, while the
+  original solver balance uses a periodic Fourier derivative. A matched-time
+  open-chain GKW-upwind discriminator did not close the gap: its growth and
+  frequency were approximately `-3.07e-4` and `-9.94e-2`, and its best
+  distribution-aligned array errors stayed near one. The periodic assumption
+  is therefore a real contract mismatch, but simply switching to the existing
+  GKW open stencil is not a stella-parity fix.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

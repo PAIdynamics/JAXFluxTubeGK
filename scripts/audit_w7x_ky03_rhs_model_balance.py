@@ -120,6 +120,13 @@ def default_balance_cases() -> tuple[RHSBalanceCase, ...]:
             n_mu=8,
             velocity_backend="finite_difference",
         ),
+        RHSBalanceCase(
+            name="stella_open_16x8",
+            n_vpar=16,
+            n_mu=8,
+            velocity_backend="finite_difference",
+            parallel_derivative_model="gkw_upwind",
+        ),
     )
 
 

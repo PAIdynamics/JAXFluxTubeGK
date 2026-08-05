@@ -299,11 +299,16 @@ def compare_stella_solver_arrays(stella: dict[str, Any], solver_array: Path):
         "w_vpar": solver["w_vpar"][vmask],
         "w_mu": solver["w_mu"][mumask],
     }
+    if "rhs_parallel_streaming" in solver:
+        solver_streaming = solver["rhs_parallel_streaming"] + solver["rhs_parallel_field_drive"]
+    else:
+        solver_streaming = (
+            solver["rhs_gkw_parallel_streaming_recurrence"]
+            + solver["rhs_gkw_parallel_field_drive"]
+        )
     solver_arrays = {
         "distribution": solver["distribution"][:, vmask][:, :, mumask],
-        "parallel_streaming": (
-            solver["rhs_parallel_streaming"] + solver["rhs_parallel_field_drive"]
-        )[:, vmask][:, :, mumask],
+        "parallel_streaming": solver_streaming[:, vmask][:, :, mumask],
         "mirror_force": solver["rhs_mirror_force"][:, vmask][:, :, mumask],
         "magnetic_drift": (
             solver["rhs_magnetic_drift"] + solver["rhs_drift_field_drive"]
@@ -698,6 +703,13 @@ def _read_solver_term_rows(path: Path) -> dict[str, dict[str, float]]:
             "rhs_fraction_of_total_l2": float(row["rhs_fraction_of_total_l2"]),
             "total_rhs_l2": float(row["total_rhs_l2"]),
         }
+    aliases = {
+        "gkw_parallel_streaming_recurrence": "parallel_streaming",
+        "gkw_parallel_field_drive": "parallel_field_drive",
+    }
+    for source, target in aliases.items():
+        if source in out and target not in out:
+            out[target] = out[source]
     return out
 
 

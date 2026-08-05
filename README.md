@@ -329,6 +329,11 @@ The current v2 trace contains three unlabeled RHS calls and lacks stella-side
 quasineutrality numerator/denominator and normalization records. The comparator
 reports all three calls separately and keeps full parity blocked.
 
+The boundary discriminator is available as `--case stella_open_16x8`. It uses
+the solver's existing open-chain GKW-style upwind operator to test stella's
+resolved unconnected boundary contract; it is a discriminator, not a claim
+that the two discretizations are identical.
+
 Prepare and run the patched stella RHS trace in a scratch tree:
 
 ```bash

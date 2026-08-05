@@ -35,12 +35,13 @@ def test_default_balance_cases_include_focus_velocity_case():
     cases = module.default_balance_cases()
     by_name = {case.name: case for case in cases}
 
-    assert tuple(by_name) == ("cheb_4x4", "gkw_fd_16x8")
+    assert tuple(by_name) == ("cheb_4x4", "gkw_fd_16x8", "stella_open_16x8")
     assert by_name["cheb_4x4"].total_time == 200.0
     assert by_name["gkw_fd_16x8"].velocity_backend == "finite_difference"
     assert by_name["gkw_fd_16x8"].n_vpar == 16
     assert by_name["gkw_fd_16x8"].n_mu == 8
     assert by_name["gkw_fd_16x8"].total_time == 200.0
+    assert by_name["stella_open_16x8"].parallel_derivative_model == "gkw_upwind"
 
 
 def test_scan_args_hold_w7x_ky03_controls_fixed():

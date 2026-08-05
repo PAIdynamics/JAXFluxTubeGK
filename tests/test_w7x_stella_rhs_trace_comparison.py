@@ -57,6 +57,22 @@ def test_term_comparison_converts_stella_rhs_dt_units():
     assert by_group["equilibrium_drive"]["stella_rhs_fraction_of_total_l2"] == 0.75
 
 
+def test_solver_term_reader_aliases_open_chain_streaming_names(tmp_path):
+    module = _load_module()
+    path = tmp_path / "terms.csv"
+    path.write_text(
+        "term,rhs_l2,rhs_fraction_of_total_l2,total_rhs_l2\n"
+        "gkw_parallel_streaming_recurrence,2,0.2,10\n"
+        "gkw_parallel_field_drive,3,0.3,10\n",
+        encoding="utf-8",
+    )
+
+    rows = module._read_solver_term_rows(path)
+
+    assert rows["parallel_streaming"] == rows["gkw_parallel_streaming_recurrence"]
+    assert rows["parallel_field_drive"] == rows["gkw_parallel_field_drive"]
+
+
 def test_array_contract_reports_shape_and_fixture_blockers(tmp_path: Path):
     module = _load_module()
     geometry_csv = tmp_path / "geometry.csv"
