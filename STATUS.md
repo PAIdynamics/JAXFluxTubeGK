@@ -46,7 +46,9 @@ Priority 2 added declared optional MHD extras, named installed DESC and VMEC++
 paths, direct VMEC full/half-grid Fourier geometry, live GVEC PEST evaluation,
 and a named W7-X reduced-scan path. The VMEC++ fork now packages
 `w7x-standard` behind a public Python API. Direct VMEC++ W7-X geometry is
-checked term by term against an independent same-source stella result.
+checked term by term against independent same-source stella and matched
+same-surface GX/GIST results. GVEC is also checked against VMEC++ on GVEC's
+tracked VMEC-initialized W7-X equilibrium. Priority 2 is complete.
 
 ## Verified Implementation
 
@@ -97,12 +99,10 @@ Present today:
 
 Not present today:
 
-- a stable named W7-X constructor in GVEC or a matched common-equilibrium
-  GVEC/VMEC/DESC comparison;
+- a stable named W7-X constructor in GVEC (the provider accepts live state and
+  parameter-file inputs, and the direct named W7-X path is VMEC++);
 - an end-to-end gradient through an installed production MHD solve (native
   VMEC++ and GVEC boundaries are currently non-differentiable);
-- a same-surface direct VMEC++/GX-GIST parity check—the retained GX table has a
-  different safety-factor/surface contract.
 
 The pinned VMEC++ fork now installs the W7-X standard input as package data and
 exports `named_configuration("w7x-standard")` and `named_configurations()`.
@@ -220,12 +220,11 @@ inexact so prepared providers remain installed.
 
 ## Active Priorities
 
-1. Match a common equilibrium/surface/field line across GVEC, VMEC++, and DESC;
-   add a stable named GVEC hook if its upstream API gains one.
-2. Add the remaining same-surface direct VMEC++/GX-GIST comparison and tighten
-   the legacy stella metric/drift envelope.
-3. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
+1. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
    convergence, CPU timing, and real MHD optimization gradients.
+2. Tighten the legacy stella and finite-element GVEC metric/drift comparison
+   envelopes as the independent reference pipelines mature.
+3. Add a named GVEC W7-X hook if its installed API gains a stable constructor.
 
 ## Current Risks
 
@@ -270,7 +269,15 @@ inexact so prepared providers remain installed.
 - Cross-checked every required direct-VMEC term against an independent
   same-source stella W7-X geometry: normalized `B` is below 1% relative L2;
   equal-arc metrics and drifts have correct scale and remain within the explicit
-  30% legacy-grid envelope. A same-surface GX/GIST comparison is still open.
+  30% legacy-grid envelope.
+- Added a matched same-surface GX/GIST check for all nine geometry terms,
+  shear, field periods, and endpoint policy; all term errors remain below 20%.
+- Normalized live GVEC fields to the common minor-radius, edge-flux, and field
+  references, including explicit flux-coordinate orientation handling.
+- Compared all live GVEC physical terms with direct VMEC++ on GVEC's tracked
+  VMEC-initialized W7-X equilibrium; invariant terms agree within 8%, while the
+  full finite-element projection contract remains within its documented 75%
+  pre-minimization envelope.
 
 ### 2026-08-05: Priority 1 Public Geometry Interface Complete
 

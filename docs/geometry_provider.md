@@ -107,9 +107,15 @@ normalization. It does not invoke GX/GIST or stella and does not write NetCDF.
 
 `GvecGeometryProvider` accepts an in-memory GVEC state or an explicit parameter
 file and requests the minimum PEST quantities needed by the same physical
-contract. GVEC currently has no stable named W7-X constructor, so named W7-X
-selection is not claimed for that backend. Both native adapters import their
-packages lazily and are non-differentiable at their current native boundaries.
+contract. It converts SI fields with GVEC's effective minor radius and
+`2*abs(Phi_edge)/r_minor**2`, and resolves poloidal/toroidal coordinate
+orientation from the edge fluxes while retaining VMEC's `signgs`-oriented
+toroidal-flux derivative. GVEC currently has no stable named W7-X constructor,
+so named W7-X selection is not claimed for that backend. Both native adapters
+import their packages lazily and are non-differentiable at their current native
+boundaries. Opt-in tests compare GVEC with direct VMEC++ on the same
+VMEC-initialized W7-X state and compare direct VMEC++ term by term with matched
+GX/GIST and stella references.
 
 ## GX/GIST and stella readers
 

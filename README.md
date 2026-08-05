@@ -196,9 +196,12 @@ geometry = internal_geometry_from_result(result)
 `GxEikGeometryProvider`, and `StellaGeometryProvider` can replace the synthetic
 provider without changing solver construction. VMEC++ runs a packaged named
 W7-X input and consumes `VmecOutput.wout` directly; GVEC consumes an in-memory
-state or an explicit parameter file. File I/O and validation happen before JAX
+state or an explicit parameter file and normalizes its SI output to the same
+minor-radius/edge-flux contract. File I/O and validation happen before JAX
 tracing; continuous in-memory DESC arrays can retain gradients. Native VMEC++
-and current GVEC evaluations are declared non-differentiable.
+and current GVEC evaluations are declared non-differentiable. Opt-in tests
+cross-check direct W7-X geometry against stella, matched GX/GIST, and a common
+GVEC/VMEC equilibrium.
 
 Optional geometry caches are explicit and must be outside the source tree.
 They preserve the schema and provenance but are non-differentiable after

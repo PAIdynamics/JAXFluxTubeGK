@@ -189,14 +189,14 @@ replaces the VMEC++/GVEC array handoffs with live MHD transformations.
   the live provider reproduces them.  Integration tests should generate data
   in a temporary/cache directory and retain only compact numerical assertions
   where a regression contract is essential.
-- [ ] Cross-check the direct W7-X provider against the committed GX/GIST and
+- [x] Cross-check the direct W7-X provider against the committed GX/GIST and
   stella geometry contracts term by term, including `B`, parallel derivative
   scaling, metric elements, drift coefficients, field-period count, and
   endpoint/linking conventions.
-  The same-source stella comparison now covers every listed term (`B` is within
-  1% relative L2 and legacy equal-arc metrics/drifts within a documented 30%
-  envelope). A same-surface GX/GIST comparison remains because the retained GX
-  table uses a different `q`/surface contract.
+  The same-source stella comparison covers every listed term (`B` is within 1%
+  relative L2 and legacy equal-arc metrics/drifts within a documented 30%
+  envelope). The matched GX VMEC/GIST pair adds a same-surface comparison for
+  all nine GIST fields, shear, field periods, and endpoint policy.
 - [x] Make the reduced W7-X example accept a provider and named design directly
   (for example `--geometry-provider vmecpp --configuration w7x-standard`), with
   optional user-supplied equilibrium files as a secondary path.
@@ -205,18 +205,18 @@ replaces the VMEC++/GVEC array handoffs with live MHD transformations.
 
 - [x] Specify the minimum GVEC output/API needed to build the physical
   flux-tube contract and implement it as an optional adapter or exporter.
-- [ ] Add an opt-in GVEC integration test and compare a common equilibrium with
+- [x] Add an opt-in GVEC integration test and compare a common equilibrium with
   VMEC/DESC after matching surface and field line.
-  The live sibling-GVEC integration test passes; only the matched common-
-  equilibrium comparison remains open because GVEC has no stable named W7-X
-  constructor or shared fixture API yet.
+  The live sibling-GVEC integration test passes. A second opt-in test loads
+  GVEC's VMEC-initialized W7-X case and compares every normalized physical term
+  against the direct VMEC++ provider on the same surface and field line.
 
 Acceptance gate: **passed**. W7-X runs from a named configuration through the
 installed VMEC++ dependency without a repository-stored design/geometry file.
 A user-supplied equilibrium file remains optional, while GX/stella are
-independent validation programs rather than canonical geometry sources. The
-two open comparison bullets above tighten cross-code numerical parity; they do
-not block the live-provider architecture.
+independent validation programs rather than canonical geometry sources.
+Priority 2 is complete; further tolerance tightening belongs to the scientific
+validation work in Priority 3.
 
 ## Priority 3: Preserve and Close the W7-X Scientific Validation Gate
 
