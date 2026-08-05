@@ -300,6 +300,8 @@ inexact so prepared providers remain installed.
   the documented opposite denominator sign, quasineutrality-denominator
   arrays agree within `5e-4` relative L2; the distribution, phi, numerator, and RHS
   structures remain mismatched.
+- Verified the complete standalone suite with x64 enabled: 352 tests passed and
+  20 opt-in external tests were deselected. Focused Ruff checks also pass.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 
