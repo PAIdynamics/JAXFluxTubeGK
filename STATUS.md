@@ -10,10 +10,11 @@ default suite, package build, fresh wheel install, and import all pass without
 sibling repositories. External validators are opt-in, revision checked, and
 receive explicit source, executable, equilibrium, or generated-data paths.
 
-The public MHD geometry boundary is now schema-versioned and provider neutral.
-The immediate work is a direct in-memory VMEC++ W7-X provider followed by the
-GVEC transformation and real-MHD gradient checks. The externally validated
-W7-X scientific gate remains open.
+The public MHD geometry boundary is schema-versioned and provider neutral.
+Priority 2 now supplies optional live DESC, VMEC++, and GVEC adapters. VMEC++
+loads its installed named W7-X design, runs it, and constructs the complete
+flux-tube geometry contract from in-memory Fourier output without a repository
+`wout` file. The externally validated W7-X scientific gate remains open.
 
 The target architecture is:
 
@@ -40,6 +41,12 @@ Priority 1 added the common request/provider/result API, extended physical
 geometry metadata, DESC/GX/stella adapters, validation, external caching, and a
 provider-independent solver path. Its implementation and conventions are
 documented in `docs/geometry_provider.md`.
+
+Priority 2 added declared optional MHD extras, named installed DESC and VMEC++
+paths, direct VMEC full/half-grid Fourier geometry, live GVEC PEST evaluation,
+and a named W7-X reduced-scan path. The VMEC++ fork now packages
+`w7x-standard` behind a public Python API. Direct VMEC++ W7-X geometry is
+checked term by term against an independent same-source stella result.
 
 ## Verified Implementation
 
@@ -77,23 +84,30 @@ Present today:
   policy, normalization, differentiability, and provenance;
 - `PhysicalFluxTubeGeometry` carrying `alpha`, `iota`, shear, `nfp`, field
   periods, topology, normalization, and provider identity as a JAX PyTree;
-- synthetic and generic physical-array providers, DESC object/path provider,
-  GX/GIST eik provider, and stella `.geometry` provider;
+- synthetic and generic physical-array providers; DESC object/path/named
+  provider; direct VMEC++ output/input/path/named provider; GVEC state/file
+  provider; GX/GIST eik and stella `.geometry` validation providers;
 - strict provider-boundary validation and explicit external cache round trips;
 - one physical-to-internal map for `F`, `G`, `E_y`, `D_x`, `D_y`, and metrics;
-- a reduced scan and solver-construction test that are provider independent.
+- a reduced scan and solver-construction test that are provider independent;
+- packaged VMEC++ `w7x-standard` lookup followed by `vmecpp.run(...)` and an
+  in-memory field-line transformation with no canonical NetCDF/GX/stella hop;
+- fixed-topology JAX gradient coverage from a DESC-compatible continuous
+  equilibrium parameter through sampled geometry and the reduced objective.
 
 Not present today:
 
-- a VMEC/VMEC++ adapter, a GVEC adapter, or direct named W7-X provider;
-- a demonstrated gradient from real MHD equilibrium/design parameters through
-  geometry into the GK objective.
+- a stable named W7-X constructor in GVEC or a matched common-equilibrium
+  GVEC/VMEC/DESC comparison;
+- an end-to-end gradient through an installed production MHD solve (native
+  VMEC++ and GVEC boundaries are currently non-differentiable);
+- a same-surface direct VMEC++/GX-GIST parity check—the retained GX table has a
+  different safety-factor/surface contract.
 
-The sibling repositories contain viable W7-X inputs.  In particular, VMEC++
-has `examples/data/input.w7x` and exposes `VmecInput.from_file(...)` plus an
-in-memory `vmecpp.run(...).wout` result.  That example input is excluded from
-the VMEC++ source distribution, so the VMEC++ fork needs a supported packaged
-W7-X configuration API/resource before it can serve as a stable dependency.
+The pinned VMEC++ fork now installs the W7-X standard input as package data and
+exports `named_configuration("w7x-standard")` and `named_configurations()`.
+The optimal-fusion manifest pins that fork commit. DESC resolves named examples
+through its installed API; GVEC presently requires a state or parameter file.
 
 ### Optimization maturity
 
@@ -125,9 +139,9 @@ The scientific W7-X gate remains open:
 - production convergence, CPU timing, and MHD design optimization remain
   blocked behind external W7-X parity.
 
-These results currently depend on committed derived fixtures.  They must be
-reproduced through live, explicitly versioned providers/validators before they
-can support the standalone production claim.
+The canonical W7-X geometry path no longer depends on a committed equilibrium
+or derived geometry file. Compact historical stella/GX contracts remain only
+as independent regression evidence for the still-open scientific parity gate.
 
 ## Repository Audit
 
@@ -138,14 +152,15 @@ ruff check src tests examples scripts: PASS
 uv sync --extra dev: PASS (exact provider-free environment)
 uv pip check --python .venv/bin/python: 25 packages compatible
 JAX_ENABLE_X64=1 .venv/bin/python -m pytest -q:
-  329 passed, 14 external tests deselected in 478.45 s
+  342 passed, 18 external tests deselected in 452.94 s
 scripts/package_smoke_test.py --python 3.13:
   sdist build, wheel build, fresh wheel install, and import: PASS
 ```
 
-The prior 13 failures were replaced with synthetic contracts or opt-in external
-tests. The default suite has no source-tree or executable availability skips;
-external tests are deselected by the registered `external` marker. NetCDF4 is
+The prior checkout-dependent failures were replaced with synthetic contracts
+or opt-in external tests. The default suite has no source-tree or executable
+availability skips; external tests are deselected by the registered `external`
+marker. NetCDF4 is
 declared in the development extra, while provider packages remain installed by
 the pinned manifest bootstrapper.
 
@@ -205,24 +220,28 @@ inexact so prepared providers remain installed.
 
 ## Active Priorities
 
-1. Add VMEC++ as the first live named W7-X provider and expose the standard
-   W7-X input through a supported API/resource in the VMEC++ fork.
-2. Convert the in-memory VMEC output to physical flux-tube arrays without an
-   intermediate committed `wout`/GX/GIST/stella file.
-3. Add the corresponding live GVEC transformation and a real-MHD gradient
-   check through the provider result.
-4. Cross-check the live providers against independent GX and stella references,
-   then remove superseded tracked W7-X equilibrium/derived artifacts.
-5. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
+1. Match a common equilibrium/surface/field line across GVEC, VMEC++, and DESC;
+   add a stable named GVEC hook if its upstream API gains one.
+2. Add the remaining same-surface direct VMEC++/GX-GIST comparison and tighten
+   the legacy stella metric/drift envelope.
+3. Resume the stella `ky=0.3` weighted term-array parity gate, followed by
    convergence, CPU timing, and real MHD optimization gradients.
 
 ## Current Risks
 
 - External integrations can drift from their pinned forks or fail on local
   native toolchains even though the provider-free suite remains green.
-- Real VMEC++ and GVEC outputs still need transformations into the now-stable
-  physical provider contract.
-- The current W7-X claim is fixture-driven rather than provider-driven.
+- On the current macOS environment, loading DESC, GVEC, and VMEC++ sequentially
+  in one pytest process causes VMEC++ to segfault inside its native run. Each
+  provider's isolated integration test passes, so external native-provider
+  suites must remain process-isolated until the shared-library conflict is
+  resolved.
+- Native VMEC++ and GVEC calls do not currently preserve JAX gradients into
+  their design variables; production design optimization therefore needs a
+  differentiable provider path (currently DESC-compatible) or custom rules.
+- Direct stella term comparison has excellent normalized `B` agreement but a
+  deliberately recorded 30% envelope for equal-arc metric/drift terms; tighter
+  same-grid cross-code parity remains work.
 - The fixed-step initial-value objective may change branches or become
   ill-conditioned during design optimization; branch/gradient checks are not
   yet implemented for real equilibria.
@@ -231,6 +250,27 @@ inexact so prepared providers remain installed.
   TEM production validation, and full shape optimization are deferred.
 
 ## Round Log
+
+### 2026-08-05: Priority 2 Live MHD Providers
+
+- Declared selective `desc`, `vmecpp`, `gvec`, and combined `mhd` extras while
+  retaining exact fork pins in the dependency bootstrap manifest.
+- Made DESC lazy and source-tree independent, added installed named-example
+  lookup, opt-in real W7-X evaluation, and a fixed-topology JAX gradient test.
+- Updated the VMEC++ fork to package and expose `w7x-standard`; pinned that fork
+  and verified a complete live named W7-X run without a stored equilibrium.
+- Added direct in-memory VMEC Fourier reconstruction using VMEC's PEST mapping,
+  staggered radial grids, orientation, normalization, metrics, grad-B drifts,
+  and curvature drifts. User `wout` import remains an optional secondary path.
+- Added a live GVEC PEST adapter for state/parameter-file inputs and verified it
+  against a revision-checked sibling example.
+- Routed the reduced scan through
+  `--geometry-provider vmecpp --configuration w7x-standard` and recorded full
+  provider/version/revision provenance.
+- Cross-checked every required direct-VMEC term against an independent
+  same-source stella W7-X geometry: normalized `B` is below 1% relative L2;
+  equal-arc metrics and drifts have correct scale and remain within the explicit
+  30% legacy-grid envelope. A same-surface GX/GIST comparison is still open.
 
 ### 2026-08-05: Priority 1 Public Geometry Interface Complete
 

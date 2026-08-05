@@ -27,8 +27,9 @@ uv run --no-sync python scripts/visualize_w7x_vmec_geometry.py \
 ```
 
 The image is documentation output; the repository does not provide the W7-X
-equilibrium file. The planned canonical path will obtain the named W7-X design
-in memory from VMEC++ without requiring a stored `wout` file.
+equilibrium file. The canonical runtime path loads VMEC++'s installed
+`w7x-standard` configuration, runs it, and transforms its in-memory `wout`
+result without writing an equilibrium file in this repository.
 
 ## Repository Map
 
@@ -159,6 +160,8 @@ run_config.json
 The scan can also read:
 
 - `--geometry-source desc-path --desc-path ...` for a DESC equilibrium path,
+- `--geometry-provider vmecpp --configuration w7x-standard` for the installed
+  live W7-X VMEC++ design, with `--vmec-wout ...` as an interoperability path,
 - `--geometry-source eik --eik-reference ...` for GX/GIST/GS2 eik tables,
 - `--geometry-source stella-geometry --stella-geometry ...` for stella
   `.geometry` files.
@@ -189,11 +192,13 @@ result = resolve_geometry(SyntheticGeometryProvider(), request)
 geometry = internal_geometry_from_result(result)
 ```
 
-`DescGeometryProvider`, `GxEikGeometryProvider`, and
-`StellaGeometryProvider` can replace the synthetic provider without changing
-solver construction. VMEC++ and GVEC will supply the same physical-array
-handoff in Priority 2. File I/O and validation happen before JAX tracing;
-continuous in-memory provider arrays can retain gradients.
+`DescGeometryProvider`, `VmecppGeometryProvider`, `GvecGeometryProvider`,
+`GxEikGeometryProvider`, and `StellaGeometryProvider` can replace the synthetic
+provider without changing solver construction. VMEC++ runs a packaged named
+W7-X input and consumes `VmecOutput.wout` directly; GVEC consumes an in-memory
+state or an explicit parameter file. File I/O and validation happen before JAX
+tracing; continuous in-memory DESC arrays can retain gradients. Native VMEC++
+and current GVEC evaluations are declared non-differentiable.
 
 Optional geometry caches are explicit and must be outside the source tree.
 They preserve the schema and provenance but are non-differentiable after
@@ -217,6 +222,17 @@ uv run --extra dev python examples/generate_validation_gate_figures.py
 ```
 
 ### W7-X Reduced Benchmark
+
+Run directly from the named VMEC++ design after preparing the MHD profile:
+
+```bash
+JAX_ENABLE_X64=1 uv run --no-sync python \
+  examples/run_stellarator_linear_scan.py \
+  --geometry-provider vmecpp \
+  --configuration w7x-standard \
+  --rho 0.8 \
+  --output-dir runs/w7x_vmecpp_linear_scan
+```
 
 Generate a reduced W7-X benchmark from explicit GX/GIST geometry and input
 paths:

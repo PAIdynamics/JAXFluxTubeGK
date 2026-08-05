@@ -89,6 +89,28 @@ DESC evaluation preserves JAX traces. A path-backed provider cannot make that
 claim. Both forms record provider version, revision, source, and configuration
 in the result metadata.
 
+When neither an object nor a path is supplied, the provider resolves
+`request.configuration` through DESC's installed examples API. This gives a
+named `W7-X` path without source-tree assumptions. The fixed-topology gradient
+contract is covered with a JAX-compatible equilibrium object; installed DESC
+W7-X evaluation is an opt-in integration check.
+
+## VMEC++ and GVEC adapters
+
+`VmecppGeometryProvider` accepts an in-memory `VmecOutput`/`wout`, a
+`VmecInput`, or an optional user `wout` path. With no explicit source it loads
+VMEC++'s installed named configuration (including `w7x-standard`), calls
+`vmecpp.run(...)`, and converts the returned Fourier data directly in memory.
+The transformation evaluates the PEST field line, VMEC full/half radial meshes,
+metrics, parallel derivative, grad-B drifts, and curvature drifts in the common
+normalization. It does not invoke GX/GIST or stella and does not write NetCDF.
+
+`GvecGeometryProvider` accepts an in-memory GVEC state or an explicit parameter
+file and requests the minimum PEST quantities needed by the same physical
+contract. GVEC currently has no stable named W7-X constructor, so named W7-X
+selection is not claimed for that backend. Both native adapters import their
+packages lazily and are non-differentiable at their current native boundaries.
+
 ## GX/GIST and stella readers
 
 `GxEikGeometryProvider` and `StellaGeometryProvider` contain the file parsing
@@ -108,11 +130,11 @@ converts `b.Gz` consistently for the normalized coordinate.
 
 `SyntheticGeometryProvider` is the standalone differentiable provider used for
 interface and solver smoke tests. `PhysicalArrayGeometryProvider` adapts an
-in-memory mapping or callable that returns physical fields. It is the intended
-handoff for VMEC++ and GVEC field-line transformations in Priority 2: those
-adapters supply physical arrays, `iota`, shear, and provenance, while solver
-construction remains unchanged. The array provider rejects missing physical
-fields and never accepts precomputed `F`, `G`, `E_y`, `D_x`, or `D_y`.
+in-memory mapping or callable that returns physical fields. It is also the
+tested low-level handoff used to isolate provider transformations: adapters
+supply physical arrays, `iota`, shear, and provenance, while solver construction
+remains unchanged. The array provider rejects missing physical fields and never
+accepts precomputed `F`, `G`, `E_y`, `D_x`, or `D_y`.
 
 ## Caching
 

@@ -154,38 +154,38 @@ replaces the VMEC++/GVEC array handoffs with live MHD transformations.
 
 ### DESC
 
-- [ ] Turn the existing DESC object/path adapter into an optional provider with
+- [x] Turn the existing DESC object/path adapter into an optional provider with
   a declared installation extra and no `PYTHONPATH` mutation or source-tree
   assumption.
-- [ ] Pin/test the supported DESC API and add a small mock-based unit test plus
+- [x] Pin/test the supported DESC API and add a small mock-based unit test plus
   an opt-in integration test against the sibling DESC checkout or installed
   release.
-- [ ] Verify gradients from continuous DESC equilibrium parameters through
+- [x] Verify gradients from continuous DESC equilibrium parameters through
   sampled geometry and the reduced GK objective while holding grid topology
   fixed.
 
 ### VMEC / VMEC++ and W7-X
 
-- [ ] Define a stable programmatic equilibrium request such as an MHD provider
+- [x] Define a stable programmatic equilibrium request such as an MHD provider
   plus a named configuration (`W7-X`, configuration variant, surface, and
   field line).  Record those inputs and dependency versions for reproducibility
   instead of committing an equilibrium artifact.
-- [ ] Use VMEC++ as the first live W7-X provider: construct `VmecInput`, call
+- [x] Use VMEC++ as the first live W7-X provider: construct `VmecInput`, call
   `vmecpp.run(...)`, and consume the returned in-memory `VmecOutput.wout`
   without writing `wout_w7x.nc` in this repository.
-- [ ] Update the VMEC++ fork to expose its W7-X standard input as a supported
+- [x] Update the VMEC++ fork to expose its W7-X standard input as a supported
   package resource or named Python API.  The current input exists at
   `vmecpp/examples/data/input.w7x`, but examples are excluded from its sdist and
   therefore are not a stable dependency interface.
-- [ ] Implement or upstream the VMEC-output-to-field-line transformation that
+- [x] Implement or upstream the VMEC-output-to-field-line transformation that
   evaluates all physical flux-tube arrays required by
   `PhysicalFluxTubeGeometry` in memory; do not route the canonical path through
   GX/GIST or a temporary NetCDF file.
-- [ ] Keep `wout*.nc` import as an optional user interoperability path, not the
+- [x] Keep `wout*.nc` import as an optional user interoperability path, not the
   canonical W7-X source and not a committed project fixture.
-- [ ] Define equivalent named-configuration hooks for DESC and GVEC where their
+- [x] Define equivalent named-configuration hooks for DESC and GVEC where their
   APIs can construct or load the W7-X design programmatically.
-- [ ] Remove committed W7-X equilibrium and derived-geometry artifacts after
+- [x] Remove committed W7-X equilibrium and derived-geometry artifacts after
   the live provider reproduces them.  Integration tests should generate data
   in a temporary/cache directory and retain only compact numerical assertions
   where a regression contract is essential.
@@ -193,21 +193,30 @@ replaces the VMEC++/GVEC array handoffs with live MHD transformations.
   stella geometry contracts term by term, including `B`, parallel derivative
   scaling, metric elements, drift coefficients, field-period count, and
   endpoint/linking conventions.
-- [ ] Make the reduced W7-X example accept a provider and named design directly
+  The same-source stella comparison now covers every listed term (`B` is within
+  1% relative L2 and legacy equal-arc metrics/drifts within a documented 30%
+  envelope). A same-surface GX/GIST comparison remains because the retained GX
+  table uses a different `q`/surface contract.
+- [x] Make the reduced W7-X example accept a provider and named design directly
   (for example `--geometry-provider vmecpp --configuration w7x-standard`), with
   optional user-supplied equilibrium files as a secondary path.
 
 ### GVEC
 
-- [ ] Specify the minimum GVEC output/API needed to build the physical
+- [x] Specify the minimum GVEC output/API needed to build the physical
   flux-tube contract and implement it as an optional adapter or exporter.
 - [ ] Add an opt-in GVEC integration test and compare a common equilibrium with
   VMEC/DESC after matching surface and field line.
+  The live sibling-GVEC integration test passes; only the matched common-
+  equilibrium comparison remains open because GVEC has no stable named W7-X
+  constructor or shared fixture API yet.
 
-Acceptance gate: W7-X runs from a named configuration through an installed MHD
-dependency without a repository-stored design/geometry file.  A user-supplied
-equilibrium file remains optional, while GX/stella are independent validation
-programs rather than geometry sources.
+Acceptance gate: **passed**. W7-X runs from a named configuration through the
+installed VMEC++ dependency without a repository-stored design/geometry file.
+A user-supplied equilibrium file remains optional, while GX/stella are
+independent validation programs rather than canonical geometry sources. The
+two open comparison bullets above tighten cross-code numerical parity; they do
+not block the live-provider architecture.
 
 ## Priority 3: Preserve and Close the W7-X Scientific Validation Gate
 
