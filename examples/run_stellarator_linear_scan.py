@@ -213,6 +213,15 @@ def _parse_args(argv: list[str] | None = None):
         choices=("chebyshev", "finite_difference", "midpoint_gauss_laguerre"),
         default="chebyshev",
     )
+    parser.add_argument(
+        "--velocity-measure-normalization",
+        choices=("legacy", "full_gyroangle"),
+        default="legacy",
+        help=(
+            "use the historical B*dv*dmu measure or the physical "
+            "2*pi*B*dv*dmu measure consistent with the normalized Maxwellian"
+        ),
+    )
     parser.add_argument("--n-kx", type=int, default=3)
     parser.add_argument("--kx-max", type=float, default=0.45)
     parser.add_argument("--ky-values", default="0.0,0.35")
@@ -587,6 +596,15 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
         temperature=args.electron_temperature,
         zonal_correction=args.zonal_correction,
     )
+    phase_space_measure = None
+    if args.velocity_measure_normalization == "full_gyroangle":
+        phase_space_measure = (
+            2.0
+            * jnp.pi
+            * geometry.B[:, None, None]
+            * velocity.w_vpar[None, :, None]
+            * velocity.w_mu[None, None, :]
+        )
     precompute = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -599,6 +617,7 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
         velocity_recurrence_rate=args.velocity_recurrence_rate,
         mode_connectivity=connectivity,
         parallel_derivative_model=args.parallel_derivative_model,
+        phase_space_measure=phase_space_measure,
     )
     state = _initial_state(velocity, parallel, fourier, args.initial_amplitude)
     solve_phi = jax.jit(lambda state_value: solve_field_from_state(state_value, precompute))
@@ -869,6 +888,7 @@ def _write_scan_outputs(output_dir: Path, scan, geometry, fourier, args, geometr
             "n_vpar": args.n_vpar,
             "n_mu": args.n_mu,
             "velocity_backend": args.velocity_backend,
+            "velocity_measure_normalization": args.velocity_measure_normalization,
             "n_kx": args.n_kx,
             "kx_max": args.kx_max,
             "ky_values": list(ky),
