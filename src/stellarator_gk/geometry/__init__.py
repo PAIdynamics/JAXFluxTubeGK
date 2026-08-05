@@ -43,6 +43,20 @@ from .provider import (
     resolve_geometry,
     validate_geometry_result,
 )
+from .gx_eik_adapter import (
+    GxEikData,
+    GxEikGeometryProvider,
+    load_gx_eik_data,
+    resample_gx_eik_data,
+)
+from .stella_adapter import (
+    STELLA_GEOMETRY_COLUMNS,
+    STELLA_GLOBAL_COLUMNS,
+    StellaGeometryData,
+    StellaGeometryProvider,
+    has_duplicate_stella_endpoint,
+    load_stella_geometry_data,
+)
 
 __all__ = [
     "AnalyticGeometry",
@@ -63,7 +77,13 @@ __all__ = [
     "GeometryRequest",
     "GeometryResult",
     "GeometrySignConvention",
+    "GxEikData",
+    "GxEikGeometryProvider",
     "PhysicalFluxTubeGeometry",
+    "STELLA_GEOMETRY_COLUMNS",
+    "STELLA_GLOBAL_COLUMNS",
+    "StellaGeometryData",
+    "StellaGeometryProvider",
     "build_boozer_parallel_grid",
     "build_circular_geometry",
     "build_desc_geometry_from_arrays",
@@ -81,8 +101,12 @@ __all__ = [
     "internal_geometry_from_result",
     "k_perp_squared",
     "load_desc_equilibrium",
+    "load_gx_eik_data",
+    "load_stella_geometry_data",
     "map_physical_to_internal_geometry",
     "resolve_geometry",
+    "resample_gx_eik_data",
     "sample_boozer_field_line",
+    "has_duplicate_stella_endpoint",
     "validate_geometry_result",
 ]

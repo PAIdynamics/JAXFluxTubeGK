@@ -16,7 +16,7 @@ from .flux_tube import FluxTubeGeometry, PhysicalFluxTubeGeometry, map_physical_
 GEOMETRY_SCHEMA_VERSION = 1
 GEOMETRY_NORMALIZATION = "stellarator_gk_physical_v1"
 GEOMETRY_FIELD_UNITS = (
-    ("z", "radian"),
+    ("z", "declared_parallel_coordinate"),
     ("theta", "radian"),
     ("phi", "radian"),
     ("alpha", "radian"),
@@ -63,6 +63,8 @@ class GeometryRequest:
     radial_coordinate: str = "rho"
     radial_value: float = 0.5
     alpha: float = 0.0
+    parallel_coordinate: str = "zeta"
+    parallel_coordinate_unit: str = "radian"
     n_z: int = 32
     z_min: float = -float(np.pi)
     z_max: float = float(np.pi)
@@ -85,6 +87,8 @@ class GeometryRequest:
             raise ValueError("geometry request n_z must be at least 2")
         if self.z_max <= self.z_min:
             raise ValueError("geometry request z_max must be greater than z_min")
+        if not self.parallel_coordinate or not self.parallel_coordinate_unit:
+            raise ValueError("parallel coordinate name and unit must be non-empty")
         if self.topology not in _TOPOLOGIES:
             raise ValueError(f"topology must be one of {_TOPOLOGIES}; got {self.topology!r}")
         if self.endpoint_policy not in _ENDPOINT_POLICIES:
@@ -148,6 +152,8 @@ class GeometryMetadata:
     provenance: GeometryProvenance
     schema_version: int = GEOMETRY_SCHEMA_VERSION
     radial_coordinate: str = "rho"
+    parallel_coordinate: str = "zeta"
+    parallel_coordinate_unit: str = "radian"
     coordinate_period: float = 2.0 * float(np.pi)
     nfp: int = 1
     field_periods: float = 1.0
@@ -168,6 +174,8 @@ class GeometryMetadata:
             raise ValueError(f"unsupported metadata radial coordinate {self.radial_coordinate!r}")
         if self.coordinate_period <= 0.0:
             raise ValueError("geometry coordinate_period must be positive")
+        if not self.parallel_coordinate or not self.parallel_coordinate_unit:
+            raise ValueError("metadata parallel coordinate name and unit must be non-empty")
         if self.nfp < 1:
             raise ValueError("geometry nfp must be at least 1")
         if self.field_periods <= 0.0:
@@ -214,6 +222,8 @@ def build_geometry_metadata(
     return GeometryMetadata(
         provenance=provenance,
         radial_coordinate=request.radial_coordinate,
+        parallel_coordinate=request.parallel_coordinate,
+        parallel_coordinate_unit=request.parallel_coordinate_unit,
         coordinate_period=request.z_max - request.z_min,
         nfp=nfp,
         field_periods=request.field_periods,
@@ -277,6 +287,10 @@ def validate_geometry_result(
             raise ValueError(
                 f"provider topology mismatch: {metadata.topology!r} != {request.topology!r}"
             )
+        if metadata.parallel_coordinate != request.parallel_coordinate:
+            raise ValueError("provider parallel coordinate does not match request")
+        if metadata.parallel_coordinate_unit != request.parallel_coordinate_unit:
+            raise ValueError("provider parallel coordinate unit does not match request")
         if metadata.endpoint_policy != request.endpoint_policy:
             raise ValueError(
                 "provider endpoint policy mismatch: "

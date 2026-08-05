@@ -9,8 +9,9 @@ class GeometryProvider(Protocol):
 ```
 
 `GeometryRequest` contains only field-line selection and static grid controls:
-the named configuration, radial coordinate/value, `alpha`, parallel interval,
-topology, periodic-endpoint policy, field-period span, resolution, and dtype.
+the named configuration, radial coordinate/value, `alpha`, named parallel
+coordinate/unit and interval, topology, periodic-endpoint policy, field-period
+span, resolution, and dtype.
 `GeometryResult` contains a `ParallelGrid`, a
 `PhysicalFluxTubeGeometry`, and immutable `GeometryMetadata`. The solver calls
 `internal_geometry_from_result` after the provider boundary; providers do not
@@ -28,8 +29,10 @@ record this version and all `GeometryMetadata` fields:
 - normalization name and the unit of every physical array;
 - whether continuous provider outputs are differentiable.
 
-The version-1 normalization is `stellarator_gk_physical_v1`. Angles are in
-radians. Magnetic field, length, and flux use provider-declared references
+The version-1 normalization is `stellarator_gk_physical_v1`. `theta`, `phi`,
+and `alpha` are in radians; `z` uses the explicitly declared parallel
+coordinate and unit (for example `zeta` in radians or `zed_over_2pi` in turns).
+Magnetic field, length, and flux use provider-declared references
 `B_ref`, `L_ref`, and `psi_ref`; the complete per-field unit table is exported
 as `GEOMETRY_FIELD_UNITS`. The sign contract uses
 `alpha = theta - iota * phi`,
@@ -78,6 +81,21 @@ An in-memory provider may explicitly declare `differentiable=True` when its
 DESC evaluation preserves JAX traces. A path-backed provider cannot make that
 claim. Both forms record provider version, revision, source, and configuration
 in the result metadata.
+
+## GX/GIST and stella readers
+
+`GxEikGeometryProvider` and `StellaGeometryProvider` contain the file parsing
+that previously lived in `benchmarks.py` and the linear-scan example. Both are
+file-backed and therefore non-differentiable. They convert imported normalized
+grad-B and curvature contributions into the common physical split; the
+canonical mapper then constructs the summed solver drift coefficients.
+
+GX/GIST eik requests use a radian parallel coordinate. The adapter supports
+both the numeric ten-column layout and the older GX multi-block layout,
+resampling onto the requested endpoint-excluded grid. stella requests declare
+`parallel_coordinate="zed_over_2pi"` with unit `turn`; the adapter drops and
+rejects duplicate periodic endpoints, retains the file's field-line span, and
+converts `b.Gz` consistently for the normalized coordinate.
 
 ## Caching
 

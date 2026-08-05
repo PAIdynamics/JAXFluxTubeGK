@@ -5215,30 +5215,22 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     reference object.
     """
 
-    path = Path(path)
-    text = path.read_text()
-    if "gbdrift gradpar grho tgrid" in text:
-        return _load_gx_block_eik_geometry_reference(path, text)
-    rows = _numeric_rows(path)
-    if len(rows) < 2:
-        raise ValueError("eik geometry reference must contain a header and data rows")
-    header = tuple(rows[0])
-    data = np.asarray([row for row in rows[1:] if len(row) >= 10], dtype=float)
-    if data.ndim != 2 or data.shape[1] < 10:
-        raise ValueError("eik geometry rows must have at least 10 numeric columns")
+    from .geometry.gx_eik_adapter import load_gx_eik_data
+
+    data = load_gx_eik_data(path)
     return GxEikGeometryReference(
-        theta=data[:, 0],
-        bmag=data[:, 1],
-        gradpar=data[:, 2],
-        gds2=data[:, 3],
-        gds21=data[:, 4],
-        gds22=data[:, 5],
-        cvdrift=data[:, 6],
-        cvdrift0=data[:, 7],
-        gbdrift=data[:, 8],
-        gbdrift0=data[:, 9],
-        source=str(path),
-        header=header,
+        theta=data.theta,
+        bmag=data.bmag,
+        gradpar=data.gradpar,
+        gds2=data.gds2,
+        gds21=data.gds21,
+        gds22=data.gds22,
+        cvdrift=data.cvdrift,
+        cvdrift0=data.cvdrift0,
+        gbdrift=data.gbdrift,
+        gbdrift0=data.gbdrift0,
+        source=data.source,
+        header=data.header,
     )
 
 
@@ -5248,19 +5240,20 @@ def resample_gx_eik_geometry_reference(
 ) -> GxEikGeometryReference:
     """Interpolate a loaded GX/GS2 eik table onto requested theta nodes."""
 
-    theta = np.asarray(theta, dtype=float)
-    source_theta = np.asarray(reference.theta, dtype=float)
-    if source_theta.ndim != 1 or source_theta.size < 2:
-        raise ValueError("reference.theta must contain at least two nodes")
-    if not np.all(np.diff(source_theta) > 0):
-        raise ValueError("reference.theta must be strictly increasing")
-    kwargs = {"theta": theta}
-    for name in GxEikGeometryReference._dynamic_fields[1:]:
-        kwargs[name] = np.interp(theta, source_theta, np.asarray(getattr(reference, name)))
+    from .geometry.gx_eik_adapter import GxEikData, resample_gx_eik_data
+
+    sampled = resample_gx_eik_data(
+        GxEikData(
+            **{name: np.asarray(getattr(reference, name)) for name in reference._dynamic_fields},
+            source=reference.source,
+            header=reference.header,
+        ),
+        theta,
+    )
     return GxEikGeometryReference(
-        **kwargs,
-        source=reference.source,
-        header=reference.header,
+        **{name: getattr(sampled, name) for name in reference._dynamic_fields},
+        source=sampled.source,
+        header=sampled.header,
     )
 
 
@@ -14688,81 +14681,6 @@ def _normalize_profile_rows(values, floor: float = 1.0e-300):
     values = jnp.asarray(values, dtype=jnp.float64)
     row_sum = jnp.sum(values, axis=1, keepdims=True)
     return values / jnp.maximum(row_sum, jnp.asarray(floor, dtype=values.dtype))
-
-
-def _load_gx_block_eik_geometry_reference(path: Path, text: str) -> GxEikGeometryReference:
-    lines = text.splitlines()
-    header = _first_numeric_row(lines)
-    if len(header) < 8:
-        raise ValueError("GX eik.out header must contain at least 8 numeric values")
-    ntheta = int(round(header[2]))
-    expected_rows = ntheta + 1
-    gb_block = _parse_gx_eik_block(lines, "gbdrift gradpar grho tgrid", expected_rows, 4)
-    cv_block = _parse_gx_eik_block(lines, "cvdrift gds2 bmag tgrid", expected_rows, 4)
-    gds_block = _parse_gx_eik_block(lines, "gds21 gds22 tgrid", expected_rows, 3)
-    drift0_block = _parse_gx_eik_block(lines, "cvdrift0 gbdrift0 tgrid", expected_rows, 3)
-    theta = gb_block[:, 3]
-    _assert_same_eik_grid("cvdrift", theta, cv_block[:, 3])
-    _assert_same_eik_grid("gds21", theta, gds_block[:, 2])
-    _assert_same_eik_grid("cvdrift0", theta, drift0_block[:, 2])
-    return GxEikGeometryReference(
-        theta=theta,
-        bmag=cv_block[:, 2],
-        gradpar=gb_block[:, 1],
-        gds2=cv_block[:, 1],
-        gds21=gds_block[:, 0],
-        gds22=gds_block[:, 1],
-        gbdrift=gb_block[:, 0],
-        gbdrift0=drift0_block[:, 1],
-        cvdrift=cv_block[:, 0],
-        cvdrift0=drift0_block[:, 0],
-        source=str(path),
-        header=tuple(header),
-    )
-
-
-def _first_numeric_row(lines: list[str]) -> list[float]:
-    for line in lines:
-        try:
-            row = [float(value) for value in line.split()]
-        except ValueError:
-            continue
-        if row:
-            return row
-    raise ValueError("file contains no numeric header row")
-
-
-def _parse_gx_eik_block(
-    lines: list[str],
-    label: str,
-    expected_rows: int,
-    expected_columns: int,
-) -> np.ndarray:
-    try:
-        start = next(index for index, line in enumerate(lines) if line.strip() == label)
-    except StopIteration as exc:
-        raise ValueError(f"GX eik.out file is missing block {label!r}") from exc
-    rows = []
-    for line in lines[start + 1 :]:
-        try:
-            row = [float(value) for value in line.split()]
-        except ValueError:
-            break
-        if len(row) != expected_columns:
-            break
-        rows.append(row)
-        if len(rows) == expected_rows:
-            break
-    if len(rows) != expected_rows:
-        raise ValueError(
-            f"GX eik.out block {label!r} expected {expected_rows} rows; got {len(rows)}"
-        )
-    return np.asarray(rows, dtype=float)
-
-
-def _assert_same_eik_grid(name: str, left, right):
-    if not np.allclose(left, right, rtol=2.0e-12, atol=2.0e-12):
-        raise ValueError(f"GX eik.out block {name!r} uses an inconsistent theta grid")
 
 
 def _desc_gx_eik_reference_from_data(

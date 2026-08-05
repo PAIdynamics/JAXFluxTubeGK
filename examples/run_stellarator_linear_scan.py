@@ -34,31 +34,33 @@ import numpy as np
 
 from stellarator_gk import (
     AdiabaticElectronParams,
+    DescGeometryProvider,
     FourierGridSpec,
-    FluxTubeGeometry,
+    GxEikGeometryProvider,
+    GeometryRequest,
     PerKyModeStructureFixture,
     ParallelGridSpec,
     SpeciesParams,
+    STELLA_GLOBAL_COLUMNS,
+    StellaGeometryProvider,
     VelocityGridSpec,
-    build_boozer_parallel_grid,
     build_desc_geometry_from_arrays,
-    build_desc_geometry_from_path,
     build_fourier_grid,
-    build_flux_tube_geometry_from_gx_eik_reference,
     build_linear_residual_precompute,
     build_mode_connectivity,
     build_parallel_grid,
     build_velocity_grid,
     estimate_linear_cfl_dt,
     integrate_fixed_step,
+    internal_geometry_from_result,
     k_perp_squared,
     kperp2_weighted_average,
     linear_residual,
-    load_gx_eik_geometry_reference,
+    load_stella_geometry_data,
     mode_chain_amplitude,
     normalize_by_ky_amplitude,
     real_frequency,
-    resample_gx_eik_geometry_reference,
+    resolve_geometry,
     run_desc_gx_eik_external_geometry_gate,
     run_stellarator_geometry_preflight,
     solve_field_from_state,
@@ -93,35 +95,6 @@ GEOMETRY_FIELDS = (
     "g_xy",
     "g_yy",
 )
-
-STELLA_GEOMETRY_COLUMNS = (
-    "alpha",
-    "zed",
-    "zeta",
-    "bmag",
-    "b_dot_grad_zed",
-    "g_yy",
-    "g_xy",
-    "g_xx",
-    "B_cross_gradB_dot_grad_alpha",
-    "b_cross_kappa_dot_grad_alpha",
-    "B_cross_gradB_dot_grad_psi",
-    "bmag_psi0",
-)
-STELLA_GLOBAL_COLUMNS = (
-    "rhoc",
-    "qinp",
-    "shat",
-    "rhotor",
-    "aref",
-    "bref",
-    "dxdpsi",
-    "dydalpha",
-    "exb_nonlin",
-    "flux_fac",
-    "one_over_Grho",
-)
-
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
@@ -216,6 +189,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--rho", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.0)
     parser.add_argument("--iota", type=float)
+    parser.add_argument("--nfp", type=int, default=1)
     parser.add_argument("--n-z", type=int)
     parser.add_argument(
         "--field-line-periods",
@@ -303,28 +277,43 @@ def _load_geometry(args):
         if args.eik_reference is None:
             raise ValueError("--eik-reference is required for --geometry-source eik")
         n_z = 33 if args.n_z is None else args.n_z
-        theta = np.linspace(
-            -np.pi * args.field_line_periods,
-            np.pi * args.field_line_periods,
-            n_z,
-            endpoint=False,
+        request = GeometryRequest(
+            configuration="gx-eik-file",
+            radial_coordinate="rho",
+            radial_value=args.rho,
+            alpha=args.alpha,
+            parallel_coordinate="theta",
+            parallel_coordinate_unit="radian",
+            n_z=n_z,
+            z_min=-np.pi * args.field_line_periods,
+            z_max=np.pi * args.field_line_periods,
+            field_periods=args.field_line_periods,
         )
-        reference = load_gx_eik_geometry_reference(args.eik_reference)
-        sampled = resample_gx_eik_geometry_reference(reference, theta)
-        parallel = _parallel_grid_from_theta(theta)
-        geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+        result = resolve_geometry(
+            GxEikGeometryProvider(
+                args.eik_reference,
+                iota=1.0 if args.iota is None else args.iota,
+                nfp=args.nfp,
+            ),
+            request,
+        )
+        parallel = result.parallel_grid
+        geometry = internal_geometry_from_result(result)
+        theta = np.asarray(result.physical.theta)
         return geometry, parallel, {
             "geometry_source": "eik",
             "eik_reference": str(args.eik_reference),
-            "source": sampled.source,
-            "rho": None,
-            "radial_coordinate": "external_eik_table",
+            "source": result.metadata.provenance.source,
+            "rho": args.rho,
+            "radial_coordinate": request.radial_coordinate,
             "alpha": args.alpha,
             "n_z": n_z,
             "field_line_periods": args.field_line_periods,
             "theta_min": float(theta[0]),
             "theta_max": float(theta[-1]),
             "theta_endpoint": "excluded",
+            "schema_version": result.metadata.schema_version,
+            "provider": result.metadata.provenance.provider,
         }
 
     if args.geometry_source == "stella-geometry":
@@ -333,20 +322,30 @@ def _load_geometry(args):
     if args.desc_path is None:
         raise ValueError("--desc-path is required for --geometry-source desc-path")
     n_z = 33 if args.n_z is None else args.n_z
-    parallel = build_boozer_parallel_grid(
-        n_z=n_z,
-        n_turns=args.field_line_periods,
-        center=args.zeta_center,
-    )
-    geometry = build_desc_geometry_from_path(
-        args.desc_path,
-        parallel,
-        rho=args.rho,
+    request = GeometryRequest(
+        configuration="desc-path",
+        radial_coordinate="rho",
+        radial_value=args.rho,
         alpha=args.alpha,
-        iota=args.iota,
-        file_format=args.file_format,
-        index=args.family_index,
+        parallel_coordinate="zeta",
+        parallel_coordinate_unit="radian",
+        n_z=n_z,
+        z_min=args.zeta_center - np.pi * args.field_line_periods,
+        z_max=args.zeta_center + np.pi * args.field_line_periods,
+        field_periods=args.field_line_periods,
     )
+    result = resolve_geometry(
+        DescGeometryProvider(
+            path=args.desc_path,
+            file_format=args.file_format,
+            family_index=args.family_index,
+            iota=args.iota,
+            nfp=args.nfp,
+        ),
+        request,
+    )
+    parallel = result.parallel_grid
+    geometry = internal_geometry_from_result(result)
     return geometry, parallel, {
         "geometry_source": "desc-path",
         "desc_path": str(args.desc_path),
@@ -356,6 +355,8 @@ def _load_geometry(args):
         "n_z": n_z,
         "field_line_periods": args.field_line_periods,
         "zeta_center": args.zeta_center,
+        "schema_version": result.metadata.schema_version,
+        "provider": result.metadata.provenance.provider,
     }
 
 
@@ -448,84 +449,49 @@ def _parallel_grid_from_theta(theta):
 
 
 def _load_stella_geometry(args):
-    rows, global_header = _read_stella_geometry_file(args.stella_geometry)
-    original_n_z = int(rows.shape[0])
-    zed = rows[:, STELLA_GEOMETRY_COLUMNS.index("zed")]
-    zeta = rows[:, STELLA_GEOMETRY_COLUMNS.index("zeta")]
-    full_zeta = np.asarray(zeta, dtype=float)
-    dropped_endpoint = False
-    if not args.keep_stella_endpoint and _has_duplicate_stella_endpoint(rows):
-        rows = rows[:-1]
-        zed = zed[:-1]
-        zeta = zeta[:-1]
-        dropped_endpoint = True
-    n_z = int(rows.shape[0])
+    if args.keep_stella_endpoint:
+        raise ValueError(
+            "the public geometry contract requires periodic upper endpoints to be excluded"
+        )
+    data = load_stella_geometry_data(args.stella_geometry)
+    n_z = int(data.rows.shape[0])
     if args.n_z is not None and args.n_z != n_z:
         raise ValueError(
             f"stella geometry provides n_z={n_z} after endpoint handling; "
             "rerun stella/export an eik table for a different resolution"
         )
-
-    z = (
-        np.linspace(-0.5, 0.5, n_z, endpoint=False, dtype=float)
-        if dropped_endpoint
-        else zed / (2.0 * np.pi)
+    alpha = float(data.column("alpha")[0])
+    rho_value = data.global_value("rhoc")
+    request = GeometryRequest(
+        configuration="stella-geometry-file",
+        radial_coordinate="rho",
+        radial_value=rho_value,
+        alpha=alpha,
+        parallel_coordinate="zed_over_2pi",
+        parallel_coordinate_unit="turn",
+        n_z=n_z,
+        z_min=-0.5,
+        z_max=0.5,
+        field_periods=data.field_periods,
     )
-    parallel = _parallel_grid_from_z(z)
+    result = resolve_geometry(
+        StellaGeometryProvider(args.stella_geometry, nfp=args.nfp),
+        request,
+    )
+    parallel = result.parallel_grid
+    geometry = internal_geometry_from_result(result)
     solver_z = np.asarray(parallel.z, dtype=float)
     theta = 2.0 * np.pi * solver_z
-    phi = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("zeta")], dtype=float)
-    rho_value = _stella_rho_from_header(global_header)
-    B = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("bmag")], dtype=float)
-    # stella's b.Gz multiplies d/dzed.  The solver grid below differentiates
-    # with respect to zed/(2*pi), so F must be scaled by 1/(2*pi).
-    F = np.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("b_dot_grad_zed")], dtype=float) / (
-        2.0 * np.pi
-    )
-    D_z = np.asarray(parallel.D_z, dtype=float)
-    G = -F * (D_z @ B) / B
-    bxgb_gy = np.asarray(
-        rows[:, STELLA_GEOMETRY_COLUMNS.index("B_cross_gradB_dot_grad_alpha")],
-        dtype=float,
-    )
-    bxkappa_gy = np.asarray(
-        rows[:, STELLA_GEOMETRY_COLUMNS.index("b_cross_kappa_dot_grad_alpha")],
-        dtype=float,
-    )
-    flux_fac = float(global_header[STELLA_GLOBAL_COLUMNS.index("flux_fac")])
-    drive_prefactor = np.full(n_z, flux_fac, dtype=float)
-    geometry = FluxTubeGeometry(
-        z=parallel.z,
-        w_z=parallel.w_z,
-        theta=jnp.asarray(theta, dtype=jnp.float64),
-        phi=jnp.asarray(phi, dtype=jnp.float64),
-        rho=jnp.full_like(parallel.z, rho_value),
-        B=jnp.asarray(B, dtype=jnp.float64),
-        F=jnp.asarray(F, dtype=jnp.float64),
-        G=jnp.asarray(G, dtype=jnp.float64),
-        E_y=jnp.asarray(drive_prefactor, dtype=jnp.float64),
-        D_x=jnp.asarray(
-            rows[:, STELLA_GEOMETRY_COLUMNS.index("B_cross_gradB_dot_grad_psi")],
-            dtype=jnp.float64,
-        ),
-        D_y=jnp.asarray(bxgb_gy + bxkappa_gy, dtype=jnp.float64),
-        g_xx=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_xx")], dtype=jnp.float64),
-        g_xy=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_xy")], dtype=jnp.float64),
-        g_yy=jnp.asarray(rows[:, STELLA_GEOMETRY_COLUMNS.index("g_yy")], dtype=jnp.float64),
-        radial_coordinate="rho",
-        source="stella-geometry",
-    )
-    field_line_turns = (float(np.max(full_zeta)) - float(np.min(full_zeta))) / (2.0 * np.pi)
-    sampled_zeta_turns = (float(np.max(zeta)) - float(np.min(zeta))) / (2.0 * np.pi)
+    phi = np.asarray(result.physical.phi)
     metadata = {
         "geometry_source": "stella-geometry",
         "stella_geometry": str(args.stella_geometry),
         "source": str(args.stella_geometry),
         "rho": rho_value,
-        "alpha": float(rows[0, STELLA_GEOMETRY_COLUMNS.index("alpha")]),
+        "alpha": alpha,
         "n_z": n_z,
-        "original_n_z": original_n_z,
-        "dropped_periodic_endpoint": dropped_endpoint,
+        "original_n_z": data.original_n_z,
+        "dropped_periodic_endpoint": data.dropped_periodic_endpoint,
         "z_coordinate": "zed_over_2pi",
         "z_min": float(solver_z[0]),
         "z_max": float(solver_z[-1]),
@@ -533,76 +499,24 @@ def _load_stella_geometry(args):
         "theta_max": float(np.max(theta)),
         "zeta_min": float(np.min(phi)),
         "zeta_max": float(np.max(phi)),
-        "zeta_turns": field_line_turns,
-        "sampled_zeta_turns": sampled_zeta_turns,
-        "field_line_periods": field_line_turns,
+        "zeta_turns": data.field_periods,
+        "sampled_zeta_turns": data.field_periods,
+        "field_line_periods": data.field_periods,
         "b_dot_grad_z_scaling": "F = stella b.Gz / (2*pi)",
-        "equilibrium_drive_scaling": "E_y = stella flux_fac",
+        "equilibrium_drive_scaling": "E_y = normalized stella BxGB.Gy",
+        "schema_version": result.metadata.schema_version,
+        "provider": result.metadata.provenance.provider,
+        "nfp": result.metadata.nfp,
         "global_header": {
             name: float(value)
-            for name, value in zip(STELLA_GLOBAL_COLUMNS, global_header, strict=True)
+            for name, value in zip(
+                STELLA_GLOBAL_COLUMNS,
+                data.global_header,
+                strict=True,
+            )
         },
     }
     return geometry, parallel, metadata
-
-
-def _read_stella_geometry_file(path: Path):
-    global_header = None
-    rows = []
-    with Path(path).open() as handle:
-        for line in handle:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("#"):
-                stripped = stripped[1:].strip()
-                if not stripped:
-                    continue
-            try:
-                values = [float(item) for item in stripped.split()]
-            except ValueError:
-                continue
-            if len(values) == len(STELLA_GLOBAL_COLUMNS) and global_header is None:
-                global_header = tuple(values)
-            elif len(values) >= len(STELLA_GEOMETRY_COLUMNS):
-                rows.append(values[: len(STELLA_GEOMETRY_COLUMNS)])
-    if global_header is None:
-        raise ValueError(f"{path} is missing the stella global geometry header")
-    if not rows:
-        raise ValueError(f"{path} contains no stella geometry rows")
-    return np.asarray(rows, dtype=float), global_header
-
-
-def _has_duplicate_stella_endpoint(rows) -> bool:
-    if rows.shape[0] < 3:
-        return False
-    first = rows[0]
-    last = rows[-1]
-    zed_span = abs((last[STELLA_GEOMETRY_COLUMNS.index("zed")] - first[STELLA_GEOMETRY_COLUMNS.index("zed")]) - 2.0 * np.pi)
-    periodic_columns = (
-        "bmag",
-        "b_dot_grad_zed",
-        "g_yy",
-        "g_xx",
-        "B_cross_gradB_dot_grad_alpha",
-        "b_cross_kappa_dot_grad_alpha",
-        "bmag_psi0",
-    )
-    periodic_match = all(
-        np.isclose(
-            first[STELLA_GEOMETRY_COLUMNS.index(name)],
-            last[STELLA_GEOMETRY_COLUMNS.index(name)],
-            rtol=1.0e-8,
-            atol=1.0e-10,
-        )
-        for name in periodic_columns
-    )
-    return bool(zed_span <= 1.0e-3 and periodic_match)
-
-
-def _stella_rho_from_header(global_header: tuple[float, ...]) -> float:
-    values = dict(zip(STELLA_GLOBAL_COLUMNS, global_header, strict=True))
-    return float(values["rhoc"])
 
 
 def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
