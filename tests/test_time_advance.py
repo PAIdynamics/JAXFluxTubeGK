@@ -15,11 +15,13 @@ from stellarator_gk import (
     build_velocity_grid,
     estimate_linear_cfl_dt,
     integrate_fixed_step,
+    integrate_fixed_step_split_mirror,
     linear_growth_diagnostics,
     mode_chain_amplitude,
     normalize_by_ky_amplitude,
     real_frequency,
     rk4_step,
+    semi_lagrangian_mirror_step,
     windowed_linear_growth_diagnostics,
 )
 
@@ -36,6 +38,38 @@ def test_rk4_zero_input_invariance_and_history_times():
     np.testing.assert_allclose(result.history, 0.0, atol=0.0)
     np.testing.assert_allclose(result.times, jnp.linspace(0.0, 0.5, 6))
     assert result.history.shape == (6, 3)
+
+
+def test_semi_lagrangian_mirror_step_translates_linear_profile():
+    vpar = jnp.linspace(-2.0, 2.0, 9)
+    state = vpar[:, None, None, None, None].astype(jnp.complex128)
+    coefficient = jnp.asarray([[0.4]])
+
+    advanced = semi_lagrangian_mirror_step(state, 0.25, vpar, coefficient)
+
+    np.testing.assert_allclose(advanced[1:-1, 0, 0, 0, 0], vpar[1:-1] + 0.1)
+
+
+def test_split_mirror_integrator_matches_characteristic_for_zero_rhs():
+    vpar = jnp.linspace(-2.0, 2.0, 9)
+    state = vpar[:, None, None, None, None].astype(jnp.complex128)
+    coefficient = jnp.asarray([[0.2]])
+
+    result = integrate_fixed_step_split_mirror(
+        state,
+        0.1,
+        4,
+        lambda value: jnp.zeros_like(value),
+        vpar,
+        coefficient,
+        store_history=False,
+    )
+
+    np.testing.assert_allclose(
+        result.state[1:5, 0, 0, 0, 0],
+        vpar[1:5] + 0.08,
+        atol=1.0e-6,
+    )
 
 
 def test_rk4_fixed_step_has_fourth_order_scalar_convergence():

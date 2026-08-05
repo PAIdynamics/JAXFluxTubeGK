@@ -44,6 +44,7 @@ def test_default_velocity_cases_include_spectral_and_gkw_grid_controls():
     assert by_name["gkw_fd_16x8"].total_time == 200.0
     assert by_name["native_32x8"].velocity_backend == "midpoint_gauss_laguerre"
     assert by_name["native_32x8"].velocity_measure_normalization == "full_gyroangle"
+    assert by_name["native_32x8"].mirror_advance == "semi_lagrangian"
     assert by_name["native_32x8"].n_vpar == 32
     assert by_name["native_32x8"].n_mu == 8
     assert by_name["native_32x8"].vpar_max == 3.0
@@ -101,6 +102,7 @@ def test_native_velocity_case_selects_zero_free_gauss_laguerre_backend(tmp_path)
     assert scan_args[scan_args.index("--velocity-measure-normalization") + 1] == (
         "full_gyroangle"
     )
+    assert scan_args[scan_args.index("--mirror-advance") + 1] == "semi_lagrangian"
     assert scan_args[scan_args.index("--vpar-max") + 1] == "3.0"
     assert float(scan_args[scan_args.index("--mu-max") + 1]) > 4.9
 

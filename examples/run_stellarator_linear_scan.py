@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -53,6 +54,7 @@ from stellarator_gk import (
     build_velocity_grid,
     estimate_linear_cfl_dt,
     integrate_fixed_step,
+    integrate_fixed_step_split_mirror,
     internal_geometry_from_result,
     k_perp_squared,
     kperp2_weighted_average,
@@ -239,6 +241,11 @@ def _parse_args(argv: list[str] | None = None):
         "--parallel-derivative-model",
         choices=("matrix", "gkw_upwind", "gkw_igh"),
         default="matrix",
+    )
+    parser.add_argument(
+        "--mirror-advance",
+        choices=("explicit", "semi_lagrangian"),
+        default="explicit",
     )
     parser.add_argument("--parallel-recurrence-rate", type=float, default=0.0)
     parser.add_argument("--velocity-recurrence-rate", type=float, default=0.0)
@@ -619,18 +626,41 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
         parallel_derivative_model=args.parallel_derivative_model,
         phase_space_measure=phase_space_measure,
     )
+    mirror_coefficient = precompute.rhs.mirror_force_coeff
+    if args.mirror_advance == "semi_lagrangian":
+        precompute = replace(
+            precompute,
+            rhs=replace(
+                precompute.rhs,
+                mirror_force_coeff=jnp.zeros_like(mirror_coefficient),
+            ),
+        )
     state = _initial_state(velocity, parallel, fourier, args.initial_amplitude)
     solve_phi = jax.jit(lambda state_value: solve_field_from_state(state_value, precompute))
-    advance_window = jax.jit(
-        lambda state_value: integrate_fixed_step(
-            state_value,
-            args.dt,
-            args.steps_per_window,
-            linear_residual,
-            precompute,
-            store_history=False,
-        ).state
-    )
+    if args.mirror_advance == "semi_lagrangian":
+        advance_window = jax.jit(
+            lambda state_value: integrate_fixed_step_split_mirror(
+                state_value,
+                args.dt,
+                args.steps_per_window,
+                linear_residual,
+                velocity.vpar,
+                mirror_coefficient,
+                precompute,
+                store_history=False,
+            ).state
+        )
+    else:
+        advance_window = jax.jit(
+            lambda state_value: integrate_fixed_step(
+                state_value,
+                args.dt,
+                args.steps_per_window,
+                linear_residual,
+                precompute,
+                store_history=False,
+            ).state
+        )
 
     times = []
     log_amplitudes = []
@@ -894,6 +924,7 @@ def _write_scan_outputs(output_dir: Path, scan, geometry, fourier, args, geometr
             "ky_values": list(ky),
             "ikxspace": args.ikxspace,
             "parallel_derivative_model": args.parallel_derivative_model,
+            "mirror_advance": args.mirror_advance,
             "species": {
                 "charge": args.charge,
                 "mass": args.mass,

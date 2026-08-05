@@ -38,6 +38,7 @@ class StellaVelocityCase:
     n_mu: int
     velocity_backend: str = "chebyshev"
     velocity_measure_normalization: str = "legacy"
+    mirror_advance: str = "explicit"
     vpar_max: float = 2.0
     mu_max: float = 1.5
     dt: float = 0.02
@@ -94,6 +95,7 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             n_mu=8,
             velocity_backend="midpoint_gauss_laguerre",
             velocity_measure_normalization="full_gyroangle",
+            mirror_advance="semi_lagrangian",
             vpar_max=3.0,
             mu_max=4.916958697837631,
         ),
@@ -272,6 +274,8 @@ def _scan_args(
         case.velocity_backend,
         "--velocity-measure-normalization",
         case.velocity_measure_normalization,
+        "--mirror-advance",
+        case.mirror_advance,
         "--density",
         "1.0",
         "--temperature",

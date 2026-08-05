@@ -116,6 +116,93 @@ def integrate_fixed_step(
     )
 
 
+def semi_lagrangian_mirror_step(state, dt, vpar, mirror_coefficient):
+    """Advance ``dg/dt = a(mu,z) dg/dvpar`` by linear characteristic tracing.
+
+    The distribution must use ``(vpar,mu,z,kx,ky)`` ordering and the parallel
+    velocity nodes must be uniformly spaced. Values traced beyond the velocity
+    domain use a zero-incoming boundary condition.
+    """
+
+    state = jnp.asarray(state)
+    vpar = jnp.asarray(vpar)
+    coefficient = jnp.asarray(mirror_coefficient)
+    if state.ndim != 5:
+        raise ValueError("state must have shape (vpar,mu,z,kx,ky)")
+    if coefficient.shape != state.shape[1:3]:
+        raise ValueError("mirror_coefficient must have shape (mu,z)")
+    if vpar.ndim != 1 or vpar.shape[0] != state.shape[0] or vpar.shape[0] < 2:
+        raise ValueError("vpar must be one-dimensional and match the state")
+
+    spacing = vpar[1] - vpar[0]
+    source_index = (
+        jnp.arange(vpar.shape[0], dtype=vpar.dtype)[:, None, None]
+        + jnp.asarray(dt, dtype=vpar.dtype) * coefficient[None, :, :] / spacing
+    )
+    lower = jnp.floor(source_index).astype(jnp.int32)
+    fraction = source_index - lower
+    upper = lower + 1
+    mu_index = jnp.arange(state.shape[1])[None, :, None]
+    z_index = jnp.arange(state.shape[2])[None, None, :]
+
+    lower_values = state[
+        jnp.clip(lower, 0, state.shape[0] - 1), mu_index, z_index, :, :
+    ]
+    upper_values = state[
+        jnp.clip(upper, 0, state.shape[0] - 1), mu_index, z_index, :, :
+    ]
+    lower_valid = (lower >= 0) & (lower < state.shape[0])
+    upper_valid = (upper >= 0) & (upper < state.shape[0])
+    lower_values = jnp.where(lower_valid[..., None, None], lower_values, 0.0)
+    upper_values = jnp.where(upper_valid[..., None, None], upper_values, 0.0)
+    fraction = fraction[..., None, None]
+    return (1.0 - fraction) * lower_values + fraction * upper_values
+
+
+def integrate_fixed_step_split_mirror(
+    state,
+    dt,
+    n_steps: int,
+    rhs_fn,
+    vpar,
+    mirror_coefficient,
+    *rhs_args,
+    filter_fn=None,
+    store_history: bool = True,
+):
+    """Advance with Strang-split semi-Lagrangian mirror characteristics."""
+
+    if n_steps < 0:
+        raise ValueError("n_steps must be nonnegative")
+    state = jnp.asarray(state)
+    dt = jnp.asarray(dt)
+
+    def step(value):
+        value = semi_lagrangian_mirror_step(value, 0.5 * dt, vpar, mirror_coefficient)
+        value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        return semi_lagrangian_mirror_step(value, 0.5 * dt, vpar, mirror_coefficient)
+
+    if store_history:
+        def body(carry, _index):
+            next_state = step(carry)
+            return next_state, next_state
+
+        final_state, states = jax.lax.scan(body, state, jnp.arange(n_steps))
+        history = jnp.concatenate([state[None, ...], states], axis=0)
+        times = dt * jnp.arange(n_steps + 1, dtype=jnp.result_type(dt, jnp.float64))
+    else:
+        final_state = jax.lax.fori_loop(0, n_steps, lambda _index, value: step(value), state)
+        history = jnp.stack([state, final_state], axis=0)
+        times = jnp.asarray([0.0, dt * n_steps], dtype=jnp.result_type(dt, jnp.float64))
+    return TimeAdvanceResult(
+        state=final_state,
+        history=history,
+        times=times,
+        dt=dt,
+        n_steps=int(n_steps),
+    )
+
+
 def _integrate_fixed_step_endpoints(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=None):
     def body(_index, carry):
         return rk4_step(carry, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
