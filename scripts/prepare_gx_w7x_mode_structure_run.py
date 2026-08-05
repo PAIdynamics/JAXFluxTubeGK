@@ -25,12 +25,6 @@ if str(SCRIPT_DIR) not in sys.path:
 from prepare_gx_mode_structure_run import patch_gx_diagnostics_text  # noqa: E402
 
 
-DEFAULT_INPUT = (
-    ROOT
-    / "relevant-codes/gx/benchmarks/linear/ITG_w7x/"
-    "itg_w7x_adiabatic_electrons.in"
-)
-DEFAULT_VMEC = ROOT / "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
 DEFAULT_OUTPUT_DIR = ROOT / "fixtures/gx_w7x_mode_structure_run"
 DEFAULT_EXTERNAL_FIXTURE = ROOT / "fixtures/w7x_itg_external_mode_structure_fixture.csv"
 DEFAULT_OBSERVED_FIXTURE = ROOT / "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv"
@@ -39,6 +33,10 @@ DEFAULT_COMPARISON_OUTPUT = ROOT / "figures/w7x_itg_external_mode_structure_comp
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("GX input", args.input)
+    announce_external_path("VMEC equilibrium", args.vmec_file)
     metadata = prepare_gx_w7x_mode_structure_run(
         args.input,
         args.output_dir,
@@ -202,9 +200,9 @@ def _readme_text(metadata: dict[str, object]) -> str:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--vmec-file", type=Path, default=DEFAULT_VMEC)
+    parser.add_argument("--vmec-file", type=Path, required=True)
     parser.add_argument("--nwrite-big", type=int, default=100)
     parser.add_argument("--gx-executable", default="path/to/gx")
     parser.add_argument("--ky-values", default="0.1,0.2,0.3")

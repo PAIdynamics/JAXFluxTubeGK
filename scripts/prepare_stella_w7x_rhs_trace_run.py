@@ -26,7 +26,6 @@ import shutil
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_STELLA_SOURCE = ROOT / "relevant-codes/stella"
 DEFAULT_REFERENCE_RUN = ROOT / "fixtures/stella_w7x_mode_structure_run"
 DEFAULT_INPUT = DEFAULT_REFERENCE_RUN / "stella_w7x_adiabatic_electrons.in"
 DEFAULT_VMEC = DEFAULT_REFERENCE_RUN / "wout_w7x.nc"
@@ -58,6 +57,9 @@ class PreparedStellaW7xRhsTraceRun:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("stella source", args.stella_source)
     prepared = prepare_stella_w7x_rhs_trace_run(
         stella_source=args.stella_source,
         input_file=args.input_file,
@@ -79,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def prepare_stella_w7x_rhs_trace_run(
     *,
-    stella_source: Path = DEFAULT_STELLA_SOURCE,
+    stella_source: Path,
     input_file: Path = DEFAULT_INPUT,
     vmec_file: Path = DEFAULT_VMEC,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
@@ -663,7 +665,7 @@ def _display_path(path: Path) -> str:
 
 def _parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stella-source", type=Path, default=DEFAULT_STELLA_SOURCE)
+    parser.add_argument("--stella-source", type=Path, required=True)
     parser.add_argument("--input-file", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--vmec-file", type=Path, default=DEFAULT_VMEC)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)

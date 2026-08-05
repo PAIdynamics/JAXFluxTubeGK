@@ -44,6 +44,13 @@ from stellarator_gk import (
 
 def main() -> None:
     args = _parse_args()
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("GX/GIST eik", args.eik_reference)
+    if args.desc_root is not None:
+        announce_external_path("DESC source", args.desc_root)
+    for index, path in enumerate(args.gx_gist_reference):
+        announce_external_path(f"GX/GIST suite input {index}", path)
     rh = run_reduced_rosenbluth_hinton_gate(
         n_z=args.n_z,
         n_vpar=args.n_vpar,
@@ -174,7 +181,10 @@ def _run_desc_eik_export_gate(args):
 
 
 def _run_desc_gx_eik_external_gate(args):
-    desc_root = Path("relevant-codes/DESC")
+    if args.desc_root is None or args.desc_path is None:
+        raise ValueError("--desc-gx-eik requires --desc-root and --desc-path")
+    desc_root = args.desc_root.resolve()
+    print(f"DESC root: {desc_root}")
     if desc_root.exists() and str(desc_root) not in sys.path:
         sys.path.insert(0, str(desc_root))
     return run_desc_gx_eik_external_geometry_gate(
@@ -214,6 +224,7 @@ def _parse_args():
     parser.add_argument("--desc-eik", action="store_true")
     parser.add_argument("--desc-gx-eik", action="store_true")
     parser.add_argument("--gx-gist-suite", action="store_true")
+    parser.add_argument("--desc-root", type=Path)
     parser.add_argument("--rh-plateau-n-z", type=int, default=64)
     parser.add_argument("--rh-plateau-n-vpar", type=int, default=64)
     parser.add_argument("--rh-plateau-n-mu", type=int, default=16)
@@ -233,10 +244,7 @@ def _parse_args():
     parser.add_argument(
         "--eik-reference",
         type=Path,
-        default=Path(
-            "relevant-codes/gx/geometry_modules/vmec/tests/"
-            "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-        ),
+        required=True,
     )
     parser.add_argument(
         "--desc-fixture",
@@ -246,7 +254,7 @@ def _parse_args():
     parser.add_argument(
         "--desc-path",
         type=Path,
-        default=Path("relevant-codes/DESC/desc/examples/DSHAPE_output.h5"),
+        default=None,
     )
     parser.add_argument(
         "--desc-gx-eik-reference",
@@ -259,20 +267,7 @@ def _parse_args():
         "--gx-gist-reference",
         type=Path,
         action="append",
-        default=[
-            Path(
-                "relevant-codes/gx/geometry_modules/vmec/tests/"
-                "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-            ),
-            Path(
-                "relevant-codes/gx/geometry_modules/vmec/tests/"
-                "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
-            ),
-            Path(
-                "relevant-codes/gx/geometry_modules/vmec/tests/"
-                "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000"
-            ),
-        ],
+        default=[],
     )
     return parser.parse_args()
 

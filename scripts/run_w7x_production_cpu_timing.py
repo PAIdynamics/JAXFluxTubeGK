@@ -47,15 +47,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONVERGENCE_DIR = ROOT / "fixtures/w7x_itg_convergence_study"
 DEFAULT_READINESS_GATE = DEFAULT_CONVERGENCE_DIR / "production_readiness_gate.json"
 DEFAULT_OUTPUT = DEFAULT_CONVERGENCE_DIR / "production_cpu_timing.json"
-DEFAULT_EIK_REFERENCE = (
-    ROOT
-    / "relevant-codes/gx/geometry_modules/vmec/tests/"
-    "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    if args.eik_reference is not None:
+        announce_external_path("GX/GIST eik", args.eik_reference)
     artifact = run_w7x_cpu_timing(args)
     print(f"{'PASS' if artifact['passed'] else 'OPEN'}: {artifact['status']}")
     print(args.output)
@@ -128,6 +127,8 @@ def run_w7x_cpu_timing(args: argparse.Namespace) -> dict[str, object]:
 def build_timing_problem(args: argparse.Namespace, controls: dict[str, object]):
     """Assemble a deterministic W7-X timing state and residual precompute."""
 
+    if args.eik_reference is None:
+        raise ValueError("a production timing run requires --eik-reference")
     eik = load_gx_eik_geometry_reference(args.eik_reference)
     theta = np.linspace(
         -np.pi * controls["field_line_periods"],
@@ -323,7 +324,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--readiness-gate", type=Path, default=DEFAULT_READINESS_GATE)
-    parser.add_argument("--eik-reference", type=Path, default=DEFAULT_EIK_REFERENCE)
+    parser.add_argument("--eik-reference", type=Path)
     parser.add_argument(
         "--preset",
         choices=("production-control", "smoke"),

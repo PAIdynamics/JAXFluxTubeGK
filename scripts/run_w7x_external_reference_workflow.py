@@ -26,6 +26,12 @@ DEFAULT_BUNDLE = ROOT / "fixtures/gx_w7x_mode_structure_run/w7x_external_referen
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    if args.gx_root is not None:
+        announce_external_path("GX source", args.gx_root)
+    if args.gx_executable is not None:
+        announce_external_path("GX executable", args.gx_executable)
     report = run_w7x_external_reference_workflow(args)
     _write_json(args.status_output, report)
     print(f"{'PASS' if report['passed'] else 'OPEN'}: {report['status']}")
@@ -100,7 +106,7 @@ def run_w7x_external_reference_workflow(args: argparse.Namespace) -> dict[str, o
             "bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh "
             "--copy-outputs --resample-reference-to-observed-z"
         ),
-        "local_capability": _local_capability_report(paths),
+        "local_capability": _local_capability_report(paths, args),
         "commands": commands,
         "required_actions": actions,
     }
@@ -129,9 +135,6 @@ def _select_gx_executable(metadata: dict[str, object], args: argparse.Namespace)
     env_value = os.environ.get("GX_EXECUTABLE")
     if env_value:
         return Path(env_value)
-    local_candidate = ROOT / "relevant-codes/gx/gx"
-    if local_candidate.exists():
-        return local_candidate
     return _resolve(metadata.get("gx_executable", "path/to/gx"))
 
 
@@ -256,13 +259,17 @@ def _is_placeholder_executable(path: Path) -> bool:
     return str(path).replace("\\", "/").endswith("path/to/gx")
 
 
-def _local_capability_report(paths: dict[str, Path]) -> dict[str, object]:
+def _local_capability_report(
+    paths: dict[str, Path], args: argparse.Namespace
+) -> dict[str, object]:
     return {
         "gx_executable_ready": _is_executable(paths["gx_executable"]),
         "gx_on_path": shutil.which("gx"),
         "nvcc_on_path": shutil.which("nvcc"),
         "nvidia_smi_on_path": shutil.which("nvidia-smi"),
-        "gx_source_tree_exists": (ROOT / "relevant-codes/gx/src/main.cu").exists(),
+        "gx_source_tree_exists": bool(
+            args.gx_root is not None and (args.gx_root / "src/main.cu").exists()
+        ),
         "cuda_runtime_detected": shutil.which("nvidia-smi") is not None,
     }
 
@@ -305,6 +312,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--status-output", type=Path, default=DEFAULT_STATUS)
     parser.add_argument("--gx-executable", type=Path)
+    parser.add_argument("--gx-root", type=Path, help="explicit GX checkout for capability audit")
     parser.add_argument("--bundle-path", type=Path, default=DEFAULT_BUNDLE)
     parser.add_argument("--copy-vmec", action="store_true")
     parser.add_argument("--run-gx", action="store_true")

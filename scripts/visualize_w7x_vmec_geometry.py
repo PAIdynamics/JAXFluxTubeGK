@@ -17,7 +17,6 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_METADATA = ROOT / "fixtures/stella_w7x_mode_structure_run/mode_structure_run_metadata.json"
-DEFAULT_VMEC = ROOT / "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
 DEFAULT_STELLA_GEOMETRY = (
     ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"
 )
@@ -27,6 +26,9 @@ DEFAULT_PDF_OUTPUT = ROOT / "figures/w7x_vmec_geometry.pdf"
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("VMEC equilibrium", args.vmec)
     metadata = _read_json(args.metadata) if args.metadata.is_file() else {}
     torflux = float(args.torflux if args.torflux is not None else _metadata_torflux(metadata))
 
@@ -309,7 +311,7 @@ def _display_path(path: Path) -> str:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vmec", type=Path, default=DEFAULT_VMEC)
+    parser.add_argument("--vmec", type=Path, required=True)
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--stella-geometry", type=Path, default=DEFAULT_STELLA_GEOMETRY)
     parser.add_argument("--torflux", type=float, default=None)

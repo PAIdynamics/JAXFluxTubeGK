@@ -46,15 +46,14 @@ DEFAULT_OUTPUT_DIR = ROOT / "figures/w7x_itg_mode_structure_gate"
 DEFAULT_GX_PREP_METADATA = (
     ROOT / "fixtures/gx_w7x_mode_structure_run/mode_structure_run_metadata.json"
 )
-DEFAULT_EIK_REFERENCE = (
-    ROOT
-    / "relevant-codes/gx/geometry_modules/vmec/tests/"
-    "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    if args.eik_reference is not None:
+        from stellarator_gk.external import announce_external_path
+
+        announce_external_path("GX/GIST eik", args.eik_reference)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if not args.reference_fixture.exists():
         _write_pending_report(args)
@@ -113,6 +112,8 @@ def _observed_fixture_path(args) -> Path:
         if not args.observed_fixture.exists():
             raise FileNotFoundError(args.observed_fixture)
         return args.observed_fixture
+    if args.eik_reference is None:
+        raise ValueError("--run-solver requires --eik-reference")
     from examples.run_stellarator_linear_scan import main as run_scan
 
     solver_run_dir = args.output_dir / "solver_run"
@@ -376,7 +377,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("reduced", "gx-production-shape"),
         default="reduced",
     )
-    parser.add_argument("--eik-reference", type=Path, default=DEFAULT_EIK_REFERENCE)
+    parser.add_argument("--eik-reference", type=Path)
     parser.add_argument("--n-z", type=int)
     parser.add_argument("--field-line-periods", type=int)
     parser.add_argument("--n-kx", type=int)

@@ -178,8 +178,8 @@ def _summary_from_term_report(label, report, *, tolerance: float) -> GateSummary
 
 
 def _run_eik_gate():
-    reference_path = Path(
-        "relevant-codes/gx/geometry_modules/vmec/tests/"
+    reference_path = _required_dependency_root("gx") / (
+        "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
     reference = load_gx_eik_geometry_reference(reference_path)
@@ -222,31 +222,44 @@ def _run_desc_eik_export_gate():
 
 
 def _run_desc_gx_eik_external_gate():
-    desc_root = Path("relevant-codes/DESC")
+    desc_root = _required_dependency_root("desc")
     if desc_root.exists() and str(desc_root) not in sys.path:
         sys.path.insert(0, str(desc_root))
     return run_desc_gx_eik_external_geometry_gate(
-        "relevant-codes/DESC/desc/examples/DSHAPE_output.h5",
+        desc_root / "desc/examples/DSHAPE_output.h5",
         "fixtures/gx_desc_dshape_rho05_alpha0.eik.out",
     )
 
 
 def _run_gx_gist_suite_gate():
+    gx_root = _required_dependency_root("gx")
     paths = (
-        Path(
-            "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / (
+            "geometry_modules/vmec/tests/"
             "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
         ),
-        Path(
-            "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / (
+            "geometry_modules/vmec/tests/"
             "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
         ),
-        Path(
-            "relevant-codes/gx/geometry_modules/vmec/tests/"
+        gx_root / (
+            "geometry_modules/vmec/tests/"
             "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000"
         ),
     )
     return run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
+
+
+def _required_dependency_root(name: str) -> Path:
+    from stellarator_gk.external import announce_external_path
+
+    variable = f"OPTIMAL_FUSION_{name.upper()}_ROOT"
+    value = os.environ.get(variable)
+    if not value:
+        raise RuntimeError(f"set {variable} to the pinned {name} checkout")
+    root = Path(value).expanduser().resolve()
+    announce_external_path(f"{name} source", root)
+    return root
 
 
 def _parallel_grid_from_fixture_z(z):

@@ -73,6 +73,9 @@ _TRACE_PROFILES = {
 
 def main() -> None:
     args = _parse_args()
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("Gyaradax source", args.gyaradax_root)
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root / "src"))
     sys.path.insert(0, str(args.gyaradax_root))
@@ -335,7 +338,7 @@ def _parse_args():
             "override the selected profile"
         ),
     )
-    parser.add_argument("--gyaradax-root", type=Path, default=Path("relevant-codes/gyaradax"))
+    parser.add_argument("--gyaradax-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--comparison-output",

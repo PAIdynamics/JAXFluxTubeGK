@@ -15,10 +15,6 @@ import shlex
 from pathlib import Path
 
 
-DEFAULT_INPUT = Path(
-    "relevant-codes/gx/benchmarks/linear/ITG_cyclone/"
-    "itg_salpha_adiabatic_electrons.in"
-)
 DEFAULT_OUTPUT_DIR = Path("fixtures/gx_cyclone_mode_structure_run")
 DEFAULT_FIXTURE_OUTPUT = Path("fixtures/gx_cyclone_mode_structure_fixture.csv")
 
@@ -209,7 +205,7 @@ def _toml_bool(value: bool) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--nwrite-big", type=int, default=1000)
     parser.add_argument("--gx-executable", default="path/to/gx")
@@ -226,6 +222,9 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("GX input", args.input)
     metadata = prepare_gx_mode_structure_run(
         args.input,
         args.output_dir,

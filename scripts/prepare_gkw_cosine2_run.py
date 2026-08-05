@@ -16,7 +16,6 @@ import shutil
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_ROOT = REPO_ROOT / "relevant-codes" / "gkw"
 DEFAULT_INPUT = REPO_ROOT / "fixtures" / "gkw_cyclone_selected_ky_linear_input.dat"
 DEFAULT_OUTPUT_ROOT = Path("/tmp/stellarator_gk_gkw_cosin2")
 PATCHED_SELECTOR = "cosin2"
@@ -72,7 +71,7 @@ COSIN2_CASE = """    case('cosin2')
 
 
 def prepare_gkw_cosine2_run(
-    source_root: Path = DEFAULT_SOURCE_ROOT,
+    source_root: Path,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     input_path: Path = DEFAULT_INPUT,
     *,
@@ -152,6 +151,7 @@ def prepare_gkw_cosine2_run(
     write_cosin2_input(input_path, patched_input)
     _write_run_readme(
         output_root,
+        source_root=source_root,
         multi_time_distr=multi_time_distr,
         state_trace=state_trace,
         selected_state_dump=selected_state_dump,
@@ -1109,6 +1109,7 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
 def _write_run_readme(
     output_root: Path,
     *,
+    source_root: Path,
     multi_time_distr: bool = False,
     state_trace: bool = False,
     selected_state_dump: bool = False,
@@ -1259,7 +1260,7 @@ coefficient construction.
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
 
-This directory was copied from `{DEFAULT_SOURCE_ROOT}` by
+This directory was copied from `{source_root}` by
 `scripts/prepare_gkw_cosine2_run.py`.
 
 Only the copied `src/init.f90` was patched.  The original GKW tree is unchanged.
@@ -1289,7 +1290,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Copy GKW to an output directory and add a cosin2 initializer."
     )
-    parser.add_argument("--source-root", type=Path, default=DEFAULT_SOURCE_ROOT)
+    parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--overwrite", action="store_true")
@@ -1372,6 +1373,9 @@ def _parse_step_list(value: str) -> tuple[int, ...]:
 
 def main() -> None:
     args = _parse_args()
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("GKW source", args.source_root)
     prepared = prepare_gkw_cosine2_run(
         source_root=args.source_root,
         output_root=args.output_root,

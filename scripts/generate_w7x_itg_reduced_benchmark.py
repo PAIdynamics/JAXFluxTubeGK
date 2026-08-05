@@ -16,21 +16,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EIK_REFERENCE = (
-    ROOT
-    / "relevant-codes/gx/geometry_modules/vmec/tests/"
-    "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-)
-DEFAULT_GX_INPUT = (
-    ROOT
-    / "relevant-codes/gx/benchmarks/linear/ITG_w7x/"
-    "itg_w7x_adiabatic_electrons.in"
-)
 DEFAULT_OUTPUT_DIR = ROOT / "fixtures/w7x_itg_reduced_benchmark"
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("GX/GIST eik", args.eik_reference)
+    announce_external_path("GX input", args.gx_input)
     sys.path.insert(0, str(ROOT))
     from examples.run_stellarator_linear_scan import main as run_scan
 
@@ -100,8 +94,8 @@ def main(argv: list[str] | None = None) -> int:
 def _parse_args(argv: list[str] | None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--eik-reference", type=Path, default=DEFAULT_EIK_REFERENCE)
-    parser.add_argument("--gx-input", type=Path, default=DEFAULT_GX_INPUT)
+    parser.add_argument("--eik-reference", type=Path, required=True)
+    parser.add_argument("--gx-input", type=Path, required=True)
     parser.add_argument("--n-z", type=int, default=33)
     parser.add_argument("--field-line-periods", type=int, default=1)
     parser.add_argument("--ky-values", default="0.0,0.1,0.2,0.3")

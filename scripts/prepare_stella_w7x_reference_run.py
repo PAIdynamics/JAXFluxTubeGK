@@ -12,13 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = ROOT / "fixtures/stella_w7x_mode_structure_run"
-DEFAULT_VMEC = ROOT / "relevant-codes/gx/benchmarks/linear/ITG_w7x/wout_w7x.nc"
-DEFAULT_EIK = (
-    ROOT
-    / "relevant-codes/gx/geometry_modules/vmec/tests/"
-    "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
-)
-DEFAULT_STELLA_EXECUTABLE = ROOT / "relevant-codes/stella/stella"
 DEFAULT_EXTERNAL_FIXTURE = ROOT / "fixtures/w7x_itg_external_mode_structure_fixture.csv"
 DEFAULT_OBSERVED_FIXTURE = ROOT / "fixtures/w7x_itg_reduced_benchmark/mode_structures.csv"
 DEFAULT_COMPARISON_OUTPUT = ROOT / "figures/w7x_itg_external_mode_structure_comparison.csv"
@@ -26,6 +19,11 @@ DEFAULT_COMPARISON_OUTPUT = ROOT / "figures/w7x_itg_external_mode_structure_comp
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    from stellarator_gk.external import announce_external_path
+
+    announce_external_path("VMEC equilibrium", args.vmec_file)
+    announce_external_path("GX/GIST eik", args.eik_reference)
+    announce_external_path("stella executable", args.stella_executable)
     metadata = prepare_stella_w7x_reference_run(
         output_dir=args.output_dir,
         vmec_file=args.vmec_file,
@@ -480,9 +478,9 @@ def _display_path(path: Path) -> str:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--vmec-file", type=Path, default=DEFAULT_VMEC)
-    parser.add_argument("--eik-reference", type=Path, default=DEFAULT_EIK)
-    parser.add_argument("--stella-executable", type=Path, default=DEFAULT_STELLA_EXECUTABLE)
+    parser.add_argument("--vmec-file", type=Path, required=True)
+    parser.add_argument("--eik-reference", type=Path, required=True)
+    parser.add_argument("--stella-executable", type=Path, required=True)
     parser.add_argument("--external-fixture", type=Path, default=DEFAULT_EXTERNAL_FIXTURE)
     parser.add_argument("--observed-fixture", type=Path, default=DEFAULT_OBSERVED_FIXTURE)
     parser.add_argument("--comparison-output", type=Path, default=DEFAULT_COMPARISON_OUTPUT)
