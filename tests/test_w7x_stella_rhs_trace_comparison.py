@@ -332,18 +332,19 @@ def test_committed_stella_rhs_trace_comparison_contract():
 
     weighted_rows = tuple(csv.DictReader((COMPARISON / "weighted_array_comparison.csv").open()))
 
-    assert status["status"] == "partial_weighted_array_comparison"
+    assert status["status"] == "weighted_array_parity_failed"
     assert status["raw_trace_used"] is True
     assert status["stella_required_record_terms_present"] is True
-    assert status["direct_array_parity_ready"] is False
+    assert status["direct_array_parity_ready"] is True
     assert contract["stella_n_z_raw"] == 257
     assert contract["stella_n_z_after_endpoint_drop"] == 256
     assert contract["stella_endpoint_drop_applied"] is True
     assert contract["stella_n_vpar"] == 32
     assert contract["solver_case"]["n_vpar"] == 16
     assert contract["inferred_stella_rhs_calls"] == 3
-    assert contract["missing_array_records"]
-    assert len(weighted_rows) == 18
+    assert contract["missing_array_records"] == []
+    assert contract["rhs_calls_explicitly_labeled"] is True
+    assert len(weighted_rows) == 30
     assert {row["quantity"] for row in weighted_rows} == {
         "distribution",
         "parallel_streaming",
@@ -351,8 +352,16 @@ def test_committed_stella_rhs_trace_comparison_contract():
         "magnetic_drift",
         "equilibrium_drive",
         "total_rhs",
+        "phi",
+        "quasineutrality_numerator",
+        "quasineutrality_denominator",
+        "normalization",
     }
-    assert min(float(row["aligned_relative_l2_error"]) for row in weighted_rows) > 0.99
+    denominator_rows = [
+        row for row in weighted_rows if row["quantity"] == "quasineutrality_denominator"
+    ]
+    assert max(float(row["aligned_relative_l2_error"]) for row in denominator_rows) < 5.0e-4
+    assert status["max_aligned_array_relative_l2_error"] > 0.99
     assert float(by_group["parallel_streaming_bundle"]["stella_rhs_fraction_of_total_l2"]) > 0.0
     assert float(by_group["mirror_force"]["stella_rhs_fraction_of_total_l2"]) > 0.0
     assert float(by_group["total_rhs"]["stella_rhs_fraction_of_total_l2"]) == 1.0

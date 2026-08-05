@@ -197,6 +197,7 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
     phase_shape = (n_z_raw, n_vpar, n_mu)
     phase_records: dict[tuple[str, str], list[np.ndarray]] = {}
     field_records: dict[tuple[str, str], list[np.ndarray]] = {}
+    scalar_records: dict[tuple[str, str], list[np.ndarray]] = {}
     occurrences: dict[tuple[str, str], int] = {}
     vpar = np.full(n_vpar, np.nan)
     mu = np.full(n_mu, np.nan)
@@ -216,15 +217,33 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
                 continue
             key = (fields[header["record"]], fields[header["term"]])
             if key != last_key:
-                stage = occurrences.get(key, 0)
+                inferred_stage = occurrences.get(key, 0)
+                if "rhs_call" in header:
+                    stage = int(fields[header["rhs_call"]]) - 1
+                    if stage != inferred_stage:
+                        raise ValueError(
+                            f"stella rhs_call is not contiguous for {key}: {stage + 1}"
+                        )
+                else:
+                    stage = inferred_stage
                 occurrences[key] = stage + 1
-                target = field_records if key[0] == "phi" else phase_records
-                shape = (n_z_raw,) if key[0] == "phi" else phase_shape
+                if key[0] == "normalization":
+                    target = scalar_records
+                    shape = (1,)
+                elif key[0] in ("phi", "quasineutrality"):
+                    target = field_records
+                    shape = (n_z_raw,)
+                else:
+                    target = phase_records
+                    shape = phase_shape
                 target.setdefault(key, []).append(np.zeros(shape, dtype=np.complex128))
                 last_key = key
             iz = int(fields[header["iz"]]) - iz_min
             value = float(fields[header["real"]]) + 1j * float(fields[header["imag"]])
-            if key[0] == "phi":
+            if key[0] == "normalization":
+                scalar_records[key][stage][0] = value
+                continue
+            if key[0] in ("phi", "quasineutrality"):
                 field_records[key][stage][iz] = value
                 continue
             iv = int(fields[header["iv"]]) - 1
@@ -245,7 +264,17 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
         ("rhs_delta", "parallel_streaming"),
         ("rhs_total", "total"),
     )
-    missing = [key for key in required if key not in phase_records and key not in field_records]
+    if summary.get("trace_format") == "stellarator_gk_stella_rhs_trace_v3":
+        required += (
+            ("quasineutrality", "numerator"),
+            ("quasineutrality", "denominator"),
+            ("normalization", "native_state_scale"),
+        )
+    missing = [
+        key
+        for key in required
+        if key not in phase_records and key not in field_records and key not in scalar_records
+    ]
     if missing:
         raise ValueError(f"raw stella trace is missing array records: {missing}")
     call_counts = {occurrences[key] for key in required}
@@ -276,6 +305,21 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
         "equilibrium_drive": phase(("rhs_delta", "equilibrium_drive_wstar"), rhs=True),
         "parallel_streaming": phase(("rhs_delta", "parallel_streaming"), rhs=True),
         "total_rhs": phase(("rhs_total", "total"), rhs=True),
+        "quasineutrality_numerator": (
+            np.stack(field_records[("quasineutrality", "numerator")], axis=0)[:, :-1]
+            if ("quasineutrality", "numerator") in field_records
+            else None
+        ),
+        "quasineutrality_denominator": (
+            np.stack(field_records[("quasineutrality", "denominator")], axis=0)[:, :-1]
+            if ("quasineutrality", "denominator") in field_records
+            else None
+        ),
+        "native_state_scale": (
+            np.stack(scalar_records[("normalization", "native_state_scale")], axis=0)[:, 0]
+            if ("normalization", "native_state_scale") in scalar_records
+            else None
+        ),
         "rhs_call_count": call_counts.pop(),
     }
 
@@ -355,6 +399,63 @@ def compare_stella_solver_arrays(stella: dict[str, Any], solver_array: Path):
                     "solver_vpar_nodes_excluded": int(np.count_nonzero(~vmask)),
                     "solver_mu_nodes_excluded": int(np.count_nonzero(~mumask)),
                     **metrics,
+                }
+            )
+        field_pairs = {"phi": solver["phi"]}
+        if stella["quasineutrality_numerator"] is not None:
+            field_pairs["quasineutrality_numerator"] = solver["quasineutrality_numerator"]
+            field_pairs["quasineutrality_denominator"] = solver[
+                "quasineutrality_denominator"
+            ]
+        for name, candidate in field_pairs.items():
+            reference = _interpolate_complex_axis(
+                stella[name][rhs_call], stella["z"], solver_z, axis=0
+            )
+            field_scale = -1.0 if name == "quasineutrality_denominator" else alignment_scale
+            metrics = weighted_complex_metrics(
+                reference[:, None, None],
+                candidate[:, None, None],
+                w_z=weights["w_z"],
+                w_vpar=[1.0],
+                w_mu=[1.0],
+                alignment_scale=field_scale,
+            )
+            rows.append(
+                {
+                    "rhs_call": rhs_call + 1,
+                    "quantity": name,
+                    "target_n_z": solver_z.size,
+                    "target_n_vpar": 1,
+                    "target_n_mu": 1,
+                    "solver_vpar_nodes_excluded": 0,
+                    "solver_mu_nodes_excluded": 0,
+                    **metrics,
+                }
+            )
+        if stella["native_state_scale"] is not None:
+            reference_scale = float(np.real(stella["native_state_scale"][rhs_call]))
+            candidate_scale = float(np.exp(solver["log_normalization"]))
+            aligned_scale = abs(reference_scale - alignment_scale * candidate_scale)
+            rows.append(
+                {
+                    "rhs_call": rhs_call + 1,
+                    "quantity": "normalization",
+                    "target_n_z": 1,
+                    "target_n_vpar": 1,
+                    "target_n_mu": 1,
+                    "solver_vpar_nodes_excluded": 0,
+                    "solver_mu_nodes_excluded": 0,
+                    "reference_weighted_l2": abs(reference_scale),
+                    "candidate_weighted_l2": abs(candidate_scale),
+                    "raw_relative_l2_error": _safe_ratio(
+                        abs(reference_scale - candidate_scale), abs(reference_scale)
+                    ),
+                    "aligned_relative_l2_error": _safe_ratio(
+                        aligned_scale, abs(reference_scale)
+                    ),
+                    "alignment_scale_real": float(np.real(alignment_scale)),
+                    "alignment_scale_imag": float(np.imag(alignment_scale)),
+                    "alignment_scale_source": "distribution_fitted",
                 }
             )
     return rows
@@ -437,31 +538,65 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
         )
         contract["inferred_stella_rhs_calls"] = len(stella_arrays["distribution"])
         contract["missing_array_records"] = [
-            "stella_quasineutrality_numerator",
-            "stella_quasineutrality_denominator",
-            "stella_log_normalization",
+            name
+            for name, available in (
+                ("stella_quasineutrality_numerator", stella_arrays["quasineutrality_numerator"]),
+                (
+                    "stella_quasineutrality_denominator",
+                    stella_arrays["quasineutrality_denominator"],
+                ),
+                ("stella_native_state_scale", stella_arrays["native_state_scale"]),
+            )
+            if available is None
         ]
-        contract["array_parity_blockers"] = [
-            "stella trace does not label the three inferred RHS calls/stages",
-            "stella trace lacks quasineutrality numerator/denominator and normalization arrays",
-            "trace forces stella mirror/streaming explicit, unlike the production growth run",
+        has_explicit_calls = stella.get("trace_format") == "stellarator_gk_stella_rhs_trace_v3"
+        contract["rhs_calls_explicitly_labeled"] = has_explicit_calls
+        contract["direct_array_parity_ready"] = has_explicit_calls and not contract[
+            "missing_array_records"
         ]
+        contract["array_parity_blockers"] = []
+        if not has_explicit_calls:
+            contract["array_parity_blockers"].append(
+                "stella trace does not label the inferred RHS calls/stages"
+            )
+        if contract["missing_array_records"]:
+            contract["array_parity_blockers"].append(
+                "stella trace lacks required quasineutrality or normalization arrays"
+            )
         status["array_parity_blockers"] = contract["array_parity_blockers"]
-        status["status"] = "partial_weighted_array_comparison"
+        status["direct_array_parity_ready"] = contract["direct_array_parity_ready"]
+        max_array_error = max(
+            float(row["aligned_relative_l2_error"])
+            for row in array_rows
+            if row["quantity"] != "normalization"
+        )
+        array_tolerance = 0.1
+        status["max_aligned_array_relative_l2_error"] = max_array_error
+        status["array_relative_l2_tolerance"] = array_tolerance
+        status["status"] = (
+            "weighted_array_parity_passed"
+            if contract["direct_array_parity_ready"] and max_array_error <= array_tolerance
+            else "weighted_array_parity_failed"
+        )
         status["comparison_kind"] = "weighted_complex_arrays_on_solver_overlap_grid"
         status["array_comparison_csv"] = str(array_comparison_output)
-        status["stella_rhs_call_selection"] = "all inferred calls reported separately"
+        status["stella_rhs_call_selection"] = (
+            "all explicitly labeled calls reported separately"
+            if has_explicit_calls
+            else "all inferred calls reported separately"
+        )
         status["interpretation"] = (
             "The external solver archive enables weighted complex comparisons for "
-            "the distribution and every RHS bundle present in stella v2. One "
-            "distribution-fitted complex scale is reused for all terms. Full parity "
-            "is not yet claimable because the three stella calls are unlabeled and "
-            "quasineutrality/normalization records are absent."
+            "the distribution, phi, RHS bundles, quasineutrality, and normalization. "
+            "One distribution-fitted complex scale is reused for all state-dependent "
+            "terms; the quasineutrality denominator uses the documented opposite-sign "
+            "solver convention. Contract completeness and numerical parity are "
+            "reported separately."
         )
-        status["passed"] = False
+        status["passed"] = status["status"] == "weighted_array_parity_passed"
         status["next_action"] = (
-            "add explicit RHS-call/stage and quasineutrality/normalization records "
-            "to the stella trace before setting array-parity tolerances"
+            "resolve the distribution/mode-structure convention mismatch, then rerun "
+            "this complete weighted array gate"
         )
 
     term_csv = output_dir / "term_norm_comparison.csv"
@@ -837,10 +972,10 @@ def _write_readme(output_dir: Path) -> None:
                 "errors with the chosen target grid's `w_z*w_vpar*w_mu` quadrature.",
                 "",
                 "When `--solver-array` is supplied, `weighted_array_comparison.csv`",
-                "retains compact metrics for every inferred stella RHS call. Raw",
-                "stella and solver arrays remain external. The current v2 result is",
-                "partial because stella call/stage labels, quasineutrality arrays,",
-                "and normalization are not present.",
+                "retains compact metrics for every labeled stella RHS call. Raw",
+                "stella and solver arrays remain external. The v3 contract includes",
+                "quasineutrality and normalization; numerical parity currently fails",
+                "the declared relative-L2 tolerance.",
                 "",
             )
         ),

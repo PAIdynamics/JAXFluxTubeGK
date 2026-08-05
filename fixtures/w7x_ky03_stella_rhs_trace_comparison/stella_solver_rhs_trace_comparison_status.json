@@ -1,22 +1,20 @@
 {
   "array_comparison_csv": "fixtures/w7x_ky03_stella_rhs_trace_comparison/weighted_array_comparison.csv",
-  "array_parity_blockers": [
-    "stella trace does not label the three inferred RHS calls/stages",
-    "stella trace lacks quasineutrality numerator/denominator and normalization arrays",
-    "trace forces stella mirror/streaming explicit, unlike the production growth run"
-  ],
+  "array_parity_blockers": [],
+  "array_relative_l2_tolerance": 0.1,
   "benchmark_name": "w7x_ky03_stella_rhs_trace_comparison",
   "comparison_kind": "weighted_complex_arrays_on_solver_overlap_grid",
-  "direct_array_parity_ready": false,
-  "interpretation": "The external solver archive enables weighted complex comparisons for the distribution and every RHS bundle present in stella v2. One distribution-fitted complex scale is reused for all terms. Full parity is not yet claimable because the three stella calls are unlabeled and quasineutrality/normalization records are absent.",
+  "direct_array_parity_ready": true,
+  "interpretation": "The external solver archive enables weighted complex comparisons for the distribution, phi, RHS bundles, quasineutrality, and normalization. One distribution-fitted complex scale is reused for all state-dependent terms; the quasineutrality denominator uses the documented opposite-sign solver convention. Contract completeness and numerical parity are reported separately.",
+  "max_aligned_array_relative_l2_error": 1.003926671358302,
   "max_scale_free_fraction_delta": 0.701555501242664,
-  "next_action": "add explicit RHS-call/stage and quasineutrality/normalization records to the stella trace before setting array-parity tolerances",
+  "next_action": "resolve the distribution/mode-structure convention mismatch, then rerun this complete weighted array gate",
   "passed": false,
-  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
   "rhs_units_after_conversion": "continuous_time_rhs_l2_for_stella_rhs_records",
   "solver_balance_status": "solver_side_rhs_balance_ready",
-  "status": "partial_weighted_array_comparison",
+  "status": "weighted_array_parity_failed",
   "stella_required_record_terms_present": true,
-  "stella_rhs_call_selection": "all inferred calls reported separately"
+  "stella_rhs_call_selection": "all explicitly labeled calls reported separately"
 }

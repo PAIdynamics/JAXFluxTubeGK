@@ -60,6 +60,28 @@ TRACE_COLUMNS_V2 = (
     "real",
     "imag",
 )
+TRACE_COLUMNS_V3 = (
+    "record",
+    "step",
+    "rhs_call",
+    "term",
+    "iky",
+    "ikx",
+    "iz",
+    "it",
+    "ivmu",
+    "iv",
+    "imu",
+    "is",
+    "vpa",
+    "mu",
+    "wgts_vpa",
+    "wgts_mu",
+    "code_time",
+    "code_dt",
+    "real",
+    "imag",
+)
 
 REQUIRED_RECORD_TERMS = (
     ("pdf_g", "input_pdf"),
@@ -70,6 +92,11 @@ REQUIRED_RECORD_TERMS = (
     ("rhs_delta", "equilibrium_drive_wstar"),
     ("rhs_delta", "parallel_streaming"),
     ("rhs_total", "total"),
+)
+V3_REQUIRED_RECORD_TERMS = REQUIRED_RECORD_TERMS + (
+    ("quasineutrality", "numerator"),
+    ("quasineutrality", "denominator"),
+    ("normalization", "native_state_scale"),
 )
 
 
@@ -92,6 +119,8 @@ class _Accumulator:
     imu_max: int | None = None
     is_min: int | None = None
     is_max: int | None = None
+    rhs_call_min: int | None = None
+    rhs_call_max: int | None = None
     vpa_min: float | None = None
     vpa_max: float | None = None
     mu_min: float | None = None
@@ -111,6 +140,7 @@ class _Accumulator:
         iv: int,
         imu: int,
         species: int,
+        rhs_call: int,
         vpa: float,
         mu: float,
         wgts_vpa: float | None,
@@ -130,6 +160,9 @@ class _Accumulator:
         self.iv_min, self.iv_max = _minmax(self.iv_min, self.iv_max, iv)
         self.imu_min, self.imu_max = _minmax(self.imu_min, self.imu_max, imu)
         self.is_min, self.is_max = _minmax(self.is_min, self.is_max, species)
+        self.rhs_call_min, self.rhs_call_max = _minmax(
+            self.rhs_call_min, self.rhs_call_max, rhs_call
+        )
         self.vpa_min, self.vpa_max = _minmax(self.vpa_min, self.vpa_max, vpa)
         self.mu_min, self.mu_max = _minmax(self.mu_min, self.mu_max, mu)
         if wgts_vpa is not None and wgts_mu is not None:
@@ -160,6 +193,7 @@ class _Accumulator:
             "iv_range": [self.iv_min, self.iv_max],
             "imu_range": [self.imu_min, self.imu_max],
             "species_range": [self.is_min, self.is_max],
+            "rhs_call_range": [self.rhs_call_min, self.rhs_call_max],
             "vpa_range": [self.vpa_min, self.vpa_max],
             "mu_range": [self.mu_min, self.mu_max],
             "velocity_weight_columns_present": self.wgts_vpa_min is not None,
@@ -184,6 +218,7 @@ def summarize_trace(
     ikx_values: set[int] = set()
     code_times: set[float] = set()
     code_dts: set[float] = set()
+    rhs_calls: set[int] = set()
     rows = 0
     with trace_path.open(encoding="utf-8") as handle:
         header = tuple(handle.readline().strip().split())
@@ -193,39 +228,40 @@ def summarize_trace(
         elif header == TRACE_COLUMNS_V2:
             trace_format = "stellarator_gk_stella_rhs_trace_v2"
             has_velocity_weights = True
+        elif header == TRACE_COLUMNS_V3:
+            trace_format = "stellarator_gk_stella_rhs_trace_v3"
+            has_velocity_weights = True
         else:
             raise ValueError(f"unexpected trace header in {trace_path}: {header}")
+        columns = {name: index for index, name in enumerate(header)}
         for line_number, line in enumerate(handle, start=2):
             parts = line.split()
             if len(parts) != len(header):
                 raise ValueError(f"malformed trace row {line_number} in {trace_path}")
-            record = parts[0]
-            term = parts[2]
-            step = int(parts[1])
-            iky = int(parts[3])
-            ikx = int(parts[4])
-            iz = int(parts[5])
-            it = int(parts[6])
-            ivmu = int(parts[7])
-            iv = int(parts[8])
-            imu = int(parts[9])
-            species = int(parts[10])
-            vpa = float(parts[11])
-            mu = float(parts[12])
+            record = parts[columns["record"]]
+            term = parts[columns["term"]]
+            step = int(parts[columns["step"]])
+            rhs_call = int(parts[columns["rhs_call"]]) if "rhs_call" in columns else 0
+            iky = int(parts[columns["iky"]])
+            ikx = int(parts[columns["ikx"]])
+            iz = int(parts[columns["iz"]])
+            it = int(parts[columns["it"]])
+            ivmu = int(parts[columns["ivmu"]])
+            iv = int(parts[columns["iv"]])
+            imu = int(parts[columns["imu"]])
+            species = int(parts[columns["is"]])
+            vpa = float(parts[columns["vpa"]])
+            mu = float(parts[columns["mu"]])
             if has_velocity_weights:
-                wgts_vpa = float(parts[13])
-                wgts_mu = float(parts[14])
-                code_time = float(parts[15])
-                code_dt = float(parts[16])
-                real = float(parts[17])
-                imag = float(parts[18])
+                wgts_vpa = float(parts[columns["wgts_vpa"]])
+                wgts_mu = float(parts[columns["wgts_mu"]])
             else:
                 wgts_vpa = None
                 wgts_mu = None
-                code_time = float(parts[13])
-                code_dt = float(parts[14])
-                real = float(parts[15])
-                imag = float(parts[16])
+            code_time = float(parts[columns["code_time"]])
+            code_dt = float(parts[columns["code_dt"]])
+            real = float(parts[columns["real"]])
+            imag = float(parts[columns["imag"]])
 
             rows += 1
             steps.add(step)
@@ -233,6 +269,7 @@ def summarize_trace(
             ikx_values.add(ikx)
             code_times.add(code_time)
             code_dts.add(code_dt)
+            rhs_calls.add(rhs_call)
             accumulators[(record, term)].add(
                 iz=iz,
                 it=it,
@@ -240,6 +277,7 @@ def summarize_trace(
                 iv=iv,
                 imu=imu,
                 species=species,
+                rhs_call=rhs_call,
                 vpa=vpa,
                 mu=mu,
                 wgts_vpa=wgts_vpa,
@@ -255,6 +293,11 @@ def summarize_trace(
         for record, term in sorted(required)
         if (record, term) not in present
     ]
+    v3_missing = [
+        {"record": record, "term": term}
+        for record, term in sorted(V3_REQUIRED_RECORD_TERMS)
+        if (record, term) not in present
+    ]
     summary = {
         "trace_path": str(trace_path),
         "trace_format": trace_format,
@@ -266,8 +309,11 @@ def summarize_trace(
         "ikx_values": sorted(ikx_values),
         "code_times": sorted(code_times),
         "code_dts": sorted(code_dts),
+        "rhs_calls": sorted(rhs_calls),
         "required_record_terms_present": not missing,
         "missing_record_terms": missing,
+        "v3_required_record_terms_present": not v3_missing,
+        "v3_missing_record_terms": v3_missing,
         "term_summaries": [
             accumulators[key].as_dict(*key)
             for key in sorted(accumulators)

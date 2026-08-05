@@ -9,8 +9,9 @@ bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
 uv run python scripts/summarize_stella_w7x_rhs_trace.py /tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat --stella-source ../stella --stella-executable /tmp/stellarator_gk_stella_w7x_rhs_trace/stella/COMPILATION/build_cmake/COMPILATION/stella --output fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json
 ```
 
-The raw v2 trace is about 329 MiB and stays outside git. The JSON summary records
+The raw v3 trace is about 332 MiB and stays outside git. The JSON summary records
 the source/executable provenance, velocity weights, row counts, selected
 indices, units, grid extents, and complex norms needed to verify that the
 external stella trace contains the requested `pdf_g`, `phi`, mirror, drift,
-drive, parallel-streaming, and total-RHS records.
+drive, parallel-streaming, total-RHS, quasineutrality numerator/denominator,
+native-state-scale, and explicit RHS-call records.

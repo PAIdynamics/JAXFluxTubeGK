@@ -13,16 +13,76 @@
   ],
   "missing_record_terms": [],
   "provenance": {
-    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace/stella/COMPILATION/build_cmake/COMPILATION/stella",
+    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/stella/COMPILATION/build_cmake/COMPILATION/stella",
     "stella_revision": "564ca09b89904c231421c17c00068a9362061278",
     "stella_source": "/Users/mohsensadr/Codes/GitHub/fusion/stella"
   },
   "required_record_terms_present": true,
+  "rhs_calls": [
+    1,
+    2,
+    3
+  ],
   "rhs_units": "stella_native_rhs_times_code_dt",
   "steps": [
     2000
   ],
   "term_summaries": [
+    {
+      "imu_range": [
+        0,
+        0
+      ],
+      "it_range": [
+        0,
+        0
+      ],
+      "iv_range": [
+        0,
+        0
+      ],
+      "ivmu_range": [
+        0,
+        0
+      ],
+      "iz_range": [
+        0,
+        0
+      ],
+      "l2_norm": 1.7320508075688772,
+      "max_abs": 1.0,
+      "mu_range": [
+        0.0,
+        0.0
+      ],
+      "record": "normalization",
+      "rhs_call_range": [
+        1,
+        3
+      ],
+      "rows": 3,
+      "species_range": [
+        0,
+        0
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 3.0,
+      "term": "native_state_scale",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        0.0,
+        0.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        0.0,
+        0.0
+      ],
+      "wgts_vpa_range": [
+        0.0,
+        0.0
+      ]
+    },
     {
       "imu_range": [
         1,
@@ -51,6 +111,10 @@
         4.917073821493017
       ],
       "record": "pdf_g",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -102,6 +166,10 @@
         0.0
       ],
       "record": "phi",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 771,
       "species_range": [
         0,
@@ -110,6 +178,116 @@
       "sum_imag": -1.092365682493453e-08,
       "sum_real": -5.676791488654657e-11,
       "term": "field_phi",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        0.0,
+        0.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        0.0,
+        0.0
+      ],
+      "wgts_vpa_range": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "imu_range": [
+        0,
+        0
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        0,
+        0
+      ],
+      "ivmu_range": [
+        0,
+        0
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 31.872232292793324,
+      "max_abs": 1.502800620594884,
+      "mu_range": [
+        0.0,
+        0.0
+      ],
+      "record": "quasineutrality",
+      "rhs_call_range": [
+        1,
+        3
+      ],
+      "rows": 771,
+      "species_range": [
+        0,
+        0
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 881.13613060039,
+      "term": "denominator",
+      "velocity_weight_columns_present": true,
+      "vpa_range": [
+        0.0,
+        0.0
+      ],
+      "weighted_velocity_l2_norm": 0.0,
+      "wgts_mu_range": [
+        0.0,
+        0.0
+      ],
+      "wgts_vpa_range": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "imu_range": [
+        0,
+        0
+      ],
+      "it_range": [
+        1,
+        1
+      ],
+      "iv_range": [
+        0,
+        0
+      ],
+      "ivmu_range": [
+        0,
+        0
+      ],
+      "iz_range": [
+        -128,
+        128
+      ],
+      "l2_norm": 2.0114424871089855e-09,
+      "max_abs": 1.5674103078994588e-10,
+      "mu_range": [
+        0.0,
+        0.0
+      ],
+      "record": "quasineutrality",
+      "rhs_call_range": [
+        1,
+        3
+      ],
+      "rows": 771,
+      "species_range": [
+        0,
+        0
+      ],
+      "sum_imag": -1.3472082816275763e-08,
+      "sum_real": 2.9305709182719755e-10,
+      "term": "numerator",
       "velocity_weight_columns_present": true,
       "vpa_range": [
         0.0,
@@ -153,6 +331,10 @@
         4.917073821493017
       ],
       "record": "rhs_delta",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -204,6 +386,10 @@
         4.917073821493017
       ],
       "record": "rhs_delta",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -255,6 +441,10 @@
         4.917073821493017
       ],
       "record": "rhs_delta",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -306,6 +496,10 @@
         4.917073821493017
       ],
       "record": "rhs_delta",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -357,6 +551,10 @@
         4.917073821493017
       ],
       "record": "rhs_delta",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -408,6 +606,10 @@
         4.917073821493017
       ],
       "record": "rhs_total",
+      "rhs_call_range": [
+        1,
+        3
+      ],
       "rows": 197376,
       "species_range": [
         1,
@@ -432,8 +634,10 @@
       ]
     }
   ],
-  "total_rows": 1382403,
-  "trace_format": "stellarator_gk_stella_rhs_trace_v2",
-  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "total_rows": 1383948,
+  "trace_format": "stellarator_gk_stella_rhs_trace_v3",
+  "trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "v3_missing_record_terms": [],
+  "v3_required_record_terms_present": true,
   "velocity_weight_columns_present": true
 }

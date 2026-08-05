@@ -4,15 +4,15 @@
     "equilibrium_drive",
     "magnetic_drift",
     "mirror_force",
+    "normalization",
     "parallel_streaming",
+    "phi",
+    "quasineutrality_denominator",
+    "quasineutrality_numerator",
     "total_rhs"
   ],
-  "array_parity_blockers": [
-    "stella trace does not label the three inferred RHS calls/stages",
-    "stella trace lacks quasineutrality numerator/denominator and normalization arrays",
-    "trace forces stella mirror/streaming explicit, unlike the production growth run"
-  ],
-  "direct_array_parity_ready": false,
+  "array_parity_blockers": [],
+  "direct_array_parity_ready": true,
   "inferred_stella_rhs_calls": 3,
   "interpolation_adapter": {
     "available": true,
@@ -25,13 +25,10 @@
     "method": "separable_linear_complex_interpolation",
     "weighting": "use_quadrature_of_the_chosen_target_grid"
   },
-  "missing_array_records": [
-    "stella_quasineutrality_numerator",
-    "stella_quasineutrality_denominator",
-    "stella_log_normalization"
-  ],
-  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "missing_array_records": [],
+  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
+  "rhs_calls_explicitly_labeled": true,
   "solver_case": {
     "case": "gkw_fd_16x8",
     "dominant_rhs_terms": [
@@ -122,8 +119,8 @@
   "stella_rhs_units": "stella_native_rhs_times_code_dt",
   "stella_step": 2000,
   "stella_total_rhs_rows": 197376,
-  "stella_total_rows": 1382403,
-  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v2",
+  "stella_total_rows": 1383948,
+  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v3",
   "stella_velocity_weight_columns_present": true,
   "stella_vpa_range": [
     -3.0,

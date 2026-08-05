@@ -12,7 +12,7 @@ complex interpolation, forbids extrapolation, and evaluates weighted
 errors with the chosen target grid's `w_z*w_vpar*w_mu` quadrature.
 
 When `--solver-array` is supplied, `weighted_array_comparison.csv`
-retains compact metrics for every inferred stella RHS call. Raw
-stella and solver arrays remain external. The current v2 result is
-partial because stella call/stage labels, quasineutrality arrays,
-and normalization are not present.
+retains compact metrics for every labeled stella RHS call. Raw
+stella and solver arrays remain external. The v3 contract includes
+quasineutrality and normalization; numerical parity currently fails
+the declared relative-L2 tolerance.

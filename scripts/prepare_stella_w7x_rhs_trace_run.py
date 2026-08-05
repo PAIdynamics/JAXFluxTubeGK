@@ -11,8 +11,9 @@ explicit RHS path by default.  The production stella W7-X comparison input keeps
 those two terms implicit, so it cannot expose their deltas inside
 ``add_explicit_gyrokinetic_terms``.  stella's explicit RHS is native ``rhs*dt``;
 the trace preserves that unit so the Python comparator can decide when to
-divide by ``code_dt``.  Trace format v2 also records stella's velocity
-quadrature weights for direct array-weighted parity checks.
+divide by ``code_dt``. Trace format v3 records stella's velocity quadrature
+weights, an explicit RHS-call index, quasineutrality numerator/denominator,
+and the native state scale for direct array-weighted parity checks.
 """
 
 from __future__ import annotations
@@ -293,6 +294,7 @@ def _insert_module_trace_state(
    integer, parameter :: stellarator_gk_trace_unit = 9304
    character(len=*), parameter :: stellarator_gk_trace_filename = '{trace_filename}'
    logical :: stellarator_gk_trace_file_initialised = .false.
+   integer :: stellarator_gk_trace_rhs_call = 0
 
 """
     if marker not in text:
@@ -322,6 +324,7 @@ def _patch_add_explicit_imports_and_locals(text: str) -> str:
     marker = "      restart_time_step = .false.\n"
     patch = (
         "      if (stellarator_gk_trace_active(istep)) then\n"
+        "         stellarator_gk_trace_rhs_call = stellarator_gk_trace_rhs_call + 1\n"
         "         call stellarator_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)\n"
         "         call stellarator_gk_write_phi_trace(istep, phi)\n"
         "      end if\n"
@@ -450,6 +453,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
       use mp, only: proc0
       use grids_z, only: nzgrid, ntubes
       use grids_kxky, only: naky, nakx
+      use arrays, only: denominator_fields
 
       implicit none
 
@@ -468,6 +472,24 @@ STELLA_RHS_TRACE_HELPERS = r"""
                  phi(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, it))
          end do
       end do
+      do it = 1, ntubes
+         do iz = -nzgrid, nzgrid
+            call stellarator_gk_write_trace_row('quasineutrality', 'numerator', istep, iz, it, &
+                 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, &
+                 phi(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, it) * &
+                 denominator_fields(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz))
+         end do
+      end do
+      do it = 1, ntubes
+         do iz = -nzgrid, nzgrid
+            call stellarator_gk_write_trace_row('quasineutrality', 'denominator', istep, iz, it, &
+                 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, &
+                 cmplx(denominator_fields(stellarator_gk_trace_iky, &
+                 stellarator_gk_trace_ikx, iz), 0.0))
+         end do
+      end do
+      call stellarator_gk_write_trace_row('normalization', 'native_state_scale', istep, 0, 0, &
+           0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, cmplx(1.0, 0.0))
       close (stellarator_gk_trace_unit)
 
    end subroutine stellarator_gk_write_phi_trace
@@ -480,7 +502,7 @@ STELLA_RHS_TRACE_HELPERS = r"""
          open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
               status='replace', action='write')
          write (stellarator_gk_trace_unit, '(A)') &
-              'record step term iky ikx iz it ivmu iv imu is vpa mu ' // &
+              'record step rhs_call term iky ikx iz it ivmu iv imu is vpa mu ' // &
               'wgts_vpa wgts_mu code_time code_dt real imag'
          stellarator_gk_trace_file_initialised = .true.
       else
@@ -503,11 +525,12 @@ STELLA_RHS_TRACE_HELPERS = r"""
       complex, intent(in) :: value
 
       write (stellarator_gk_trace_unit, &
-           '(A,1X,I0,1X,A,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,' // &
+           '(A,1X,I0,1X,I0,1X,A,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,1X,I0,' // &
            '1X,ES24.16E3,1X,ES24.16E3,1X,ES24.16E3,1X,ES24.16E3,' // &
            '1X,ES24.16E3,1X,ES24.16E3,' // &
            '1X,ES24.16E3,1X,ES24.16E3)') &
-           trim(record_type), istep, trim(term_name), stellarator_gk_trace_iky, &
+           trim(record_type), istep, stellarator_gk_trace_rhs_call, trim(term_name), &
+           stellarator_gk_trace_iky, &
            stellarator_gk_trace_ikx, iz, it, ivmu, iv, imu, is, vpa_value, &
            mu_value, wgts_vpa_value, wgts_mu_value, code_time, code_dt, real(value), aimag(value)
 
@@ -586,8 +609,9 @@ def _metadata_payload(
         "trace_ky_value": 0.3,
         "trace_kx_value": 0.0,
         "rhs_units": "stella_native_rhs_times_code_dt",
-        "trace_format": "stellarator_gk_stella_rhs_trace_v2",
+        "trace_format": "stellarator_gk_stella_rhs_trace_v3",
         "velocity_weight_columns": ("wgts_vpa", "wgts_mu"),
+        "rhs_call_column": "rhs_call",
         "force_explicit_stream_mirror": bool(force_explicit_stream_mirror),
         "trace_input_note": (
             "mirror and parallel streaming are forced explicit for this RHS term "
@@ -600,6 +624,9 @@ def _metadata_payload(
         "terms": (
             "pdf_g",
             "phi",
+            "quasineutrality_numerator",
+            "quasineutrality_denominator",
+            "native_state_scale",
             "mirror_force",
             "magnetic_drift_y",
             "magnetic_drift_x",

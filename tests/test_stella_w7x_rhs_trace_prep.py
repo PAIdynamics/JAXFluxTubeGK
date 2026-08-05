@@ -69,15 +69,21 @@ def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Pat
     assert "integer, parameter :: stellarator_gk_trace_step = 123" in text
     assert "integer, parameter :: stellarator_gk_trace_iky = 4" in text
     assert "integer, parameter :: stellarator_gk_trace_ikx = 1" in text
+    assert "stellarator_gk_trace_rhs_call = stellarator_gk_trace_rhs_call + 1" in text
     assert "use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu" in text
     assert "call stellarator_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)" in text
     assert "call stellarator_gk_write_phi_trace(istep, phi)" in text
+    assert "denominator_fields(stellarator_gk_trace_iky" in text
+    assert "'quasineutrality', 'numerator'" in text
+    assert "'quasineutrality', 'denominator'" in text
+    assert "'normalization', 'native_state_scale'" in text
     assert "call stellarator_gk_write_rhs_delta('mirror_force'" in text
     assert "call stellarator_gk_write_rhs_delta('magnetic_drift_y'" in text
     assert "call stellarator_gk_write_rhs_delta('magnetic_drift_x'" in text
     assert "call stellarator_gk_write_rhs_delta('equilibrium_drive_wstar'" in text
     assert "call stellarator_gk_write_rhs_delta('parallel_streaming'" in text
     assert "call stellarator_gk_write_complex_state('rhs_total', 'total', istep, rhs)" in text
+    assert "record step rhs_call term" in text
     assert "wgts_vpa wgts_mu code_time code_dt real imag" in text
     assert "wgts_vpa(iv), wgts_mu(1, iz, imu)" in text
     assert "rhs*dt" in text
@@ -165,8 +171,9 @@ def test_prepare_rhs_trace_run_writes_minimal_patched_tree(tmp_path: Path):
     assert metadata["vmec_source"] == str(vmec)
     assert metadata["trace_step"] == 20
     assert metadata["rhs_units"] == "stella_native_rhs_times_code_dt"
-    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v2"
+    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v3"
     assert metadata["velocity_weight_columns"] == ["wgts_vpa", "wgts_mu"]
+    assert metadata["rhs_call_column"] == "rhs_call"
     assert metadata["force_explicit_stream_mirror"] is True
     assert metadata["trace_output"].endswith("stellarator_gk_w7x_ky03_rhs_trace.dat")
     assert prepared.build_script.read_text().startswith("#!/usr/bin/env bash")

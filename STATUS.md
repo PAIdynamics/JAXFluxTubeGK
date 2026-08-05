@@ -134,10 +134,9 @@ The scientific W7-X gate remains open:
 - the `ky=0.3` real-frequency and phase-aligned mode-profile comparison remains
   outside tolerance;
 - the solver-side RHS balance reconstructs and is streaming dominated;
-- the retained stella trace summary is now format v2 with velocity quadrature
-  weights; the upper periodic z endpoint is now excluded before comparison,
-  while direct term-array parity remains blocked by the velocity contract and
-  missing solver-side full-array trace;
+- the retained stella trace summary is now format v3 with explicit RHS-call
+  labels, velocity quadrature, quasineutrality, and normalization; the complete
+  weighted array contract runs but numerical parity fails;
 - production convergence, CPU timing, and MHD design optimization remain
   blocked behind external W7-X parity.
 
@@ -293,6 +292,14 @@ inexact so prepared providers remain installed.
   distribution-aligned array errors stayed near one. The periodic assumption
   is therefore a real contract mismatch, but simply switching to the existing
   GKW open stencil is not a stella-parity fix.
+- Rebuilt and reran the pinned stella trace in format v3. The 332 MiB raw trace
+  remains external; its compact summary covers 1,383,948 rows, three explicit
+  RHS calls, velocity weights, quasineutrality numerator/denominator, and native
+  state scale. The complete 30-row weighted comparison is now contract-ready
+  but fails its 0.1 relative-L2 tolerance (maximum about 1.004). After applying
+  the documented opposite denominator sign, quasineutrality-denominator
+  arrays agree within `5e-4` relative L2; the distribution, phi, numerator, and RHS
+  structures remain mismatched.
 
 ### 2026-08-05: Priority 2 Live MHD Providers
 

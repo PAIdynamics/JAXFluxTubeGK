@@ -325,9 +325,9 @@ uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
   --array-comparison-output /tmp/stellarator_gk_w7x_ky03_array_comparison_t1999.csv
 ```
 
-The current v2 trace contains three unlabeled RHS calls and lacks stella-side
-quasineutrality numerator/denominator and normalization records. The comparator
-reports all three calls separately and keeps full parity blocked.
+The v3 trace labels all three RHS calls and includes stella-side quasineutrality
+numerator/denominator and native normalization records. The complete weighted
+array contract is ready, but numerical parity currently fails.
 
 The boundary discriminator is available as `--case stella_open_16x8`. It uses
 the solver's existing open-chain GKW-style upwind operator to test stella's

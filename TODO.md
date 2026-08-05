@@ -220,18 +220,17 @@ validation work in Priority 3.
 
 ## Priority 3: Preserve and Close the W7-X Scientific Validation Gate
 
-- [x] Rerun the patched sibling stella RHS trace in format v2 with `wgts_vpa`
+- [x] Rerun the patched sibling stella RHS trace in format v3 with `wgts_vpa`
   and z-dependent `wgts_mu`; require an explicit stella source/executable path
   and record its commit.
 - [x] Drop the duplicate periodic stella z endpoint before array comparison.
 - [x] Emit a solver-side selected-mode full-array trace on a stella-compatible
   `z/vpa/mu` grid, or add a documented interpolation and weighting adapter.
-- [ ] Compare velocity-weighted complex arrays for distribution, parallel
+- [x] Compare velocity-weighted complex arrays for distribution, parallel
   streaming, mirror force, magnetic drift, equilibrium drive, field-drive
   terms, total RHS, quasineutrality numerator/denominator, and normalization.
-  The v2 trace now supports partial weighted comparisons for the distribution
-  and available RHS bundles; add explicit call/stage, quasineutrality, and
-  normalization records before closing this item.
+  The complete contract is now executable and currently fails numerical parity;
+  keep downstream mode-structure and production gates blocked.
 - [x] Inspect the parallel-streaming derivative/linking convention first if
   weighted arrays confirm the current scalar mismatch.
 - [ ] After term parity passes, rerun the W7-X mode-structure gate against the
