@@ -58,8 +58,8 @@ revision = "564ca09b89904c231421c17c00068a9362061278"
 source_dir = "stella"
 install = "native"
 build = [
-  ["cmake", "-S", ".", "-B", "{build_dir}"],
-  ["cmake", "--build", "{build_dir}", "-j", "{jobs}"],
+  ["cmake", "-S", ".", "-B", "{build_dir}/COMPILATION/build_cmake"],
+  ["cmake", "--build", "{build_dir}/COMPILATION/build_cmake", "-j", "{jobs}"],
 ]
 executables = [
   "{build_dir}/stella",

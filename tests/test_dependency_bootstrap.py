@@ -36,6 +36,9 @@ def test_dependency_manifest_has_pinned_profiles():
         "PYTHONPATH": "{root}/scripts/dependency_compat/desc"
     }
     assert manifest.dependencies["gx"].install == "native"
+    assert manifest.dependencies["stella"].build[0][-1] == (
+        "{build_dir}/COMPILATION/build_cmake"
+    )
 
 
 def test_profile_resolution_is_ordered_and_deduplicated():
