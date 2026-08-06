@@ -360,8 +360,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `A_parallel` algebraic solve and coupled kinetic `phi`/`B_parallel` solve now
   agree with pinned Gyaradax precomputes. The mixed `g` to physical `f`
   transform and generalized-potential `A_parallel` coefficient also match the
-  pinned reference; RHS coupling and production electromagnetic trajectory
-  parity remain open.
+  pinned reference. Linear RHS coupling now includes the generalized-potential
+  drive and both `B_parallel` compression terms; its isolated electromagnetic
+  increment agrees with pinned Gyaradax. A conservative electromagnetic CFL
+  bound and production dispersion/growth/mode-structure trajectory parity
+  remain open, as does the pre-existing electrostatic stencil baseline gap.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

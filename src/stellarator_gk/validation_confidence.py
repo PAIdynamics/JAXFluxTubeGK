@@ -143,12 +143,14 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             superseded_for_claims=(),
             evidence=(
                 "A differentiable species-local conserving BGK model is integrated, "
-                "but no Landau/Fokker--Planck inter-species operator or A_parallel/"
-                "B_parallel evolution has passed an external validation gate."
+                "but no Landau/Fokker--Planck inter-species operator is validated. "
+                "A_parallel/B_parallel fields, the mixed-state transform, and the "
+                "isolated electromagnetic RHS increment match pinned Gyaradax; a "
+                "conservative EM timestep bound and trajectory gate remain open."
             ),
             next_action=(
-                "Implement the collision and electromagnetic field contracts in "
-                "separate slices, then compare conservation, damping, dispersion, "
+                "Add a conservative electromagnetic timestep bound, close the "
+                "electrostatic stencil baseline, and compare dispersion, growth, "
                 "and mode structure against revision-pinned independent runs."
             ),
         ),

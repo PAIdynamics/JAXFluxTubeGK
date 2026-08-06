@@ -895,7 +895,13 @@ def mirror_force(distribution, D_vpar, mirror_coefficient):
 def equilibrium_drive(phi, precompute: LinearRHSPrecompute):
     """Return ``i ky E_y J0 phi F_M Xi``."""
 
-    gyro_phi = _gyroaveraged_potential(phi, precompute)
+    gyro_phi = _gyroaveraged_potential(phi, precompute)[:, None, ...]
+    return _equilibrium_drive_from_gyrokinetic_potential(gyro_phi, precompute)
+
+
+def _equilibrium_drive_from_gyrokinetic_potential(gyro_chi, precompute):
+    """Return the equilibrium-gradient drive for an already gyroaveraged ``chi``."""
+
     coefficient = (
         1j
         * precompute.E_y[None, None, None, :, None, None]
@@ -903,7 +909,7 @@ def equilibrium_drive(phi, precompute: LinearRHSPrecompute):
     )
     result = (
         coefficient
-        * gyro_phi[:, None, :, :, :, :]
+        * jnp.asarray(gyro_chi)
         * precompute.maxwellian[..., None, None]
         * precompute.drive_factor[..., None, None]
     )
@@ -913,13 +919,17 @@ def equilibrium_drive(phi, precompute: LinearRHSPrecompute):
 def parallel_field_drive(phi, D_z, precompute: LinearRHSPrecompute):
     """Return ``-(Z/T) a_parallel F_M partial_z(J0 phi)``."""
 
-    gyro_phi = _gyroaveraged_potential(phi, precompute)
-    dz_gyro_phi = _parallel_derivative(gyro_phi, D_z)
+    gyro_phi = _gyroaveraged_potential(phi, precompute)[:, None, ...]
+    return _parallel_field_drive_from_gyroaveraged(gyro_phi, D_z, precompute)
+
+
+def _parallel_field_drive_from_gyroaveraged(gyro_field, D_z, precompute):
+    dz_gyro_field = _parallel_derivative(gyro_field, D_z)
     result = (
         -precompute.charge_over_temperature[:, None, None, None, None, None]
         * precompute.parallel_streaming_coeff[:, :, None, :, None, None]
         * precompute.maxwellian[..., None, None]
-        * dz_gyro_phi[:, None, :, :, :, :]
+        * dz_gyro_field
     )
     return _drop_single_species(result, precompute.n_species)
 
@@ -991,14 +1001,18 @@ def gkw_igh_streaming_mirror(distribution, precompute: LinearRHSPrecompute):
 def gkw_parallel_field_drive(phi, precompute: LinearRHSPrecompute):
     """Return GKW upwinded Term VII for the gyroaveraged potential."""
 
-    gyro_phi = _gyroaveraged_potential(phi, precompute)
+    gyro_phi = _gyroaveraged_potential(phi, precompute)[:, None, ...]
+    return _gkw_parallel_field_drive_from_gyroaveraged(gyro_phi, precompute)
+
+
+def _gkw_parallel_field_drive_from_gyroaveraged(gyro_field, precompute):
     d1_pos = _apply_gkw_parallel_stencil_table(
-        gyro_phi,
+        gyro_field,
         precompute.gkw_parallel_stencil.d1_pos,
         precompute.gkw_parallel_stencil,
     )
     d1_neg = _apply_gkw_parallel_stencil_table(
-        gyro_phi,
+        gyro_field,
         precompute.gkw_parallel_stencil.d1_neg,
         precompute.gkw_parallel_stencil,
     )
@@ -1009,8 +1023,8 @@ def gkw_parallel_field_drive(phi, precompute: LinearRHSPrecompute):
     )
     selected_derivative = jnp.where(
         coefficient < 0.0,
-        d1_pos[:, None, :, :, :, :],
-        d1_neg[:, None, :, :, :, :],
+        d1_pos,
+        d1_neg,
     )
     result = coefficient * selected_derivative
     return _drop_single_species(result, precompute.n_species)
@@ -1019,13 +1033,17 @@ def gkw_parallel_field_drive(phi, precompute: LinearRHSPrecompute):
 def drift_field_drive(phi, precompute: LinearRHSPrecompute):
     """Return ``-(Z/T) i omega_d F_M J0 phi``."""
 
-    gyro_phi = _gyroaveraged_potential(phi, precompute)
+    gyro_phi = _gyroaveraged_potential(phi, precompute)[:, None, ...]
+    return _drift_field_drive_from_gyroaveraged(gyro_phi, precompute)
+
+
+def _drift_field_drive_from_gyroaveraged(gyro_field, precompute):
     result = (
         -precompute.charge_over_temperature[:, None, None, None, None, None]
         * 1j
         * precompute.magnetic_drift_frequency
         * precompute.maxwellian[..., None, None]
-        * gyro_phi[:, None, :, :, :, :]
+        * jnp.asarray(gyro_field)
     )
     return _drop_single_species(result, precompute.n_species)
 
@@ -1089,15 +1107,53 @@ def velocity_recurrence_control(distribution, operator, coefficient):
 def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute):
     """Assemble the linear RHS for a supplied electrostatic potential."""
 
+    return linear_residual_from_fields(distribution, phi, precompute)
+
+
+def linear_residual_from_fields(
+    distribution,
+    phi,
+    precompute: LinearRHSPrecompute,
+    *,
+    gyrokinetic_potential=None,
+    gyro_bpar=None,
+):
+    """Assemble the linear RHS for electrostatic or electromagnetic fields.
+
+    ``gyrokinetic_potential`` is the species/velocity resolved generalized
+    potential ``J0*phi - 2*vth*vpar*J0*A_parallel + chi_B``. ``gyro_bpar`` is
+    the ``chi_B`` contribution alone, used by the two explicit magnetic
+    compression terms. Both use shape ``(species,vpar,mu,z,kx,ky)``.
+    """
+
+    gyro_phi = _gyroaveraged_potential(phi, precompute)[:, None, ...]
+    gyro_chi = gyro_phi if gyrokinetic_potential is None else jnp.asarray(
+        gyrokinetic_potential
+    )
+
     if precompute.parallel_derivative_model == "gkw_igh":
         parallel_term = gkw_igh_streaming_mirror(distribution, precompute)
-        parallel_field_term = gkw_parallel_field_drive(phi, precompute)
+        parallel_field_term = _gkw_parallel_field_drive_from_gyroaveraged(
+            gyro_phi, precompute
+        )
+        bpar_parallel_term = (
+            jnp.zeros_like(distribution)
+            if gyro_bpar is None
+            else _gkw_parallel_field_drive_from_gyroaveraged(gyro_bpar, precompute)
+        )
         mirror_term = jnp.zeros_like(distribution)
         parallel_recurrence_term = jnp.zeros_like(distribution)
         velocity_recurrence_term = jnp.zeros_like(distribution)
     elif precompute.parallel_derivative_model == "gkw_upwind":
         parallel_term = gkw_parallel_streaming(distribution, precompute)
-        parallel_field_term = gkw_parallel_field_drive(phi, precompute)
+        parallel_field_term = _gkw_parallel_field_drive_from_gyroaveraged(
+            gyro_phi, precompute
+        )
+        bpar_parallel_term = (
+            jnp.zeros_like(distribution)
+            if gyro_bpar is None
+            else _gkw_parallel_field_drive_from_gyroaveraged(gyro_bpar, precompute)
+        )
         mirror_term = mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
         parallel_recurrence_term = jnp.zeros_like(distribution)
         velocity_recurrence_term = velocity_recurrence_control(
@@ -1111,7 +1167,16 @@ def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute)
             precompute.D_z,
             precompute.parallel_streaming_coeff,
         )
-        parallel_field_term = parallel_field_drive(phi, precompute.D_z, precompute)
+        parallel_field_term = _parallel_field_drive_from_gyroaveraged(
+            gyro_phi, precompute.D_z, precompute
+        )
+        bpar_parallel_term = (
+            jnp.zeros_like(distribution)
+            if gyro_bpar is None
+            else _parallel_field_drive_from_gyroaveraged(
+                gyro_bpar, precompute.D_z, precompute
+            )
+        )
         mirror_term = mirror_force(distribution, precompute.D_vpar, precompute.mirror_force_coeff)
         parallel_recurrence_term = parallel_recurrence_control(
             distribution,
@@ -1127,9 +1192,15 @@ def linear_residual_from_phi(distribution, phi, precompute: LinearRHSPrecompute)
         parallel_term
         + magnetic_drift_advection(distribution, precompute.magnetic_drift_frequency)
         + mirror_term
-        + equilibrium_drive(phi, precompute)
+        + _equilibrium_drive_from_gyrokinetic_potential(gyro_chi, precompute)
         + parallel_field_term
-        + drift_field_drive(phi, precompute)
+        + _drift_field_drive_from_gyroaveraged(gyro_phi, precompute)
+        + bpar_parallel_term
+        + (
+            jnp.zeros_like(distribution)
+            if gyro_bpar is None
+            else _drift_field_drive_from_gyroaveraged(gyro_bpar, precompute)
+        )
         + dissipation(distribution, precompute.perpendicular_damping)
         + parallel_recurrence_term
         + velocity_recurrence_term

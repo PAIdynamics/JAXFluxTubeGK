@@ -138,8 +138,14 @@ claimed.
   incorrectly erasing physical oscillatory sign changes; a SciPy comparison
   now covers both signs beyond the asymptotic threshold.
 - This is an algebraic field foundation, not full electromagnetic evolution.
-  Coupling the fields into the kinetic RHS and passing independent
-  electromagnetic trajectory parity remain open.
+  The subsequent implementation now couples physical `f`, generalized
+  `chi=J0*phi+chi_A+chi_B`, and the two explicit `B_parallel` compression terms
+  into the linear RHS. The exact beta-zero residual, JIT, and beta-gradient
+  tests pass.
+- The isolated finite-beta RHS increment matches pinned Gyaradax on the same
+  mixed state. Full RHS equality remains limited by the already tracked
+  electrostatic GKW streaming/mirror stencil baseline, so electromagnetic
+  timestep/trajectory parity is not yet claimed.
 
 ### 2026-08-06: Conservative Collision Foundation
 

@@ -13,11 +13,12 @@ code can already run reduced stellarator scans, reduced optimization examples,
 Rosenbluth-Hinton and Cyclone gates, and several geometry/code-to-code parity
 checks. A conservative model-collision operator, a dealiased nonlinear ExB
 path with adaptive CFL control, and independently parity-checked algebraic
-`A_parallel` and coupled `phi`/`B_parallel` field solves now exist as
-development foundations. Full nonlinear turbulence validation, production DESC
-shape optimization, converged production Landau/Fokker--Planck collisions, and
-electromagnetic RHS evolution remain explicitly deferred. The pinned
-heavy-electron kinetic TEM benchmark passes.
+`A_parallel` and coupled `phi`/`B_parallel` field solves, plus their linear RHS
+coupling, now exist as development foundations. Full nonlinear turbulence
+validation, production DESC shape optimization, converged production
+Landau/Fokker--Planck collisions, and electromagnetic trajectory validation
+remain explicitly deferred. The pinned heavy-electron kinetic TEM benchmark
+passes.
 
 ## Example Geometry
 

@@ -9,6 +9,10 @@ import jax
 import jax.numpy as jnp
 
 from .physics.collisions import build_conserving_bgk_precompute, conserving_bgk_collision
+from .physics.electromagnetic import (
+    build_electromagnetic_field_precompute,
+    solve_electromagnetic_fields,
+)
 from .physics.nonlinear import estimate_nonlinear_exb_dt, nonlinear_exb_term
 from .physics.quasineutrality import (
     AdiabaticElectronParams,
@@ -20,6 +24,7 @@ from .physics.quasineutrality import (
 from .physics.rhs_terms import (
     LinearRHSPrecompute,
     build_linear_rhs_precompute,
+    linear_residual_from_fields,
     linear_residual_from_phi,
 )
 from .types import FourierGrid, ParallelGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
@@ -41,8 +46,8 @@ class LinearResidualPrecompute(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("field_model", "n_species")
 
     def __post_init__(self):
-        if self.field_model not in ("adiabatic", "kinetic"):
-            raise ValueError("field_model must be 'adiabatic' or 'kinetic'")
+        if self.field_model not in ("adiabatic", "kinetic", "electromagnetic"):
+            raise ValueError("field_model must be 'adiabatic', 'kinetic', or 'electromagnetic'")
         if self.n_species < 1:
             raise ValueError("n_species must be at least 1")
 
@@ -280,8 +285,9 @@ def build_linear_residual_precompute(
     parallel_derivative_model: str = "matrix",
     phase_space_measure=None,
     collision_frequency=None,
+    beta=None,
 ) -> LinearResidualPrecompute:
-    """Build the coupled linear RHS and electrostatic field precompute."""
+    """Build the coupled linear RHS and field precompute."""
 
     rhs = build_linear_rhs_precompute(
         velocity_grid,
@@ -312,7 +318,7 @@ def build_linear_residual_precompute(
                 w_z=geometry.w_z,
                 phase_space_measure=phase_space_measure,
             )
-        else:
+        elif normalized_model == "kinetic":
             field = build_kinetic_quasineutrality_precompute(
                 velocity_grid,
                 geometry.B,
@@ -320,6 +326,17 @@ def build_linear_residual_precompute(
                 species,
                 fourier_grid=fourier_grid,
                 phase_space_measure=phase_space_measure,
+            )
+        else:
+            if beta is None:
+                raise ValueError("beta must be supplied for the electromagnetic field model")
+            field = build_electromagnetic_field_precompute(
+                velocity_grid,
+                geometry,
+                fourier_grid,
+                species,
+                rhs.flr_factors,
+                beta=beta,
             )
     collisions = None
     if collision_frequency is not None:
@@ -363,10 +380,41 @@ def linear_residual(
 
     if not isinstance(precompute, LinearResidualPrecompute):
         raise TypeError("precomputed must be LinearResidualPrecompute or LinearRHSPrecompute")
-    solved_phi = phi if phi is not None else _solve_phi(distribution, precompute)
-    residual = linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
+    collision_distribution = distribution
+    if precompute.field_model == "electromagnetic":
+        if phi is not None:
+            raise ValueError("electromagnetic residual requires its self-consistent field solve")
+        solved_phi, apar, bpar, physical = solve_electromagnetic_fields(
+            distribution, precompute.field
+        )
+        gyro_phi = (
+            jnp.asarray(precompute.rhs.flr_factors.bessel_j0)[:, None, ...]
+            * solved_phi[None, None, None, ...]
+        )
+        gyro_bpar = (
+            precompute.field.perpendicular.bpar_chi_factor
+            * bpar[None, None, None, ...]
+        )
+        gyro_chi = (
+            gyro_phi
+            + precompute.field.ampere.apar_chi_factor * apar[None, None, None, ...]
+            + gyro_bpar
+        )
+        residual = linear_residual_from_fields(
+            physical,
+            solved_phi,
+            precompute.rhs,
+            gyrokinetic_potential=gyro_chi,
+            gyro_bpar=gyro_bpar,
+        )
+        collision_distribution = physical
+    else:
+        solved_phi = phi if phi is not None else _solve_phi(distribution, precompute)
+        residual = linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
     if precompute.collisions is not None:
-        residual = residual + conserving_bgk_collision(distribution, precompute.collisions)
+        residual = residual + conserving_bgk_collision(
+            collision_distribution, precompute.collisions
+        )
     return residual
 
 
@@ -379,6 +427,8 @@ def nonlinear_residual(
 ):
     """Return the electrostatic residual including dealiased nonlinear ExB advection."""
 
+    if precomputed.field_model == "electromagnetic":
+        raise NotImplementedError("nonlinear electromagnetic residual is not yet supported")
     solved_phi = phi if phi is not None else _solve_phi(distribution, precomputed)
     return linear_residual(
         distribution, precomputed=precomputed, phi=solved_phi
@@ -455,6 +505,8 @@ def _solve_phi(distribution, precompute: LinearResidualPrecompute):
         return solve_adiabatic_electron_phi(distribution, precompute.field)
     if precompute.field_model == "kinetic":
         return solve_kinetic_electron_phi(distribution, precompute.field)
+    if precompute.field_model == "electromagnetic":
+        return solve_electromagnetic_fields(distribution, precompute.field)[0]
     raise ValueError(f"unsupported field_model {precompute.field_model!r}")
 
 
@@ -469,6 +521,6 @@ def _coerce_precompute(geometry, params, precomputed):
 
 
 def _normalize_field_model(field_model: str) -> str:
-    if field_model not in ("adiabatic", "kinetic"):
-        raise ValueError("field_model must be 'adiabatic' or 'kinetic'")
+    if field_model not in ("adiabatic", "kinetic", "electromagnetic"):
+        raise ValueError("field_model must be 'adiabatic', 'kinetic', or 'electromagnetic'")
     return field_model

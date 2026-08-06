@@ -19,6 +19,7 @@ from stellarator_gk import (
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
+    linear_residual,
     mixed_to_physical_distribution,
     parallel_ampere_residual,
     physical_to_mixed_distribution,
@@ -26,7 +27,11 @@ from stellarator_gk import (
     solve_parallel_ampere,
     solve_perpendicular_magnetic_fields,
 )
-from stellarator_gk.tem_validation import _build_tem_system, gyaradax_tem_case_spec
+from stellarator_gk.tem_validation import (
+    _build_tem_system,
+    _initial_tem_state,
+    gyaradax_tem_case_spec,
+)
 
 
 def _setup(beta=0.01):
@@ -204,6 +209,56 @@ def test_electromagnetic_field_contract_recovers_kinetic_electrostatic_limit():
     np.testing.assert_allclose(phi, solve_kinetic_electron_phi(mixed, linear.field), rtol=3e-14)
 
 
+def test_electromagnetic_linear_residual_recovers_electrostatic_limit():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    electrostatic = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species, field_model="kinetic"
+    )
+    electromagnetic = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="electromagnetic",
+        beta=0.0,
+    )
+    mixed = jax.random.normal(
+        jax.random.key(13), (2, 8, 4, parallel.z.shape[0], 3, 2)
+    ).astype(jnp.complex128)
+
+    expected = linear_residual(mixed, precomputed=electrostatic)
+    observed = jax.jit(linear_residual)(mixed, precomputed=electromagnetic)
+
+    np.testing.assert_allclose(observed, expected, rtol=2e-13, atol=2e-13)
+
+
+def test_electromagnetic_linear_residual_has_finite_nonzero_beta_response():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    mixed = jax.random.normal(
+        jax.random.key(14), (2, 8, 4, parallel.z.shape[0], 3, 2)
+    ).astype(jnp.complex128)
+
+    def objective(beta):
+        precompute = build_linear_residual_precompute(
+            velocity,
+            parallel,
+            fourier,
+            geometry,
+            species,
+            field_model="electromagnetic",
+            beta=beta,
+        )
+        rhs = linear_residual(mixed, precomputed=precompute)
+        return jnp.sum(jnp.abs(rhs) ** 2)
+
+    value = objective(0.01)
+    derivative = jax.grad(objective)(0.01)
+    assert np.isfinite(float(value))
+    assert np.isfinite(float(derivative))
+    assert float(jnp.abs(derivative)) > 0.0
+
+
 @pytest.mark.external
 def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
     import sys
@@ -352,3 +407,131 @@ def test_perpendicular_magnetic_precompute_matches_pinned_gyaradax(gyaradax_root
             atol=2e-12,
             err_msg=name,
         )
+
+
+@pytest.mark.external
+def test_electromagnetic_rhs_increment_matches_pinned_gyaradax(gyaradax_root):
+    import sys
+
+    if str(gyaradax_root) not in sys.path:
+        sys.path.insert(0, str(gyaradax_root))
+    from gyaradax.backends import create_ops
+    from gyaradax.fields import _compute_fields, g_to_f
+    from gyaradax.geometry import compute_geometry
+    from gyaradax.params import GKParams
+    from gyaradax.solver import linear_precompute
+
+    spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
+    velocity, parallel, fourier, geometry, species, electrostatic = _build_tem_system(spec)
+    from stellarator_gk import build_mode_connectivity
+
+    observed_precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="electromagnetic",
+        parallel_recurrence_rate=0.0,
+        velocity_recurrence_rate=0.0,
+        mode_connectivity=build_mode_connectivity(fourier),
+        parallel_derivative_model=spec.parallel_derivative_model,
+        beta=0.01,
+    )
+    mixed = _initial_tem_state(electrostatic, parallel, spec)
+    mixed = mixed * (
+        1.0 + 0.1 * velocity.vpar[None, :, None, None, None, None]
+    )
+
+    kthnorm = spec.q / (2.0 * np.pi * spec.eps)
+    reference_geometry = compute_geometry(
+        q=spec.q,
+        shat=spec.shat,
+        eps=spec.eps,
+        ns=8,
+        nvpar=8,
+        nmu=4,
+        vpar_max=3.0,
+        nkx=1,
+        nky=1,
+        nperiod=2,
+        kxmax=spec.ky * kthnorm,
+        krhomax=spec.ky * kthnorm,
+        geom_type="s-alpha",
+    )
+    masses = jnp.asarray([1.0, spec.electron_mass])
+    params = GKParams(
+        adiabatic_electrons=False,
+        beta=0.01,
+        nlapar=True,
+        nlbpar=True,
+        mas=masses,
+        signz=jnp.asarray([1.0, -1.0]),
+        tmp=jnp.ones(2),
+        de=jnp.ones(2),
+        vthrat=jnp.sqrt(1.0 / masses),
+        rln=jnp.asarray([spec.density_gradient, spec.density_gradient]),
+        rlt=jnp.asarray([spec.ion_temperature_gradient, spec.electron_temperature_gradient]),
+        disp_par=0.0,
+        disp_vp=0.0,
+        disp_x=0.0,
+        disp_y=0.0,
+        drive_scale=1.0,
+        dgrid=1.0,
+        sgr_dist=float(reference_geometry["sgr_dist"]),
+        dvp=float(reference_geometry["dvp"]),
+        kxmax=float(np.max(np.abs(np.asarray(reference_geometry["kxrh"])))) or 1.0,
+        kymax=float(np.max(np.asarray(reference_geometry["krho"]))) or 1.0,
+        backend="jax",
+        mixed_precision=False,
+    )
+    reference_precompute = linear_precompute(reference_geometry, params)
+    phi_ref, apar_ref, bpar_ref = _compute_fields(
+        mixed, reference_geometry, params, reference_precompute
+    )
+    physical_ref = g_to_f(mixed, apar_ref, params, reference_precompute)
+    reference_rhs = create_ops(
+        reference_precompute, backend="jax", mixed_precision=False
+    ).linear_rhs(
+        physical_ref,
+        phi_ref,
+        reference_geometry,
+        params,
+        reference_precompute,
+        apar=apar_ref,
+        bpar=bpar_ref,
+    )
+    reference_electrostatic_rhs = create_ops(
+        reference_precompute, backend="jax", mixed_precision=False
+    ).linear_rhs(
+        physical_ref,
+        phi_ref,
+        reference_geometry,
+        params,
+        reference_precompute,
+        apar=None,
+        bpar=None,
+    )
+    phi_obs, apar_obs, bpar_obs, physical_obs = solve_electromagnetic_fields(
+        mixed, observed_precompute.field
+    )
+    observed_rhs = linear_residual(mixed, precomputed=observed_precompute)
+    from stellarator_gk import linear_residual_from_phi
+
+    observed_electrostatic_rhs = linear_residual_from_phi(
+        physical_obs, phi_obs, observed_precompute.rhs
+    )
+
+    np.testing.assert_allclose(phi_obs, phi_ref, rtol=8e-7, atol=2e-12, err_msg="phi")
+    np.testing.assert_allclose(apar_obs, apar_ref, rtol=8e-7, atol=2e-12, err_msg="apar")
+    np.testing.assert_allclose(bpar_obs, bpar_ref, rtol=8e-7, atol=2e-12, err_msg="bpar")
+    np.testing.assert_allclose(
+        physical_obs, physical_ref, rtol=8e-7, atol=2e-12, err_msg="physical_f"
+    )
+    np.testing.assert_allclose(
+        observed_rhs - observed_electrostatic_rhs,
+        reference_rhs - reference_electrostatic_rhs,
+        rtol=2e-6,
+        atol=2e-10,
+        err_msg="electromagnetic_rhs_increment",
+    )
