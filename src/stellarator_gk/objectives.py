@@ -111,8 +111,14 @@ def mode_structure_penalty(
     *,
     w_z=None,
     connectivity: ModeConnectivity | None = None,
+    phase_align: bool = False,
 ):
-    """Return a weighted squared-distance penalty for a mode structure."""
+    """Return a weighted squared-distance penalty for a mode structure.
+
+    When ``phase_align`` is true, each ``ky`` target is first multiplied by its
+    optimal unit complex phase. This removes the arbitrary eigenfunction phase
+    without allowing an amplitude rescaling.
+    """
 
     mode_structure = jnp.asarray(mode_structure)
     target = jnp.zeros_like(mode_structure) if target is None else jnp.asarray(target)
@@ -125,6 +131,17 @@ def mode_structure_penalty(
         connectivity,
         dtype=mode_structure.real.dtype,
     )
+    if phase_align:
+        overlap = jnp.sum(
+            weights[:, None, None]
+            * mask[None, :, :]
+            * jnp.conj(target)
+            * mode_structure,
+            axis=(0, 1),
+        )
+        overlap_abs = jnp.abs(overlap)
+        phase = jnp.where(overlap_abs > 0.0, overlap / overlap_abs, 1.0 + 0.0j)
+        target = target * phase[None, None, :]
     error = jnp.abs(mode_structure - target) ** 2
     numerator = jnp.sum(weights[:, None, None] * mask[None, :, :] * error)
     denominator = jnp.sum(weights) * jnp.maximum(jnp.sum(mask), 1.0)
@@ -146,6 +163,7 @@ def linear_growth_objectives(
     amplitude_floor: float = 1.0e-300,
     kperp_epsilon: float = 1.0e-12,
     softplus_temperature: float | None = None,
+    phase_align_mode_structure: bool = False,
 ) -> LinearObjectiveValues:
     """Compute scalar optimization objectives from two potential snapshots."""
 
@@ -175,6 +193,7 @@ def linear_growth_objectives(
         target=target_mode_structure,
         w_z=w_z,
         connectivity=connectivity,
+        phase_align=phase_align_mode_structure,
     )
     return LinearObjectiveValues(
         growth_rate=diagnostics.growth_rate,
@@ -210,6 +229,7 @@ def initial_value_growth_objectives(
     kperp_epsilon: float = 1.0e-12,
     softplus_temperature: float | None = None,
     store_history: bool = True,
+    phase_align_mode_structure: bool = False,
 ) -> LinearObjectiveValues:
     """Run a short fixed-step linear solve and return growth objectives."""
 
@@ -237,6 +257,7 @@ def initial_value_growth_objectives(
         amplitude_floor=amplitude_floor,
         kperp_epsilon=kperp_epsilon,
         softplus_temperature=softplus_temperature,
+        phase_align_mode_structure=phase_align_mode_structure,
     )
 
 

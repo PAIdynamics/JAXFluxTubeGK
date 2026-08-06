@@ -7,6 +7,7 @@ import pytest
 
 from stellarator_gk import (
     AdiabaticElectronParams,
+    DesignObjectiveSpec,
     FourierGridSpec,
     OptimizationKnobs,
     ParallelGridSpec,
@@ -20,6 +21,7 @@ from stellarator_gk import (
     build_optimization_species,
     build_parallel_grid,
     build_velocity_grid,
+    design_objective,
     scan_single_surface_objective,
     single_surface_objective,
     toy_gradient_descent_step,
@@ -238,6 +240,88 @@ def test_single_surface_objective_accepts_desc_geometry_arrays():
             connectivity=connectivity,
             config=config,
             geometry=bad_geometry,
+        )
+
+
+def test_design_objective_composes_named_physical_terms_and_gradients():
+    velocity, parallel, fourier, connectivity, initial_state = _grids()
+    knobs = _knobs()
+    config = _config(objective_kind="selected_growth", quasilinear_weight=0.0)
+    electrons = AdiabaticElectronParams(density=1.0, temperature=1.0, zonal_correction=False)
+    baseline = single_surface_objective(
+        knobs,
+        velocity,
+        parallel,
+        fourier,
+        initial_state,
+        electron_params=electrons,
+        connectivity=connectivity,
+        config=config,
+    )
+    target = baseline.values.mode_structure * jnp.exp(0.83j)
+    spec = DesignObjectiveSpec(
+        selected_ky=1,
+        growth_weight=0.7,
+        frequency_weight=0.2,
+        mode_structure_weight=0.3,
+        quasilinear_weight=0.01,
+        frequency_target=0.04,
+    )
+
+    def objective(temperature_gradient):
+        local_knobs = replace(knobs, temperature_gradient=temperature_gradient)
+        return design_objective(
+            local_knobs,
+            velocity,
+            parallel,
+            fourier,
+            initial_state,
+            spec,
+            electron_params=electrons,
+            connectivity=connectivity,
+            config=config,
+            target_mode_structure=target,
+        ).scalar_objective
+
+    result = design_objective(
+        knobs,
+        velocity,
+        parallel,
+        fourier,
+        initial_state,
+        spec,
+        electron_params=electrons,
+        connectivity=connectivity,
+        config=config,
+        target_mode_structure=target,
+    )
+    expected = (
+        spec.growth_weight * result.growth_objective
+        + spec.frequency_weight * result.frequency_penalty
+        + spec.mode_structure_weight * result.mode_structure_penalty
+        + spec.quasilinear_weight * result.quasilinear_proxy
+    )
+    value, gradient = jax.jit(jax.value_and_grad(objective))(knobs.temperature_gradient)
+    # The reduced grid includes a zonal k_perp=0 contribution, so the
+    # quasilinear component is O(1e9); use a scale-resolving difference step.
+    step = 3.0e-2
+    finite_difference = (
+        objective(knobs.temperature_gradient + step)
+        - objective(knobs.temperature_gradient - step)
+    ) / (2.0 * step)
+
+    np.testing.assert_allclose(result.scalar_objective, expected, rtol=2.0e-13)
+    np.testing.assert_allclose(result.mode_structure_penalty, 0.0, atol=2.0e-15)
+    np.testing.assert_allclose(value, result.scalar_objective, rtol=2.0e-12)
+    np.testing.assert_allclose(gradient, finite_difference, rtol=1.0e-3, atol=1.0e-6)
+
+
+def test_design_objective_rejects_ambiguous_frequency_branch():
+    with pytest.raises(ValueError, match="frequency objective requires selected_ky"):
+        DesignObjectiveSpec(
+            selected_ky=None,
+            growth_aggregation="max",
+            frequency_weight=1.0,
         )
 
 

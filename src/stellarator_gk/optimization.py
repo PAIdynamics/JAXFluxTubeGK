@@ -183,6 +183,67 @@ class BenchmarkOptimizationResult(_PyTreeDataclass):
     )
 
 
+@dataclass(frozen=True)
+class DesignObjectiveSpec:
+    """Stable composition contract for a differentiable linear design objective."""
+
+    selected_ky: int | None = None
+    growth_aggregation: str = "selected"
+    growth_weight: float = 1.0
+    frequency_weight: float = 0.0
+    mode_structure_weight: float = 0.0
+    quasilinear_weight: float = 0.0
+    frequency_target: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.growth_aggregation not in ("selected", "max"):
+            raise ValueError("growth_aggregation must be 'selected' or 'max'")
+        if self.growth_aggregation == "selected" and self.selected_ky is None:
+            raise ValueError("selected growth aggregation requires selected_ky")
+        if self.selected_ky is not None and self.selected_ky < 0:
+            raise ValueError("selected_ky must be nonnegative")
+        if self.frequency_weight != 0.0 and self.selected_ky is None:
+            raise ValueError("a frequency objective requires selected_ky")
+        for name in (
+            "growth_weight",
+            "frequency_weight",
+            "mode_structure_weight",
+            "quasilinear_weight",
+        ):
+            if getattr(self, name) < 0.0:
+                raise ValueError(f"{name} must be nonnegative")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class DesignObjectiveResult(_PyTreeDataclass):
+    """Scalar design loss together with all named physical components."""
+
+    scalar_objective: object
+    growth_objective: object
+    selected_growth_rate: object
+    selected_frequency: object
+    frequency_penalty: object
+    max_growth_rate: object
+    quasilinear_proxy: object
+    mode_structure_penalty: object
+    mode_structure: object
+    surface_result: SingleSurfaceOptimizationResult
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "scalar_objective",
+        "growth_objective",
+        "selected_growth_rate",
+        "selected_frequency",
+        "frequency_penalty",
+        "max_growth_rate",
+        "quasilinear_proxy",
+        "mode_structure_penalty",
+        "mode_structure",
+        "surface_result",
+    )
+
+
 def build_optimization_species(
     knobs: OptimizationKnobs,
     base_species: SpeciesParams | None = None,
@@ -239,6 +300,8 @@ def single_surface_objective(
     connectivity: ModeConnectivity | None = None,
     config: SingleSurfaceOptimizationConfig | None = None,
     geometry=None,
+    target_mode_structure=None,
+    phase_align_mode_structure: bool = False,
 ) -> SingleSurfaceOptimizationResult:
     """Evaluate a differentiable single-surface linear objective."""
 
@@ -262,10 +325,12 @@ def single_surface_objective(
         config.n_steps,
         kperp2,
         selected_ky=config.selected_ky,
+        target_mode_structure=target_mode_structure,
         w_z=geometry.w_z,
         connectivity=connectivity,
         softplus_temperature=config.softplus_temperature,
         store_history=config.store_history,
+        phase_align_mode_structure=phase_align_mode_structure,
     )
     scalar = _scalar_from_objective_values(values, config)
     return SingleSurfaceOptimizationResult(
@@ -277,6 +342,73 @@ def single_surface_objective(
     )
 
 
+def design_objective(
+    knobs: OptimizationKnobs,
+    velocity_grid: VelocityGrid,
+    parallel_grid: ParallelGrid,
+    fourier_grid: FourierGrid,
+    initial_state,
+    spec: DesignObjectiveSpec,
+    *,
+    base_species: SpeciesParams | None = None,
+    electron_params: AdiabaticElectronParams | None = None,
+    connectivity: ModeConnectivity | None = None,
+    config: SingleSurfaceOptimizationConfig | None = None,
+    geometry=None,
+    target_mode_structure=None,
+) -> DesignObjectiveResult:
+    """Evaluate the stable growth/frequency/shape/quasilinear design contract."""
+
+    base_config = config or SingleSurfaceOptimizationConfig()
+    selected_ky = spec.selected_ky
+    objective_config = replace(base_config, selected_ky=selected_ky)
+    surface = single_surface_objective(
+        knobs,
+        velocity_grid,
+        parallel_grid,
+        fourier_grid,
+        initial_state,
+        base_species=base_species,
+        electron_params=electron_params,
+        connectivity=connectivity,
+        config=objective_config,
+        geometry=geometry,
+        target_mode_structure=target_mode_structure,
+        phase_align_mode_structure=True,
+    )
+    values = surface.values
+    if selected_ky is None:
+        selected_index = jnp.argmax(values.growth_rate)
+    else:
+        if selected_ky >= fourier_grid.ky.shape[0]:
+            raise ValueError(
+                f"selected_ky {selected_ky} is outside the {fourier_grid.ky.shape[0]}-mode grid"
+            )
+        selected_index = selected_ky
+    selected_growth = values.growth_rate[selected_index]
+    selected_frequency = values.frequency[selected_index]
+    growth = (
+        selected_growth if spec.growth_aggregation == "selected" else values.max_growth_rate
+    )
+    frequency_penalty = (selected_frequency - spec.frequency_target) ** 2
+    scalar = (
+        spec.growth_weight * growth
+        + spec.frequency_weight * frequency_penalty
+        + spec.mode_structure_weight * values.mode_structure_penalty
+        + spec.quasilinear_weight * values.quasilinear_proxy
+    )
+    return DesignObjectiveResult(
+        scalar_objective=scalar,
+        growth_objective=growth,
+        selected_growth_rate=selected_growth,
+        selected_frequency=selected_frequency,
+        frequency_penalty=frequency_penalty,
+        max_growth_rate=values.max_growth_rate,
+        quasilinear_proxy=values.quasilinear_proxy,
+        mode_structure_penalty=values.mode_structure_penalty,
+        mode_structure=values.mode_structure,
+        surface_result=surface,
+    )
 def scan_single_surface_objective(
     knobs: OptimizationKnobs,
     velocity_grid: VelocityGrid,

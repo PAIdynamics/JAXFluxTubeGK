@@ -1,7 +1,42 @@
 # Optimization Integration
 
-Phase 12 introduces a small fixed-topology optimization layer. It is intended
-for reduced single-surface experiments before coupling full DESC equilibria.
+The optimization layer provides a fixed-topology design boundary for reduced
+single-surface experiments and real-provider geometry arrays.
+
+## Stable Design Objective
+
+`DesignObjectiveSpec` composes named physical terms without encoding the loss
+in an opaque objective string:
+
+```python
+from stellarator_gk import DesignObjectiveSpec, design_objective
+
+spec = DesignObjectiveSpec(
+    selected_ky=3,
+    growth_weight=1.0,
+    frequency_weight=0.1,
+    frequency_target=0.0,
+    mode_structure_weight=0.2,
+    quasilinear_weight=0.01,
+)
+result = design_objective(
+    knobs,
+    velocity_grid,
+    parallel_grid,
+    fourier_grid,
+    initial_state,
+    spec,
+    geometry=provider_geometry,
+    target_mode_structure=target_phi,
+)
+```
+
+The result exposes the scalar loss, selected and maximum growth, selected real
+frequency, frequency penalty, phase-aligned complex mode-shape penalty, and
+quasilinear proxy. Frequency targeting requires an explicit `selected_ky`;
+the API refuses to attach frequency to an ambiguous maximum-growth branch.
+Each `ky` target is aligned by an independent unit complex phase before the
+shape penalty, while its amplitude remains physical.
 
 ## Fixed And Differentiable Inputs
 

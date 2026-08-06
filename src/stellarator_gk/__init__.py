@@ -289,6 +289,8 @@ from .performance import (
 )
 from .optimization import (
     BenchmarkOptimizationResult,
+    DesignObjectiveResult,
+    DesignObjectiveSpec,
     OptimizationKnobs,
     OptimizationScanResult,
     SingleSurfaceOptimizationConfig,
@@ -296,6 +298,7 @@ from .optimization import (
     ToyOptimizationStep,
     build_optimization_geometry,
     build_optimization_species,
+    design_objective,
     scan_single_surface_objective,
     single_surface_benchmark_objective,
     single_surface_objective,
@@ -479,6 +482,8 @@ __all__ = [
     "CycloneVelocitySpaceSliceAudit",
     "CycloneVelocitySpaceSliceSeriesAudit",
     "CycloneVparOddSignAudit",
+    "DesignObjectiveResult",
+    "DesignObjectiveSpec",
     "GkwIghInputComparisonReport",
     "GkwIghInputTrace",
     "GkwIghMatrixComparisonReport",
@@ -596,6 +601,7 @@ __all__ = [
     "dense_eigensystem",
     "dense_linear_operator_matrix",
     "dense_matrix_from_action",
+    "design_objective",
     "density_moment",
     "default_adiabatic_electron_params",
     "desc_geometry_arrays_from_data",

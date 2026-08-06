@@ -164,6 +164,23 @@ def test_growth_objectives_shapes_values_and_penalties():
     )
 
 
+def test_mode_structure_penalty_removes_independent_ky_phases():
+    target = jnp.asarray(
+        [
+            [[1.0 + 0.5j, 0.2 - 0.4j]],
+            [[-0.3 + 0.7j, 1.2 + 0.1j]],
+        ]
+    )
+    phases = jnp.exp(1j * jnp.asarray([0.7, -1.1]))
+    observed = target * phases[None, None, :]
+
+    aligned = mode_structure_penalty(observed, target, phase_align=True)
+    direct = mode_structure_penalty(observed, target, phase_align=False)
+
+    np.testing.assert_allclose(aligned, 0.0, atol=2.0e-15)
+    assert direct > 0.1
+
+
 def test_initial_value_growth_objective_gradients_on_reduced_grid():
     velocity = build_velocity_grid(VelocityGridSpec(n_vpar=3, n_mu=3, vpar_max=1.6, mu_max=1.2))
     parallel = _cell_centered_parallel_grid(5)
