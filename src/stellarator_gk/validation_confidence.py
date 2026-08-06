@@ -116,6 +116,23 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "phase-aligned per-ky structures only after matching branch windows."
             ),
         ),
+        ValidationConfidenceGap(
+            identifier="kinetic_electron_tem_external_parity",
+            status="open",
+            summary="Kinetic-electron TEM growth and frequency lack external parity.",
+            blocks_claims=("kinetic_electron_tem_validation",),
+            superseded_for_claims=(),
+            evidence=(
+                "Multispecies kinetic quasineutrality and the coupled linear RHS pass "
+                "an algebraic TEM-favorable preflight, but no converged quantitative "
+                "growth/frequency comparison has been accepted."
+            ),
+            next_action=(
+                "Run a resolution/time-step scan for the pinned heavy-electron TEM "
+                "case and compare growth, electron-direction frequency, and mode "
+                "structure against a revision-pinned GKW, stella, GX, or Gyaradax run."
+            ),
+        ),
     )
 
 

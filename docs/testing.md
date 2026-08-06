@@ -63,3 +63,15 @@ open. `validation_claim_readiness` and `require_validation_claim_ready` map
 each gap to the broad scientific claims it blocks. Independent stella evidence
 supersedes the two GKW gaps only for the converged W7-X linear branch; it does
 not promote a general GKW/Cyclone history-parity claim.
+
+The kinetic-electron path has a separate algebraic preflight:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python examples/run_tem_physics_preflight.py
+```
+
+It exercises two kinetic species, charge neutrality, the electron thermal
+streaming scale, kinetic quasineutrality, the coupled JIT residual, and the CFL
+estimate at TEM-favorable gradients. A passing result deliberately reports
+`external_growth_frequency_validated: false`; quantitative TEM validation
+still requires a converged revision-pinned independent comparison.

@@ -124,6 +124,17 @@ Run linting:
 uv run --no-sync ruff check src tests examples scripts
 ```
 
+Run the kinetic-electron TEM algebraic preflight:
+
+```bash
+JAX_ENABLE_X64=1 uv run --no-sync python \
+  examples/run_tem_physics_preflight.py
+```
+
+This is a multispecies/kinetic-field readiness check, not a quantitative TEM
+growth-rate validation. The generated report explicitly leaves external
+growth, frequency, and mode-structure parity open.
+
 These are the same standalone boundaries exercised by GitHub Actions. The CI
 job also builds an sdist and wheel, installs the wheel into a fresh environment,
 and verifies that `stellarator_gk` imports without repository-relative files.

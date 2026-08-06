@@ -18,6 +18,7 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
         "gkw_selected_mode_state_history",
         "gkw_multi_time_velocity_slice",
         "cyclone_gx_low_ky_branch_shape",
+        "kinetic_electron_tem_external_parity",
     }
     assert all(gap.status == "open" for gap in by_id.values())
     velocity_metrics = {
@@ -49,6 +50,7 @@ def test_w7x_claim_records_narrow_independent_supersession():
             "gkw_multi_time_velocity_slice",
         ),
         ("cyclone_gx_multi_ky_mode_structure_parity", "cyclone_gx_low_ky_branch_shape"),
+        ("kinetic_electron_tem_validation", "kinetic_electron_tem_external_parity"),
     ),
 )
 def test_broad_claims_remain_blocked(claim, gap_id):
@@ -65,7 +67,7 @@ def test_confidence_report_is_compact_and_schema_versioned(tmp_path):
     payload = json.loads(output.read_text())
 
     assert payload["schema_version"] == 1
-    assert len(payload["gaps"]) == 3
+    assert len(payload["gaps"]) == 4
     assert "state" not in payload["gaps"][0]
     with pytest.raises(FileExistsError):
         write_validation_confidence_report(output)

@@ -330,6 +330,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [x] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
   ledger.
 - [ ] Validate kinetic-electron TEM physics.
+  Algebraic preflight now passes for a charge-neutral heavy-electron,
+  TEM-favorable case: kinetic quasineutrality closes, the multispecies RHS is
+  finite, and the electron/ion streaming ratio matches the mass-ratio scaling.
+  Keep this item open until a converged growth/frequency/mode-structure scan
+  agrees with a revision-pinned independent code.
 - [ ] Add collisions and electromagnetic perturbations.
 - [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
   timestep control, saturated heat-flux diagnostics, and nonlinear parity.

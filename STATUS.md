@@ -53,6 +53,19 @@ claimed.
 - Focused policy, Hermite-Laguerre, and spectral-grid verification passes with
   34 tests.
 
+### 2026-08-06: Kinetic-Electron TEM Preflight
+
+- Added a TEM-favorable electrostatic preflight with kinetic deuterium and
+  heavy electrons (`m_e/m_i=0.01`), `R/L_Ti=0`, `R/L_Te=6.9`, and
+  `R/L_n=2.2` on s-alpha geometry.
+- The preflight passes charge neutrality, fully kinetic quasineutrality,
+  coupled JIT residual finiteness, positive CFL, and the expected 10:1
+  electron/ion streaming scale. The current reduced case reports zero field
+  residual and an estimated explicit CFL timestep of `7.70e-3`.
+- Added `kinetic_electron_tem_external_parity` to the confidence ledger. The
+  TEM roadmap item remains open because no converged external growth,
+  electron-direction frequency, or complex mode-structure gate has passed.
+
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
 - Added `DesignObjectiveSpec`/`design_objective` as the stable public contract
