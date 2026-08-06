@@ -43,6 +43,8 @@ claimed.
 - Added schema-v1 optimization checkpoints carrying sample axes and values,
   objective/aggregation policy, topology fingerprints, design parameters,
   provider provenance, code/dependency revisions, command, seed, and history.
+- Verified the exact standalone boundary after closure: Ruff passes and the
+  x64 default suite reports 408 passed with 20 external tests deselected.
 - Priority 4's acceptance gate is reduced design integration. VMEC++ and GVEC
   remain non-differentiable providers, while full equilibrium-shape AD and
   nonlinear heat-flux optimization remain Priority 5 work.
