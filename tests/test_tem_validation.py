@@ -1,4 +1,5 @@
 import dataclasses
+import json
 
 import numpy as np
 import pytest
@@ -7,7 +8,9 @@ from stellarator_gk.tem_validation import (
     TemCaseSpec,
     _build_tem_system,
     _initial_tem_state,
+    compare_tem_external_reference,
     gyaradax_tem_case_spec,
+    load_tem_external_reference,
     run_reduced_tem_linear_smoke,
     run_tem_physics_preflight,
     tem_species,
@@ -60,6 +63,7 @@ def test_reduced_tem_time_advance_stays_a_nonexternal_smoke_result():
     assert result.dt <= result.estimated_cfl_dt
     assert not result.externally_validated
     assert result.status == "reduced_tem_time_advance_not_external_validation"
+    assert len(result.mode_structure) == TemCaseSpec().n_z
 
 
 def test_reduced_tem_time_advance_rejects_timestep_above_cfl():
@@ -97,6 +101,43 @@ def test_gyaradax_tem_runner_requires_explicit_external_root_and_output(tmp_path
     assert args.output == tmp_path / "tem.json"
     assert args.n_windows == 200
     assert args.steps_per_window == 20
+
+
+def test_tem_external_reference_loader_and_quantitative_gate(tmp_path):
+    result = dataclasses.replace(
+        run_reduced_tem_linear_smoke(steps_per_window=2, n_windows=3),
+        late_window_growth_delta=0.0,
+    )
+    mode = np.asarray(result.mode_structure)
+    path = tmp_path / "tem.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "producer": "gyaradax",
+                "revision": "abc123",
+                "case": {"ky": 0.7},
+                "growth_rate": result.growth_rate,
+                "frequency": result.frequency,
+                "final_time": result.final_time,
+                "mode_structure_real": mode.real.tolist(),
+                "mode_structure_imag": mode.imag.tolist(),
+            }
+        )
+    )
+    reference = load_tem_external_reference(path)
+    report = compare_tem_external_reference(result, reference)
+
+    assert reference.revision == "abc123"
+    assert report.passed
+    assert report.growth_relative_error == pytest.approx(0.0)
+    assert report.frequency_relative_error == pytest.approx(0.0)
+    assert report.mode_structure_relative_l2_error < 1.0e-14
+
+    failed = compare_tem_external_reference(
+        dataclasses.replace(result, growth_rate=2.0 * result.growth_rate), reference
+    )
+    assert not failed.passed
 
 
 @pytest.mark.parametrize(

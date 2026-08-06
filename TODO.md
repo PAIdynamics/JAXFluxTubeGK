@@ -329,7 +329,7 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   gradient, external-parity, and timing gates.
 - [x] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
   ledger.
-- [ ] Validate kinetic-electron TEM physics.
+- [x] Validate kinetic-electron TEM physics.
   Algebraic preflight now passes for a charge-neutral heavy-electron,
   TEM-favorable case: kinetic quasineutrality closes, the multispecies RHS is
   finite, and the electron/ion streaming ratio matches the mass-ratio scaling.
@@ -343,10 +343,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   acceptance gate.
   The exact pinned Gyaradax producer is now executable without stored output
   and reproduces `gamma=0.66370834`, `omega=-1.02976757` at `ky rho_i=0.7`.
-  A reference-matched local profile now uses the same `32x32x16` grid,
+  A reference-matched local profile uses the same `32x32x16` grid,
   cell-centered finite differences, fused GKW `igh` operator, and `cosine2`
-  initialization. Keep the item open until its long-time local result and
-  complex mode structure pass the comparison.
+  initialization. At final time 40, growth differs by 8.82%, frequency by
+  17.39%, and the phase-aligned complex mode structure by 6.47%, passing the
+  declared 10%/20%/25% tolerances with negligible late-window drift.
 - [x] Add a differentiable collision foundation to the production collocation
   residual. The current species-local linearized BGK model preserves discrete
   density, parallel momentum, and energy exactly and contributes to the CFL
@@ -374,8 +375,8 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 Acceptance status: **implementation foundations advanced; scientific gate
 remains open**. The standalone suite covers the model collision operator,
 nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
-be marked complete until the external TEM, production collision/EM, stationary
-nonlinear-flux, and unrestricted shape-optimization claims named above pass.
+be marked complete until the production collision/EM, stationary nonlinear-flux,
+and unrestricted shape-optimization claims named above pass.
 
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 

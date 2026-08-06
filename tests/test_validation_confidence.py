@@ -23,7 +23,12 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
         "nonlinear_stationary_heat_flux_parity",
         "full_equilibrium_shape_optimization",
     }
-    assert all(gap.status == "open" for gap in by_id.values())
+    assert by_id["kinetic_electron_tem_external_parity"].status == "passed"
+    assert all(
+        gap.status == "open"
+        for identifier, gap in by_id.items()
+        if identifier != "kinetic_electron_tem_external_parity"
+    )
     velocity_metrics = {
         metric.name: metric.value
         for metric in by_id["gkw_multi_time_velocity_slice"].metrics
@@ -53,7 +58,6 @@ def test_w7x_claim_records_narrow_independent_supersession():
             "gkw_multi_time_velocity_slice",
         ),
         ("cyclone_gx_multi_ky_mode_structure_parity", "cyclone_gx_low_ky_branch_shape"),
-        ("kinetic_electron_tem_validation", "kinetic_electron_tem_external_parity"),
         (
             "collisional_electromagnetic_production_physics",
             "production_collisions_electromagnetic_parity",
@@ -83,3 +87,10 @@ def test_confidence_report_is_compact_and_schema_versioned(tmp_path):
     assert "state" not in payload["gaps"][0]
     with pytest.raises(FileExistsError):
         write_validation_confidence_report(output)
+
+
+def test_kinetic_electron_tem_claim_is_ready_after_external_gate():
+    readiness = validation_claim_readiness("kinetic_electron_tem_validation")
+
+    assert readiness.ready
+    assert readiness.blocking_gap_ids == ()

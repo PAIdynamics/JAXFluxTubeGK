@@ -115,6 +115,9 @@ def main() -> None:
     phases_array = np.unwrap(np.asarray(phases))
     late = times_array > 0.5 * times_array[-1]
     frequency = float(np.polyfit(times_array[late], phases_array[late], 1)[0])
+    final_mode = np.asarray(phi[:, 0, 0], dtype=complex)
+    final_mode = final_mode / np.linalg.norm(final_mode)
+    final_mode = final_mode * np.exp(-1j * np.angle(final_mode[args.n_z // 2]))
     payload = {
         "schema_version": 1,
         "producer": "gyaradax",
@@ -142,6 +145,8 @@ def main() -> None:
         "times": times,
         "window_growth_rates": growth_rates,
         "unwrapped_probe_phases": phases_array.tolist(),
+        "mode_structure_real": final_mode.real.tolist(),
+        "mode_structure_imag": final_mode.imag.tolist(),
     }
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

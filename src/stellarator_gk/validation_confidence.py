@@ -118,19 +118,20 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
         ),
         ValidationConfidenceGap(
             identifier="kinetic_electron_tem_external_parity",
-            status="open",
-            summary="Kinetic-electron TEM growth and frequency lack external parity.",
+            status="passed",
+            summary="Kinetic-electron TEM growth, frequency, and mode structure pass.",
             blocks_claims=("kinetic_electron_tem_validation",),
             superseded_for_claims=(),
             evidence=(
-                "Multispecies kinetic quasineutrality and the coupled linear RHS pass "
-                "an algebraic TEM-favorable preflight, but no converged quantitative "
-                "growth/frequency comparison has been accepted."
+                "At ky*rho_i=0.7 the converged local result gamma=0.72221521 and "
+                "omega=-1.20888602 agrees with pinned Gyaradax gamma=0.66370834 and "
+                "omega=-1.02976757 within declared 10%/20% tolerances. The "
+                "phase-aligned complex phi(z) relative L2 error is 0.0647 against "
+                "a 0.25 tolerance, and late growth drift is 2.6e-14."
             ),
             next_action=(
-                "Run a resolution/time-step scan for the pinned heavy-electron TEM "
-                "case and compare growth, electron-direction frequency, and mode "
-                "structure against a revision-pinned GKW, stella, GX, or Gyaradax run."
+                "Retain the revision-pinned producer and repeat the gate when the "
+                "kinetic field, velocity grid, recurrence, or time advance changes."
             ),
         ),
         ValidationConfidenceGap(

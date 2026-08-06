@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -117,6 +119,34 @@ class TemLinearSmokeResult:
     finite: bool
     electron_direction_frequency: bool
     externally_validated: bool
+    mode_structure: tuple[complex, ...]
+
+
+@dataclass(frozen=True)
+class TemExternalReference:
+    """Compact revision-pinned TEM target produced outside this repository."""
+
+    revision: str
+    case: dict[str, object]
+    growth_rate: float
+    frequency: float
+    final_time: float
+    mode_structure: tuple[complex, ...]
+
+
+@dataclass(frozen=True)
+class TemExternalParityReport:
+    """Quantitative local-versus-external TEM acceptance decision."""
+
+    passed: bool
+    growth_relative_error: float
+    frequency_relative_error: float
+    mode_structure_relative_l2_error: float
+    late_window_growth_delta: float
+    growth_tolerance: float
+    frequency_tolerance: float
+    mode_structure_tolerance: float
+    late_growth_drift_tolerance: float
 
 
 def tem_species(spec: TemCaseSpec | None = None) -> tuple[SpeciesParams, SpeciesParams]:
@@ -155,6 +185,82 @@ def gyaradax_tem_case_spec() -> TemCaseSpec:
         parallel_derivative_model="gkw_igh",
         initial_condition="gyaradax_cosine2",
     )
+
+
+def load_tem_external_reference(path: str | Path) -> TemExternalReference:
+    """Load a compact schema-v1 result from the external TEM producer."""
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 1 or payload.get("producer") != "gyaradax":
+        raise ValueError("TEM reference must be a schema-v1 Gyaradax result")
+    real = np.asarray(payload["mode_structure_real"], dtype=float)
+    imag = np.asarray(payload["mode_structure_imag"], dtype=float)
+    if real.ndim != 1 or real.shape != imag.shape or real.size < 2:
+        raise ValueError("TEM reference mode structure arrays are inconsistent")
+    required = ("revision", "case", "growth_rate", "frequency", "final_time")
+    if any(key not in payload for key in required):
+        raise ValueError("TEM reference is missing provenance or scalar diagnostics")
+    return TemExternalReference(
+        revision=str(payload["revision"]),
+        case=dict(payload["case"]),
+        growth_rate=float(payload["growth_rate"]),
+        frequency=float(payload["frequency"]),
+        final_time=float(payload["final_time"]),
+        mode_structure=tuple(complex(value) for value in real + 1j * imag),
+    )
+
+
+def compare_tem_external_reference(
+    result: TemLinearSmokeResult,
+    reference: TemExternalReference,
+    *,
+    growth_tolerance: float = 0.10,
+    frequency_tolerance: float = 0.20,
+    mode_structure_tolerance: float = 0.25,
+    late_growth_drift_tolerance: float = 1.0e-3,
+) -> TemExternalParityReport:
+    """Evaluate the declared scalar, convergence, and complex-shape TEM gate."""
+
+    tolerances = (
+        growth_tolerance,
+        frequency_tolerance,
+        mode_structure_tolerance,
+        late_growth_drift_tolerance,
+    )
+    if any(value <= 0.0 for value in tolerances):
+        raise ValueError("TEM parity tolerances must be positive")
+    observed_mode = np.asarray(result.mode_structure, dtype=complex)
+    reference_mode = np.asarray(reference.mode_structure, dtype=complex)
+    if observed_mode.shape != reference_mode.shape:
+        raise ValueError("local and external TEM mode structures must share a grid")
+    overlap = np.vdot(reference_mode, observed_mode)
+    aligned = observed_mode * np.exp(-1j * np.angle(overlap))
+    mode_error = float(np.linalg.norm(aligned - reference_mode) / np.linalg.norm(reference_mode))
+    growth_error = _relative_error(result.growth_rate, reference.growth_rate)
+    frequency_error = _relative_error(result.frequency, reference.frequency)
+    passed = bool(
+        result.finite
+        and result.electron_direction_frequency
+        and growth_error <= growth_tolerance
+        and frequency_error <= frequency_tolerance
+        and mode_error <= mode_structure_tolerance
+        and result.late_window_growth_delta <= late_growth_drift_tolerance
+    )
+    return TemExternalParityReport(
+        passed=passed,
+        growth_relative_error=growth_error,
+        frequency_relative_error=frequency_error,
+        mode_structure_relative_l2_error=mode_error,
+        late_window_growth_delta=result.late_window_growth_delta,
+        growth_tolerance=growth_tolerance,
+        frequency_tolerance=frequency_tolerance,
+        mode_structure_tolerance=mode_structure_tolerance,
+        late_growth_drift_tolerance=late_growth_drift_tolerance,
+    )
+
+
+def _relative_error(observed: float, reference: float) -> float:
+    return float(abs(observed - reference) / max(abs(reference), 1.0e-14))
 
 
 def run_tem_physics_preflight(
@@ -217,6 +323,7 @@ def run_reduced_tem_linear_smoke(
     steps_per_window: int = 20,
     n_windows: int = 12,
     late_fraction: float = 0.5,
+    allow_timestep_above_conservative_bound: bool = False,
 ) -> TemLinearSmokeResult:
     """Evolve a reduced kinetic-electron case and report branch diagnostics."""
 
@@ -230,39 +337,51 @@ def run_reduced_tem_linear_smoke(
     _velocity, parallel, _fourier, _geometry, _species, precompute = _build_tem_system(spec)
     cfl = float(estimate_linear_cfl_dt(precompute))
     timestep = cfl_fraction * cfl if dt is None else float(dt)
-    if timestep <= 0.0 or timestep > cfl:
+    if timestep <= 0.0 or (
+        timestep > cfl and not allow_timestep_above_conservative_bound
+    ):
         raise ValueError(f"dt must be positive and no larger than estimated CFL {cfl:.6g}")
     state = _initial_tem_state(precompute, parallel, spec)
     field = solve_kinetic_electron_phi(state, precompute.field)
-    amplitude = float(mode_amplitude(field)[0, 0])
-    state = state / amplitude
-    log_normalization = np.log(amplitude)
-    times = [0.0]
-    log_amplitudes = [log_normalization]
-    probes = [complex(np.asarray(field[parallel.z.shape[0] // 2, 0, 0]) / amplitude)]
-    for window in range(n_windows):
-        result = integrate_fixed_step(
-            state,
+    initial_amplitude = mode_amplitude(field)[0, 0]
+    state = state / initial_amplitude
+    initial_probe = field[parallel.z.shape[0] // 2, 0, 0] / initial_amplitude
+
+    def advance_window(carry, _index):
+        advanced = integrate_fixed_step(
+            carry,
             timestep,
             steps_per_window,
             linear_residual,
             precompute,
             store_history=False,
+        ).state
+        next_field = solve_kinetic_electron_phi(advanced, precompute.field)
+        amplitude = mode_amplitude(next_field)[0, 0]
+        safe_amplitude = jnp.maximum(amplitude, jnp.asarray(1.0e-300, dtype=amplitude.dtype))
+        normalized = advanced / safe_amplitude
+        probe = next_field[parallel.z.shape[0] // 2, 0, 0] / safe_amplitude
+        return normalized, (amplitude, probe)
+
+    state, (window_amplitudes, window_probes) = jax.lax.scan(
+        advance_window, state, jnp.arange(n_windows)
+    )
+    final_field = solve_kinetic_electron_phi(state, precompute.field)[:, 0, 0]
+    final_norm = jnp.sqrt(jnp.sum(jnp.abs(final_field) ** 2))
+    final_mode = final_field / final_norm
+    phase_anchor = final_mode[parallel.z.shape[0] // 2]
+    final_mode = final_mode * jnp.exp(-1j * jnp.angle(phase_anchor))
+    times_array = np.arange(n_windows + 1, dtype=float) * steps_per_window * timestep
+    amplitudes_array = np.asarray(window_amplitudes)
+    logs_array = np.concatenate(
+        (
+            np.asarray([np.log(float(initial_amplitude))]),
+            np.log(float(initial_amplitude)) + np.cumsum(np.log(amplitudes_array)),
         )
-        state = result.state
-        field = solve_kinetic_electron_phi(state, precompute.field)
-        amplitude = float(mode_amplitude(field)[0, 0])
-        if not np.isfinite(amplitude) or amplitude <= 0.0:
-            break
-        state = state / amplitude
-        log_normalization += np.log(amplitude)
-        time = (window + 1) * steps_per_window * timestep
-        times.append(time)
-        log_amplitudes.append(log_normalization)
-        probes.append(complex(np.asarray(field[parallel.z.shape[0] // 2, 0, 0]) / amplitude))
-    times_array = np.asarray(times)
-    logs_array = np.asarray(log_amplitudes)
-    probes_array = np.asarray(probes)
+    )
+    probes_array = np.concatenate(
+        (np.asarray([complex(initial_probe)]), np.asarray(window_probes, dtype=complex))
+    )
     start = min(max(int(len(times_array) * late_fraction), 0), len(times_array) - 2)
     growth = float(np.polyfit(times_array[start:], logs_array[start:], 1)[0])
     phases = np.unwrap(np.angle(probes_array))
@@ -270,8 +389,7 @@ def run_reduced_tem_linear_smoke(
     window_growth = np.diff(logs_array) / np.diff(times_array)
     late_delta = float(abs(window_growth[-1] - window_growth[-2]))
     finite = bool(
-        len(times_array) == n_windows + 1
-        and np.all(np.isfinite(logs_array))
+        np.all(np.isfinite(logs_array))
         and np.isfinite(growth)
         and np.isfinite(frequency)
     )
@@ -289,6 +407,7 @@ def run_reduced_tem_linear_smoke(
         finite=finite,
         electron_direction_frequency=bool(frequency < 0.0),
         externally_validated=False,
+        mode_structure=tuple(complex(value) for value in np.asarray(final_mode)),
     )
 
 
@@ -387,9 +506,13 @@ def _initial_tem_state(precompute, parallel, spec: TemCaseSpec | None = None):
 __all__ = [
     "TEM_PREFLIGHT_SCHEMA_VERSION",
     "TemCaseSpec",
+    "TemExternalParityReport",
+    "TemExternalReference",
     "TemPhysicsPreflightReport",
     "TemLinearSmokeResult",
     "gyaradax_tem_case_spec",
+    "compare_tem_external_reference",
+    "load_tem_external_reference",
     "run_reduced_tem_linear_smoke",
     "run_tem_physics_preflight",
     "tem_species",

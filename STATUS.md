@@ -32,8 +32,8 @@ claimed.
   tests deselected in 492.55 s**. Repository-wide Ruff and whitespace checks
   also pass. The recurring missing `bitx` hook message is unrelated and does
   not affect these results.
-- Priority 5 is not declared scientifically complete: converged external TEM
-  parity, production Landau/Fokker--Planck plus electromagnetic parity,
+- Priority 5 is not declared scientifically complete: production
+  Landau/Fokker--Planck plus electromagnetic parity,
   stationary nonlinear heat-flux parity, and unrestricted full-shape
   optimization remain evidence-gated work.
 
@@ -42,8 +42,9 @@ claimed.
 - Added a schema-versioned machine-readable ledger for the open full GKW
   selected-mode history, long-time velocity-slice, and low-`ky` Cyclone/GX
   branch-shape gaps. The ledger now also blocks unsupported production claims
-  for kinetic-electron TEM, collisional/electromagnetic physics, nonlinear
-  turbulence, and unrestricted equilibrium-shape optimization.
+  for collisional/electromagnetic physics, nonlinear turbulence, and
+  unrestricted equilibrium-shape optimization. The TEM entry now records a
+  passed gate.
 - Broad GKW/GX parity claims now fail an explicit readiness guard with the
   blocking gap identifier. The converged W7-X linear claim records that its
   independent stella gate narrowly supersedes the two GKW gaps without closing
@@ -79,9 +80,9 @@ claimed.
   electron/ion streaming scale. The current reduced case reports zero field
   residual and an estimated explicit CFL timestep of `3.54e-3` after recurrence
   and algebraic-field-response stiffness are included.
-- Added `kinetic_electron_tem_external_parity` to the confidence ledger. The
-  TEM roadmap item remains open because no converged external growth,
-  electron-direction frequency, or complex mode-structure gate has passed.
+- Added `kinetic_electron_tem_external_parity` to the confidence ledger. It was
+  initially open after algebraic preflight and is now closed by the later
+  pinned growth, frequency, and complex mode-structure gate.
 - Added a normalized multi-window TEM discriminator. Short runs are visibly
   transient; longer reduced runs recover an electron-direction branch but do
   not agree with the reference growth and change with resolution.
@@ -104,8 +105,12 @@ claimed.
   reproduces `gamma=0.66370834`, `omega=-1.02976757`, and final time `40`.
 - Added a local reference-matched TEM profile with GKW cell-centered parallel
   and velocity grids, zero-incoming boundaries, fused `igh` recurrence, and
-  velocity-independent `cosine2` initialization. Its reduced transient agrees
-  qualitatively with the producer; long-time quantitative parity remains open.
+  velocity-independent `cosine2` initialization.
+- The final-time-40 local result is `gamma=0.72221521`, `omega=-1.20888602`.
+  Relative growth and frequency errors are 8.82% and 17.39%; the phase-aligned
+  complex `phi(z)` error is 6.47%, and late-window growth drift is `2.6e-14`.
+  These pass the declared 10%/20%/25% and `1e-3` gates, closing the
+  kinetic-electron TEM validation gap.
 
 ### 2026-08-06: Conservative Collision Foundation
 
