@@ -4,6 +4,7 @@ from scripts.prepare_stella_w7x_implicit_trace_run import (
     TRACE_FILENAME,
     patch_stella_implicit_stage_trace,
 )
+from scripts.replay_w7x_stella_implicit_stage import _metrics
 
 
 def test_implicit_trace_patch_instruments_all_response_stages(tmp_path: Path):
@@ -41,3 +42,11 @@ def test_implicit_trace_patch_instruments_all_response_stages(tmp_path: Path):
         assert stage in patched
     assert TRACE_FILENAME in patched
     assert "stellarator_gk_implicit_call /= 1" in patched
+
+
+def test_implicit_stage_metrics_report_fixed_and_phase_aligned_errors():
+    metrics = _metrics([1.0 + 1.0j, 2.0 - 1.0j], [2.0 + 2.0j, 4.0 - 2.0j])
+    assert metrics["relative_l2_error"] == 1.0
+    assert metrics["best_fit_relative_l2_error"] < 1.0e-14
+    assert metrics["best_fit_scale_real"] == 0.5
+    assert abs(metrics["best_fit_scale_imag"]) < 1.0e-14
