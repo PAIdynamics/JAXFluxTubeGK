@@ -8,6 +8,7 @@ from .collisions import (
     collision_moments,
     conserving_bgk_collision,
     fokker_planck_collision,
+    fokker_planck_conserved_moments,
 )
 from .electromagnetic import (
     ElectromagneticFieldPrecompute,
@@ -169,6 +170,7 @@ __all__ = [
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
+    "fokker_planck_conserved_moments",
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",

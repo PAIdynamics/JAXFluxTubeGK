@@ -193,6 +193,13 @@ claimed.
   The reciprocal field-particle term needed for exact inter-species
   momentum/energy exchange remains open, so the production Landau claim stays
   blocked.
+- Added an opt-in conservative field-particle completion through
+  `collision_conserve_exchange=True`. A discrete global projection preserves
+  each species density and combined physical parallel momentum and energy to
+  roundoff, while allowing nonzero exchange between species. The correction's
+  induced norm is included conservatively in the CFL bound. Independent
+  Landau field-particle parity is still required before calling this a
+  production Landau operator.
 
 ### 2026-08-06: Nonlinear ExB Foundation
 

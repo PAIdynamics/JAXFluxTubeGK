@@ -42,10 +42,22 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
 
     stencil: object
     row_sum_bound: object
+    conservation_invariants: object
+    conservation_basis: object
+    conservation_inverse: object
+    measure: object
     n_species: int
+    conserve_exchange: bool = False
 
-    _dynamic_fields: ClassVar[tuple[str, ...]] = ("stencil", "row_sum_bound")
-    _static_fields: ClassVar[tuple[str, ...]] = ("n_species",)
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "stencil",
+        "row_sum_bound",
+        "conservation_invariants",
+        "conservation_basis",
+        "conservation_inverse",
+        "measure",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "conserve_exchange")
 
 
 def build_fokker_planck_precompute(
@@ -58,6 +70,7 @@ def build_fokker_planck_precompute(
     energy_scattering: bool = True,
     friction: bool = True,
     mass_conserving_boundary: bool = True,
+    conserve_exchange: bool = False,
 ) -> FokkerPlanckPrecompute:
     """Build a multispecies test-particle differential collision stencil.
 
@@ -113,10 +126,28 @@ def build_fokker_planck_precompute(
             )
         stencils.append(target_stencil)
     stencil = jnp.stack(stencils)
+    invariants = basis = inverse = measure = None
+    conservation_gain = jnp.asarray(1.0)
+    if conserve_exchange:
+        invariants, basis, inverse, measure, conservation_gain = (
+            _build_fokker_planck_conservation(
+                velocity_grid,
+                B,
+                species_tuple,
+            )
+        )
     return FokkerPlanckPrecompute(
         stencil=stencil,
-        row_sum_bound=jnp.max(jnp.sum(jnp.abs(stencil), axis=1), axis=(1, 2, 3)),
+        row_sum_bound=(
+            jnp.max(jnp.sum(jnp.abs(stencil), axis=1), axis=(1, 2, 3))
+            * conservation_gain
+        ),
+        conservation_invariants=invariants,
+        conservation_basis=basis,
+        conservation_inverse=inverse,
+        measure=measure,
         n_species=n_species,
+        conserve_exchange=conserve_exchange,
     )
 
 
@@ -130,7 +161,34 @@ def fokker_planck_collision(distribution, precompute: FokkerPlanckPrecompute):
     if values.ndim != 6 or values.shape[0] != precompute.n_species:
         raise ValueError("distribution has incompatible species or phase-space shape")
     result = jax.vmap(_apply_fokker_planck_stencil)(values, precompute.stencil)
+    if precompute.conserve_exchange:
+        moments = fokker_planck_conserved_moments(result, precompute)
+        coefficients = jnp.einsum(
+            "zdc,czxy->zdxy", precompute.conservation_inverse, moments
+        )
+        correction = jnp.einsum(
+            "dsvmz,zdxy->svmzxy", precompute.conservation_basis, coefficients
+        )
+        result = result - correction
     return result[0] if original_ndim == 5 else result
+
+
+def fokker_planck_conserved_moments(values, precompute: FokkerPlanckPrecompute):
+    """Return per-species density plus total momentum/energy constraints."""
+
+    if not precompute.conserve_exchange:
+        raise ValueError("exchange conservation was not enabled in the precompute")
+    values = jnp.asarray(values)
+    if values.ndim == 5 and precompute.n_species == 1:
+        values = values[None, ...]
+    if values.ndim != 6 or values.shape[0] != precompute.n_species:
+        raise ValueError("values have incompatible species or phase-space shape")
+    return jnp.einsum(
+        "csvmz,vmz,svmzxy->czxy",
+        precompute.conservation_invariants,
+        precompute.measure,
+        values,
+    )
 
 
 def build_conserving_bgk_precompute(
@@ -225,6 +283,60 @@ def collision_moments(values, precompute: ConservingBGKPrecompute):
         precompute.measure,
         values,
     )
+
+
+def _build_fokker_planck_conservation(velocity_grid, B, species):
+    n_species = len(species)
+    maxwellians = jnp.asarray(maxwellian(velocity_grid.vpar, velocity_grid.mu, B, species))
+    energy = jnp.asarray(normalized_energy(velocity_grid.vpar, velocity_grid.mu, B, species))
+    vpar = jnp.asarray(velocity_grid.vpar)[None, :, None, None]
+    momentum_scale = jnp.sqrt(
+        jnp.asarray([item.mass * item.temperature for item in species])
+    )[:, None, None, None]
+    physical_momentum = momentum_scale * vpar * jnp.ones_like(energy)
+    physical_energy = (
+        jnp.asarray([item.temperature for item in species])[:, None, None, None]
+        * energy
+    )
+    measure = (
+        jnp.asarray(velocity_grid.w_vpar)[:, None, None]
+        * jnp.asarray(velocity_grid.w_mu)[None, :, None]
+        * B[None, None, :]
+    )
+    density_invariants = jnp.eye(n_species)[:, :, None, None, None] * jnp.ones_like(
+        energy
+    )[None, ...]
+    invariants = jnp.concatenate(
+        (
+            density_invariants,
+            physical_momentum[None, ...],
+            physical_energy[None, ...],
+        ),
+        axis=0,
+    )
+    density_basis = density_invariants * maxwellians[None, ...]
+    density_norm = jnp.einsum("svmz,vmz->sz", maxwellians, measure)
+    energy_mean = jnp.einsum(
+        "svmz,svmz,vmz->sz", physical_energy, maxwellians, measure
+    ) / jnp.maximum(density_norm, 1.0e-14)
+    centered_energy = physical_energy - energy_mean[:, None, None, :]
+    basis = jnp.concatenate(
+        (
+            density_basis,
+            (physical_momentum * maxwellians)[None, ...],
+            (centered_energy * maxwellians)[None, ...],
+        ),
+        axis=0,
+    )
+    moment_matrix = jnp.einsum("csvmz,dsvmz,vmz->zcd", invariants, basis, measure)
+    inverse = jnp.linalg.inv(moment_matrix)
+    basis_norm = jnp.max(jnp.sum(jnp.abs(basis), axis=0))
+    inverse_norm = jnp.max(jnp.sum(jnp.abs(inverse), axis=2))
+    invariant_norm = jnp.max(
+        jnp.sum(jnp.abs(invariants) * measure[None, None, ...], axis=(1, 2, 3))
+    )
+    gain = 1.0 + basis_norm * inverse_norm * invariant_norm
+    return invariants, basis, inverse, measure, gain
 
 
 def _erf_derivative(value):
@@ -404,4 +516,5 @@ __all__ = [
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
+    "fokker_planck_conserved_moments",
 ]

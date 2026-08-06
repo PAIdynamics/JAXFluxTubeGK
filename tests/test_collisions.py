@@ -20,6 +20,7 @@ from stellarator_gk import (
     conserving_bgk_collision,
     estimate_linear_cfl_dt,
     fokker_planck_collision,
+    fokker_planck_conserved_moments,
     linear_residual,
 )
 
@@ -219,6 +220,77 @@ def test_linear_precompute_rejects_unknown_collision_model():
             collision_frequency=0.2,
             collision_model="unknown",
         )
+
+
+def test_fokker_planck_field_particle_completion_conserves_exchange_moments():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    state = (
+        jax.random.normal(
+            jax.random.key(61),
+            (2, 8, 6, parallel.z.shape[0], 1, 1),
+        )
+        + 1j
+        * jax.random.normal(
+            jax.random.key(62),
+            (2, 8, 6, parallel.z.shape[0], 1, 1),
+        )
+    )
+    raw = build_fokker_planck_precompute(
+        velocity, geometry.B, species, frequency=(0.2, 0.7)
+    )
+    conserving = build_fokker_planck_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequency=(0.2, 0.7),
+        conserve_exchange=True,
+    )
+    raw_collision = fokker_planck_collision(state, raw)
+    collision = jax.jit(fokker_planck_collision)(state, conserving)
+    moments = fokker_planck_conserved_moments(collision, conserving)
+
+    assert float(jnp.max(jnp.abs(raw_collision - collision))) > 1.0e-6
+    np.testing.assert_allclose(moments, 0.0, atol=3.0e-10, rtol=0.0)
+    assert float(jnp.max(conserving.row_sum_bound)) > float(jnp.max(raw.row_sum_bound))
+
+
+def test_solver_builds_exchange_conserving_fokker_planck_precompute():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="kinetic",
+        collision_frequency=(0.2, 0.7),
+        collision_model="fokker_planck",
+        collision_conserve_exchange=True,
+    )
+
+    assert precompute.collisions.conserve_exchange
+    assert np.isfinite(float(estimate_linear_cfl_dt(precompute)))
 
 
 @pytest.mark.external

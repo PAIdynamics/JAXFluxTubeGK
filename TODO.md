@@ -385,8 +385,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   action match pinned Gyaradax to `2e-12`, and the frequency remains
   differentiable. The explicit `collision_model="fokker_planck"` path is now
   integrated into the linear residual, and its stencil row-sum enters the CFL
-  bound. Next, add and independently validate the reciprocal field-particle
-  correction required for exact inter-species momentum and energy exchange.
+  bound. An opt-in discrete field-particle completion now preserves each species
+  density and combined momentum/energy to roundoff and contributes its induced
+  norm to the CFL bound. It establishes the algebraic exchange-conservation
+  contract, but independent Landau field-particle coefficient/action parity is
+  still required before this item can close.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

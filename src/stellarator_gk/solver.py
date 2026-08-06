@@ -292,6 +292,7 @@ def build_linear_residual_precompute(
     phase_space_measure=None,
     collision_frequency=None,
     collision_model: str = "bgk",
+    collision_conserve_exchange: bool = False,
     beta=None,
 ) -> LinearResidualPrecompute:
     """Build the coupled linear RHS and field precompute."""
@@ -360,6 +361,7 @@ def build_linear_residual_precompute(
                 geometry.B,
                 species,
                 collision_frequency,
+                conserve_exchange=collision_conserve_exchange,
             )
         else:
             raise ValueError("collision_model must be 'bgk' or 'fokker_planck'")
