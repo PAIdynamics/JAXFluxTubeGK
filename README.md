@@ -567,5 +567,6 @@ Useful companion docs:
 
 - `docs/performance_and_differentiability.md`
 - `docs/optimization_integration.md`
+- `docs/velocity_backend_policy.md`
 - `TODO.md`
 - `STATUS.md`

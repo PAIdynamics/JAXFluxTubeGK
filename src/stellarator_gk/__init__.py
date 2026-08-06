@@ -326,6 +326,14 @@ from .design_checkpoint import (
     load_optimization_checkpoint,
     write_optimization_checkpoint,
 )
+from .velocity_backend_policy import (
+    PRODUCTION_VELOCITY_REPRESENTATION,
+    VelocityBackendDecision,
+    VelocityBackendNotReadyError,
+    require_velocity_backend_for_claim,
+    velocity_backend_decision,
+    velocity_backend_decisions,
+)
 from .physics import (
     AdiabaticElectronParams,
     AdiabaticQuasineutralityPrecompute,
@@ -501,6 +509,7 @@ __all__ = [
     "OptimizationKnobs",
     "OptimizationCheckpoint",
     "OPTIMIZATION_CHECKPOINT_SCHEMA_VERSION",
+    "PRODUCTION_VELOCITY_REPRESENTATION",
     "OptimizationTopologyContract",
     "OptimizationScanResult",
     "RobustAggregationResult",
@@ -539,6 +548,8 @@ __all__ = [
     "TopologyChangeError",
     "VelocityBasisKind",
     "VelocityBasisSpec",
+    "VelocityBackendDecision",
+    "VelocityBackendNotReadyError",
     "VelocityGrid",
     "VelocityGridSpec",
     "VelocitySliceConventionAudit",
@@ -759,6 +770,7 @@ __all__ = [
     "pytree_nbytes",
     "radial_flux_spectrum",
     "real_frequency",
+    "require_velocity_backend_for_claim",
     "resample_gx_eik_geometry_reference",
     "resample_gx_eik_data",
     "rosenbluth_hinton_residual",
@@ -840,6 +852,8 @@ __all__ = [
     "TimeAdvanceResult",
     "toy_gradient_descent_step",
     "velocity_grid_to_spectral",
+    "velocity_backend_decision",
+    "velocity_backend_decisions",
     "velocity_space_integral",
     "validate_geometry_result",
     "unflatten_state",

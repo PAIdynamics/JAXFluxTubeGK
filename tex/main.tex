@@ -708,7 +708,7 @@ Here \(W^{C,[0,1]}\) and \(D^{C,[0,1]}\) are the mapped weights and derivative m
   g_{\ell m}(z).
   \label{eq:velocity-spectral-quadrature}
 \end{equation}
-The gyrophase factor is absorbed into the chosen normalization; if a benchmark requires an explicit \(2\pi\), it should enter the documented velocity measure, not an individual physics term.  Hermite--Laguerre velocity bases are a later optimization path, not the first backend.
+The gyrophase factor is absorbed into the chosen normalization; if a benchmark requires an explicit \(2\pi\), it should enter the documented velocity measure, not an individual physics term.  Velocity collocation is the selected production CPU representation: Chebyshev is the general reduced/differentiable path, GKW finite differences retain convention parity, and the midpoint/Gauss--Laguerre recipe is used by the source-matched W7-X gate.  Hermite--Laguerre remains a reduced GX discriminator until it is integrated with the complete stellarator residual and field solve and passes comparable convergence, parity, gradient, and timing gates.
 
 \subsection{Parallel spectral grid}
 

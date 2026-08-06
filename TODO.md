@@ -318,9 +318,15 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 
 - [x] Keep GKW selected-mode state-history and multi-time velocity-slice gaps
   visible until closed or superseded by an independent stellarator reference.
-- [ ] Decide whether Chebyshev/GKW finite-difference velocity collocation is
+- [x] Decide whether Chebyshev/GKW finite-difference velocity collocation is
   the production CPU backend or the Hermite-Laguerre backend must become fully
   production capable first.
+  Decision: collocation remains the production CPU representation. Chebyshev
+  is the general reduced/differentiable default, GKW finite differences are a
+  convention-parity specialist, and the midpoint/Gauss-Laguerre recipe is the
+  validated W7-X path. Hermite-Laguerre remains an experimental GX
+  discriminator until it passes the full residual, field, convergence,
+  gradient, external-parity, and timing gates.
 - [x] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
   ledger.
 - [ ] Validate kinetic-electron TEM physics.

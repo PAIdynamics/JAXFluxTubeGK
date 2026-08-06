@@ -37,6 +37,22 @@ claimed.
 - No external state/history fixture was added; reports are generated on demand
   and may be written to caller-selected scratch storage.
 
+### 2026-08-06: Priority 5 Velocity Backend Decision
+
+- Selected collocation as the production CPU velocity representation; the
+  reduced Hermite-Laguerre moment path is not a prerequisite for production
+  use of the current linear kinetic solver.
+- Added a claim-scoped policy API. Chebyshev supports general reduced and
+  differentiable linear CPU runs, finite differences support the GKW
+  term/operator convention claim, and midpoint/Gauss-Laguerre supports the
+  validated W7-X linear recipe.
+- Arbitrary native grids remain plumbing-only until a named gate passes.
+  Hermite-Laguerre remains an experimental GX discriminator because it is not
+  integrated with the full stellarator residual/field/design path and has no
+  equivalent convergence, external-parity, or production timing gate.
+- Focused policy, Hermite-Laguerre, and spectral-grid verification passes with
+  34 tests.
+
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
 - Added `DesignObjectiveSpec`/`design_objective` as the stable public contract
