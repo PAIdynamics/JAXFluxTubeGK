@@ -21,6 +21,7 @@ from stellarator_gk import (
     build_optimization_species,
     build_parallel_grid,
     build_velocity_grid,
+    audit_design_gradient,
     design_objective,
     scan_single_surface_objective,
     single_surface_objective,
@@ -323,6 +324,66 @@ def test_design_objective_rejects_ambiguous_frequency_branch():
             growth_aggregation="max",
             frequency_weight=1.0,
         )
+
+
+def test_softmax_growth_gradient_passes_at_degenerate_time_advanced_branches():
+    velocity, parallel, _fourier, _connectivity, initial_state = _grids()
+    fourier = build_fourier_grid(
+        FourierGridSpec(
+            n_kx=3,
+            n_ky=2,
+            kx_max=0.5,
+            ky_values=(0.35, 0.35),
+            ikxspace=2,
+        )
+    )
+    connectivity = build_mode_connectivity(fourier)
+    repeated_state = jnp.repeat(initial_state[..., :1], 2, axis=-1)
+    knobs = _knobs()
+    spec = DesignObjectiveSpec(
+        selected_ky=None,
+        growth_aggregation="softmax",
+        softmax_temperature=0.02,
+        branch_gap_tolerance=1.0e-8,
+    )
+    config = _config(objective_kind="max_growth", selected_ky=None)
+
+    def objective(temperature_gradient):
+        return design_objective(
+            replace(knobs, temperature_gradient=temperature_gradient),
+            velocity,
+            parallel,
+            fourier,
+            repeated_state,
+            spec,
+            connectivity=connectivity,
+            config=config,
+        ).scalar_objective
+
+    result = design_objective(
+        knobs,
+        velocity,
+        parallel,
+        fourier,
+        repeated_state,
+        spec,
+        connectivity=connectivity,
+        config=config,
+    )
+    audit = audit_design_gradient(
+        objective,
+        float(knobs.temperature_gradient),
+        step=3.0e-4,
+        relative_tolerance=2.0e-3,
+        absolute_tolerance=2.0e-6,
+        branch_gap=float(result.growth_branch_gap),
+        branch_gap_tolerance=spec.branch_gap_tolerance,
+    )
+
+    np.testing.assert_allclose(result.growth_branch_gap, 0.0, atol=2.0e-14)
+    assert bool(result.near_degenerate_branch)
+    assert audit.near_degenerate_branch
+    assert audit.passed
 
 
 def test_scan_single_surface_objective_accepts_supplied_desc_geometry():

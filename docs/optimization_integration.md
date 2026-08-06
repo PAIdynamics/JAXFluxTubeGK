@@ -38,6 +38,20 @@ the API refuses to attach frequency to an ambiguous maximum-growth branch.
 Each `ky` target is aligned by an independent unit complex phase before the
 shape penalty, while its amplitude remains physical.
 
+### Branch and gradient policy
+
+`growth_aggregation="max"` is a hard maximum and is nonsmooth when two modes
+exchange dominance. `growth_aggregation="softmax"` supplies a differentiable
+log-sum-exp envelope controlled by `softmax_temperature`. Every result reports
+the top-two `growth_branch_gap` and `near_degenerate_branch`; these diagnostics
+must be retained with optimization records.
+
+`audit_design_gradient` compares reverse-mode AD with a central difference for
+one scalar equilibrium/provider parameter. Near a small branch gap, use the
+soft maximum or select a physical `ky` branch explicitly, then require the
+audit to pass. A hard-maximum gradient across a branch change must not be
+reported as a validated derivative.
+
 ## Fixed And Differentiable Inputs
 
 Static during a traced objective:

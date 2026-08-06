@@ -289,6 +289,7 @@ from .performance import (
 )
 from .optimization import (
     BenchmarkOptimizationResult,
+    DesignGradientAudit,
     DesignObjectiveResult,
     DesignObjectiveSpec,
     OptimizationKnobs,
@@ -298,6 +299,7 @@ from .optimization import (
     ToyOptimizationStep,
     build_optimization_geometry,
     build_optimization_species,
+    audit_design_gradient,
     design_objective,
     scan_single_surface_objective,
     single_surface_benchmark_objective,
@@ -484,6 +486,7 @@ __all__ = [
     "CycloneVparOddSignAudit",
     "DesignObjectiveResult",
     "DesignObjectiveSpec",
+    "DesignGradientAudit",
     "GkwIghInputComparisonReport",
     "GkwIghInputTrace",
     "GkwIghMatrixComparisonReport",
@@ -581,6 +584,7 @@ __all__ = [
     "build_velocity_grid",
     "build_velocity_grid_from_nodes",
     "benchmark_linear_residual",
+    "audit_design_gradient",
     "benchmark_target_cost",
     "benchmark_target_residual",
     "build_desc_gx_eik_reference_from_path",

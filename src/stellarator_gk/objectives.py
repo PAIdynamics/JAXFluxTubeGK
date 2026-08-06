@@ -140,7 +140,15 @@ def mode_structure_penalty(
             axis=(0, 1),
         )
         overlap_abs = jnp.abs(overlap)
-        phase = jnp.where(overlap_abs > 0.0, overlap / overlap_abs, 1.0 + 0.0j)
+        safe_overlap_abs = jnp.maximum(
+            overlap_abs,
+            jnp.asarray(jnp.finfo(overlap_abs.dtype).tiny, dtype=overlap_abs.dtype),
+        )
+        phase = jnp.where(
+            overlap_abs > 0.0,
+            overlap / safe_overlap_abs,
+            1.0 + 0.0j,
+        )
         target = target * phase[None, None, :]
     error = jnp.abs(mode_structure - target) ** 2
     numerator = jnp.sum(weights[:, None, None] * mask[None, :, :] * error)

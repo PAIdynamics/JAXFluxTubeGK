@@ -194,16 +194,22 @@ class DesignObjectiveSpec:
     mode_structure_weight: float = 0.0
     quasilinear_weight: float = 0.0
     frequency_target: float = 0.0
+    softmax_temperature: float = 0.01
+    branch_gap_tolerance: float = 1.0e-3
 
     def __post_init__(self) -> None:
-        if self.growth_aggregation not in ("selected", "max"):
-            raise ValueError("growth_aggregation must be 'selected' or 'max'")
+        if self.growth_aggregation not in ("selected", "max", "softmax"):
+            raise ValueError("growth_aggregation must be 'selected', 'max', or 'softmax'")
         if self.growth_aggregation == "selected" and self.selected_ky is None:
             raise ValueError("selected growth aggregation requires selected_ky")
         if self.selected_ky is not None and self.selected_ky < 0:
             raise ValueError("selected_ky must be nonnegative")
         if self.frequency_weight != 0.0 and self.selected_ky is None:
             raise ValueError("a frequency objective requires selected_ky")
+        if self.softmax_temperature <= 0.0:
+            raise ValueError("softmax_temperature must be positive")
+        if self.branch_gap_tolerance < 0.0:
+            raise ValueError("branch_gap_tolerance must be nonnegative")
         for name in (
             "growth_weight",
             "frequency_weight",
@@ -228,6 +234,8 @@ class DesignObjectiveResult(_PyTreeDataclass):
     quasilinear_proxy: object
     mode_structure_penalty: object
     mode_structure: object
+    growth_branch_gap: object
+    near_degenerate_branch: object
     surface_result: SingleSurfaceOptimizationResult
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
@@ -240,8 +248,24 @@ class DesignObjectiveResult(_PyTreeDataclass):
         "quasilinear_proxy",
         "mode_structure_penalty",
         "mode_structure",
+        "growth_branch_gap",
+        "near_degenerate_branch",
         "surface_result",
     )
+
+
+@dataclass(frozen=True)
+class DesignGradientAudit:
+    """Autodiff/finite-difference agreement for one scalar design parameter."""
+
+    autodiff_gradient: float
+    finite_difference_gradient: float
+    absolute_error: float
+    relative_error: float
+    passed: bool
+    step: float
+    branch_gap: float | None
+    near_degenerate_branch: bool
 
 
 def build_optimization_species(
@@ -308,7 +332,7 @@ def single_surface_objective(
     config = config or SingleSurfaceOptimizationConfig()
     species = build_optimization_species(knobs, base_species)
     geometry = _objective_geometry(parallel_grid, knobs, config, geometry)
-    electrons = electron_params or default_adiabatic_electron_params()
+    electrons = electron_params or default_adiabatic_electron_params(species)
     precompute = build_linear_residual_precompute(
         velocity_grid,
         parallel_grid,
@@ -387,16 +411,22 @@ def design_objective(
         selected_index = selected_ky
     selected_growth = values.growth_rate[selected_index]
     selected_frequency = values.frequency[selected_index]
-    growth = (
-        selected_growth if spec.growth_aggregation == "selected" else values.max_growth_rate
-    )
+    if spec.growth_aggregation == "selected":
+        growth = selected_growth
+    elif spec.growth_aggregation == "softmax":
+        temperature = jnp.asarray(spec.softmax_temperature, dtype=values.growth_rate.dtype)
+        growth = temperature * jax.scipy.special.logsumexp(values.growth_rate / temperature)
+    else:
+        growth = values.max_growth_rate
+    branch_gap = _growth_branch_gap(values.growth_rate)
     frequency_penalty = (selected_frequency - spec.frequency_target) ** 2
-    scalar = (
-        spec.growth_weight * growth
-        + spec.frequency_weight * frequency_penalty
-        + spec.mode_structure_weight * values.mode_structure_penalty
-        + spec.quasilinear_weight * values.quasilinear_proxy
-    )
+    scalar = spec.growth_weight * growth
+    if spec.frequency_weight != 0.0:
+        scalar = scalar + spec.frequency_weight * frequency_penalty
+    if spec.mode_structure_weight != 0.0:
+        scalar = scalar + spec.mode_structure_weight * values.mode_structure_penalty
+    if spec.quasilinear_weight != 0.0:
+        scalar = scalar + spec.quasilinear_weight * values.quasilinear_proxy
     return DesignObjectiveResult(
         scalar_objective=scalar,
         growth_objective=growth,
@@ -407,7 +437,47 @@ def design_objective(
         quasilinear_proxy=values.quasilinear_proxy,
         mode_structure_penalty=values.mode_structure_penalty,
         mode_structure=values.mode_structure,
+        growth_branch_gap=branch_gap,
+        near_degenerate_branch=branch_gap <= spec.branch_gap_tolerance,
         surface_result=surface,
+    )
+
+
+def audit_design_gradient(
+    objective_fn,
+    parameter: float,
+    *,
+    step: float = 1.0e-5,
+    relative_tolerance: float = 1.0e-3,
+    absolute_tolerance: float = 1.0e-6,
+    branch_gap: float | None = None,
+    branch_gap_tolerance: float = 1.0e-3,
+) -> DesignGradientAudit:
+    """Compare reverse-mode AD with a central difference at a scalar parameter."""
+
+    if step <= 0.0:
+        raise ValueError("gradient-audit step must be positive")
+    if relative_tolerance < 0.0 or absolute_tolerance < 0.0:
+        raise ValueError("gradient-audit tolerances must be nonnegative")
+    autodiff = float(jax.grad(objective_fn)(parameter))
+    finite_difference = float(
+        (objective_fn(parameter + step) - objective_fn(parameter - step)) / (2.0 * step)
+    )
+    absolute_error = abs(autodiff - finite_difference)
+    scale = max(abs(autodiff), abs(finite_difference), absolute_tolerance)
+    relative_error = absolute_error / scale
+    passed = absolute_error <= absolute_tolerance + relative_tolerance * scale
+    return DesignGradientAudit(
+        autodiff_gradient=autodiff,
+        finite_difference_gradient=finite_difference,
+        absolute_error=absolute_error,
+        relative_error=relative_error,
+        passed=passed,
+        step=float(step),
+        branch_gap=None if branch_gap is None else float(branch_gap),
+        near_degenerate_branch=(
+            False if branch_gap is None else abs(float(branch_gap)) <= branch_gap_tolerance
+        ),
     )
 def scan_single_surface_objective(
     knobs: OptimizationKnobs,
@@ -640,3 +710,11 @@ def _coefficient_modulation(theta, coefficients):
     modes = jnp.arange(1, coefficients.shape[0] + 1, dtype=theta.dtype)
     phase = modes[:, None] * theta[None, :]
     return jnp.sum(coefficients[:, None] * jnp.cos(phase), axis=0)
+
+
+def _growth_branch_gap(growth_rates):
+    growth_rates = jnp.asarray(growth_rates)
+    if growth_rates.shape[0] < 2:
+        return jnp.asarray(jnp.inf, dtype=growth_rates.dtype)
+    ordered = jnp.sort(growth_rates)
+    return ordered[-1] - ordered[-2]
