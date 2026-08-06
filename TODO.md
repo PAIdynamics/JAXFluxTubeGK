@@ -1,6 +1,6 @@
 # TODO: Differentiable Flux-Tube Stellarator GK Solver
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-06
 
 ## Goal
 
@@ -50,15 +50,16 @@ Repository cleanup already completed:
   kept under ignored `.dependencies/`, while sibling clones can be verified
   and reused without modification.
 
-Standalone Priority 0 and geometry-interface Priority 1 are complete. The next
-architectural gaps are:
+Standalone Priority 0, geometry-interface Priority 1, live-MHD Priority 2, and
+W7-X scientific-validation Priority 3 are complete. The next architectural
+gaps are:
 
-- there is no first-class VMEC/VMEC++ `wout` or GVEC adapter, so W7-X geometry
-  is currently obtained indirectly from GX/GIST or stella artifacts;
-- `benchmarks.py` is 16,564 lines and the top-level `__init__.py` eagerly
-  re-exports most of it, coupling the solver API to validation infrastructure;
-- compact historical W7-X validation records still need to migrate to live
-  providers as the direct W7-X path is implemented in Priority 2.
+- validate end-to-end gradients through a real installed MHD solve and define
+  fixed-topology/remeshing behavior for Priority 4 design optimization;
+- `benchmarks.py` remains oversized and the top-level `__init__.py` eagerly
+  re-exports much of it, coupling the solver API to validation infrastructure;
+- retain historical W7-X fixtures only as compact independent regression
+  evidence while canonical geometry comes from installed MHD providers.
 
 Standalone acceptance on 2026-08-05:
 
@@ -260,40 +261,35 @@ validation work in Priority 3.
   pinned stella rerun reproduces the fixture and proves its averaging window is
   unconverged; a scratch `t=500` run converges `ky=0.3` to approximately
   `(gamma, omega)=(0.01754, 0.04638)`, while the matched solver converges to
-  `(-0.00013, -0.05497)`. The remaining gap is therefore real, but must be
-  evaluated against converged per-ky reference windows.
-- [ ] Replace the reduced convergence ladder with production controls in
-  parallel and velocity resolution, backend, modes, field-line length,
-  timestep, and growth window. The provider-neutral zero-free 32×8
-  midpoint/Gauss-Laguerre quadrature, physical phase-space measure, and
-  cubic semi-Lagrangian mirror split are now implemented. A differentiable
-  implicit-midpoint parallel streaming split and source-matched `dt=0.1` control
-  are also available. Against converged `t=500` `ky=0.3` stella output, the
-  solver gives `(gamma, omega)=(0.02151, 0.04576)` with scalar errors
-  `0.00396/0.00062`; the complex profile error remains 0.115. Timestep,
-  convergence, reversal, conjugation, and a simple phase gauge have been ruled
-  out. A differentiable quasineutrality-coupled Schur response and an opt-in
-  stella-shaped `0.51/0.49` near-centered mass/derivative solve are now
-  implemented and algebraically tested. At `t=500`, the latter gives
-  `ky=0.3` growth/frequency errors of `0.00238/0.00943`, but its complex-profile
-  error is `0.1391` (versus `0.1149` for the streaming-only spectral default),
-  so it is not yet source-equivalent. The remaining implementation must match
-  stella's centering of z-dependent Maxwellian/geometry prefactors and its
-  exact inhomogeneous/homogeneous delta-phi response update on the extended
-  domain. Do not substitute the rejected GKW open stencil or promote either
-  experimental coupled response as the production default before profile
-  parity passes.
-  Source-following discriminators now also rule out three partial fixes:
-  zero-incoming rather than periodic nonzonal boundary rows, separate
-  centering of the streaming/Maxwellian factors, and a single full response
-  after the explicit stage all leave the `t=200` profile error near
-  `0.169-0.179`. Before another long run, instrument one stella implicit step
-  and compare its incoming state, inhomogeneous solve, response-solved field,
-  and final distribution stage-by-stage against the JAX response.
-- [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
-  production optimization blocked until the readiness ledger passes.
-- [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a
-  secondary moment-method cross-check.
+  `(-0.00013, -0.05497)` from the old generic initial state. This established
+  the reproducible long-time discriminator later closed by source-matched stage
+  ordering and initialization below.
+- [x] Replace the reduced convergence ladder with production controls. Source
+  tracing established the exact stella step as SSP RK3 explicit stages, one
+  full direction-aware cubic mirror characteristic, and one full implicit
+  streaming/field response. JAX replay of a native stella step agrees to
+  `7.19e-6` after RK3, `1.34e-4` after mirror advance, `2.17e-5` in the final
+  distribution, and `1.34e-4` in potential. The remaining long-time profile
+  mismatch was an initial-state mismatch, not a timestep defect. An analytic
+  `stella_maxwellian` initializer now reproduces stella's default perturbation
+  without storing equilibrium or distribution artifacts. At `t=500`, 32×8,
+  `dt=0.1`, the converged unstable `ky=0.3` branch has growth/frequency/profile
+  errors `3.20e-4/2.18e-3/1.08e-2`, passing the 0.02 gate. The `ky=0.1,0.2`
+  omega windows remain diagnostic: the independent stella reference fails its
+  own convergence check even at `t=1000`, so those branches are not used to
+  weaken or broaden the production claim.
+- [x] Run guarded CPU timing after parity. The `stella-production` timing preset
+  exercises the validated 256×32×8, `ky=0.3` advance end to end in disposable
+  external scratch space. A 100-step CPU run passed in 13.34 s including geometry
+  loading, JAX compilation, and diagnostics, with a 5.13 MiB memory estimate.
+  DESC production optimization remains a Priority 4 gradient/readiness task.
+- [x] Keep the sibling GX CUDA workflow optional as a secondary moment-method
+  cross-check; it is not a Priority 3 acceptance requirement and no CUDA claim
+  is made from this CPU campaign.
+
+Acceptance gate: **passed for the converged unstable W7-X branch**. Priority 3
+is complete. External stella source, geometry, and generated run data remain
+explicit scratch inputs and are not stored as canonical W7-X design artifacts.
 
 ## Priority 4: Differentiable Design Integration
 

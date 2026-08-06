@@ -254,9 +254,9 @@ Run the W7-X production-readiness ledger:
 JAX_ENABLE_X64=1 uv run python scripts/run_w7x_production_readiness_gate.py
 ```
 
-The ledger currently remains blocked by open solver/stella mode-structure
-parity.  This is intentional: reduced runs should stay reduced until the
-external W7-X gate passes.
+The committed historical ledger remains conservative. For a new external run,
+pass the generated solver/reference fixtures and timing artifact explicitly;
+generated W7-X state stays outside the repository.
 
 ### Matched stella W7-X Path
 
@@ -282,22 +282,31 @@ JAX_ENABLE_X64=1 uv run python examples/run_w7x_mode_structure_gate.py \
   --resample-reference-to-observed-z
 ```
 
-Current status: same-state RHS parity passes, and the old `t=200` reference is
-reproducible but has an unconverged omega averaging window. A clean scratch
-`t=500` run converges stella's `ky=0.3` branch near
-`(gamma, omega)=(0.01754, 0.04638)`. The provider-neutral 32x8 native-velocity
-solver with cubic mirror characteristics and implicit spectral streaming gives
-approximately `(0.02151, 0.04576)`, closing scalar parity, while its
-phase-aligned profile error remains about `0.115`. A quasineutrality-coupled
-Schur response and an opt-in `stella_implicit` near-centered diagnostic are
-available, but neither yet closes profile parity. The latter reproduces
-stella's `0.51/0.49` spatial/time weights; matching stella's centered
-z-dependent prefactors, zero-incoming nonzonal boundaries, and full-step
-ordering individually does not close profile parity. A stage-resolved stella
-implicit-step replay is the next validation gate for the exact response
-construction.
+Current status: the converged `t=500`, `ky=0.3` production branch passes. The
+source-matched path uses a 32x8 midpoint/Gauss-Laguerre velocity grid, `dt=0.1`,
+SSP RK3 explicit stages, one full stella-cubic mirror characteristic, one full
+implicit response, and `--initial-condition stella_maxwellian`. Its
+growth/frequency/phase-aligned-profile errors are approximately
+`0.00032/0.00218/0.01084`, all below 0.02. The initializer is analytic and no
+W7-X distribution is stored. Lower-`ky` frequencies remain diagnostic because
+stella's own omega window is unconverged even at `t=1000`.
 Reference export rejects half-window omega changes above 0.02 by default;
 `--allow-unconverged-omega` is diagnostic-only.
+
+Run guarded timing of the validated algorithm only after supplying a passing
+external gate ledger:
+
+```bash
+JAX_ENABLE_X64=1 uv run python scripts/run_w7x_production_cpu_timing.py \
+  --preset stella-production \
+  --stella-geometry /external/run/w7x.geometry \
+  --readiness-gate /external/run/readiness_gate.json \
+  --output /external/run/production_cpu_timing.json \
+  --n-windows 100 --require-pass
+```
+
+The scan output used by the timer is created in disposable system scratch and
+removed automatically.
 
 ### W7-X `ky=0.3` RHS Trace Work
 
@@ -504,10 +513,10 @@ Passing guardrails:
 
 Open blockers:
 
-- matched W7-X solver/stella `ky=0.3` frequency/profile parity,
-- exact stella implicit-response parity for centered z-dependent prefactors and
-  the inhomogeneous/homogeneous delta-phi update,
-- production W7-X convergence and CPU timing after parity,
+- end-to-end gradients through production MHD solvers and the Priority 4 W7-X
+  design loop,
+- convergence of the independent low-`ky` stella branches before making a
+  broader spectral claim,
 - full nonlinear turbulence and full DESC optimization.
 
 Read `STATUS.md` for the latest state and `TODO.md` for the next concrete

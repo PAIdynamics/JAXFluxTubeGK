@@ -1151,90 +1151,50 @@ fixture is deliberately guarded by production-readiness ledgers.
 
 \subsection{Matched W7-X stella reference}
 
-The preferred current external W7-X reference is stella, because it is a CPU
-continuum gyrokinetic code and can run the matched W7-X case locally.  The
-prepared directory \path{fixtures/stella_w7x_mode_structure_run/} uses the GX
-benchmark VMEC file, \(\texttt{torflux}=0.64\), \(\alpha=0\), adiabatic
-electrons, \(k_y=(0,0.1,0.2,0.3)\), \(k_x=0\), \(\texttt{nzed}=256\),
-\(\texttt{nmu}=8\), \(\texttt{nvgrid}=16\), \(\texttt{tend}=200\), and a
-late-half-window growth convention.  The full matched run completed on one CPU
-in about \(295\,\mathrm{s}\) and was exported to
-\path{fixtures/w7x_itg_external_mode_structure_fixture.csv}.  The exported
-stella values are
-\[
-\gamma=(-7.797962\times10^{-4},-4.876057\times10^{-3},9.619444\times10^{-3}),
-\]
-\[
-\omega_r=(-6.573003\times10^{-2},-1.181846\times10^{-1},-2.849346\times10^{-3})
-\]
-for \(k_y=(0.1,0.2,0.3)\).
+The preferred external W7-X reference is stella, a CPU continuum gyrokinetic
+code that can run the matched case locally.  Acceptance uses
+\(\texttt{torflux}=0.64\), \(\alpha=0\), adiabatic electrons, \(k_x=0\),
+\(k_y=0.3\), \(N_z=256\), \(N_{v_\parallel}=32\), \(N_\mu=8\),
+\(\Delta t=0.1\), and \(t=500\).  Generated stella input, geometry, state, and
+output remain external scratch data rather than canonical repository assets.
+The lower \(k_y=0.1,0.2\) branches are diagnostic because their stella omega
+windows fail the convergence test even at \(t=1000\).
 
-The solver can now import the stella \path{.geometry} table directly.  After
-matching normalized \(z\), field-line length, selected \(k_y\), \(k_x=0\), and
-late-time growth-window controls, the \(t=200\) comparison has good growth
-agreement,
+The solver imports the external stella \path{.geometry} table only for this
+independent validation path.  With the source-matched analytic initial
+perturbation, the converged branch gives
 \[
-\max_{k_y}|\gamma_{\rm solver}-\gamma_{\rm stella}|=8.00978267\times10^{-3},
+(|\Delta\gamma|,|\Delta\omega_r|,\epsilon_\phi)
+=(3.20\times10^{-4},2.18\times10^{-3},1.08\times10^{-2}),
 \]
-but the W7-X gate remains open.  The remaining discrepancy is concentrated in
-\(k_y=0.3\): the closest stella-scale finite-difference velocity case has
-\(\Delta\omega_r=-1.65161421\times10^{-1}\) and phase-aligned profile error
-\(1.56517320\times10^{-1}\).  Frequency sign, affine rescaling, profile
-conjugation, z reversal, circular shifts, longer time windows, and simple
-velocity-grid refinement do not close the gate.
+where \(\epsilon_\phi\) is the phase-aligned complex profile error.  All three
+values pass the \(2\times10^{-2}\) gate.
 
-\subsection{Current W7-X blocker}
+\subsection{Resolved W7-X timestep discriminator}
 
-The active W7-X task is term-array parity for \(k_y=0.3\).  The solver-side
-balance fixture \path{fixtures/w7x_ky03_rhs_model_balance/} reconstructs the RHS
-with zero stored error and has quasineutrality residual near machine precision.
-Its selected-mode RHS is streaming dominated:
+Source instrumentation established the production ordering, which differs from
+a generic RK4 Strang split.  Each stella step consists of three SSP RK3 explicit
+stages, one full sign-dependent cubic semi-Lagrangian mirror characteristic,
+and one full implicit parallel-streaming and quasineutrality response.  On an
+exact native stella input, the JAX replay errors after RK3, after mirror advance,
+in the final distribution, and in potential are respectively
 \[
-\begin{array}{c|c}
-\hbox{term} & \|R_{\rm term}\|_2/\|R\|_2 \\
-\hline
-\hbox{parallel streaming} & 1.11324006\\
-\hbox{magnetic drift} & 0.53073047\\
-\hbox{mirror force} & 0.32597147\\
-\hbox{parallel field drive} & 0.13985170
-\end{array}
+7.19\times10^{-6},\quad 1.34\times10^{-4},\quad
+2.17\times10^{-5},\quad 1.34\times10^{-4}.
 \]
+This closes the timestep discriminator independently of long-time eigenmode
+selection.
 
-Standard stella output is enough to verify normalized \(z\), \(F=b\cdot\nabla
-z/(2\pi)\), \(B\), and \(k_\perp^2\) at the precision of the rounded
-\path{.geometry} table, but it does not contain complex distribution or
-per-term RHS/source arrays.  A non-destructive stella source-copy patch now
-emits a selected-mode explicit-term trace for Fortran \texttt{iky=4},
-\texttt{ikx=1}.  The raw trace is intentionally kept in \path{/tmp}; the compact
-summary is stored in
-\path{fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json}.
-
-The first RHS-trace comparator converts stella-native
-\(\texttt{rhs}\Delta t\) records to continuous-time RHS norms and compares
-scale-free term fractions.  It exposed one concrete convention fix:
-the stella-imported equilibrium-gradient drive coefficient must use the
-stella global-header \texttt{flux\_fac}.  After this correction, the solver
-and stella scalar fractions are
+The earlier long-time profile mismatch came from comparing different initial
+mode mixtures.  Stella initializes a localized Maxwellian perturbation,
 \[
-\begin{array}{c|cc}
-\hbox{group} & \hbox{stella} & \hbox{solver}\\
-\hline
-\hbox{parallel streaming bundle} & 0.89595108 & 1.16029482\\
-\hbox{mirror force} & 0.29866891 & 0.24474080\\
-\hbox{magnetic drift bundle} & 0.42804911 & 0.56430754\\
-\hbox{equilibrium drive} & 0.77998161 & 0.61459833
-\end{array}
+g_0=A(1+i)\exp[-(2\pi z)^2]
+\exp[-v_\parallel^2-2\mu B(z)],
 \]
-The old solver equilibrium-drive fraction was \(0.07783134\), so the
-\texttt{flux\_fac} correction removed the dominant scalar error.  The remaining
-blocker is a contract mismatch rather than a justified physics change: the
-current stella trace has a duplicate z endpoint, \(N_{v_\parallel}=32\),
-\(v_\parallel\in[-3,3]\), large Gauss-like \(\mu\) nodes, and no velocity
-weights, while the committed solver balance fixture stores scalar summaries on
-a smaller grid.  The next run should use the trace format with \texttt{wgts\_vpa}
-and z-dependent \texttt{wgts\_mu}, then compare weighted complex arrays on a
-shared or explicitly interpolated grid before changing the streaming/mirror
-physics.
+whereas the generic scan used a dense oscillatory state.  The
+\texttt{stella\_maxwellian} option implements this expression analytically; no
+W7-X distribution is stored.  This distinction matters at finite time for a
+nonnormal spectrum with slowly separating branches.
 
 \subsection{Optimization status}
 
@@ -1243,23 +1203,24 @@ single-surface objectives, scans over \(\rho\), \(\alpha\), and \(k_y\),
 selected-growth and quasilinear proxy objectives, benchmark-target least-square
 wrappers, and examples that differentiate through a fixed number of RK4 steps.
 DESC coupling currently uses sampled geometry arrays or optional DESC path
-loading; integer topology and remeshing remain static.  Therefore the DESC
-examples should remain labeled reduced until the W7-X external parity,
-production convergence, and guarded CPU-timing ledgers pass.
+loading; integer topology and remeshing remain static.  W7-X external parity
+and guarded timing now pass for the converged linear branch, but the DESC
+examples remain reduced until Priority 4 validates gradients through a real MHD
+solve and defines remeshing/topology-change behavior.
 
 \subsection{Production criteria}
 
-Before claiming a trusted linear stellarator run, the project needs:
+The trusted linear W7-X branch now satisfies:
 \begin{enumerate}
-  \item weighted stella-vs-solver \(k_y=0.3\) term-array parity, or a documented
-  convention difference justified by arrays rather than scalar norms;
-  \item a passing W7-X mode-structure gate against the matched stella fixture;
-  \item a production-control W7-X convergence ladder in field-line length,
-  \(N_z\), velocity resolution/backend, \(k_x/k_y\), timestep, and growth-window
-  diagnostic;
-  \item a guarded production CPU timing result after parity passes;
-  \item an updated readiness ledger that allows production DESC optimization.
+  \item weighted stella-vs-solver \(k_y=0.3\) term and stage-array parity;
+  \item a passing converged W7-X growth, frequency, and mode-profile gate;
+  \item source-matched field-line, 256-point parallel, 32-by-8 velocity,
+  timestep, split-ordering, initial-state, and growth-window controls;
+  \item guarded CPU timing of the validated advance after parity passes.
 \end{enumerate}
+Production design optimization additionally requires the Priority 4 real-MHD
+gradient and topology gates.  A broader low-\(k_y\) spectral claim additionally
+requires converged independent reference windows.
 
 
 \section{Nonlinear and Extended Physics Roadmap}

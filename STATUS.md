@@ -14,7 +14,31 @@ The public MHD geometry boundary is schema-versioned and provider neutral.
 Priority 2 now supplies optional live DESC, VMEC++, and GVEC adapters. VMEC++
 loads its installed named W7-X design, runs it, and constructs the complete
 flux-tube geometry contract from in-memory Fourier output without a repository
-`wout` file. The externally validated W7-X scientific gate remains open.
+`wout` file. The externally validated W7-X scientific gate passes for the
+converged unstable `ky=0.3` branch. Priority 3 is complete; unconverged low-`ky`
+stella windows remain diagnostics rather than grounds for relaxing the gate.
+
+### 2026-08-06: Priority 3 Closure
+
+- Traced the complete stella production step and corrected the solver ordering
+  to SSP RK3 explicit stages, a full direction-aware cubic mirror
+  characteristic, and a full implicit streaming/quasineutrality response.
+- Replayed the exact native input in JAX: RK3, mirror, final distribution, and
+  potential errors are `7.19e-6`, `1.34e-4`, `2.17e-5`, and `1.34e-4`.
+- Identified the long-time blocker as the initial perturbation. The scan now
+  offers an analytic `stella_maxwellian` initializer; it does not store a W7-X
+  distribution or equilibrium artifact.
+- The converged `t=500`, 256×32×8, `dt=0.1`, `ky=0.3` comparison passes with
+  growth/frequency/profile errors `3.20e-4/2.18e-3/1.08e-2` against tolerances
+  of 0.02. Across `ky=0.1,0.2,0.3`, growth and profiles pass, but low-`ky`
+  frequency is not accepted because stella's own omega window remains
+  unconverged even at `t=1000`.
+- Added a guarded `stella-production` CPU timing path that uses disposable
+  scratch output and the validated advance. A 100-step run took 13.34 s end to
+  end, including geometry load, JAX compilation, and diagnostics; estimated
+  memory was 5.13 MiB.
+- Priority 4 may now build on the validated linear branch. This does not claim
+  end-to-end MHD gradients, nonlinear turbulence, or CUDA/GX parity.
 
 ### 2026-08-06: Priority 3 Native Velocity and Mirror Discriminator
 
@@ -191,18 +215,17 @@ committed contracts:
 - DESC/GX eik conversion and geometry checks;
 - reduced W7-X scans, convergence ledgers, and optimization readiness guards.
 
-The scientific W7-X gate remains open:
+The scientific W7-X gate now passes on its converged acceptance branch:
 
-- matched stella geometry, field-line length, `ky`, `kx=0`, and late-time
-  controls brought growth close at `t=200`;
-- the `ky=0.3` real-frequency and phase-aligned mode-profile comparison remains
-  outside tolerance;
-- the solver-side RHS balance reconstructs and is streaming dominated;
-- the retained stella trace summary is now format v3 with explicit RHS-call
-  labels, velocity quadrature, quasineutrality, and normalization; the complete
-  weighted array contract runs but numerical parity fails;
-- production convergence, CPU timing, and MHD design optimization remain
-  blocked behind external W7-X parity.
+- matched stella geometry, initial distribution, 256×32×8 grid, `ky=0.3`,
+  `kx=0`, `dt=0.1`, and `t=500` controls close growth, frequency, and profile;
+- exact stage replay validates the explicit, mirror, and implicit response
+  ordering independently of the long-time eigenmode diagnostic;
+- the source-matched production CPU timing path passes after external parity;
+- low-`ky` omega results remain non-acceptance diagnostics until the independent
+  stella windows converge;
+- production MHD design optimization remains a Priority 4 gradient task, not a
+  remaining Priority 3 solver-parity blocker.
 
 The canonical W7-X geometry path no longer depends on a committed equilibrium
 or derived geometry file. Compact historical stella/GX contracts remain only
