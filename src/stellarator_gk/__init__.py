@@ -93,6 +93,14 @@ from .diagnostics import (
     total_radial_flux,
     velocity_space_integral,
 )
+from .design_topology import (
+    DESIGN_TOPOLOGY_SCHEMA_VERSION,
+    OptimizationTopologyContract,
+    TopologyChangeError,
+    assert_fixed_optimization_topology,
+    build_optimization_topology_contract,
+    optimization_topology_changes,
+)
 from .benchmarks import (
     BenchmarkGateResult,
     BenchmarkTarget,
@@ -421,6 +429,7 @@ from .time_advance import (
 )
 
 __all__ = [
+    "DESIGN_TOPOLOGY_SCHEMA_VERSION",
     "DerivativeBackend",
     "AdiabaticElectronParams",
     "ImplicitParallelResponsePrecompute",
@@ -478,6 +487,7 @@ __all__ = [
     "ModeConnectivity",
     "ModeBoundaryContractReport",
     "OptimizationKnobs",
+    "OptimizationTopologyContract",
     "OptimizationScanResult",
     "CycloneSelectedKyGapAudit",
     "CycloneSameStateIghReplayAudit",
@@ -510,6 +520,7 @@ __all__ = [
     "SpeciesParams",
     "StellaratorGeometryPreflightReport",
     "ToyOptimizationStep",
+    "TopologyChangeError",
     "VelocityBasisKind",
     "VelocityBasisSpec",
     "VelocityGrid",
@@ -573,6 +584,7 @@ __all__ = [
     "build_linear_residual_precompute",
     "build_optimization_geometry",
     "build_optimization_species",
+    "build_optimization_topology_contract",
     "build_physical_flux_tube_geometry_from_coordinate_arrays",
     "build_physical_flux_tube_geometry_from_arrays",
     "build_mode_connectivity",
@@ -585,6 +597,7 @@ __all__ = [
     "build_velocity_grid_from_nodes",
     "benchmark_linear_residual",
     "audit_design_gradient",
+    "assert_fixed_optimization_topology",
     "benchmark_target_cost",
     "benchmark_target_residual",
     "build_desc_gx_eik_reference_from_path",
@@ -708,6 +721,7 @@ __all__ = [
     "mode_chain_mask",
     "mode_structure_fixture_from_selected_state_trace",
     "mode_structure_penalty",
+    "optimization_topology_changes",
     "resample_per_ky_mode_structure_fixture",
     "normalized_hermite_functions",
     "normalized_energy",

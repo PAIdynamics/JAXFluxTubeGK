@@ -52,6 +52,20 @@ soft maximum or select a physical `ky` branch explicitly, then require the
 audit to pass. A hard-maximum gradient across a branch change must not be
 reported as a validated derivative.
 
+## Remeshing and topology changes
+
+Create an `OptimizationTopologyContract` before compiling an objective. It
+hashes velocity nodes, parallel nodes, Fourier modes, mode connectivity, and
+the provider's field-line/linking metadata. Before reusing a compiled objective,
+precompute, checkpoint, or gradient, build the candidate contract and call
+`assert_fixed_optimization_topology(reference, candidate)`.
+
+A changed resolution, node placement, derivative backend, parallel boundary,
+`kx`/`ky` set, `ikxspace`, twist-and-shift map, field-line period count, or MHD
+provider topology raises `TopologyChangeError`. The caller must stop the current
+AD trace and rebuild all discrete objects. Continuous geometry values may
+change without rebuilding when this contract remains identical.
+
 ## Fixed And Differentiable Inputs
 
 Static during a traced objective:

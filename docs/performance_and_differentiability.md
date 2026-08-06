@@ -58,3 +58,6 @@ Static under JAX transforms:
 Integer topology should be rebuilt outside traced objectives whenever grid
 resolution, `ikxspace`, or mode connectivity changes. Continuous geometry and
 profile parameters may be differentiated through on a fixed topology.
+`build_optimization_topology_contract` and
+`assert_fixed_optimization_topology` enforce this boundary for design loops;
+they must run outside JAX transformations at every accepted design iterate.
