@@ -99,7 +99,7 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             velocity_measure_normalization="full_gyroangle",
             mirror_advance="semi_lagrangian",
             mirror_interpolation="cubic",
-            parallel_advance="stella_implicit",
+            parallel_advance="implicit_midpoint",
             vpar_max=3.0,
             mu_max=4.916958697837631,
             dt=0.1,

@@ -272,10 +272,17 @@ validation work in Priority 3.
   solver gives `(gamma, omega)=(0.02151, 0.04576)` with scalar errors
   `0.00396/0.00062`; the complex profile error remains 0.115. Timestep,
   convergence, reversal, conjugation, and a simple phase gauge have been ruled
-  out. The remaining implementation is stella's extended-domain near-centered
-  parallel response solve coupled to quasineutrality; do not substitute the
-  rejected GKW open stencil or treat the current spectral midpoint split as
-  source-equivalent.
+  out. A differentiable quasineutrality-coupled Schur response and an opt-in
+  stella-shaped `0.51/0.49` near-centered mass/derivative solve are now
+  implemented and algebraically tested. At `t=500`, the latter gives
+  `ky=0.3` growth/frequency errors of `0.00238/0.00943`, but its complex-profile
+  error is `0.1391` (versus `0.1149` for the streaming-only spectral default),
+  so it is not yet source-equivalent. The remaining implementation must match
+  stella's centering of z-dependent Maxwellian/geometry prefactors and its
+  exact inhomogeneous/homogeneous delta-phi response update on the extended
+  domain. Do not substitute the rejected GKW open stencil or promote either
+  experimental coupled response as the production default before profile
+  parity passes.
 - [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
   production optimization blocked until the readiness ledger passes.
 - [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a

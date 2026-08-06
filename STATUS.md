@@ -51,6 +51,20 @@ flux-tube geometry contract from in-memory Fourier output without a repository
   extended-domain near-centered streaming response coupled to the
   quasineutrality field response; the current implicit spectral propagator does
   not claim equivalence to that algorithm.
+- Added a differentiable Schur-complement response that advances streaming,
+  parallel electric-field drive, and quasineutrality in one implicit step. A
+  dense small-system regression verifies exact equivalence to the coupled
+  midpoint equations, and a precomputed field inverse avoids a dense solve at
+  every split stage.
+- Added an opt-in `stella_implicit` diagnostic with sign-dependent `0.51/0.49`
+  spatial centering and `0.51/0.49` time weights. The converged `t=500` W7-X
+  run in `/private/tmp` gives `ky=0.3` `(gamma, omega)=(0.01516, 0.05580)`,
+  within scalar tolerances of the stella reference, but the phase-aligned
+  profile error is `0.13913`; the all-ky maximum profile/frequency errors are
+  `0.17676/0.03670`. The streaming-only spectral path therefore remains the
+  validated default. Source inspection narrows the remaining mismatch to
+  stella's centering of z-dependent Maxwellian/geometry factors and its exact
+  inhomogeneous/homogeneous delta-phi response construction.
 
 The target architecture is:
 

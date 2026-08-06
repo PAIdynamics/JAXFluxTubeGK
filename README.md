@@ -282,15 +282,19 @@ JAX_ENABLE_X64=1 uv run python examples/run_w7x_mode_structure_gate.py \
   --resample-reference-to-observed-z
 ```
 
-Current status: same-state RHS parity passes, and the matched mode gate has been
-rerun. The old `t=200` reference is reproducible but its omega averaging window
-is not converged. A clean scratch `t=500` run converges stella's `ky=0.3` branch
-near `(gamma, omega)=(0.01754, 0.04638)`; the matched production solver instead
-converges near `(-0.00013, -0.05497)`, with a phase-aligned profile error near
-0.125. Reference export now rejects half-window omega changes above 0.02 by
-default; `--allow-unconverged-omega` is diagnostic-only. The active blocker is
-production native-velocity/FLR and implicit-parallel convergence, not an
-unresolved scalar RHS convention.
+Current status: same-state RHS parity passes, and the old `t=200` reference is
+reproducible but has an unconverged omega averaging window. A clean scratch
+`t=500` run converges stella's `ky=0.3` branch near
+`(gamma, omega)=(0.01754, 0.04638)`. The provider-neutral 32x8 native-velocity
+solver with cubic mirror characteristics and implicit spectral streaming gives
+approximately `(0.02151, 0.04576)`, closing scalar parity, while its
+phase-aligned profile error remains about `0.115`. A quasineutrality-coupled
+Schur response and an opt-in `stella_implicit` near-centered diagnostic are
+available, but neither yet closes profile parity. The latter reproduces
+stella's `0.51/0.49` spatial/time weights; matching stella's centered
+z-dependent prefactors and exact delta-phi response construction remains open.
+Reference export rejects half-window omega changes above 0.02 by default;
+`--allow-unconverged-omega` is diagnostic-only.
 
 ### W7-X `ky=0.3` RHS Trace Work
 
@@ -498,7 +502,8 @@ Passing guardrails:
 Open blockers:
 
 - matched W7-X solver/stella `ky=0.3` frequency/profile parity,
-- direct weighted term-array parity against the patched stella RHS trace,
+- exact stella implicit-response parity for centered z-dependent prefactors and
+  the inhomogeneous/homogeneous delta-phi update,
 - production W7-X convergence and CPU timing after parity,
 - full nonlinear turbulence and full DESC optimization.
 
