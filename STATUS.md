@@ -65,6 +65,8 @@ flux-tube geometry contract from in-memory Fourier output without a repository
   validated default. Source inspection narrows the remaining mismatch to
   stella's centering of z-dependent Maxwellian/geometry factors and its exact
   inhomogeneous/homogeneous delta-phi response construction.
+- Verified the complete standalone x64 suite after the coupled-response work:
+  378 tests pass and 20 explicitly external tests are deselected.
 
 The target architecture is:
 
