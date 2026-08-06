@@ -672,7 +672,14 @@ def estimate_linear_cfl_dt(
     rk4_radius: float = 2.4,
     floor: float = 1.0e-14,
 ):
-    """Return a conservative fixed-step estimate from RHS coefficient row sums."""
+    """Return a conservative fixed-step estimate from coupled-operator row sums.
+
+    When given a kinetic-electron ``LinearResidualPrecompute``, the estimate
+    includes the quasineutrality-mediated field response as well as the
+    distribution-side advection, drift, damping, and recurrence terms. Passing
+    a bare RHS precompute, or the nonlocal zonal adiabatic solve, retains the
+    distribution-only estimate.
+    """
 
     rhs = precompute.rhs if hasattr(precompute, "rhs") else precompute
     dz_radius = jnp.max(jnp.sum(jnp.abs(rhs.D_z), axis=1))
@@ -683,6 +690,7 @@ def estimate_linear_cfl_dt(
     damping_radius = jnp.max(jnp.abs(rhs.perpendicular_damping))
     parallel_recurrence_radius = jnp.asarray(0.0)
     velocity_recurrence_radius = jnp.asarray(0.0)
+    field_response_radius = jnp.asarray(0.0)
     derivative_model = getattr(rhs, "parallel_derivative_model", "matrix")
     if derivative_model == "matrix" and hasattr(rhs, "parallel_recurrence_operator"):
         parallel_recurrence_radius = jnp.max(
@@ -692,6 +700,8 @@ def estimate_linear_cfl_dt(
         velocity_recurrence_radius = jnp.max(
             jnp.abs(rhs.velocity_recurrence_coeff)
         ) * jnp.max(jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1))
+    if getattr(precompute, "field_model", None) == "kinetic":
+        field_response_radius = _electrostatic_field_response_radius(precompute)
     radius = (
         parallel_radius
         + mirror_radius
@@ -699,8 +709,60 @@ def estimate_linear_cfl_dt(
         + damping_radius
         + parallel_recurrence_radius
         + velocity_recurrence_radius
+        + field_response_radius
     )
     return jnp.asarray(safety * rk4_radius) / jnp.maximum(radius, jnp.asarray(floor))
+
+
+def _electrostatic_field_response_radius(precompute):
+    """Bound the infinity norm of the algebraic-phi contribution to the RHS."""
+
+    rhs = precompute.rhs
+    field = precompute.field
+    denominator = jnp.asarray(field.denominator)
+    floor = jnp.asarray(field.denominator_floor, dtype=denominator.dtype)
+    safe_denominator = jnp.where(
+        jnp.abs(denominator) < floor,
+        jnp.where(denominator < 0.0, -floor, floor),
+        denominator,
+    )
+    # phi(z,kx,ky) is local in Fourier space and is a weighted velocity-space
+    # reduction. This is its exact infinity-norm row sum before optional zonal
+    # corrections, which are irrelevant to the non-zonal TEM path.
+    phi_radius = jnp.sum(jnp.abs(field.phi_weight), axis=(0, 1, 2)) / jnp.abs(
+        safe_denominator
+    )
+
+    bessel = jnp.asarray(rhs.flr_factors.bessel_j0)
+    maxwellian = jnp.asarray(rhs.maxwellian)[..., None, None]
+    drive = jnp.asarray(rhs.drive_factor)[..., None, None]
+    ky = jnp.asarray(rhs.ky)[None, None, None, None, None, :]
+    ey = jnp.asarray(rhs.E_y)[None, None, None, :, None, None]
+    gyro_radius = jnp.abs(bessel[:, None, ...])
+
+    equilibrium = jnp.max(
+        jnp.abs(ey * ky * maxwellian * drive) * gyro_radius * phi_radius
+    )
+    drift = jnp.max(
+        jnp.abs(
+            rhs.charge_over_temperature[:, None, None, None, None, None]
+            * rhs.magnetic_drift_frequency
+            * maxwellian
+        )
+        * gyro_radius
+        * phi_radius
+    )
+
+    dz_radius = jnp.max(jnp.sum(jnp.abs(rhs.D_z), axis=1))
+    parallel = jnp.max(
+        jnp.abs(
+            rhs.charge_over_temperature[:, None, None, None, None, None]
+            * rhs.parallel_streaming_coeff[:, :, None, :, None, None]
+            * maxwellian
+        )
+        * gyro_radius
+    ) * dz_radius * jnp.max(phi_radius)
+    return equilibrium + drift + parallel
 
 
 def _apply_filter(state, filter_fn):

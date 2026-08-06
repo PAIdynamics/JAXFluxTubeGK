@@ -427,3 +427,34 @@ def test_linear_cfl_estimate_includes_explicit_recurrence_operators():
     expected_radius = 3.0 * 4.0 + 4.0 * 3.0 + 0.7 + 0.3 + 0.5 * 6.0 + 0.25 * 8.0
 
     np.testing.assert_allclose(estimate, 2.4 / expected_radius)
+
+
+def test_linear_cfl_estimate_includes_quasineutrality_field_response():
+    rhs = SimpleNamespace(
+        D_z=jnp.zeros((1, 1)),
+        D_vpar=jnp.zeros((1, 1)),
+        parallel_streaming_coeff=jnp.zeros((1, 1, 1)),
+        mirror_force_coeff=jnp.zeros((1, 1, 1)),
+        magnetic_drift_frequency=jnp.zeros((1, 1, 1, 1, 1, 1)),
+        perpendicular_damping=jnp.zeros((1, 1)),
+        ky=jnp.asarray([3.0]),
+        E_y=jnp.asarray([2.0]),
+        maxwellian=jnp.asarray([[[[5.0]]]]),
+        drive_factor=jnp.asarray([[[[7.0]]]]),
+        charge_over_temperature=jnp.asarray([1.0]),
+        flr_factors=SimpleNamespace(bessel_j0=jnp.asarray([[[[[11.0]]]]])),
+    )
+    field = SimpleNamespace(
+        phi_weight=jnp.asarray([[[[[[13.0]]]]]]),
+        denominator=jnp.asarray([[[-17.0]]]),
+        denominator_floor=1.0e-14,
+    )
+
+    estimate = estimate_linear_cfl_dt(
+        SimpleNamespace(rhs=rhs, field=field, field_model="kinetic"),
+        safety=1.0,
+        rk4_radius=2.4,
+    )
+    expected_radius = 2.0 * 3.0 * 5.0 * 7.0 * 11.0 * 13.0 / 17.0
+
+    np.testing.assert_allclose(estimate, 2.4 / expected_radius)

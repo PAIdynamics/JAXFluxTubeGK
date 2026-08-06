@@ -337,7 +337,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   agrees with a revision-pinned independent code.
   A normalized multi-window discriminator now exposes growth, frequency, late
   drift, and CFL metadata. Its reduced ladders are not resolution-converged;
-  the investigation also fixed a CFL omission for explicit recurrence terms.
+  the investigation also fixed CFL omissions for explicit recurrence terms
+  and the kinetic-quasineutrality field response. The corrected default
+  reduced-case bound is `3.54e-3`; quantitative external parity remains the
+  acceptance gate.
 - [ ] Add collisions and electromagnetic perturbations.
 - [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
   timestep control, saturated heat-flux diagnostics, and nonlinear parity.

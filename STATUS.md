@@ -61,8 +61,8 @@ claimed.
 - The preflight passes charge neutrality, fully kinetic quasineutrality,
   coupled JIT residual finiteness, positive CFL, and the expected 10:1
   electron/ion streaming scale. The current reduced case reports zero field
-  residual and an estimated explicit CFL timestep of `5.50e-3` after recurrence
-  stiffness is included.
+  residual and an estimated explicit CFL timestep of `3.54e-3` after recurrence
+  and algebraic-field-response stiffness are included.
 - Added `kinetic_electron_tem_external_parity` to the confidence ledger. The
   TEM roadmap item remains open because no converged external growth,
   electron-direction frequency, or complex mode-structure gate has passed.
@@ -70,8 +70,10 @@ claimed.
   transient; longer reduced runs recover an electron-direction branch but do
   not agree with the reference growth and change with resolution.
 - Fixed the explicit CFL estimator to include matrix-backend parallel and
-  velocity recurrence operators. The previous estimate omitted these active
-  fourth-order terms and became increasingly unsafe as resolution increased.
+  velocity recurrence operators plus a kinetic-quasineutrality field-response
+  row-sum bound. The previous estimate omitted these active fourth-order and
+  algebraic-coupling terms and became increasingly unsafe as resolution
+  increased.
 - Repository-wide verification after these Priority 5 changes passes: Ruff is
   clean and the x64 standalone suite reports 430 passed with 20 external tests
   deselected.
