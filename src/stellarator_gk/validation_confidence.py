@@ -138,21 +138,21 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
         ValidationConfidenceGap(
             identifier="production_collisions_electromagnetic_parity",
             status="open",
-            summary="Production collision and electromagnetic trajectory parity remain open.",
+            summary="Production collision and long electromagnetic trajectory parity remain open.",
             blocks_claims=("collisional_electromagnetic_production_physics",),
             superseded_for_claims=(),
             evidence=(
                 "A differentiable species-local conserving BGK model is integrated, "
                 "but no Landau/Fokker--Planck inter-species operator is validated. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
-                "complete one-state electromagnetic RHS match pinned Gyaradax when "
-                "both codes use its separable upwind backend. The EM timestep bound "
-                "dominates a small exact operator row sum; the production trajectory "
-                "gate remains open."
+                "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
+                "trajectory match pinned Gyaradax when both codes use its separable "
+                "upwind backend. The EM timestep bound dominates a small exact "
+                "operator row sum; the long production trajectory gate remains open."
             ),
             next_action=(
-                "Compare electromagnetic time advance, dispersion, growth, and mode "
-                "structure against revision-pinned independent runs, and separately "
+                "Compare electromagnetic dispersion, converged growth, and mode "
+                "structure over a long revision-pinned independent run, and separately "
                 "validate a Landau/Fokker--Planck inter-species collision operator."
             ),
         ),

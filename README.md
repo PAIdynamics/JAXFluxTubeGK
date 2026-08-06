@@ -588,7 +588,8 @@ Open blockers:
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
 - production Landau/Fokker--Planck collision parity and electromagnetic
-  time-advance/dispersion parity (one-state field and full-RHS parity pass),
+  long-time dispersion parity (one-state field/full-RHS and five-step RK4
+  parity pass),
 - statistically stationary, resolution-converged nonlinear heat flux with an
   independent parity gate, and full DESC optimization.
 

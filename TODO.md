@@ -366,10 +366,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   drive and both `B_parallel` compression terms. Fields, physical-state
   recovery, the isolated electromagnetic increment, and the complete
   one-state RHS agree with pinned Gyaradax when the matched separable-upwind
-  backend is selected. The mixed-field CFL estimate includes the `g`-to-`f`
-  gain and all three algebraic field feedback paths and bounds a small exact
-  dense-operator row sum. Production electromagnetic time-advance,
-  dispersion/growth, and mode-structure trajectory parity remain open.
+  backend is selected. One RK4 step and an unnormalized five-step trajectory
+  also agree, exercising repeated mixed-state field solves. The mixed-field
+  CFL estimate includes the `g`-to-`f` gain and all three algebraic field
+  feedback paths and bounds a small exact dense-operator row sum. Long-time
+  electromagnetic dispersion/growth and mode-structure parity remain open.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

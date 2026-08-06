@@ -21,10 +21,12 @@ from stellarator_gk import (
     build_velocity_grid,
     dense_matrix_from_action,
     estimate_linear_cfl_dt,
+    integrate_fixed_step,
     linear_residual,
     mixed_to_physical_distribution,
     parallel_ampere_residual,
     physical_to_mixed_distribution,
+    rk4_step,
     solve_electromagnetic_fields,
     solve_parallel_ampere,
     solve_perpendicular_magnetic_fields,
@@ -472,7 +474,7 @@ def test_perpendicular_magnetic_precompute_matches_pinned_gyaradax(gyaradax_root
 
 
 @pytest.mark.external
-def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
+def test_electromagnetic_rhs_and_rk4_step_match_pinned_gyaradax(gyaradax_root):
     import sys
 
     if str(gyaradax_root) not in sys.path:
@@ -481,7 +483,7 @@ def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
     from gyaradax.fields import _compute_fields, g_to_f
     from gyaradax.geometry import compute_geometry
     from gyaradax.params import GKParams
-    from gyaradax.solver import linear_precompute
+    from gyaradax.solver import default_state, gkstep_single, linear_precompute
 
     spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
     velocity, parallel, fourier, geometry, species, electrostatic = _build_tem_system(spec)
@@ -546,15 +548,15 @@ def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
         kymax=float(np.max(np.asarray(reference_geometry["krho"]))) or 1.0,
         backend="jax",
         mixed_precision=False,
+        disable_per_ky_norm=True,
     )
     reference_precompute = linear_precompute(reference_geometry, params)
+    reference_ops = create_ops(reference_precompute, backend="jax", mixed_precision=False)
     phi_ref, apar_ref, bpar_ref = _compute_fields(
         mixed, reference_geometry, params, reference_precompute
     )
     physical_ref = g_to_f(mixed, apar_ref, params, reference_precompute)
-    reference_rhs = create_ops(
-        reference_precompute, backend="jax", mixed_precision=False
-    ).linear_rhs(
+    reference_rhs = reference_ops.linear_rhs(
         physical_ref,
         phi_ref,
         reference_geometry,
@@ -563,9 +565,7 @@ def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
         apar=apar_ref,
         bpar=bpar_ref,
     )
-    reference_electrostatic_rhs = create_ops(
-        reference_precompute, backend="jax", mixed_precision=False
-    ).linear_rhs(
+    reference_electrostatic_rhs = reference_ops.linear_rhs(
         physical_ref,
         phi_ref,
         reference_geometry,
@@ -603,4 +603,54 @@ def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
         rtol=2e-6,
         atol=2e-10,
         err_msg="full_electromagnetic_rhs",
+    )
+
+    dt = 1.0e-4
+    observed_next = rk4_step(
+        mixed,
+        dt,
+        lambda state: linear_residual(state, precomputed=observed_precompute),
+    )
+    reference_next, _, reference_state = gkstep_single(
+        mixed,
+        reference_geometry,
+        params,
+        default_state(nky=1),
+        reference_precompute,
+        ops=reference_ops,
+        dt_override=jnp.asarray(dt),
+    )
+    np.testing.assert_allclose(
+        observed_next,
+        reference_next,
+        rtol=2e-6,
+        atol=2e-10,
+        err_msg="electromagnetic_rk4_step",
+    )
+
+    n_steps = 5
+    observed_trajectory = integrate_fixed_step(
+        mixed,
+        dt,
+        n_steps,
+        lambda state: linear_residual(state, precomputed=observed_precompute),
+        store_history=False,
+    ).state
+    reference_trajectory = reference_next
+    for _ in range(1, n_steps):
+        reference_trajectory, _, reference_state = gkstep_single(
+            reference_trajectory,
+            reference_geometry,
+            params,
+            reference_state,
+            reference_precompute,
+            ops=reference_ops,
+            dt_override=jnp.asarray(dt),
+        )
+    np.testing.assert_allclose(
+        observed_trajectory,
+        reference_trajectory,
+        rtol=3e-6,
+        atol=3e-10,
+        err_msg="electromagnetic_five_step_trajectory",
     )

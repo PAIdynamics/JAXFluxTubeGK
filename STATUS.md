@@ -149,8 +149,10 @@ claimed.
   and the complete one-state RHS match pinned Gyaradax on the same mixed state.
   The former full-RHS mismatch was an operator-routing error: Gyaradax's JAX
   backend uses separable upwind streaming and trapping, whereas `gkw_igh` is
-  the fused GKW convention path. Electromagnetic time-advance and trajectory
-  parity are not yet claimed.
+  the fused GKW convention path. One RK4 step and a five-step unnormalized
+  trajectory also match, covering repeated self-consistent field solves.
+  Long-time electromagnetic dispersion/growth and mode-structure parity are
+  not yet claimed.
 - Added a differentiable electromagnetic CFL bound covering the mixed-state
   amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
   at finite beta and conservatively dominates the exact row sum of a small
