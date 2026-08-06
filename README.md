@@ -474,6 +474,24 @@ bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
   --copy-outputs --resample-reference-to-observed-z
 ```
 
+### External Gyaradax TEM Reference
+
+The kinetic-electron TEM target is generated on demand from an explicit,
+revision-pinned Gyaradax checkout and written to caller-selected scratch
+storage:
+
+```bash
+PYTHONPATH=/path/to/gyaradax uv run --extra reference python \
+  scripts/run_gyaradax_tem_reference.py \
+  --gyaradax-root /path/to/gyaradax \
+  --expected-revision 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234 \
+  --output /tmp/optimal-fusion-gyaradax-tem-ky07.json
+```
+
+The exact notebook case produces `gamma=0.66370834` and `omega=-1.02976757`
+at `ky rho_i=0.7`. The output contains provenance, case parameters, timestep
+range, and window histories; it is not stored in the repository.
+
 ## Using the Python API
 
 The examples are the best starting point.  For direct API use, build grids and

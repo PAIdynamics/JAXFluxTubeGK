@@ -94,6 +94,19 @@ claimed.
   clean and the x64 standalone suite reports 430 passed with 20 external tests
   deselected.
 
+### 2026-08-06: Pinned TEM Target Reproduced
+
+- Added an explicit Gyaradax TEM producer requiring a caller-supplied checkout,
+  optional exact revision, and scratch output path. No generated state or
+  reference artifact is committed.
+- At pinned revision `8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234`, the exact
+  notebook configuration (`32x32x16`, 200 windows of 20 steps, `dt=0.01`)
+  reproduces `gamma=0.66370834`, `omega=-1.02976757`, and final time `40`.
+- Added a local reference-matched TEM profile with GKW cell-centered parallel
+  and velocity grids, zero-incoming boundaries, fused `igh` recurrence, and
+  velocity-independent `cosine2` initialization. Its reduced transient agrees
+  qualitatively with the producer; long-time quantitative parity remains open.
+
 ### 2026-08-06: Conservative Collision Foundation
 
 - Added an optional species-local linearized BGK operator to the collocation

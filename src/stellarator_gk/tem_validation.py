@@ -9,7 +9,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from .geometry import build_s_alpha_geometry
-from .grids import build_fourier_grid, build_parallel_grid, build_velocity_grid
+from .grids import (
+    build_finite_difference_operators,
+    build_fourier_grid,
+    build_mode_connectivity,
+    build_parallel_grid,
+    build_velocity_grid,
+)
 from .diagnostics import mode_amplitude
 from .physics import kinetic_quasineutrality_residual, solve_kinetic_electron_phi
 from .solver import build_linear_residual_precompute, linear_residual
@@ -17,6 +23,7 @@ from .time_advance import estimate_linear_cfl_dt, integrate_fixed_step
 from .types import (
     FourierGridSpec,
     GeometryScalarParams,
+    ParallelGrid,
     ParallelGridSpec,
     SpeciesParams,
     VelocityGridSpec,
@@ -45,6 +52,9 @@ class TemCaseSpec:
     mu_max: float = 4.5
     field_periods: float = 3.0
     velocity_backend: str = "chebyshev"
+    parallel_backend: str = "fourier"
+    parallel_derivative_model: str = "matrix"
+    initial_condition: str = "generic"
     parallel_recurrence_rate: float = 1.0
     velocity_recurrence_rate: float = 0.1
 
@@ -59,6 +69,17 @@ class TemCaseSpec:
             raise ValueError("velocity bounds must be positive")
         if self.parallel_recurrence_rate < 0.0 or self.velocity_recurrence_rate < 0.0:
             raise ValueError("recurrence-control rates must be nonnegative")
+        if self.parallel_backend not in ("fourier", "finite_difference"):
+            raise ValueError("parallel_backend must be 'fourier' or 'finite_difference'")
+        if self.parallel_derivative_model not in ("matrix", "gkw_igh"):
+            raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_igh'")
+        if self.parallel_derivative_model == "gkw_igh" and (
+            self.parallel_backend != "finite_difference"
+            or self.velocity_backend != "finite_difference"
+        ):
+            raise ValueError("gkw_igh requires finite-difference parallel and velocity grids")
+        if self.initial_condition not in ("generic", "gyaradax_cosine2"):
+            raise ValueError("unsupported TEM initial condition")
 
 
 @dataclass(frozen=True)
@@ -122,6 +143,20 @@ def tem_species(spec: TemCaseSpec | None = None) -> tuple[SpeciesParams, Species
     )
 
 
+def gyaradax_tem_case_spec() -> TemCaseSpec:
+    """Return the exact local discretization profile for the pinned TEM producer."""
+
+    return TemCaseSpec(
+        n_z=32,
+        n_vpar=32,
+        n_mu=16,
+        velocity_backend="finite_difference",
+        parallel_backend="finite_difference",
+        parallel_derivative_model="gkw_igh",
+        initial_condition="gyaradax_cosine2",
+    )
+
+
 def run_tem_physics_preflight(
     spec: TemCaseSpec | None = None,
     *,
@@ -132,7 +167,7 @@ def run_tem_physics_preflight(
 
     spec = spec or TemCaseSpec()
     velocity, parallel, _fourier, _geometry, _species, precompute = _build_tem_system(spec)
-    state = _initial_tem_state(precompute, parallel)
+    state = _initial_tem_state(precompute, parallel, spec)
     phi = solve_kinetic_electron_phi(state, precompute.field)
     field_residual = kinetic_quasineutrality_residual(phi, state, precompute.field)
     rhs = jax.jit(linear_residual)(state, precomputed=precompute)
@@ -197,7 +232,7 @@ def run_reduced_tem_linear_smoke(
     timestep = cfl_fraction * cfl if dt is None else float(dt)
     if timestep <= 0.0 or timestep > cfl:
         raise ValueError(f"dt must be positive and no larger than estimated CFL {cfl:.6g}")
-    state = _initial_tem_state(precompute, parallel)
+    state = _initial_tem_state(precompute, parallel, spec)
     field = solve_kinetic_electron_phi(state, precompute.field)
     amplitude = float(mode_amplitude(field)[0, 0])
     state = state / amplitude
@@ -231,7 +266,7 @@ def run_reduced_tem_linear_smoke(
     start = min(max(int(len(times_array) * late_fraction), 0), len(times_array) - 2)
     growth = float(np.polyfit(times_array[start:], logs_array[start:], 1)[0])
     phases = np.unwrap(np.angle(probes_array))
-    frequency = float(-np.polyfit(times_array[start:], phases[start:], 1)[0])
+    frequency = float(np.polyfit(times_array[start:], phases[start:], 1)[0])
     window_growth = np.diff(logs_array) / np.diff(times_array)
     late_delta = float(abs(window_growth[-1] - window_growth[-2]))
     finite = bool(
@@ -268,17 +303,12 @@ def _build_tem_system(spec: TemCaseSpec):
             backend=spec.velocity_backend,
         )
     )
-    half_span = 0.5 * spec.field_periods
-    parallel = build_parallel_grid(
-        ParallelGridSpec(
-            n_z=spec.n_z,
-            z_min=-half_span,
-            z_max=half_span,
-            topology="periodic",
-        )
-    )
+    parallel = _build_tem_parallel_grid(spec)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(spec.ky,))
+    )
+    mode_connectivity = (
+        build_mode_connectivity(fourier) if spec.parallel_derivative_model == "gkw_igh" else None
     )
     geometry = build_s_alpha_geometry(
         parallel,
@@ -293,11 +323,53 @@ def _build_tem_system(spec: TemCaseSpec):
         field_model="kinetic",
         parallel_recurrence_rate=spec.parallel_recurrence_rate,
         velocity_recurrence_rate=spec.velocity_recurrence_rate,
+        mode_connectivity=mode_connectivity,
+        parallel_derivative_model=spec.parallel_derivative_model,
     )
     return velocity, parallel, fourier, geometry, species, precompute
 
 
-def _initial_tem_state(precompute, parallel):
+def _build_tem_parallel_grid(spec: TemCaseSpec) -> ParallelGrid:
+    half_span = 0.5 * spec.field_periods
+    spacing = spec.field_periods / spec.n_z
+    lower = -half_span + 0.5 * spacing
+    if spec.parallel_backend == "finite_difference":
+        operators = build_finite_difference_operators(spec.n_z, spacing, periodic=False)
+        identity = jnp.eye(spec.n_z, dtype=operators.D1.dtype)
+        return ParallelGrid(
+            z=lower + spacing * jnp.arange(spec.n_z, dtype=operators.D1.dtype),
+            w_z=jnp.full((spec.n_z,), spacing, dtype=operators.D1.dtype),
+            D_z=operators.D1,
+            modal_transform=identity,
+            inverse_modal_transform=identity,
+            backend="finite_difference",
+            topology="open",
+        )
+    return build_parallel_grid(
+        ParallelGridSpec(
+            n_z=spec.n_z,
+            z_min=lower,
+            z_max=lower + spec.field_periods,
+            topology="periodic",
+        )
+    )
+
+
+def _initial_tem_state(precompute, parallel, spec: TemCaseSpec | None = None):
+    spec = spec or TemCaseSpec()
+    if spec.initial_condition == "gyaradax_cosine2":
+        profile = 1.0e-3 * (jnp.cos(2.0 * jnp.pi * parallel.z) + 1.0)
+        shape = (
+            precompute.n_species,
+            precompute.rhs.maxwellian.shape[1],
+            precompute.rhs.maxwellian.shape[2],
+            parallel.z.shape[0],
+            1,
+            1,
+        )
+        return jnp.broadcast_to(profile[None, None, None, :, None, None], shape).astype(
+            jnp.complex128
+        )
     maxwellian = jnp.asarray(precompute.rhs.maxwellian)
     half_span = 0.5 * float(jnp.sum(parallel.w_z))
     phase = jnp.exp(0.07j * 2.0 * jnp.pi * parallel.z)
@@ -317,6 +389,7 @@ __all__ = [
     "TemCaseSpec",
     "TemPhysicsPreflightReport",
     "TemLinearSmokeResult",
+    "gyaradax_tem_case_spec",
     "run_reduced_tem_linear_smoke",
     "run_tem_physics_preflight",
     "tem_species",

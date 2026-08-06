@@ -341,6 +341,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and the kinetic-quasineutrality field response. The corrected default
   reduced-case bound is `3.54e-3`; quantitative external parity remains the
   acceptance gate.
+  The exact pinned Gyaradax producer is now executable without stored output
+  and reproduces `gamma=0.66370834`, `omega=-1.02976757` at `ky rho_i=0.7`.
+  A reference-matched local profile now uses the same `32x32x16` grid,
+  cell-centered finite differences, fused GKW `igh` operator, and `cosine2`
+  initialization. Keep the item open until its long-time local result and
+  complex mode structure pass the comparison.
 - [x] Add a differentiable collision foundation to the production collocation
   residual. The current species-local linearized BGK model preserves discrete
   density, parallel momentum, and energy exactly and contributes to the CFL
