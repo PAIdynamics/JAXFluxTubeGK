@@ -181,6 +181,16 @@ claimed.
 - This closes the model-collision implementation slice only. A validated
   Landau/Fokker--Planck operator with inter-species exchange and electromagnetic
   field evolution remain open Priority 5 physics gates.
+- Added a standalone nine-point GKW-style test-particle Fokker--Planck
+  foundation for the finite-difference velocity grid. It includes pitch-angle
+  scattering, energy diffusion, friction, target/background mass and thermal
+  speed scaling, boundary flux closure, a differentiable frequency, and a
+  conservative row-sum stiffness bound. The single-species stencil and action
+  match pinned Gyaradax to `2e-12`.
+- This differential test-particle foundation is not yet wired into the solver
+  and does not include the reciprocal field-particle term needed for exact
+  inter-species momentum/energy exchange; the production Landau claim remains
+  blocked.
 
 ### 2026-08-06: Nonlinear ExB Foundation
 

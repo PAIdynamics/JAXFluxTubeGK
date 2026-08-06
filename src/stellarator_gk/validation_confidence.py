@@ -143,7 +143,9 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             superseded_for_claims=(),
             evidence=(
                 "A differentiable species-local conserving BGK model is integrated, "
-                "but no Landau/Fokker--Planck inter-species operator is validated. "
+                "and a standalone nine-point test-particle Fokker--Planck stencil/action "
+                "matches pinned Gyaradax to 2e-12. The latter is not yet solver-integrated "
+                "and lacks reciprocal field-particle inter-species exchange. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "

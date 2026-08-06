@@ -2,9 +2,12 @@
 
 from .collisions import (
     ConservingBGKPrecompute,
+    FokkerPlanckPrecompute,
     build_conserving_bgk_precompute,
+    build_fokker_planck_precompute,
     collision_moments,
     conserving_bgk_collision,
+    fokker_planck_collision,
 )
 from .electromagnetic import (
     ElectromagneticFieldPrecompute,
@@ -133,6 +136,7 @@ __all__ = [
     "ParallelAmperePrecompute",
     "PerpendicularMagneticPrecompute",
     "KineticQuasineutralityPrecompute",
+    "FokkerPlanckPrecompute",
     "GKWArakawaIghStencil",
     "GKWParallelStencil",
     "LinearRHSPrecompute",
@@ -151,6 +155,7 @@ __all__ = [
     "build_adiabatic_quasineutrality_precompute",
     "build_kinetic_quasineutrality_precompute",
     "build_conserving_bgk_precompute",
+    "build_fokker_planck_precompute",
     "build_exb_pseudospectral_precompute",
     "build_electromagnetic_field_precompute",
     "build_parallel_ampere_precompute",
@@ -163,6 +168,7 @@ __all__ = [
     "default_adiabatic_electron_params",
     "collision_moments",
     "conserving_bgk_collision",
+    "fokker_planck_collision",
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",

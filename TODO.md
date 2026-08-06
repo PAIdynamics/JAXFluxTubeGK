@@ -378,7 +378,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   growth and frequency by `4.64%` and `3.93%`, below the declared 5% gate,
   while both rungs independently retain Gyaradax parity. A higher
   production-grid confirmation and Landau/Fokker--Planck inter-species
-  collisions remain open before closing this combined item.
+  collisions remain open before closing this combined item. A standalone
+  nine-point test-particle Fokker--Planck stencil now covers pitch-angle
+  scattering, energy diffusion, friction, pair mass/thermal-speed scaling,
+  and finite-difference boundary closure. Its single-species stencil and
+  action match pinned Gyaradax to `2e-12`, and the frequency remains
+  differentiable. Next, integrate this path into the linear residual/CFL and
+  add the reciprocal field-particle correction required for exact
+  inter-species momentum and energy exchange.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
