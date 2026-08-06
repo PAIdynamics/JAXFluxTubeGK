@@ -41,6 +41,7 @@ class StellaVelocityCase:
     mirror_advance: str = "explicit"
     mirror_interpolation: str = "linear"
     parallel_advance: str = "explicit"
+    initial_condition: str = "generic"
     vpar_max: float = 2.0
     mu_max: float = 1.5
     dt: float = 0.02
@@ -100,6 +101,7 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             mirror_advance="semi_lagrangian",
             mirror_interpolation="stella_cubic",
             parallel_advance="stella_implicit",
+            initial_condition="stella_maxwellian",
             vpar_max=3.0,
             mu_max=4.916958697837631,
             dt=0.1,
@@ -286,6 +288,8 @@ def _scan_args(
         case.mirror_interpolation,
         "--parallel-advance",
         case.parallel_advance,
+        "--initial-condition",
+        case.initial_condition,
         "--density",
         "1.0",
         "--temperature",

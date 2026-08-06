@@ -281,6 +281,12 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--growth-window-fraction", type=float, default=0.5)
     parser.add_argument("--no-normalize-each-window", action="store_true")
     parser.add_argument("--initial-amplitude", type=float, default=1.0e-2)
+    parser.add_argument(
+        "--initial-condition",
+        choices=("generic", "stella_maxwellian"),
+        default="generic",
+        help="deterministic initial distribution; stella_maxwellian matches stella's default benchmark",
+    )
     parser.add_argument("--softplus-temperature", type=float)
     parser.add_argument("--kperp-epsilon", type=float, default=1.0e-12)
     return parser.parse_args(argv)
@@ -655,7 +661,14 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 mirror_force_coeff=jnp.zeros_like(mirror_coefficient),
             ),
         )
-    state = _initial_state(velocity, parallel, fourier, args.initial_amplitude)
+    state = _initial_state(
+        velocity,
+        parallel,
+        fourier,
+        args.initial_amplitude,
+        geometry=geometry,
+        initial_condition=args.initial_condition,
+    )
     solve_phi = jax.jit(lambda state_value: solve_field_from_state(state_value, precompute))
     parallel_propagator = None
     parallel_response_step = None
@@ -1037,7 +1050,15 @@ def _parallel_grid_from_z(z):
     )
 
 
-def _initial_state(velocity, parallel, fourier, amplitude: float):
+def _initial_state(
+    velocity,
+    parallel,
+    fourier,
+    amplitude: float,
+    *,
+    geometry=None,
+    initial_condition: str = "generic",
+):
     shape = (
         velocity.vpar.shape[0],
         velocity.mu.shape[0],
@@ -1045,6 +1066,18 @@ def _initial_state(velocity, parallel, fourier, amplitude: float):
         fourier.kx.shape[0],
         fourier.ky.shape[0],
     )
+    if initial_condition == "stella_maxwellian":
+        if geometry is None:
+            raise ValueError("stella_maxwellian initial condition requires geometry")
+        zed = 2.0 * jnp.pi * parallel.z
+        spatial = jnp.exp(-(zed**2))[None, None, :, None, None]
+        velocity_profile = jnp.exp(
+            -(velocity.vpar[:, None, None] ** 2)
+            - 2.0 * velocity.mu[None, :, None] * geometry.B[None, None, :]
+        )[..., None, None]
+        return amplitude * (1.0 + 1.0j) * velocity_profile * spatial * jnp.ones(shape)
+    if initial_condition != "generic":
+        raise ValueError("initial_condition must be 'generic' or 'stella_maxwellian'")
     index = jnp.arange(np.prod(shape), dtype=jnp.float64).reshape(shape)
     z_profile = (1.0 + 0.25 * jnp.cos(2.0 * jnp.pi * parallel.z))[None, None, :, None, None]
     return amplitude * z_profile * (jnp.cos(index / 7.0) + 1j * jnp.sin(index / 11.0))

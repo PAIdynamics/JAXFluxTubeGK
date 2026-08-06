@@ -47,6 +47,7 @@ def test_default_velocity_cases_include_spectral_and_gkw_grid_controls():
     assert by_name["native_32x8"].mirror_advance == "semi_lagrangian"
     assert by_name["native_32x8"].mirror_interpolation == "stella_cubic"
     assert by_name["native_32x8"].parallel_advance == "stella_implicit"
+    assert by_name["native_32x8"].initial_condition == "stella_maxwellian"
     assert by_name["native_32x8"].dt == 0.1
     assert by_name["native_32x8"].steps_per_window == 1
     assert by_name["native_32x8"].total_time == 200.0
