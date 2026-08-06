@@ -75,3 +75,12 @@ streaming scale, kinetic quasineutrality, the coupled JIT residual, and the CFL
 estimate at TEM-favorable gradients. A passing result deliberately reports
 `external_growth_frequency_validated: false`; quantitative TEM validation
 still requires a converged revision-pinned independent comparison.
+
+Add `--linear-smoke` to evolve normalized time windows and report growth,
+frequency direction, late-window drift, and timestep metadata. This remains a
+discriminator rather than an acceptance gate:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python examples/run_tem_physics_preflight.py \
+  --linear-smoke --n-windows 12 --steps-per-window 20
+```

@@ -5,6 +5,7 @@ import pytest
 
 from stellarator_gk.tem_validation import (
     TemCaseSpec,
+    run_reduced_tem_linear_smoke,
     run_tem_physics_preflight,
     tem_species,
 )
@@ -44,6 +45,22 @@ def test_tem_preflight_responds_to_electron_mass_ratio():
     assert report.passed
     assert report.expected_streaming_ratio == pytest.approx(5.0)
     assert report.electron_to_ion_streaming_ratio == pytest.approx(5.0)
+
+
+def test_reduced_tem_time_advance_stays_a_nonexternal_smoke_result():
+    result = run_reduced_tem_linear_smoke(steps_per_window=2, n_windows=3)
+
+    assert result.finite
+    assert np.isfinite(result.growth_rate)
+    assert np.isfinite(result.frequency)
+    assert result.dt <= result.estimated_cfl_dt
+    assert not result.externally_validated
+    assert result.status == "reduced_tem_time_advance_not_external_validation"
+
+
+def test_reduced_tem_time_advance_rejects_timestep_above_cfl():
+    with pytest.raises(ValueError, match="no larger than estimated CFL"):
+        run_reduced_tem_linear_smoke(dt=1.0, steps_per_window=1, n_windows=3)
 
 
 @pytest.mark.parametrize(

@@ -681,7 +681,25 @@ def estimate_linear_cfl_dt(
     mirror_radius = jnp.max(jnp.abs(rhs.mirror_force_coeff)) * dv_radius
     drift_radius = jnp.max(jnp.abs(rhs.magnetic_drift_frequency))
     damping_radius = jnp.max(jnp.abs(rhs.perpendicular_damping))
-    radius = parallel_radius + mirror_radius + drift_radius + damping_radius
+    parallel_recurrence_radius = jnp.asarray(0.0)
+    velocity_recurrence_radius = jnp.asarray(0.0)
+    derivative_model = getattr(rhs, "parallel_derivative_model", "matrix")
+    if derivative_model == "matrix" and hasattr(rhs, "parallel_recurrence_operator"):
+        parallel_recurrence_radius = jnp.max(
+            jnp.abs(rhs.parallel_recurrence_coeff)
+        ) * jnp.max(jnp.sum(jnp.abs(rhs.parallel_recurrence_operator), axis=1))
+    if derivative_model != "gkw_igh" and hasattr(rhs, "velocity_recurrence_operator"):
+        velocity_recurrence_radius = jnp.max(
+            jnp.abs(rhs.velocity_recurrence_coeff)
+        ) * jnp.max(jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1))
+    radius = (
+        parallel_radius
+        + mirror_radius
+        + drift_radius
+        + damping_radius
+        + parallel_recurrence_radius
+        + velocity_recurrence_radius
+    )
     return jnp.asarray(safety * rk4_radius) / jnp.maximum(radius, jnp.asarray(floor))
 
 

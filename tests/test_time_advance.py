@@ -406,3 +406,24 @@ def test_linear_cfl_estimate_uses_rhs_coefficient_row_sums():
     expected_radius = 3.0 * 4.0 + 4.0 * 3.0 + 0.7 + 0.3
 
     np.testing.assert_allclose(estimate, 2.4 / expected_radius)
+
+
+def test_linear_cfl_estimate_includes_explicit_recurrence_operators():
+    rhs = SimpleNamespace(
+        D_z=jnp.asarray([[1.0, -1.0], [2.0, -2.0]]),
+        D_vpar=jnp.asarray([[0.5, -0.5], [1.5, -1.5]]),
+        parallel_streaming_coeff=jnp.asarray([[[3.0, -1.0]]]),
+        mirror_force_coeff=jnp.asarray([[[2.0, -4.0]]]),
+        magnetic_drift_frequency=jnp.ones((1, 1, 1, 2, 1, 1)) * 0.7,
+        perpendicular_damping=jnp.asarray([[0.3]]),
+        parallel_recurrence_operator=jnp.asarray([[2.0, -2.0], [-3.0, 3.0]]),
+        parallel_recurrence_coeff=jnp.asarray([[[0.5, 0.25]]]),
+        velocity_recurrence_operator=jnp.asarray([[1.0, -1.0], [-4.0, 4.0]]),
+        velocity_recurrence_coeff=jnp.asarray([[[0.25, 0.1]]]),
+        parallel_derivative_model="matrix",
+    )
+
+    estimate = estimate_linear_cfl_dt(rhs, safety=1.0, rk4_radius=2.4)
+    expected_radius = 3.0 * 4.0 + 4.0 * 3.0 + 0.7 + 0.3 + 0.5 * 6.0 + 0.25 * 8.0
+
+    np.testing.assert_allclose(estimate, 2.4 / expected_radius)

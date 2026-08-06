@@ -335,6 +335,9 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   finite, and the electron/ion streaming ratio matches the mass-ratio scaling.
   Keep this item open until a converged growth/frequency/mode-structure scan
   agrees with a revision-pinned independent code.
+  A normalized multi-window discriminator now exposes growth, frequency, late
+  drift, and CFL metadata. Its reduced ladders are not resolution-converged;
+  the investigation also fixed a CFL omission for explicit recurrence terms.
 - [ ] Add collisions and electromagnetic perturbations.
 - [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
   timestep control, saturated heat-flux diagnostics, and nonlinear parity.
