@@ -772,9 +772,12 @@ def estimate_linear_cfl_dt(
             precompute
         )
     if getattr(precompute, "collisions", None) is not None:
-        # I-P is bounded by two in the weighted projection norm. The factor is
-        # deliberately conservative for the infinity-norm estimate used here.
-        collision_radius = 2.0 * jnp.max(jnp.abs(precompute.collisions.frequency))
+        if hasattr(precompute.collisions, "frequency"):
+            # I-P is bounded by two in the weighted projection norm. The factor is
+            # deliberately conservative for the infinity-norm estimate used here.
+            collision_radius = 2.0 * jnp.max(jnp.abs(precompute.collisions.frequency))
+        else:
+            collision_radius = jnp.max(precompute.collisions.row_sum_bound)
     distribution_radius = (
         parallel_radius
         + mirror_radius

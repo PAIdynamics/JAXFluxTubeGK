@@ -8,7 +8,13 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 
-from .physics.collisions import build_conserving_bgk_precompute, conserving_bgk_collision
+from .physics.collisions import (
+    ConservingBGKPrecompute,
+    build_conserving_bgk_precompute,
+    build_fokker_planck_precompute,
+    conserving_bgk_collision,
+    fokker_planck_collision,
+)
 from .physics.electromagnetic import (
     build_electromagnetic_field_precompute,
     solve_electromagnetic_fields,
@@ -285,6 +291,7 @@ def build_linear_residual_precompute(
     parallel_derivative_model: str = "matrix",
     phase_space_measure=None,
     collision_frequency=None,
+    collision_model: str = "bgk",
     beta=None,
 ) -> LinearResidualPrecompute:
     """Build the coupled linear RHS and field precompute."""
@@ -340,12 +347,24 @@ def build_linear_residual_precompute(
             )
     collisions = None
     if collision_frequency is not None:
-        collisions = build_conserving_bgk_precompute(
-            velocity_grid,
-            geometry.B,
-            species,
-            collision_frequency,
-        )
+        if collision_model == "bgk":
+            collisions = build_conserving_bgk_precompute(
+                velocity_grid,
+                geometry.B,
+                species,
+                collision_frequency,
+            )
+        elif collision_model == "fokker_planck":
+            collisions = build_fokker_planck_precompute(
+                velocity_grid,
+                geometry.B,
+                species,
+                collision_frequency,
+            )
+        else:
+            raise ValueError("collision_model must be 'bgk' or 'fokker_planck'")
+    elif collision_model not in ("bgk", "fokker_planck"):
+        raise ValueError("collision_model must be 'bgk' or 'fokker_planck'")
     return LinearResidualPrecompute(
         rhs=rhs,
         field=field,
@@ -412,9 +431,15 @@ def linear_residual(
         solved_phi = phi if phi is not None else _solve_phi(distribution, precompute)
         residual = linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
     if precompute.collisions is not None:
-        residual = residual + conserving_bgk_collision(
-            collision_distribution, precompute.collisions
-        )
+        if isinstance(precompute.collisions, ConservingBGKPrecompute):
+            collision_term = conserving_bgk_collision(
+                collision_distribution, precompute.collisions
+            )
+        else:
+            collision_term = fokker_planck_collision(
+                collision_distribution, precompute.collisions
+            )
+        residual = residual + collision_term
     return residual
 
 

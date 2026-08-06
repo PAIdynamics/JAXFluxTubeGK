@@ -159,6 +159,68 @@ def test_fokker_planck_rejects_nonuniform_velocity_backend():
         build_fokker_planck_precompute(velocity, geometry.B, species, 0.1)
 
 
+def test_fokker_planck_operator_is_integrated_in_residual_and_cfl():
+    _velocity, parallel, geometry, species = _collision_setup()
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    collisionless = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species
+    )
+    collisional = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        collision_frequency=0.2,
+        collision_model="fokker_planck",
+    )
+    state = jax.random.normal(
+        jax.random.key(52),
+        (8, 6, parallel.z.shape[0], 1, 1),
+    ).astype(jnp.complex128)
+    difference = linear_residual(state, precomputed=collisional) - linear_residual(
+        state, precomputed=collisionless
+    )
+
+    np.testing.assert_allclose(
+        difference,
+        fokker_planck_collision(state, collisional.collisions),
+        rtol=2.0e-11,
+        atol=2.0e-11,
+    )
+    assert float(estimate_linear_cfl_dt(collisional)) < float(
+        estimate_linear_cfl_dt(collisionless)
+    )
+
+
+def test_linear_precompute_rejects_unknown_collision_model():
+    velocity, parallel, geometry, species = _collision_setup()
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    with np.testing.assert_raises_regex(ValueError, "collision_model"):
+        build_linear_residual_precompute(
+            velocity,
+            parallel,
+            fourier,
+            geometry,
+            species,
+            collision_frequency=0.2,
+            collision_model="unknown",
+        )
+
+
 @pytest.mark.external
 def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
     import sys

@@ -383,9 +383,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   scattering, energy diffusion, friction, pair mass/thermal-speed scaling,
   and finite-difference boundary closure. Its single-species stencil and
   action match pinned Gyaradax to `2e-12`, and the frequency remains
-  differentiable. Next, integrate this path into the linear residual/CFL and
-  add the reciprocal field-particle correction required for exact
-  inter-species momentum and energy exchange.
+  differentiable. The explicit `collision_model="fokker_planck"` path is now
+  integrated into the linear residual, and its stencil row-sum enters the CFL
+  bound. Next, add and independently validate the reciprocal field-particle
+  correction required for exact inter-species momentum and energy exchange.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -187,9 +187,11 @@ claimed.
   speed scaling, boundary flux closure, a differentiable frequency, and a
   conservative row-sum stiffness bound. The single-species stencil and action
   match pinned Gyaradax to `2e-12`.
-- This differential test-particle foundation is not yet wired into the solver
-  and does not include the reciprocal field-particle term needed for exact
-  inter-species momentum/energy exchange; the production Landau claim remains
+- The differential operator is integrated into the linear residual through
+  `collision_model="fokker_planck"`; BGK remains the backward-compatible
+  default. Its exact stencil row-sum bound contributes to the explicit CFL.
+  The reciprocal field-particle term needed for exact inter-species
+  momentum/energy exchange remains open, so the production Landau claim stays
   blocked.
 
 ### 2026-08-06: Nonlinear ExB Foundation
