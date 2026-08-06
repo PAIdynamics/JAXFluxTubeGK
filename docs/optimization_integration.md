@@ -117,3 +117,25 @@ step = toy_gradient_descent_step(loss, knobs, learning_rate=1e-3)
 The toy equilibrium-coefficient path is only for plumbing and gradient tests.
 Production stellarator optimization should replace it with precomputed Boozer,
 GX/eik, or DESC-derived geometry arrays on the same fixed grid topology.
+
+## Reduced W7-X Loop Through VMEC++
+
+After preparing the MHD dependency profile, run a one-iteration smoke case with
+the installed VMEC++ `w7x-standard` configuration:
+
+```bash
+JAX_ENABLE_X64=1 uv run --no-sync \
+  python examples/vmecpp_w7x_design_loop.py \
+  --iterations 1 --n-z 16 --n-vpar 2 --n-mu 2 --n-steps 1 \
+  --output /tmp/optimal-fusion-vmecpp-w7x-design/smoke.json
+```
+
+The example loads W7-X from VMEC++ rather than a repository artifact, perturbs
+one boundary harmonic, performs fresh center/plus/minus VMEC++ solves, converts
+each in-memory result through `VmecppGeometryProvider`, checks the fixed-topology
+contract, and takes an outer central-finite-difference step. Its JSON record is
+required to live outside the repository.
+
+This demonstrates the real MHD-provider integration boundary. VMEC++ is not
+currently differentiated through, and the example is neither an end-to-end AD
+claim nor a production full-boundary shape optimizer.
