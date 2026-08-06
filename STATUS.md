@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Executive Summary
 
@@ -23,6 +23,22 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Production Electromagnetic Resolution Gate
+
+- Added a named on-demand production ladder with `16x16x8`, `24x24x12`, and
+  `32x32x16` rungs, preserving the reduced ladder as the routine default.
+- The full beta-0.01, final-time-10 ladder passes against pinned Gyaradax at
+  revision `8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234`. The finest local
+  growth/frequency changes are `2.196%`/`1.206%`; independent-reference changes
+  are `2.203%`/`1.206%`, all below the 5% convergence threshold. Finest-rung
+  growth, frequency, and complex mode errors are `1.72e-5`, `1.08e-9`, and
+  `7.58e-10`, with late growth drift `4.90e-7`.
+- Generated references and the schema-v1 summary were written only to
+  `/tmp/optimal-fusion-em-production-20260807`; no equilibrium, state, or
+  reference artifact was added to the repository. The production
+  electromagnetic resolution sub-gap is closed; inter-species Landau
+  field-particle parity remains open.
+
 ### 2026-08-06: Priority 5 Implementation Campaign Verification
 
 - Corrected the kinetic-electron timestep estimate, integrated a conservative
@@ -33,7 +49,7 @@ claimed.
   also pass. The recurring missing `bitx` hook message is unrelated and does
   not affect these results.
 - Priority 5 is not declared scientifically complete: production
-  Landau/Fokker--Planck plus electromagnetic parity,
+  inter-species Landau/Fokker--Planck parity,
   stationary nonlinear heat-flux parity, and unrestricted full-shape
   optimization remain evidence-gated work.
 
@@ -163,7 +179,7 @@ claimed.
   `12x12x6 -> 16x16x8` pair passes the 5% gate: local relative growth and
   frequency changes are `4.64%` and `3.93%`; per-rung growth parity errors are
   `8.95e-4` and `2.43e-4`, while frequency and mode errors remain near
-  `1e-9`. A higher production-grid confirmation remains evidence-gated.
+  `1e-9`. The later production ladder closes the higher-grid evidence gate.
 - Added a differentiable electromagnetic CFL bound covering the mixed-state
   amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
   at finite beta and conservatively dominates the exact row sum of a small
@@ -179,8 +195,9 @@ claimed.
   single-species conservation, null-space, residual-integration, CFL, JIT, and
   gradient tests pass.
 - This closes the model-collision implementation slice only. A validated
-  Landau/Fokker--Planck operator with inter-species exchange and electromagnetic
-  field evolution remain open Priority 5 physics gates.
+  Landau/Fokker--Planck operator with inter-species exchange remains an open
+  Priority 5 physics gate; electromagnetic field evolution now passes its
+  production ladder.
 - Added a standalone nine-point GKW-style test-particle Fokker--Planck
   foundation for the finite-difference velocity grid. It includes pitch-angle
   scattering, energy diffusion, friction, target/background mass and thermal

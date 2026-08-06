@@ -16,9 +16,9 @@ path with adaptive CFL control, and independently parity-checked algebraic
 `A_parallel` and coupled `phi`/`B_parallel` field solves, plus their linear RHS
 coupling, now exist as development foundations. Full nonlinear turbulence
 validation, production DESC shape optimization, converged production
-Landau/Fokker--Planck collisions, and electromagnetic trajectory validation
-remain explicitly deferred. The pinned heavy-electron kinetic TEM benchmark
-passes.
+Landau/Fokker--Planck inter-species collisions, and nonlinear turbulence
+validation remain explicitly deferred. The pinned heavy-electron kinetic TEM
+and production-grid electromagnetic benchmarks pass.
 
 ## Example Geometry
 
@@ -605,11 +605,10 @@ Open blockers:
 - full GKW state-history/long-time velocity-slice parity and the low-`ky`
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
-- inter-species Landau/Fokker--Planck field-particle parity and electromagnetic
-  full-production-grid confirmation (one-state field/full-RHS, five-step RK4,
-  reduced final-time-10 dispersion parity, and the default EM resolution
-  ladder pass; the species-local Xu collision correction also matches pinned
-  Gyaradax/GKW factors and action),
+- inter-species Landau/Fokker--Planck field-particle parity (the species-local
+  Xu correction matches pinned Gyaradax/GKW factors and action, but does not
+  provide reciprocal exchange); electromagnetic one-state field/full-RHS,
+  five-step RK4, final-time-10 dispersion, and production resolution gates pass,
 - statistically stationary, resolution-converged nonlinear heat flux with an
   independent parity gate, and full DESC optimization.
 

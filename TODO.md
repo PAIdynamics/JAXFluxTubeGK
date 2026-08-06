@@ -376,8 +376,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   only to caller-selected scratch storage. The on-demand default resolution
   ladder also passes: its finest `12x12x6 -> 16x16x8` pair changes local
   growth and frequency by `4.64%` and `3.93%`, below the declared 5% gate,
-  while both rungs independently retain Gyaradax parity. A higher
-  production-grid confirmation and Landau/Fokker--Planck inter-species
+  while both rungs independently retain Gyaradax parity. The production
+  `16x16x8 -> 24x24x12 -> 32x32x16` ladder now passes as well. Its finest-pair
+  local growth/frequency changes are `2.20%`/`1.21%`, the independent changes
+  are `2.20%`/`1.21%`, and finest-rung growth/frequency/mode errors are
+  `1.72e-5`/`1.08e-9`/`7.58e-10`. Landau/Fokker--Planck inter-species
   collisions remain open before closing this combined item. A standalone
   nine-point test-particle Fokker--Planck stencil now covers pitch-angle
   scattering, energy diffusion, friction, pair mass/thermal-speed scaling,
@@ -413,7 +416,7 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 Acceptance status: **implementation foundations advanced; scientific gate
 remains open**. The standalone suite covers the model collision operator,
 nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
-be marked complete until the production collision/EM, stationary nonlinear-flux,
+be marked complete until the inter-species collision, stationary nonlinear-flux,
 and unrestricted shape-optimization claims named above pass.
 
 ## Priority 6: Maintainability After the Standalone Boundary Is Green

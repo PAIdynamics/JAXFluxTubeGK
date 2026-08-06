@@ -36,6 +36,12 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
     assert velocity_metrics["step_20_complex_max_error"] == pytest.approx(3.99e-3)
     assert velocity_metrics["step_800_complex_max_error"] == pytest.approx(3.67e-2)
     assert velocity_metrics["acceptance_tolerance"] == pytest.approx(2.0e-2)
+    em_metrics = {
+        metric.name: metric.value
+        for metric in by_id["production_collisions_electromagnetic_parity"].metrics
+    }
+    assert em_metrics["em_local_growth_finest_change"] == pytest.approx(2.19627e-2)
+    assert em_metrics["em_finest_growth_parity_error"] == pytest.approx(1.71945e-5)
 
 
 def test_w7x_claim_records_narrow_independent_supersession():

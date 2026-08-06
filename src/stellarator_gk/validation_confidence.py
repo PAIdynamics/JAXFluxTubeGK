@@ -138,7 +138,7 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
         ValidationConfidenceGap(
             identifier="production_collisions_electromagnetic_parity",
             status="open",
-            summary="Production collisions and full-grid EM confirmation remain open.",
+            summary="Inter-species production collision parity remains open.",
             blocks_claims=("collisional_electromagnetic_production_physics",),
             superseded_for_claims=(),
             evidence=(
@@ -156,13 +156,24 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "upwind backend. A reduced final-time-10 finite-beta run also passes "
                 "growth, frequency, mode-shape, and late-drift gates. The default EM "
                 "ladder passes per-rung parity and 5% finest-pair convergence at "
-                "12x12x6 -> 16x16x8. The EM timestep bound dominates a small exact "
-                "operator row sum; higher production-grid confirmation remains open."
+                "12x12x6 -> 16x16x8. The production 16x16x8 -> 24x24x12 -> "
+                "32x32x16 ladder also passes: finest local growth/frequency changes "
+                "are 2.196%/1.206%, independent changes are 2.203%/1.206%, and "
+                "finest growth/frequency/mode parity errors are 1.72e-5/1.08e-9/"
+                "7.58e-10. The EM timestep bound dominates a small exact operator "
+                "row sum, closing the production-grid electromagnetic sub-gap."
             ),
             next_action=(
-                "Extend the electromagnetic ladder to higher production-grid rungs, "
-                "and separately validate a Landau/Fokker--Planck inter-species "
-                "collision operator."
+                "Validate reciprocal Landau/Fokker--Planck inter-species "
+                "field-particle coefficients and action against an independent code."
+            ),
+            metrics=(
+                ConfidenceMetric("em_local_growth_finest_change", 2.1962696972943164e-2),
+                ConfidenceMetric("em_local_frequency_finest_change", 1.2058357404686887e-2),
+                ConfidenceMetric("em_reference_growth_finest_change", 2.2032779226274737e-2),
+                ConfidenceMetric("em_reference_frequency_finest_change", 1.205835737686247e-2),
+                ConfidenceMetric("em_finest_growth_parity_error", 1.719448606648505e-5),
+                ConfidenceMetric("em_finest_mode_parity_error", 7.576553792617767e-10),
             ),
         ),
         ValidationConfidenceGap(
