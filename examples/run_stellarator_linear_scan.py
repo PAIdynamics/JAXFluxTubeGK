@@ -264,7 +264,7 @@ def _parse_args(argv: list[str] | None = None):
     )
     parser.add_argument(
         "--mirror-interpolation",
-        choices=("linear", "cubic"),
+        choices=("linear", "cubic", "stella_cubic"),
         default="linear",
     )
     parser.add_argument("--parallel-recurrence-rate", type=float, default=0.0)

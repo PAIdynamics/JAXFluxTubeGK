@@ -45,8 +45,8 @@ def test_default_velocity_cases_include_spectral_and_gkw_grid_controls():
     assert by_name["native_32x8"].velocity_backend == "midpoint_gauss_laguerre"
     assert by_name["native_32x8"].velocity_measure_normalization == "full_gyroangle"
     assert by_name["native_32x8"].mirror_advance == "semi_lagrangian"
-    assert by_name["native_32x8"].mirror_interpolation == "cubic"
-    assert by_name["native_32x8"].parallel_advance == "implicit_midpoint"
+    assert by_name["native_32x8"].mirror_interpolation == "stella_cubic"
+    assert by_name["native_32x8"].parallel_advance == "stella_implicit"
     assert by_name["native_32x8"].dt == 0.1
     assert by_name["native_32x8"].steps_per_window == 1
     assert by_name["native_32x8"].total_time == 200.0
@@ -108,8 +108,8 @@ def test_native_velocity_case_selects_zero_free_gauss_laguerre_backend(tmp_path)
         "full_gyroangle"
     )
     assert scan_args[scan_args.index("--mirror-advance") + 1] == "semi_lagrangian"
-    assert scan_args[scan_args.index("--mirror-interpolation") + 1] == "cubic"
-    assert scan_args[scan_args.index("--parallel-advance") + 1] == "implicit_midpoint"
+    assert scan_args[scan_args.index("--mirror-interpolation") + 1] == "stella_cubic"
+    assert scan_args[scan_args.index("--parallel-advance") + 1] == "stella_implicit"
     assert scan_args[scan_args.index("--dt") + 1] == "0.1"
     assert scan_args[scan_args.index("--steps-per-window") + 1] == "1"
     assert scan_args[scan_args.index("--vpar-max") + 1] == "3.0"
