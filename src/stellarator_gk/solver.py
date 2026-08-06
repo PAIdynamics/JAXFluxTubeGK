@@ -52,11 +52,13 @@ class ImplicitParallelResponsePrecompute(_PyTreeDataclass):
 
     left_inverse: object
     field_matrix: object
+    field_inverse: object
     half_dt: object
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
         "left_inverse",
         "field_matrix",
+        "field_inverse",
         "half_dt",
     )
 
@@ -114,6 +116,7 @@ def build_implicit_parallel_response_precompute(
     return ImplicitParallelResponsePrecompute(
         left_inverse=left_inverse,
         field_matrix=field_matrix,
+        field_inverse=jnp.linalg.inv(field_matrix),
         half_dt=half_dt,
     )
 
@@ -139,9 +142,8 @@ def implicit_parallel_response_step(
     )
     uncoupled = _apply_parallel_left_inverse(rhs_state, response.left_inverse)
     phi_shape = phi_old.shape
-    phi_new = jnp.linalg.solve(
-        response.field_matrix,
-        _solve_phi(uncoupled, precompute).reshape(-1),
+    phi_new = (
+        response.field_inverse @ _solve_phi(uncoupled, precompute).reshape(-1)
     ).reshape(phi_shape)
     correction = _apply_parallel_left_inverse(
         response.half_dt
