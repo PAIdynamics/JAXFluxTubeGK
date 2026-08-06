@@ -6,6 +6,12 @@ from .collisions import (
     collision_moments,
     conserving_bgk_collision,
 )
+from .electromagnetic import (
+    ParallelAmperePrecompute,
+    build_parallel_ampere_precompute,
+    parallel_ampere_residual,
+    solve_parallel_ampere,
+)
 from .nonlinear import (
     ExBPseudospectralPrecompute,
     build_exb_pseudospectral_precompute,
@@ -113,6 +119,7 @@ __all__ = [
     "AdiabaticQuasineutralityPrecompute",
     "ConservingBGKPrecompute",
     "ExBPseudospectralPrecompute",
+    "ParallelAmperePrecompute",
     "KineticQuasineutralityPrecompute",
     "GKWArakawaIghStencil",
     "GKWParallelStencil",
@@ -132,6 +139,7 @@ __all__ = [
     "build_kinetic_quasineutrality_precompute",
     "build_conserving_bgk_precompute",
     "build_exb_pseudospectral_precompute",
+    "build_parallel_ampere_precompute",
     "build_gkw_igh_stencil",
     "build_gkw_parallel_stencil",
     "build_linear_rhs_precompute",
@@ -177,6 +185,7 @@ __all__ = [
     "normalized_energy",
     "nonlinear_exb_term",
     "parallel_field_drive",
+    "parallel_ampere_residual",
     "parallel_heat_flux_moment",
     "parallel_recurrence_control",
     "parallel_streaming_coefficient",
@@ -192,6 +201,7 @@ __all__ = [
     "solve_adiabatic_electron_phi_from_density",
     "solve_kinetic_electron_phi",
     "solve_kinetic_electron_phi_from_density",
+    "solve_parallel_ampere",
     "spectral_to_velocity_grid",
     "thermodynamic_drive_factor",
     "thermal_speed",

@@ -127,6 +127,8 @@ def main() -> None:
             "shat": args.shat,
             "eps": args.eps,
             "ky": args.ky,
+            "ky_internal": float(np.asarray(geometry["krho"])[0]),
+            "wave_number_convention": "ky is GKW kthrho; ky_internal is solver krho",
             "density_gradient": args.density_gradient,
             "electron_temperature_gradient": args.electron_temperature_gradient,
             "electron_mass": args.electron_mass,

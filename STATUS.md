@@ -106,11 +106,29 @@ claimed.
 - Added a local reference-matched TEM profile with GKW cell-centered parallel
   and velocity grids, zero-incoming boundaries, fused `igh` recurrence, and
   velocity-independent `cosine2` initialization.
-- The final-time-40 local result is `gamma=0.72221521`, `omega=-1.20888602`.
-  Relative growth and frequency errors are 8.82% and 17.39%; the phase-aligned
-  complex `phi(z)` error is 6.47%, and late-window growth drift is `2.6e-14`.
+- Corrected the explicit wave-number contract: public GKW `kthrho=0.7` maps to
+  internal `krho=0.56548668` through `kthnorm=q/(2*pi*eps)` for s-alpha. The
+  producer now records both values.
+- The final-time-40 local result is `gamma=0.63379954`, `omega=-1.01859892`.
+  Relative growth and frequency errors are 4.51% and 1.08%; the phase-aligned
+  complex `phi(z)` error is 2.85%, and late-window growth drift is `4.8e-15`.
   These pass the declared 10%/20%/25% and `1e-3` gates, closing the
   kinetic-electron TEM validation gap.
+
+### 2026-08-06: Parallel Ampere Field Foundation
+
+- Added a differentiable GKW-normalized mixed-variable `A_parallel` solve with
+  the numerical velocity-grid skin term used by the `g`-to-`f` cancellation.
+- Discrete tests cover field-residual closure, odd-`v_parallel` current
+  selection, the electrostatic beta-zero limit, and differentiation through
+  the solve.
+- An opt-in test matches source weights, diagonal, and `k_perp^2` against the
+  pinned Gyaradax checkout. The source/diagonal tolerance accounts for the
+  documented difference between optimal-fusion's differentiable Cephes `J0`
+  approximation and Gyaradax's `jax.scipy` implementation.
+- This is an algebraic field foundation, not full electromagnetic evolution.
+  Coupling `A_parallel` into the kinetic RHS, adding `B_parallel`, and passing
+  independent electromagnetic trajectory parity remain open.
 
 ### 2026-08-06: Conservative Collision Foundation
 

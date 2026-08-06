@@ -176,7 +176,16 @@ def tem_species(spec: TemCaseSpec | None = None) -> tuple[SpeciesParams, Species
 def gyaradax_tem_case_spec() -> TemCaseSpec:
     """Return the exact local discretization profile for the pinned TEM producer."""
 
+    q = 1.4
+    eps = 0.18
+    # Gyaradax/GKW accepts kthrho and converts it to the internal binormal
+    # wave number krho by dividing by kthnorm = q/(2*pi*eps) for s-alpha.
+    # FourierGrid stores that internal wave number directly.
+    ky = 0.7 / (q / (2.0 * np.pi * eps))
     return TemCaseSpec(
+        q=q,
+        eps=eps,
+        ky=ky,
         n_z=32,
         n_vpar=32,
         n_mu=16,

@@ -123,11 +123,12 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             blocks_claims=("kinetic_electron_tem_validation",),
             superseded_for_claims=(),
             evidence=(
-                "At ky*rho_i=0.7 the converged local result gamma=0.72221521 and "
-                "omega=-1.20888602 agrees with pinned Gyaradax gamma=0.66370834 and "
-                "omega=-1.02976757 within declared 10%/20% tolerances. The "
-                "phase-aligned complex phi(z) relative L2 error is 0.0647 against "
-                "a 0.25 tolerance, and late growth drift is 2.6e-14."
+                "At GKW kthrho=0.7 (internal krho=0.56548668) the converged local "
+                "result gamma=0.63379954 and omega=-1.01859892 agrees with pinned "
+                "Gyaradax gamma=0.66370834 and omega=-1.02976757 within declared "
+                "10%/20% tolerances. The "
+                "phase-aligned complex phi(z) relative L2 error is 0.0285 against "
+                "a 0.25 tolerance, and late growth drift is 4.8e-15."
             ),
             next_action=(
                 "Retain the revision-pinned producer and repeat the gate when the "

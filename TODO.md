@@ -342,11 +342,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   reduced-case bound is `3.54e-3`; quantitative external parity remains the
   acceptance gate.
   The exact pinned Gyaradax producer is now executable without stored output
-  and reproduces `gamma=0.66370834`, `omega=-1.02976757` at `ky rho_i=0.7`.
+  and reproduces `gamma=0.66370834`, `omega=-1.02976757` at GKW
+  `kthrho=0.7` (`krho=0.56548668` after the s-alpha `kthnorm` conversion).
   A reference-matched local profile uses the same `32x32x16` grid,
   cell-centered finite differences, fused GKW `igh` operator, and `cosine2`
-  initialization. At final time 40, growth differs by 8.82%, frequency by
-  17.39%, and the phase-aligned complex mode structure by 6.47%, passing the
+  initialization. At final time 40, growth differs by 4.51%, frequency by
+  1.08%, and the phase-aligned complex mode structure by 2.85%, passing the
   declared 10%/20%/25% tolerances with negligible late-window drift.
 - [x] Add a differentiable collision foundation to the production collocation
   residual. The current species-local linearized BGK model preserves discrete
@@ -355,7 +356,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [ ] Validate a production Landau/Fokker--Planck collision operator including
   inter-species exchange, and add electromagnetic `A_parallel`/`B_parallel`
   perturbations with independent parity gates. The conserving BGK model is not
-  a substitute for this acceptance claim.
+  a substitute for this acceptance claim. A differentiable mixed-variable
+  `A_parallel` algebraic solve now closes its discrete residual and its
+  precomputed source/diagonal agree with pinned Gyaradax; RHS coupling,
+  `B_parallel`, and production electromagnetic trajectory parity remain open.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

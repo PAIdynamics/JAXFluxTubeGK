@@ -489,8 +489,11 @@ PYTHONPATH=/path/to/gyaradax uv run --extra reference python \
 ```
 
 The exact notebook case produces `gamma=0.66370834` and `omega=-1.02976757`
-at `ky rho_i=0.7`. The output contains provenance, case parameters, timestep
-range, and window histories; it is not stored in the repository.
+at GKW `kthrho=0.7`. For this s-alpha case, GKW/Gyaradax divides by
+`kthnorm=q/(2*pi*eps)`, giving the solver coordinate `krho=0.56548668`; the
+local matched profile uses that internal value directly. The output records
+both conventions plus provenance, case parameters, timestep range, and window
+histories; it is not stored in the repository.
 
 ## Using the Python API
 
