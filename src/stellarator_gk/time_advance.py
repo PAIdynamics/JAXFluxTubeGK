@@ -196,6 +196,7 @@ def integrate_fixed_step_split_mirror(
     mirror_coefficient,
     *rhs_args,
     mirror_interpolation: str = "linear",
+    parallel_streaming_propagator=None,
     filter_fn=None,
     store_history: bool = True,
 ):
@@ -214,7 +215,11 @@ def integrate_fixed_step_split_mirror(
             mirror_coefficient,
             interpolation=mirror_interpolation,
         )
+        if parallel_streaming_propagator is not None:
+            value = implicit_parallel_streaming_step(value, parallel_streaming_propagator)
         value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        if parallel_streaming_propagator is not None:
+            value = implicit_parallel_streaming_step(value, parallel_streaming_propagator)
         return semi_lagrangian_mirror_step(
             value,
             0.5 * dt,
@@ -242,6 +247,43 @@ def integrate_fixed_step_split_mirror(
         dt=dt,
         n_steps=int(n_steps),
     )
+
+
+def build_implicit_parallel_streaming_propagator(D_z, parallel_coefficient, dt):
+    """Build batched implicit-midpoint propagators for ``-c(v,z) d/dz``.
+
+    ``dt`` is the duration of one application. The returned array has shape
+    ``(n_vpar,n_z,n_z)`` and remains differentiable with respect to the
+    derivative matrix and streaming coefficient.
+    """
+
+    derivative = jnp.asarray(D_z)
+    coefficient = jnp.asarray(parallel_coefficient)
+    if coefficient.ndim == 3 and coefficient.shape[0] == 1:
+        coefficient = coefficient[0]
+    if derivative.ndim != 2 or derivative.shape[0] != derivative.shape[1]:
+        raise ValueError("D_z must be square")
+    if coefficient.ndim != 2 or coefficient.shape[1] != derivative.shape[0]:
+        raise ValueError("parallel_coefficient must have shape (vpar,z)")
+
+    operator = -coefficient[:, :, None] * derivative[None, :, :]
+    identity = jnp.eye(derivative.shape[0], dtype=jnp.result_type(derivative, coefficient))
+    half_dt = 0.5 * jnp.asarray(dt, dtype=identity.dtype)
+    left = identity[None, :, :] - half_dt * operator
+    right = identity[None, :, :] + half_dt * operator
+    return jnp.linalg.solve(left, right)
+
+
+def implicit_parallel_streaming_step(state, propagator):
+    """Apply per-vpar parallel propagators to a single-species distribution."""
+
+    state = jnp.asarray(state)
+    propagator = jnp.asarray(propagator)
+    if state.ndim != 5:
+        raise ValueError("state must have shape (vpar,mu,z,kx,ky)")
+    if propagator.shape != (state.shape[0], state.shape[2], state.shape[2]):
+        raise ValueError("propagator must have shape (vpar,z,z)")
+    return jnp.einsum("vij,vmjxy->vmixy", propagator, state)
 
 
 def _integrate_fixed_step_endpoints(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=None):

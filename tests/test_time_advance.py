@@ -9,6 +9,7 @@ from stellarator_gk import (
     ParallelGridSpec,
     VelocityGridSpec,
     build_fourier_grid,
+    build_implicit_parallel_streaming_propagator,
     build_mode_connectivity,
     build_modal_damping_filter,
     build_parallel_grid,
@@ -16,6 +17,7 @@ from stellarator_gk import (
     estimate_linear_cfl_dt,
     integrate_fixed_step,
     integrate_fixed_step_split_mirror,
+    implicit_parallel_streaming_step,
     linear_growth_diagnostics,
     mode_chain_amplitude,
     normalize_by_ky_amplitude,
@@ -107,6 +109,31 @@ def test_split_mirror_integrator_matches_characteristic_for_zero_rhs():
         result.state[1:5, 0, 0, 0, 0],
         vpar[1:5] + 0.08,
         atol=1.0e-6,
+    )
+
+
+def test_implicit_parallel_streaming_matches_midpoint_amplification():
+    derivative = jnp.asarray([[0.0, 1.0], [-1.0, 0.0]])
+    coefficient = jnp.asarray([[0.7, 0.7], [-0.4, -0.4]])
+    dt = 0.08
+    propagator = build_implicit_parallel_streaming_propagator(
+        derivative,
+        coefficient,
+        dt,
+    )
+    state = jnp.arange(8, dtype=jnp.float64).reshape(2, 1, 2, 2, 1).astype(jnp.complex128)
+
+    observed = implicit_parallel_streaming_step(state, propagator)
+    expected = jnp.stack(
+        [propagator[index] @ state[index, 0, :, :, 0] for index in range(2)]
+    )
+
+    np.testing.assert_allclose(observed[:, 0, :, :, 0], expected, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(
+        jnp.linalg.det(propagator[0]),
+        1.0,
+        rtol=2e-13,
+        atol=2e-13,
     )
 
 
