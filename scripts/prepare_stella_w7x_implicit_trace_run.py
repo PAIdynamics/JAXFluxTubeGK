@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.in"
 DEFAULT_OUTPUT_ROOT = Path("/private/tmp/stellarator_gk_stella_w7x_implicit_trace")
 TARGET = Path("STELLA_CODE/gyrokinetic_equation/gk_implicit_terms.f90")
+MIRROR_TARGET = Path(
+    "STELLA_CODE/gyrokinetic_equation/gyrokinetic_equation_implicit.f90"
+)
 TRACE_FILENAME = "stellarator_gk_w7x_implicit_stage_trace.dat"
 
 
@@ -56,7 +59,7 @@ def prepare_stella_w7x_implicit_trace_run(
     vmec_file = Path(vmec_file).resolve()
     input_file = Path(input_file).resolve()
     output_root = Path(output_root).resolve()
-    for required in (stella_source / TARGET, vmec_file, input_file):
+    for required in (stella_source / TARGET, stella_source / MIRROR_TARGET, vmec_file, input_file):
         if not required.is_file():
             raise FileNotFoundError(required)
     if output_root.exists():
@@ -70,6 +73,7 @@ def prepare_stella_w7x_implicit_trace_run(
     shutil.copytree(stella_source, source_copy, ignore=_ignore_stella_copy_entries)
     patched_source = source_copy / TARGET
     patch_stella_implicit_stage_trace(patched_source)
+    patch_stella_mirror_stage_trace(source_copy / MIRROR_TARGET)
 
     prepared_input = run_dir / "stella_w7x_implicit_trace.in"
     write_rhs_trace_input(
@@ -104,6 +108,8 @@ def prepare_stella_w7x_implicit_trace_run(
                 "trace_implicit_call": 1,
                 "stages": [
                     "input_pdf",
+                    "mirror_input_pdf",
+                    "mirror_final_pdf",
                     "input_phi",
                     "inhomogeneous_pdf",
                     "inhomogeneous_phi",
@@ -195,6 +201,45 @@ def patch_stella_implicit_stage_trace(source_path: Path) -> bool:
     return True
 
 
+def patch_stella_mirror_stage_trace(source_path: Path) -> bool:
+    """Trace the PDF immediately around stella's first implicit mirror advance."""
+
+    source_path = Path(source_path)
+    text = source_path.read_text(encoding="utf-8")
+    if "stellarator_gk mirror stage trace patch" in text:
+        return False
+    module_marker = "   private\n"
+    module_state = f"""
+   ! stellarator_gk mirror stage trace patch
+   integer, parameter :: stellarator_gk_mirror_trace_iky = 4
+   integer, parameter :: stellarator_gk_mirror_trace_ikx = 1
+   integer, parameter :: stellarator_gk_mirror_trace_unit = 9315
+   character(len=*), parameter :: stellarator_gk_mirror_trace_filename = '{TRACE_FILENAME}'
+
+"""
+    text = _replace_once(text, module_marker, module_marker + module_state)
+    mirror_block = """         if (mirror_implicit .and. include_mirror) then
+            call advance_mirror_implicit(collisions_implicit, g, apar)
+            fields_updated = .false.
+         end if
+"""
+    traced_block = """         if (mirror_implicit .and. include_mirror) then
+            call stellarator_gk_trace_mirror_pdf('mirror_input_pdf', istep, g)
+            call advance_mirror_implicit(collisions_implicit, g, apar)
+            call stellarator_gk_trace_mirror_pdf('mirror_final_pdf', istep, g)
+            fields_updated = .false.
+         end if
+"""
+    text = _replace_once(text, mirror_block, traced_block)
+    text = _replace_once(
+        text,
+        "end module gyrokinetic_equation_implicit\n",
+        MIRROR_TRACE_HELPER + "\nend module gyrokinetic_equation_implicit\n",
+    )
+    source_path.write_text(text, encoding="utf-8")
+    return True
+
+
 def _replace_once(text: str, old: str, new: str) -> str:
     if text.count(old) != 1:
         raise ValueError(f"expected exactly one patch marker, found {text.count(old)}: {old!r}")
@@ -262,6 +307,37 @@ IMPLICIT_TRACE_HELPERS = r"""
               status='old', position='append', action='write')
       end if
    end subroutine stellarator_gk_open_implicit_trace
+"""
+
+
+MIRROR_TRACE_HELPER = r"""
+   subroutine stellarator_gk_trace_mirror_pdf(stage, istep, values)
+      use mp, only: proc0
+      use parallelisation_layouts, only: vmu_lo, iv_idx, imu_idx, is_idx
+      use grids_z, only: nzgrid
+      use grids_kxky, only: naky, nakx
+      use grids_velocity, only: vpa, mu
+      implicit none
+      character(len=*), intent(in) :: stage
+      integer, intent(in) :: istep
+      complex, dimension(:, :, -nzgrid:, :, vmu_lo%llim_proc:), intent(in) :: values
+      integer :: iz, ivmu, iv, imu, is
+      if (.not. proc0 .or. istep /= 1) return
+      if (stellarator_gk_mirror_trace_iky > naky .or. stellarator_gk_mirror_trace_ikx > nakx) return
+      open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+           status='old', position='append', action='write')
+      do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
+         iv = iv_idx(vmu_lo, ivmu); imu = imu_idx(vmu_lo, ivmu); is = is_idx(vmu_lo, ivmu)
+         do iz = -nzgrid, nzgrid
+            write (stellarator_gk_mirror_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
+                 'pdf', trim(stage), 1, stellarator_gk_mirror_trace_iky, &
+                 stellarator_gk_mirror_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
+                 real(values(stellarator_gk_mirror_trace_iky, stellarator_gk_mirror_trace_ikx, iz, 1, ivmu)), &
+                 aimag(values(stellarator_gk_mirror_trace_iky, stellarator_gk_mirror_trace_ikx, iz, 1, ivmu))
+         end do
+      end do
+      close (stellarator_gk_mirror_trace_unit)
+   end subroutine stellarator_gk_trace_mirror_pdf
 """
 
 
