@@ -188,3 +188,48 @@ def test_late_window_frequency_uses_unaliased_short_phase_increments():
 
     np.testing.assert_allclose(frequency, [omega], atol=1.0e-12)
     assert abs(float(endpoint_frequency[0]) - omega) > 0.05
+
+
+def test_stella_initial_condition_matches_default_maxwellian_perturbation():
+    module = _load_scan_module()
+    from stellarator_gk import (
+        FourierGridSpec,
+        ParallelGridSpec,
+        VelocityGridSpec,
+        build_fourier_grid,
+        build_parallel_grid,
+        build_velocity_grid,
+    )
+
+    velocity = build_velocity_grid(
+        VelocityGridSpec(n_vpar=4, n_mu=3, vpar_max=2.0, mu_max=1.5)
+    )
+    parallel = build_parallel_grid(ParallelGridSpec(n_z=5, z_min=-0.5, z_max=0.5))
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=2, kx_max=0.0, ky_values=(0.1, 0.3))
+    )
+    geometry = type("Geometry", (), {"B": np.linspace(0.9, 1.2, 5)})()
+
+    state = np.asarray(
+        module._initial_state(
+            velocity,
+            parallel,
+            fourier,
+            0.01,
+            geometry=geometry,
+            initial_condition="stella_maxwellian",
+        )
+    )
+    expected = (
+        0.01
+        * (1.0 + 1.0j)
+        * np.exp(-np.asarray(velocity.vpar)[:, None, None] ** 2)
+        * np.exp(
+            -2.0
+            * np.asarray(velocity.mu)[None, :, None]
+            * np.asarray(geometry.B)[None, None, :]
+        )
+        * np.exp(-(2.0 * np.pi * np.asarray(parallel.z))[None, None, :] ** 2)
+    )
+    np.testing.assert_allclose(state[..., 0, 0], expected)
+    np.testing.assert_allclose(state[..., 0, 1], expected)

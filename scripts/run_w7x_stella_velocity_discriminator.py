@@ -1,10 +1,9 @@
 """Run a stella-matched W7-X velocity-space discriminator.
 
-The time/geometry/mode controls are held fixed at the matched ``t=200`` W7-X
-stella comparison.  Only the velocity-space grid/backend changes.  This keeps
-the remaining ``ky=0.3`` frequency/profile mismatch focused on
-velocity-space/RHS physics instead of re-opening coordinate, field-line-length,
-mode-linking, or growth-window questions.
+The reduced cases retain the historical ``t=200`` controls.  The source-matched
+native case uses the converged ``t=500``, ``ky=0.3`` stella comparison.  Lower
+ky branches are deliberately not acceptance defaults because their independent
+stella omega windows remain unconverged even at ``t=1000``.
 """
 
 from __future__ import annotations
@@ -24,9 +23,9 @@ DEFAULT_STELLA_GEOMETRY = (
     ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"
 )
 DEFAULT_REFERENCE_FIXTURE = ROOT / "fixtures/w7x_itg_external_mode_structure_fixture.csv"
-DEFAULT_KY_VALUES = "0.1,0.2,0.3"
+DEFAULT_KY_VALUES = "0.3"
 FOCUS_KY = 0.3
-STELLA_TEND = 200.0
+STELLA_TEND = 500.0
 
 
 @dataclass(frozen=True)
@@ -106,6 +105,7 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             mu_max=4.916958697837631,
             dt=0.1,
             steps_per_window=1,
+            n_windows=5000,
         ),
     )
 
