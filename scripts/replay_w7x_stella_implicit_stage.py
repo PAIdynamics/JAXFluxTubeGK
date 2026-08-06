@@ -19,6 +19,7 @@ from scripts.replay_w7x_stella_state_in_solver import (
 from stellarator_gk import (
     build_implicit_parallel_response_precompute,
     implicit_parallel_response_step,
+    semi_lagrangian_mirror_step,
     solve_field_from_state,
 )
 
@@ -92,6 +93,17 @@ def replay_implicit_stage(*, trace: Path, explicit_summary: Path, geometry: Path
     )
     final_state = implicit_parallel_response_step(state, precompute, response)
     final_phi = solve_field_from_state(final_state, precompute)
+    mirror_input = jnp.asarray(stages["mirror_input_pdf"][:, :, :-1, None, None])
+    mirror_coefficient = precompute.rhs.mirror_force_coeff
+    if mirror_coefficient.ndim == 3:
+        mirror_coefficient = mirror_coefficient[0]
+    mirror_final = semi_lagrangian_mirror_step(
+        mirror_input,
+        0.1,
+        setup["velocity"].vpar,
+        mirror_coefficient,
+        interpolation="stella_cubic",
+    )
     return {
         "schema": "stellarator_gk_w7x_implicit_stage_replay_v1",
         "trace": str(Path(trace).resolve()),
@@ -100,6 +112,9 @@ def replay_implicit_stage(*, trace: Path, explicit_summary: Path, geometry: Path
         "input_quasineutrality": _metrics(
             stages["input_phi"][:-1],
             solve_field_from_state(state, precompute)[:, 0, 0],
+        ),
+        "mirror_distribution": _metrics(
+            stages["mirror_final_pdf"][:, :, :-1], mirror_final[..., 0, 0]
         ),
     }
 
