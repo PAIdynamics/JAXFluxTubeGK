@@ -19,6 +19,10 @@ from scripts.replay_w7x_stella_state_in_solver import (
 from stellarator_gk import (
     build_implicit_parallel_response_precompute,
     implicit_parallel_response_step,
+    linear_residual,
+    mirror_force,
+    parallel_field_drive,
+    parallel_streaming,
     semi_lagrangian_mirror_step,
     solve_field_from_state,
 )
@@ -104,6 +108,39 @@ def replay_implicit_stage(*, trace: Path, explicit_summary: Path, geometry: Path
         mirror_coefficient,
         interpolation="stella_cubic",
     )
+    explicit_states = {
+        name: jnp.asarray(stages[name][:, :, :-1, None, None])
+        for name in (
+            "explicit_input_pdf",
+            "explicit_state1_pdf",
+            "explicit_state2_pdf",
+        )
+    }
+
+    def explicit_increment(value):
+        phi = solve_field_from_state(value, precompute)
+        residual = linear_residual(value, precomputed=precompute)
+        residual -= parallel_streaming(
+            value, precompute.rhs.D_z, precompute.rhs.parallel_streaming_coeff
+        )
+        residual -= parallel_field_drive(phi, precompute.rhs.D_z, precompute.rhs)
+        residual -= mirror_force(
+            value, precompute.rhs.D_vpar, precompute.rhs.mirror_force_coeff
+        )
+        return 0.1 * residual
+
+    explicit_rhs = {
+        f"rhs{index}": explicit_increment(explicit_states[state_name])
+        for index, state_name in enumerate(
+            ("explicit_input_pdf", "explicit_state1_pdf", "explicit_state2_pdf"),
+            start=1,
+        )
+    }
+    explicit_final = (
+        explicit_states["explicit_input_pdf"] / 3.0
+        + 0.5 * (explicit_states["explicit_input_pdf"] + explicit_rhs["rhs1"])
+        + (explicit_states["explicit_state2_pdf"] + explicit_rhs["rhs3"]) / 6.0
+    )
     return {
         "schema": "stellarator_gk_w7x_implicit_stage_replay_v1",
         "trace": str(Path(trace).resolve()),
@@ -115,6 +152,13 @@ def replay_implicit_stage(*, trace: Path, explicit_summary: Path, geometry: Path
         ),
         "mirror_distribution": _metrics(
             stages["mirror_final_pdf"][:, :, :-1], mirror_final[..., 0, 0]
+        ),
+        "explicit_rhs": {
+            name: _metrics(stages[f"explicit_{name}_pdf"][:, :, :-1], values[..., 0, 0])
+            for name, values in explicit_rhs.items()
+        },
+        "explicit_distribution": _metrics(
+            stages["explicit_final_pdf"][:, :, :-1], explicit_final[..., 0, 0]
         ),
     }
 
