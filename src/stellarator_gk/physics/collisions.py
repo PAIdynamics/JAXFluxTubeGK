@@ -46,8 +46,13 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
     conservation_basis: object
     conservation_inverse: object
     measure: object
+    xu_momentum_factor: object
+    xu_energy_factor: object
+    xu_vpar_weight: object
+    xu_energy_weight: object
     n_species: int
     conserve_exchange: bool = False
+    conservation_model: str = "none"
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
         "stencil",
@@ -56,8 +61,16 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
         "conservation_basis",
         "conservation_inverse",
         "measure",
+        "xu_momentum_factor",
+        "xu_energy_factor",
+        "xu_vpar_weight",
+        "xu_energy_weight",
     )
-    _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "conserve_exchange")
+    _static_fields: ClassVar[tuple[str, ...]] = (
+        "n_species",
+        "conserve_exchange",
+        "conservation_model",
+    )
 
 
 def build_fokker_planck_precompute(
@@ -71,15 +84,25 @@ def build_fokker_planck_precompute(
     friction: bool = True,
     mass_conserving_boundary: bool = True,
     conserve_exchange: bool = False,
+    conservation_model: str | None = None,
 ) -> FokkerPlanckPrecompute:
     """Build a multispecies test-particle differential collision stencil.
 
     Each target species sums scattering from every supplied background species.
     The discretization follows GKW's nine-point ``(v_parallel, mu)`` stencil.
-    This foundation does not include the reciprocal field-particle term needed
-    to claim exact inter-species momentum and energy exchange.
+    ``xu_species_local`` reproduces GKW's local defect correction, while
+    ``global_exchange`` applies the package's algebraic multispecies projection.
+    Neither is an independently validated reciprocal Landau field-particle term.
     """
 
+    if conservation_model is None:
+        conservation_model = "global_exchange" if conserve_exchange else "none"
+    elif conserve_exchange:
+        raise ValueError("use conservation_model or conserve_exchange, not both")
+    if conservation_model not in ("none", "global_exchange", "xu_species_local"):
+        raise ValueError(
+            "conservation_model must be 'none', 'global_exchange', or 'xu_species_local'"
+        )
     if velocity_grid.backend != "finite_difference":
         raise ValueError("Fokker-Planck collisions require the finite-difference velocity grid")
     species_tuple = species if isinstance(species, tuple) else (species,)
@@ -127,8 +150,9 @@ def build_fokker_planck_precompute(
         stencils.append(target_stencil)
     stencil = jnp.stack(stencils)
     invariants = basis = inverse = measure = None
+    xu_momentum = xu_energy = xu_vpar_weight = xu_energy_weight = None
     conservation_gain = jnp.asarray(1.0)
-    if conserve_exchange:
+    if conservation_model == "global_exchange":
         invariants, basis, inverse, measure, conservation_gain = (
             _build_fokker_planck_conservation(
                 velocity_grid,
@@ -136,6 +160,14 @@ def build_fokker_planck_precompute(
                 species_tuple,
             )
         )
+    elif conservation_model == "xu_species_local":
+        (
+            xu_momentum,
+            xu_energy,
+            xu_vpar_weight,
+            xu_energy_weight,
+            conservation_gain,
+        ) = _build_xu_conservation(velocity_grid, B, species_tuple)
     return FokkerPlanckPrecompute(
         stencil=stencil,
         row_sum_bound=(
@@ -146,8 +178,13 @@ def build_fokker_planck_precompute(
         conservation_basis=basis,
         conservation_inverse=inverse,
         measure=measure,
+        xu_momentum_factor=xu_momentum,
+        xu_energy_factor=xu_energy,
+        xu_vpar_weight=xu_vpar_weight,
+        xu_energy_weight=xu_energy_weight,
         n_species=n_species,
-        conserve_exchange=conserve_exchange,
+        conserve_exchange=conservation_model == "global_exchange",
+        conservation_model=conservation_model,
     )
 
 
@@ -161,7 +198,7 @@ def fokker_planck_collision(distribution, precompute: FokkerPlanckPrecompute):
     if values.ndim != 6 or values.shape[0] != precompute.n_species:
         raise ValueError("distribution has incompatible species or phase-space shape")
     result = jax.vmap(_apply_fokker_planck_stencil)(values, precompute.stencil)
-    if precompute.conserve_exchange:
+    if precompute.conservation_model == "global_exchange":
         moments = fokker_planck_conserved_moments(result, precompute)
         coefficients = jnp.einsum(
             "zdc,czxy->zdxy", precompute.conservation_inverse, moments
@@ -170,6 +207,19 @@ def fokker_planck_collision(distribution, precompute: FokkerPlanckPrecompute):
             "dsvmz,zdxy->svmzxy", precompute.conservation_basis, coefficients
         )
         result = result - correction
+    elif precompute.conservation_model == "xu_species_local":
+        momentum_defect = jnp.einsum(
+            "svmz,svmzxy->szxy", precompute.xu_vpar_weight, result
+        )
+        energy_defect = jnp.einsum(
+            "svmz,svmzxy->szxy", precompute.xu_energy_weight, result
+        )
+        result = result - (
+            momentum_defect[:, None, None, :, :, :]
+            * precompute.xu_momentum_factor[..., None, None]
+            + energy_defect[:, None, None, :, :, :]
+            * precompute.xu_energy_factor[..., None, None]
+        )
     return result[0] if original_ndim == 5 else result
 
 
@@ -337,6 +387,69 @@ def _build_fokker_planck_conservation(velocity_grid, B, species):
     )
     gain = 1.0 + basis_norm * inverse_norm * invariant_norm
     return invariants, basis, inverse, measure, gain
+
+
+def _build_xu_conservation(velocity_grid, B, species):
+    """Build the species-local Xu correction used by GKW/Gyaradax.
+
+    This correction removes the parallel-momentum and energy defects of the
+    test-particle stencil independently for each species.  It is therefore a
+    useful reference-parity model, but it does not represent reciprocal
+    inter-species field-particle exchange.
+    """
+
+    vpar = jnp.asarray(velocity_grid.vpar)[:, None, None]
+    mu = jnp.asarray(velocity_grid.mu)[None, :, None]
+    B = jnp.asarray(B)[None, None, :]
+    speed_squared = vpar**2 + 2.0 * mu * B
+    measure = (
+        jnp.asarray(velocity_grid.w_vpar)[:, None, None]
+        * jnp.asarray(velocity_grid.w_mu)[None, :, None]
+        * B
+    )
+    vpar_weight = vpar * measure
+    energy_weight = speed_squared * measure
+
+    momentum_factors = []
+    energy_factors = []
+    for item in species:
+        temperature = jnp.asarray(item.temperature)
+        density = jnp.asarray(item.density)
+        maxwellian_envelope = jnp.exp(-speed_squared / temperature) / (
+            jnp.sqrt(temperature * jnp.pi) ** 3
+        )
+        equilibrium = density * maxwellian_envelope
+        particle_norm = jnp.sum(equilibrium * measure, axis=(0, 1))
+        energy_norm = jnp.sum(speed_squared * equilibrium * measure, axis=(0, 1))
+        energy_mean = energy_norm / jnp.maximum(particle_norm, 1.0e-14)
+        momentum_norm = jnp.sum(vpar**2 * equilibrium * measure, axis=(0, 1))
+        centered_energy = speed_squared - energy_mean[None, None, :]
+        centered_energy_norm = jnp.sum(
+            speed_squared * centered_energy * equilibrium * measure,
+            axis=(0, 1),
+        )
+        momentum_factors.append(
+            vpar * equilibrium / jnp.maximum(momentum_norm, 1.0e-14)[None, None, :]
+        )
+        energy_factors.append(
+            centered_energy
+            * equilibrium
+            / jnp.maximum(centered_energy_norm, 1.0e-14)[None, None, :]
+        )
+
+    momentum_factor = jnp.stack(momentum_factors)
+    energy_factor = jnp.stack(energy_factors)
+    weight_shape = momentum_factor.shape
+    vpar_weights = jnp.broadcast_to(vpar_weight[None, ...], weight_shape)
+    energy_weights = jnp.broadcast_to(energy_weight[None, ...], weight_shape)
+    momentum_gain = jnp.max(jnp.abs(momentum_factor), axis=(1, 2)) * jnp.sum(
+        jnp.abs(vpar_weights), axis=(1, 2)
+    )
+    energy_gain = jnp.max(jnp.abs(energy_factor), axis=(1, 2)) * jnp.sum(
+        jnp.abs(energy_weights), axis=(1, 2)
+    )
+    gain = jnp.max(1.0 + momentum_gain + energy_gain)
+    return momentum_factor, energy_factor, vpar_weights, energy_weights, gain
 
 
 def _erf_derivative(value):

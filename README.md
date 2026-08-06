@@ -603,10 +603,11 @@ Open blockers:
 - full GKW state-history/long-time velocity-slice parity and the low-`ky`
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
-- production Landau/Fokker--Planck collision parity and electromagnetic
+- inter-species Landau/Fokker--Planck field-particle parity and electromagnetic
   full-production-grid confirmation (one-state field/full-RHS, five-step RK4,
   reduced final-time-10 dispersion parity, and the default EM resolution
-  ladder pass),
+  ladder pass; the species-local Xu collision correction also matches pinned
+  Gyaradax/GKW factors and action),
 - statistically stationary, resolution-converged nonlinear heat flux with an
   independent parity gate, and full DESC optimization.
 

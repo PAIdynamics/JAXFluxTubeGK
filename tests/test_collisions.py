@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -293,13 +295,63 @@ def test_solver_builds_exchange_conserving_fokker_planck_precompute():
     assert np.isfinite(float(estimate_linear_cfl_dt(precompute)))
 
 
+def test_xu_species_local_completion_removes_each_species_defect():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    state = jax.random.normal(
+        jax.random.key(71), (2, 8, 6, parallel.z.size, 1, 1)
+    )
+    precompute = build_fokker_planck_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequency=(0.2, 0.7),
+        conservation_model="xu_species_local",
+    )
+    collision = jax.jit(fokker_planck_collision)(state, precompute)
+    momentum = jnp.einsum("svmz,svmzxy->szxy", precompute.xu_vpar_weight, collision)
+    energy = jnp.einsum("svmz,svmzxy->szxy", precompute.xu_energy_weight, collision)
+
+    np.testing.assert_allclose(momentum, 0.0, atol=2.0e-10, rtol=0.0)
+    np.testing.assert_allclose(energy, 0.0, atol=2.0e-10, rtol=0.0)
+    assert np.isfinite(float(jnp.max(precompute.row_sum_bound)))
+
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    solver_precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="kinetic",
+        collision_frequency=(0.2, 0.7),
+        collision_model="fokker_planck",
+        collision_conservation_model="xu_species_local",
+    )
+    assert solver_precompute.collisions.conservation_model == "xu_species_local"
+
+
 @pytest.mark.external
 def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
     import sys
 
     if str(gyaradax_root) not in sys.path:
         sys.path.insert(0, str(gyaradax_root))
-    from gyaradax.collisions import collision_rhs, precompute_collisions
+    from gyaradax.collisions import (
+        collision_rhs,
+        conservation_correction,
+        precompute_collisions,
+    )
     from gyaradax.geometry import compute_geometry
     from gyaradax.params import GKParams
 
@@ -358,6 +410,60 @@ def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
     np.testing.assert_allclose(
         fokker_planck_collision(state, observed),
         collision_rhs(state, reference_stencil),
+        rtol=2e-12,
+        atol=2e-12,
+    )
+
+    conserving_reference_params = replace(
+        reference_params,
+        coll_mom_conservation=True,
+        coll_ene_conservation=True,
+    )
+    conserving_reference = precompute_collisions(
+        reference_geometry, conserving_reference_params
+    )
+    conserving_observed = build_fokker_planck_precompute(
+        velocity,
+        reference_geometry["bn"],
+        species,
+        frequency=0.1,
+        conservation_model="xu_species_local",
+    )
+    np.testing.assert_allclose(
+        conserving_observed.xu_momentum_factor[0],
+        conserving_reference["coll_mom_factor"],
+        rtol=2e-12,
+        atol=2e-12,
+    )
+    np.testing.assert_allclose(
+        conserving_observed.xu_energy_factor[0],
+        conserving_reference["coll_ene_factor"],
+        rtol=2e-12,
+        atol=2e-12,
+    )
+    np.testing.assert_allclose(
+        conserving_observed.xu_vpar_weight[0],
+        conserving_reference["coll_vpar_weight"],
+        rtol=2e-12,
+        atol=2e-12,
+    )
+    np.testing.assert_allclose(
+        conserving_observed.xu_energy_weight[0],
+        conserving_reference["coll_vsq_weight"],
+        rtol=2e-12,
+        atol=2e-12,
+    )
+    reference_rhs = collision_rhs(state, conserving_reference["coll_stencil"])
+    reference_rhs = reference_rhs + conservation_correction(
+        reference_rhs,
+        conserving_reference["coll_mom_factor"],
+        conserving_reference["coll_ene_factor"],
+        conserving_reference["coll_vpar_weight"],
+        conserving_reference["coll_vsq_weight"],
+    )
+    np.testing.assert_allclose(
+        fokker_planck_collision(state, conserving_observed),
+        reference_rhs,
         rtol=2e-12,
         atol=2e-12,
     )

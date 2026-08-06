@@ -388,8 +388,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   bound. An opt-in discrete field-particle completion now preserves each species
   density and combined momentum/energy to roundoff and contributes its induced
   norm to the CFL bound. It establishes the algebraic exchange-conservation
-  contract, but independent Landau field-particle coefficient/action parity is
-  still required before this item can close.
+  contract. A separate `conservation_model="xu_species_local"` path now matches
+  the pinned Gyaradax/GKW Xu momentum and energy factors, quadrature weights,
+  and corrected action to `2e-12`; it removes each species' defects locally and
+  is not presented as reciprocal inter-species exchange. Independent
+  inter-species Landau field-particle coefficient/action parity is still
+  required before this item can close.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

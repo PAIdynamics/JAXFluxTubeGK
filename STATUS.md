@@ -200,6 +200,12 @@ claimed.
   induced norm is included conservatively in the CFL bound. Independent
   Landau field-particle parity is still required before calling this a
   production Landau operator.
+- Added the distinct `collision_conservation_model="xu_species_local"` option.
+  Its species-local momentum/energy factors, quadrature weights, and corrected
+  action match the pinned Gyaradax/GKW Xu implementation to `2e-12`; local
+  momentum and energy defects vanish to roundoff and the correction enters the
+  CFL bound. This reference-parity model does not supply reciprocal
+  inter-species field-particle exchange, so that production gate remains open.
 
 ### 2026-08-06: Nonlinear ExB Foundation
 
