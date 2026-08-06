@@ -11,7 +11,7 @@ from jax.scipy.special import i1e
 
 from ..geometry.analytic import k_perp_squared
 from ..types import FourierGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
-from .primitives import FLRFactors, bessel_j1_hat, normalized_energy, thermal_speed
+from .primitives import FLRFactors, bessel_j1_hat, maxwellian, normalized_energy, thermal_speed
 
 
 @jax.tree_util.register_pytree_node_class
@@ -22,6 +22,8 @@ class ParallelAmperePrecompute(_PyTreeDataclass):
     source_weight: object
     denominator: object
     kperp_squared: object
+    g_to_f_factor: object
+    apar_chi_factor: object
     beta: object
     denominator_floor: float
     n_species: int
@@ -31,6 +33,8 @@ class ParallelAmperePrecompute(_PyTreeDataclass):
         "source_weight",
         "denominator",
         "kperp_squared",
+        "g_to_f_factor",
+        "apar_chi_factor",
         "beta",
         "denominator_floor",
     )
@@ -60,6 +64,19 @@ class PerpendicularMagneticPrecompute(_PyTreeDataclass):
         "denominator_floor",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "representation")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ElectromagneticFieldPrecompute(_PyTreeDataclass):
+    """Complete algebraic field and mixed-variable transform contract."""
+
+    ampere: ParallelAmperePrecompute
+    perpendicular: PerpendicularMagneticPrecompute
+    n_species: int
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("ampere", "perpendicular")
+    _static_fields: ClassVar[tuple[str, ...]] = ("n_species",)
 
 
 def build_parallel_ampere_precompute(
@@ -132,13 +149,71 @@ def build_parallel_ampere_precompute(
     )
     kperp2 = k_perp_squared(geometry, fourier_grid)
     denominator = kperp2 + skin
+    maxwellian_value = maxwellian(velocity_grid.vpar, velocity_grid.mu, geometry.B, species_tuple)
+    g_to_f_factor = (
+        -2.0
+        * charges[:, None, None, None, None, None]
+        / jnp.asarray([item.temperature for item in species_tuple])[
+            :, None, None, None, None, None
+        ]
+        * thermal_speeds[:, None, None, None, None, None]
+        * vpar
+        * bessel[:, None, ...]
+        * maxwellian_value[..., None, None]
+    )
+    apar_chi_factor = (
+        -2.0
+        * thermal_speeds[:, None, None, None, None, None]
+        * vpar
+        * bessel[:, None, ...]
+    )
     return ParallelAmperePrecompute(
         source_weight=source_weight,
         denominator=denominator,
         kperp_squared=kperp2,
+        g_to_f_factor=g_to_f_factor,
+        apar_chi_factor=apar_chi_factor,
         beta=beta,
         denominator_floor=float(denominator_floor),
         n_species=n_species,
+    )
+
+
+def build_electromagnetic_field_precompute(
+    velocity_grid: VelocityGrid,
+    geometry,
+    fourier_grid: FourierGrid,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    flr_factors: FLRFactors,
+    *,
+    beta,
+    denominator_floor: float = 1.0e-14,
+) -> ElectromagneticFieldPrecompute:
+    """Build all algebraic electromagnetic fields for the mixed ``g`` variable."""
+
+    ampere = build_parallel_ampere_precompute(
+        velocity_grid,
+        geometry,
+        fourier_grid,
+        species,
+        flr_factors,
+        beta=beta,
+        denominator_floor=denominator_floor,
+    )
+    perpendicular = build_perpendicular_magnetic_precompute(
+        velocity_grid,
+        geometry,
+        species,
+        flr_factors,
+        beta=beta,
+        denominator_floor=denominator_floor,
+    )
+    if ampere.n_species != perpendicular.n_species:
+        raise ValueError("electromagnetic field precomputes have inconsistent species counts")
+    return ElectromagneticFieldPrecompute(
+        ampere=ampere,
+        perpendicular=perpendicular,
+        n_species=ampere.n_species,
     )
 
 
@@ -248,6 +323,42 @@ def solve_perpendicular_magnetic_fields(
     return -phi_numerator / denominator, -bpar_numerator / denominator
 
 
+def mixed_to_physical_distribution(
+    mixed_distribution, apar, precompute: ParallelAmperePrecompute
+):
+    """Convert the evolved mixed variable ``g`` to the physical perturbation ``f``."""
+
+    original_ndim = jnp.asarray(mixed_distribution).ndim
+    mixed = _with_species_axis(mixed_distribution, precompute.n_species)
+    physical = mixed + precompute.g_to_f_factor * jnp.asarray(apar)[None, None, None, ...]
+    return physical[0] if original_ndim == 5 else physical
+
+
+def physical_to_mixed_distribution(
+    physical_distribution, apar, precompute: ParallelAmperePrecompute
+):
+    """Convert physical ``f`` back to the evolved mixed variable ``g``."""
+
+    original_ndim = jnp.asarray(physical_distribution).ndim
+    physical = _with_species_axis(physical_distribution, precompute.n_species)
+    mixed = physical - precompute.g_to_f_factor * jnp.asarray(apar)[None, None, None, ...]
+    return mixed[0] if original_ndim == 5 else mixed
+
+
+def solve_electromagnetic_fields(
+    mixed_distribution, precompute: ElectromagneticFieldPrecompute
+):
+    """Return ``(phi, A_parallel, B_parallel, physical_f)`` from evolved ``g``."""
+
+    apar = solve_parallel_ampere(mixed_distribution, precompute.ampere)
+    physical = mixed_to_physical_distribution(mixed_distribution, apar, precompute.ampere)
+    phi, bpar = solve_perpendicular_magnetic_fields(physical, precompute.perpendicular)
+    constant_mode = jnp.abs(precompute.ampere.kperp_squared) < precompute.perpendicular.denominator_floor
+    phi = jnp.where(constant_mode, 0.0, phi)
+    bpar = jnp.where(constant_mode, 0.0, bpar)
+    return phi, apar, bpar, physical
+
+
 def _safe_denominator(precompute: ParallelAmperePrecompute):
     return _safe_field_denominator(precompute.denominator, precompute.denominator_floor)
 
@@ -268,11 +379,16 @@ def _with_species_axis(values, n_species: int):
 
 
 __all__ = [
+    "ElectromagneticFieldPrecompute",
     "ParallelAmperePrecompute",
     "PerpendicularMagneticPrecompute",
     "build_parallel_ampere_precompute",
+    "build_electromagnetic_field_precompute",
     "build_perpendicular_magnetic_precompute",
     "parallel_ampere_residual",
+    "mixed_to_physical_distribution",
+    "physical_to_mixed_distribution",
+    "solve_electromagnetic_fields",
     "solve_parallel_ampere",
     "solve_perpendicular_magnetic_fields",
 ]

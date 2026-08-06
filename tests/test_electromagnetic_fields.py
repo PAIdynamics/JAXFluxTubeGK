@@ -12,13 +12,17 @@ from stellarator_gk import (
     SpeciesParams,
     VelocityGridSpec,
     build_fourier_grid,
+    build_electromagnetic_field_precompute,
     build_linear_residual_precompute,
     build_parallel_ampere_precompute,
     build_perpendicular_magnetic_precompute,
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
+    mixed_to_physical_distribution,
     parallel_ampere_residual,
+    physical_to_mixed_distribution,
+    solve_electromagnetic_fields,
     solve_parallel_ampere,
     solve_perpendicular_magnetic_fields,
 )
@@ -154,6 +158,52 @@ def test_perpendicular_magnetic_response_is_differentiable():
     assert np.isfinite(float(jax.grad(objective)(0.01)))
 
 
+def test_electromagnetic_mixed_variable_transform_roundtrips_and_closes_fields():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    linear = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species, field_model="kinetic"
+    )
+    precompute = build_electromagnetic_field_precompute(
+        velocity, geometry, fourier, species, linear.rhs.flr_factors, beta=0.01
+    )
+    mixed = jax.random.normal(
+        jax.random.key(11), (2, 8, 4, parallel.z.shape[0], 3, 2)
+    ).astype(jnp.complex128)
+
+    phi, apar, bpar, physical = solve_electromagnetic_fields(mixed, precompute)
+    restored = physical_to_mixed_distribution(physical, apar, precompute.ampere)
+
+    np.testing.assert_allclose(restored, mixed, rtol=2e-14, atol=2e-14)
+    np.testing.assert_allclose(
+        physical,
+        mixed_to_physical_distribution(mixed, apar, precompute.ampere),
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert phi.shape == apar.shape == bpar.shape == (parallel.z.shape[0], 3, 2)
+
+
+def test_electromagnetic_field_contract_recovers_kinetic_electrostatic_limit():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    linear = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species, field_model="kinetic"
+    )
+    precompute = build_electromagnetic_field_precompute(
+        velocity, geometry, fourier, species, linear.rhs.flr_factors, beta=0.0
+    )
+    mixed = jax.random.normal(
+        jax.random.key(12), (2, 8, 4, parallel.z.shape[0], 3, 2)
+    ).astype(jnp.complex128)
+    phi, apar, bpar, physical = solve_electromagnetic_fields(mixed, precompute)
+
+    from stellarator_gk import solve_kinetic_electron_phi
+
+    np.testing.assert_allclose(apar, 0.0, atol=0.0)
+    np.testing.assert_allclose(bpar, 0.0, atol=0.0)
+    np.testing.assert_allclose(physical, mixed, atol=0.0)
+    np.testing.assert_allclose(phi, solve_kinetic_electron_phi(mixed, linear.field), rtol=3e-14)
+
+
 @pytest.mark.external
 def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
     import sys
@@ -163,6 +213,7 @@ def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
     from gyaradax.geometry import compute_geometry
     from gyaradax.integrals import precompute_apar
     from gyaradax.params import GKParams
+    from gyaradax.solver import linear_precompute
 
     spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
     velocity, _parallel, fourier, geometry, species, linear = _build_tem_system(spec)
@@ -199,7 +250,10 @@ def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
         tmp=jnp.ones(2),
         de=jnp.ones(2),
         vthrat=jnp.sqrt(1.0 / masses),
+        rln=jnp.asarray([spec.density_gradient, spec.density_gradient]),
+        rlt=jnp.asarray([spec.ion_temperature_gradient, spec.electron_temperature_gradient]),
         dgrid=1.0,
+        nlapar=True,
     )
     reference_weight, reference_denominator, reference_kperp2 = precompute_apar(
         reference_geometry, params
@@ -214,6 +268,19 @@ def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
         observed.kperp_squared,
         np.asarray(reference_kperp2).reshape(observed.kperp_squared.shape),
         rtol=2e-13,
+        atol=2e-13,
+    )
+    reference_precompute = linear_precompute(reference_geometry, params)
+    np.testing.assert_allclose(
+        observed.g_to_f_factor,
+        reference_precompute["g2f_factor"],
+        rtol=3e-8,
+        atol=2e-13,
+    )
+    np.testing.assert_allclose(
+        observed.apar_chi_factor,
+        reference_precompute["apar_chi_factor"],
+        rtol=3e-8,
         atol=2e-13,
     )
 

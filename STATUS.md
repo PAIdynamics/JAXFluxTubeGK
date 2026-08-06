@@ -129,6 +129,11 @@ claimed.
 - Added the coupled kinetic `phi`/`B_parallel` field solve, gyrokinetic
   `B_parallel` response factor, beta-zero limit, and differentiation tests.
   All coupled coefficients independently match pinned Gyaradax.
+- Added the complete mixed-variable field contract: solve `A_parallel` from
+  evolved `g`, transform reversibly to physical `f`, then solve coupled
+  `phi/B_parallel`. The `g`-to-`f` and generalized-potential coefficients match
+  pinned Gyaradax, while the exact beta-zero path recovers kinetic
+  electrostatics including constant-mode gauge regularization.
 - The new parity test exposed and fixed the large-argument `J1` approximation
   incorrectly erasing physical oscillatory sign changes; a SciPy comparison
   now covers both signs beyond the asymptotic threshold.
