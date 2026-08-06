@@ -35,7 +35,7 @@ flux-tube geometry contract from in-memory Fourier output without a repository
   late-window growth delta is 0.0256, so Priority 3 remains open for converged
   `t=500` per-ky references, implicit parallel streaming, and cubic mirror
   interpolation.
-- Verified the complete standalone x64 suite after these changes: 373 passed
+- Verified the complete standalone x64 suite after these changes: 376 passed
   and 20 external tests were deselected.
 - Added source-default cubic mirror interpolation and a differentiable
   implicit-midpoint parallel streaming propagator. The latter is precomputed
