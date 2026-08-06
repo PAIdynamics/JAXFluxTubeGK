@@ -249,7 +249,12 @@ def _parse_args(argv: list[str] | None = None):
     )
     parser.add_argument(
         "--parallel-advance",
-        choices=("explicit", "implicit_midpoint", "coupled_implicit_midpoint"),
+        choices=(
+            "explicit",
+            "implicit_midpoint",
+            "coupled_implicit_midpoint",
+            "stella_implicit",
+        ),
         default="explicit",
     )
     parser.add_argument(
@@ -670,12 +675,20 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 residual_precompute.rhs.D_z,
                 residual_precompute.rhs.parallel_streaming_coeff,
             )
-    elif args.parallel_advance == "coupled_implicit_midpoint":
+    elif args.parallel_advance in ("coupled_implicit_midpoint", "stella_implicit"):
         if args.parallel_derivative_model != "matrix":
             raise ValueError(
                 "coupled_implicit_midpoint parallel advance requires the matrix derivative"
             )
-        response = build_implicit_parallel_response_precompute(precompute, 0.5 * args.dt)
+        response = build_implicit_parallel_response_precompute(
+            precompute,
+            0.5 * args.dt,
+            spatial_scheme=(
+                "stella_near_centered"
+                if args.parallel_advance == "stella_implicit"
+                else "spectral"
+            ),
+        )
 
         def parallel_response_step(state_value):
             return implicit_parallel_response_step(state_value, precompute, response)

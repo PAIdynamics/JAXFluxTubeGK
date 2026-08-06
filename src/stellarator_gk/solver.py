@@ -19,8 +19,6 @@ from .physics.rhs_terms import (
     LinearRHSPrecompute,
     build_linear_rhs_precompute,
     linear_residual_from_phi,
-    parallel_field_drive,
-    parallel_streaming,
 )
 from .types import FourierGrid, ParallelGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
 
@@ -53,19 +51,29 @@ class ImplicitParallelResponsePrecompute(_PyTreeDataclass):
     left_inverse: object
     field_matrix: object
     field_inverse: object
-    half_dt: object
+    mass_matrix: object
+    derivative: object
+    left_dt: object
+    right_dt: object
 
     _dynamic_fields: ClassVar[tuple[str, ...]] = (
         "left_inverse",
         "field_matrix",
         "field_inverse",
-        "half_dt",
+        "mass_matrix",
+        "derivative",
+        "left_dt",
+        "right_dt",
     )
 
 
 def build_implicit_parallel_response_precompute(
     precompute: LinearResidualPrecompute,
     dt,
+    *,
+    spatial_scheme: str = "spectral",
+    zed_upwind: float = 0.02,
+    time_upwind: float = 0.02,
 ) -> ImplicitParallelResponsePrecompute:
     """Build a midpoint Schur complement for streaming, field drive, and QN.
 
@@ -79,21 +87,51 @@ def build_implicit_parallel_response_precompute(
     if precompute.rhs.parallel_derivative_model != "matrix":
         raise ValueError("implicit parallel response requires the matrix parallel derivative")
 
-    derivative = jnp.asarray(precompute.rhs.D_z)
+    derivative_base = jnp.asarray(precompute.rhs.D_z)
     coefficient = jnp.asarray(precompute.rhs.parallel_streaming_coeff)
     if coefficient.ndim == 3 and coefficient.shape[0] == 1:
         coefficient = coefficient[0]
-    if derivative.ndim != 2 or derivative.shape[0] != derivative.shape[1]:
+    if derivative_base.ndim != 2 or derivative_base.shape[0] != derivative_base.shape[1]:
         raise ValueError("D_z must be square")
-    if coefficient.ndim != 2 or coefficient.shape[1] != derivative.shape[0]:
+    if coefficient.ndim != 2 or coefficient.shape[1] != derivative_base.shape[0]:
         raise ValueError("parallel_streaming_coeff must have shape (vpar,z)")
+    if spatial_scheme not in ("spectral", "stella_near_centered"):
+        raise ValueError("spatial_scheme must be 'spectral' or 'stella_near_centered'")
+    if not 0.0 <= zed_upwind <= 1.0 or not 0.0 <= time_upwind <= 1.0:
+        raise ValueError("upwind parameters must lie in [0, 1]")
 
-    operator = -coefficient[:, :, None] * derivative[None, :, :]
-    dtype = jnp.result_type(derivative, coefficient, jnp.asarray(dt))
-    identity_z = jnp.eye(derivative.shape[0], dtype=dtype)
-    half_dt = 0.5 * jnp.asarray(dt, dtype=dtype)
+    dtype = jnp.result_type(derivative_base, coefficient, jnp.asarray(dt))
+    identity_z = jnp.eye(derivative_base.shape[0], dtype=dtype)
+    if spatial_scheme == "spectral":
+        derivative = jnp.broadcast_to(
+            derivative_base[None, :, :],
+            (coefficient.shape[0],) + derivative_base.shape,
+        )
+        mass_matrix = jnp.broadcast_to(identity_z[None, :, :], derivative.shape)
+        left_dt = right_dt = 0.5 * jnp.asarray(dt, dtype=dtype)
+    else:
+        spacing = jnp.sum(jnp.asarray(precompute.field.w_z)) / derivative_base.shape[0]
+        forward = jnp.roll(identity_z, -1, axis=0)
+        backward = jnp.roll(identity_z, 1, axis=0)
+        plus = 0.5 * (1.0 + zed_upwind)
+        minus = 0.5 * (1.0 - zed_upwind)
+        positive_mass = plus * identity_z + minus * forward
+        negative_mass = plus * identity_z + minus * backward
+        positive_derivative = (forward - identity_z) / spacing
+        negative_derivative = (identity_z - backward) / spacing
+        positive_rhs = -jnp.mean(coefficient, axis=1) >= 0.0
+        mass_matrix = jnp.where(
+            positive_rhs[:, None, None], positive_mass, negative_mass
+        )
+        derivative = jnp.where(
+            positive_rhs[:, None, None], positive_derivative, negative_derivative
+        )
+        left_dt = 0.5 * (1.0 + time_upwind) * jnp.asarray(dt, dtype=dtype)
+        right_dt = 0.5 * (1.0 - time_upwind) * jnp.asarray(dt, dtype=dtype)
+
+    operator = -coefficient[:, :, None] * derivative
     left_inverse = jnp.linalg.solve(
-        identity_z[None, :, :] - half_dt * operator,
+        mass_matrix - left_dt * operator,
         jnp.broadcast_to(identity_z, operator.shape),
     )
 
@@ -105,7 +143,7 @@ def build_implicit_parallel_response_precompute(
     )
 
     def field_response_column(phi):
-        drive = half_dt * parallel_field_drive(phi, derivative, precompute.rhs)
+        drive = left_dt * _implicit_parallel_field_drive(phi, precompute, derivative)
         correction = _apply_parallel_left_inverse(drive, left_inverse)
         return _solve_phi(correction, precompute)
 
@@ -117,7 +155,10 @@ def build_implicit_parallel_response_precompute(
         left_inverse=left_inverse,
         field_matrix=field_matrix,
         field_inverse=jnp.linalg.inv(field_matrix),
-        half_dt=half_dt,
+        mass_matrix=mass_matrix,
+        derivative=derivative,
+        left_dt=left_dt,
+        right_dt=right_dt,
     )
 
 
@@ -132,13 +173,9 @@ def implicit_parallel_response_step(
     if distribution.ndim != 5:
         raise ValueError("distribution must have shape (vpar,mu,z,kx,ky)")
     phi_old = _solve_phi(distribution, precompute)
-    rhs_state = distribution + response.half_dt * (
-        parallel_streaming(
-            distribution,
-            precompute.rhs.D_z,
-            precompute.rhs.parallel_streaming_coeff,
-        )
-        + parallel_field_drive(phi_old, precompute.rhs.D_z, precompute.rhs)
+    rhs_state = _apply_parallel_matrix(distribution, response.mass_matrix) + response.right_dt * (
+        _implicit_parallel_streaming(distribution, precompute, response.derivative)
+        + _implicit_parallel_field_drive(phi_old, precompute, response.derivative)
     )
     uncoupled = _apply_parallel_left_inverse(rhs_state, response.left_inverse)
     phi_shape = phi_old.shape
@@ -146,8 +183,8 @@ def implicit_parallel_response_step(
         response.field_inverse @ _solve_phi(uncoupled, precompute).reshape(-1)
     ).reshape(phi_shape)
     correction = _apply_parallel_left_inverse(
-        response.half_dt
-        * parallel_field_drive(phi_new, precompute.rhs.D_z, precompute.rhs),
+        response.left_dt
+        * _implicit_parallel_field_drive(phi_new, precompute, response.derivative),
         response.left_inverse,
     )
     return uncoupled + correction
@@ -155,6 +192,29 @@ def implicit_parallel_response_step(
 
 def _apply_parallel_left_inverse(distribution, left_inverse):
     return jnp.einsum("vij,vmjxy->vmixy", left_inverse, distribution)
+
+
+def _apply_parallel_matrix(distribution, matrix):
+    return jnp.einsum("vij,vmjxy->vmixy", matrix, distribution)
+
+
+def _implicit_parallel_streaming(distribution, precompute, derivative):
+    differentiated = _apply_parallel_matrix(distribution, derivative)
+    coefficient = jnp.asarray(precompute.rhs.parallel_streaming_coeff)[0]
+    return -coefficient[:, None, :, None, None] * differentiated
+
+
+def _implicit_parallel_field_drive(phi, precompute, derivative):
+    rhs = precompute.rhs
+    gyro_phi = rhs.flr_factors.bessel_j0[0] * phi[None, :, :, :]
+    differentiated = jnp.einsum("vij,mjxy->vmixy", derivative, gyro_phi)
+    coefficient = jnp.asarray(rhs.parallel_streaming_coeff)[0]
+    return (
+        -rhs.charge_over_temperature[0]
+        * coefficient[:, None, :, None, None]
+        * rhs.maxwellian[0, ..., None, None]
+        * differentiated
+    )
 
 
 def build_linear_residual_precompute(

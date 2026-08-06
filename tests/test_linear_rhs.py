@@ -138,6 +138,37 @@ def test_implicit_parallel_response_matches_dense_midpoint_system():
     np.testing.assert_allclose(actual, expected, rtol=2.0e-12, atol=2.0e-12)
 
 
+def test_stella_parallel_response_uses_sign_dependent_near_centering():
+    velocity, parallel, _fourier, _geometry, _species, _rhs, precompute = _setup(n_z=4)
+    response = build_implicit_parallel_response_precompute(
+        precompute,
+        0.04,
+        spatial_scheme="stella_near_centered",
+    )
+    spacing = float(jnp.sum(precompute.field.w_z) / 4)
+
+    negative_v_index = 0
+    positive_v_index = velocity.vpar.shape[0] - 1
+    np.testing.assert_allclose(
+        response.mass_matrix[negative_v_index, 0],
+        jnp.asarray([0.51, 0.49, 0.0, 0.0]),
+    )
+    np.testing.assert_allclose(
+        response.derivative[negative_v_index, 0],
+        jnp.asarray([-1.0, 1.0, 0.0, 0.0]) / spacing,
+    )
+    np.testing.assert_allclose(
+        response.mass_matrix[positive_v_index, 0],
+        jnp.asarray([0.51, 0.0, 0.0, 0.49]),
+    )
+    np.testing.assert_allclose(
+        response.derivative[positive_v_index, 0],
+        jnp.asarray([1.0, 0.0, 0.0, -1.0]) / spacing,
+    )
+    np.testing.assert_allclose(response.left_dt, 0.0204)
+    np.testing.assert_allclose(response.right_dt, 0.0196)
+
+
 def test_rhs_precompute_shapes_and_zero_input_terms():
     velocity, parallel, fourier, _geometry, _species, precompute, _residual_precompute = _setup()
     shape = (
