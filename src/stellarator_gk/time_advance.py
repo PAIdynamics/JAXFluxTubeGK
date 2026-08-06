@@ -7,6 +7,7 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from .types import DerivativeBackend, ModeConnectivity, _PyTreeDataclass
 
@@ -28,6 +29,17 @@ class TimeAdvanceResult(_PyTreeDataclass):
     def __post_init__(self):
         if self.n_steps < 0:
             raise ValueError("n_steps must be nonnegative")
+
+
+@dataclass(frozen=True)
+class AdaptiveTimeAdvanceResult:
+    """Result of host-controlled adaptive integration with accepted step sizes."""
+
+    state: object
+    history: object
+    times: object
+    dt_history: object
+    n_steps: int
 
 
 @jax.tree_util.register_pytree_node_class
@@ -113,6 +125,57 @@ def integrate_fixed_step(
         times=times,
         dt=dt,
         n_steps=int(n_steps),
+    )
+
+
+def integrate_adaptive(
+    state,
+    final_time: float,
+    rhs_fn,
+    timestep_fn,
+    *rhs_args,
+    max_steps: int = 100_000,
+    filter_fn=None,
+    store_history: bool = True,
+):
+    """Advance with RK4 using a state-dependent accepted timestep.
+
+    Timestep selection and termination are intentionally host controlled; each
+    accepted RK4 step remains JAX-compatible. Use fixed-step integration when
+    differentiating through the complete trajectory because adaptive accept
+    decisions are nonsmooth.
+    """
+
+    if final_time <= 0.0:
+        raise ValueError("final_time must be positive")
+    if max_steps < 1:
+        raise ValueError("max_steps must be positive")
+    state = jnp.asarray(state)
+    initial_state = state
+    time = 0.0
+    states = [state] if store_history else []
+    times = [time]
+    steps = []
+    while time < final_time and len(steps) < max_steps:
+        proposed = float(timestep_fn(state, *rhs_args))
+        if not np.isfinite(proposed) or proposed <= 0.0:
+            raise ValueError("timestep_fn must return a finite positive value")
+        dt = min(proposed, final_time - time)
+        state = rk4_step(state, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        time += dt
+        steps.append(dt)
+        times.append(time)
+        if store_history:
+            states.append(state)
+    if time < final_time:
+        raise RuntimeError(f"adaptive integration exceeded max_steps={max_steps}")
+    history = jnp.stack(states) if store_history else jnp.stack((initial_state, state))
+    return AdaptiveTimeAdvanceResult(
+        state=state,
+        history=history,
+        times=jnp.asarray(times),
+        dt_history=jnp.asarray(steps),
+        n_steps=len(steps),
     )
 
 

@@ -1261,8 +1261,11 @@ The implementation should be pseudospectral:
 \end{enumerate}
 The implemented nonlinear foundation follows this construction for centered
 $k_x$ modes and the nonnegative-$k_y$ Hermitian half spectrum.  It also
-evaluates an advective timestep bound from the padded-grid ExB velocity.
-Production nonlinear readiness additionally requires adaptive time advance,
+evaluates an advective timestep bound from the padded-grid ExB velocity.  The
+host-controlled nonlinear driver chooses the minimum of this instantaneous
+bound and the coupled linear bound for each accepted RK4 step.  Since timestep
+accept decisions are nonsmooth, differentiable trajectories retain the
+fixed-step driver. Production nonlinear readiness additionally requires
 statistically stationary heat flux, resolution and box-size convergence, and
 independent-code parity.
 

@@ -355,10 +355,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   CFL estimate.
 - [x] Add candidate-saturation radial/heat-flux window statistics with mean,
   variance, standard error, and relative drift diagnostics.
-- [ ] Add an adaptive nonlinear time-advance driver, demonstrate statistically
-  stationary heat flux with resolution/domain convergence, and pass an
-  independent nonlinear parity gate. The operator and diagnostics alone do
-  not establish a turbulence claim.
+- [x] Add host-controlled adaptive nonlinear RK4 time advance using the minimum
+  of coupled linear and instantaneous ExB CFL bounds. Fixed-step integration
+  remains the differentiable trajectory path because adaptive accept decisions
+  are nonsmooth.
+- [ ] Demonstrate statistically stationary heat flux with resolution/domain
+  convergence and pass an independent nonlinear parity gate. The operator,
+  adaptive driver, and diagnostics alone do not establish a turbulence claim.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -16,8 +16,10 @@ from stellarator_gk import (
     build_s_alpha_geometry,
     build_velocity_grid,
     estimate_nonlinear_exb_dt,
+    estimate_nonlinear_residual_dt,
     exb_pseudospectral_bracket,
     linear_residual,
+    integrate_nonlinear_adaptive,
     nonlinear_exb_term,
     nonlinear_residual,
 )
@@ -115,3 +117,18 @@ def test_nonlinear_residual_adds_gyroaveraged_exb_term():
     )
 
     np.testing.assert_allclose(total, expected, atol=2.0e-12, rtol=2.0e-12)
+
+    selected_dt = estimate_nonlinear_residual_dt(
+        state, linear_precompute, nonlinear_precompute
+    )
+    assert np.isfinite(float(selected_dt))
+    assert float(selected_dt) > 0.0
+
+    zero_result = integrate_nonlinear_adaptive(
+        jnp.zeros_like(state),
+        1.0e-3,
+        linear_precompute,
+        nonlinear_precompute,
+    )
+    np.testing.assert_allclose(zero_result.state, 0.0, atol=0.0)
+    np.testing.assert_allclose(zero_result.times[-1], 1.0e-3, atol=0.0)

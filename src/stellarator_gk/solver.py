@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from .physics.collisions import build_conserving_bgk_precompute, conserving_bgk_collision
-from .physics.nonlinear import nonlinear_exb_term
+from .physics.nonlinear import estimate_nonlinear_exb_dt, nonlinear_exb_term
 from .physics.quasineutrality import (
     AdiabaticElectronParams,
     build_adiabatic_quasineutrality_precompute,
@@ -23,6 +23,7 @@ from .physics.rhs_terms import (
     linear_residual_from_phi,
 )
 from .types import FourierGrid, ParallelGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
+from .time_advance import estimate_linear_cfl_dt, integrate_adaptive
 
 
 @jax.tree_util.register_pytree_node_class
@@ -383,6 +384,62 @@ def nonlinear_residual(
         distribution, precomputed=precomputed, phi=solved_phi
     ) + nonlinear_exb_term(
         distribution, solved_phi, precomputed.rhs, spectral_precomputed
+    )
+
+
+def estimate_nonlinear_residual_dt(
+    distribution,
+    precomputed: LinearResidualPrecompute,
+    spectral_precomputed,
+    *,
+    linear_safety: float = 0.8,
+    nonlinear_safety: float = 0.8,
+):
+    """Return the minimum linear and instantaneous nonlinear CFL bounds."""
+
+    phi = _solve_phi(distribution, precomputed)
+    gyro_phi = (
+        jnp.asarray(precomputed.rhs.flr_factors.bessel_j0)
+        * jnp.asarray(phi)[None, None, ...]
+    )
+    linear_dt = estimate_linear_cfl_dt(precomputed, safety=linear_safety)
+    nonlinear_dt = estimate_nonlinear_exb_dt(
+        gyro_phi, spectral_precomputed, safety=nonlinear_safety
+    )
+    return jnp.minimum(linear_dt, nonlinear_dt)
+
+
+def integrate_nonlinear_adaptive(
+    distribution,
+    final_time: float,
+    precomputed: LinearResidualPrecompute,
+    spectral_precomputed,
+    *,
+    linear_safety: float = 0.8,
+    nonlinear_safety: float = 0.8,
+    max_steps: int = 100_000,
+    store_history: bool = True,
+):
+    """Advance the nonlinear electrostatic system with combined CFL control."""
+
+    def timestep(state, _linear, _spectral):
+        return estimate_nonlinear_residual_dt(
+            state,
+            _linear,
+            _spectral,
+            linear_safety=linear_safety,
+            nonlinear_safety=nonlinear_safety,
+        )
+
+    return integrate_adaptive(
+        distribution,
+        final_time,
+        nonlinear_residual,
+        timestep,
+        precomputed,
+        spectral_precomputed,
+        max_steps=max_steps,
+        store_history=store_history,
     )
 
 

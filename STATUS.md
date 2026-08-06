@@ -104,8 +104,11 @@ claimed.
   JIT, amplitude/CFL scaling, grid rejection, and residual integration pass.
 - Added candidate saturated-flux statistics reporting the mean, sample
   deviation, standard error, and relative window drift. An adaptive nonlinear
-  driver, converged stationary heat flux, and external nonlinear parity remain
-  open before claiming nonlinear turbulence readiness.
+  RK4 driver now selects the minimum of the coupled linear and instantaneous
+  nonlinear CFL bounds and records every accepted step. Adaptive accept
+  decisions are explicitly outside the differentiable fixed-step path.
+- Converged stationary heat flux and external nonlinear parity remain open
+  before claiming nonlinear turbulence readiness.
 
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 

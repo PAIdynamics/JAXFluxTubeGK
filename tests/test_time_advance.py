@@ -15,6 +15,7 @@ from stellarator_gk import (
     build_parallel_grid,
     build_velocity_grid,
     estimate_linear_cfl_dt,
+    integrate_adaptive,
     integrate_fixed_step,
     integrate_fixed_step_split_mirror,
     implicit_parallel_streaming_step,
@@ -40,6 +41,22 @@ def test_rk4_zero_input_invariance_and_history_times():
     np.testing.assert_allclose(result.history, 0.0, atol=0.0)
     np.testing.assert_allclose(result.times, jnp.linspace(0.0, 0.5, 6))
     assert result.history.shape == (6, 3)
+
+
+def test_adaptive_integrator_reaches_final_time_and_records_accepted_steps():
+    def rhs(state, rate):
+        return rate * state
+
+    def timestep(state, _rate):
+        return 0.07 if state < 1.15 else 0.03
+
+    result = integrate_adaptive(jnp.asarray(1.0), 0.2, rhs, timestep, 1.0)
+
+    np.testing.assert_allclose(result.times[-1], 0.2, atol=0.0)
+    np.testing.assert_allclose(jnp.sum(result.dt_history), 0.2, atol=2.0e-15)
+    np.testing.assert_allclose(result.state, np.exp(0.2), rtol=3.0e-7)
+    assert result.history.shape[0] == result.n_steps + 1
+    assert jnp.min(result.dt_history) < jnp.max(result.dt_history)
 
 
 def test_semi_lagrangian_mirror_step_translates_linear_profile():
