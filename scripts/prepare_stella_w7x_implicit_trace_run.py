@@ -280,48 +280,53 @@ def patch_stella_explicit_stage_trace(source_path: Path) -> bool:
 
 """
     text = _replace_once(text, module_marker, module_marker + module_state)
-    text = _replace_once(
-        text,
+    rk3_start = text.index("   subroutine advance_explicit_rk3")
+    rk3_end_marker = "   end subroutine advance_explicit_rk3\n"
+    rk3_end = text.index(rk3_end_marker, rk3_start) + len(rk3_end_marker)
+    rk3 = text[rk3_start:rk3_end]
+    rk3 = _replace_once(
+        rk3,
         "      g0 = g\n",
         "      g0 = g\n"
         "      call stellarator_gk_trace_explicit_pdf('explicit_input_pdf', istep, g0)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n"
         "            call stellarator_gk_trace_explicit_pdf('explicit_rhs1_pdf', istep, g1)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "            g1 = g0 + g1\n",
         "            g1 = g0 + g1\n"
         "            call stellarator_gk_trace_explicit_pdf('explicit_state1_pdf', istep, g1)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n"
         "            call stellarator_gk_trace_explicit_pdf('explicit_rhs2_pdf', istep, g2)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "            g2 = g1 + g2\n",
         "            g2 = g1 + g2\n"
         "            call stellarator_gk_trace_explicit_pdf('explicit_state2_pdf', istep, g2)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n"
         "            call stellarator_gk_trace_explicit_pdf('explicit_rhs3_pdf', istep, g)\n",
     )
-    text = _replace_once(
-        text,
+    rk3 = _replace_once(
+        rk3,
         "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n",
         "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n"
         "      call stellarator_gk_trace_explicit_pdf('explicit_final_pdf', istep, g)\n",
     )
+    text = text[:rk3_start] + rk3 + text[rk3_end:]
     text = _replace_once(
         text,
         "end module gyrokinetic_equation_explicit\n",

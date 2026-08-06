@@ -79,17 +79,19 @@ def test_mirror_trace_patch_instruments_first_mirror_stage(tmp_path: Path):
 def test_explicit_trace_patch_instruments_rk3_stages(tmp_path: Path):
     source = tmp_path / "gyrokinetic_equation_explicit.f90"
     source.write_text(
-        "module gyrokinetic_equation_explicit\n"
-        "   private\n"
-        "contains\n"
+            "module gyrokinetic_equation_explicit\n"
+            "   private\n"
+            "contains\n"
+            "   subroutine advance_explicit_rk3(g, restart_time_step, istep)\n"
         "      g0 = g\n"
         "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n"
         "            g1 = g0 + g1\n"
         "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n"
         "            g2 = g1 + g2\n"
         "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n"
-        "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n"
-        "end module gyrokinetic_equation_explicit\n",
+            "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n"
+            "   end subroutine advance_explicit_rk3\n"
+            "end module gyrokinetic_equation_explicit\n",
         encoding="utf-8",
     )
 
