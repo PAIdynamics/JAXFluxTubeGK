@@ -28,8 +28,8 @@ claimed.
 - Corrected the kinetic-electron timestep estimate, integrated a conservative
   BGK collision foundation, and added the dealiased nonlinear ExB residual,
   combined adaptive CFL driver, and saturated-flux window statistics.
-- The complete standalone x64 suite passes with **466 passed and 24 external
-  tests deselected in 588.68 s**. Repository-wide Ruff and whitespace checks
+- The complete standalone x64 suite passes with **475 passed and 25 external
+  tests deselected in 592.47 s**. Repository-wide Ruff and whitespace checks
   also pass. The recurring missing `bitx` hook message is unrelated and does
   not affect these results.
 - Priority 5 is not declared scientifically complete: production
