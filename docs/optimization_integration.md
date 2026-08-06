@@ -52,6 +52,30 @@ soft maximum or select a physical `ky` branch explicitly, then require the
 audit to pass. A hard-maximum gradient across a branch change must not be
 reported as a validated derivative.
 
+### Multiple surfaces and field lines
+
+`scan_single_surface_objective` evaluates a fixed Cartesian sample set in
+`rho`, `alpha`, and `ky`. Pass its result to `robust_scan_objective` to reduce
+all samples with a weighted mean, hard worst case, or smooth worst-case
+(`softmax`) policy:
+
+```python
+from stellarator_gk import RobustAggregationSpec, robust_scan_objective
+
+robust = robust_scan_objective(
+    scan,
+    RobustAggregationSpec(method="softmax", softmax_temperature=0.05),
+    sample_weights=weights,
+)
+loss = robust.scalar_objective
+```
+
+The scan tensor and optional weights have shape `(rho, alpha, ky)` and are
+flattened in row-major order. Weights are normalized, fixed controls; gradients
+flow through every sample objective. The result always reports the weighted
+mean, hard worst case, and smooth worst case so optimization records can be
+audited independently of the selected reduction.
+
 ## Remeshing and topology changes
 
 Create an `OptimizationTopologyContract` before compiling an objective. It
@@ -139,3 +163,18 @@ required to live outside the repository.
 This demonstrates the real MHD-provider integration boundary. VMEC++ is not
 currently differentiated through, and the example is neither an end-to-end AD
 claim nor a production full-boundary shape optimizer.
+
+## Reproducible Checkpoints
+
+Use `build_optimization_checkpoint` and `write_optimization_checkpoint` at an
+accepted iteration. Schema version 1 records the complete `rho/alpha/ky`
+sample axes and objectives, objective and aggregation policies, design
+parameters, iteration history, provider provenance, code and dependency
+revisions, invocation, random seed, and every fixed-topology fingerprint.
+
+On restart, load the record with `load_optimization_checkpoint` and call
+`assert_checkpoint_topology` with the newly constructed contracts before
+reusing compiled functions or optimizer state. A mesh, mode, linking, or
+provider-topology change raises `TopologyChangeError` and requires rebuilding
+the differentiated solve. Checkpoint files contain optimization records, not
+embedded MHD equilibria or W7-X geometry arrays.

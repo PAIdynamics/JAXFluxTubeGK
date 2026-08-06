@@ -7,6 +7,7 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from .benchmarks import BenchmarkTarget, benchmark_target_cost, benchmark_target_residual
 from .geometry import build_circular_geometry, build_s_alpha_geometry, k_perp_squared
@@ -268,6 +269,44 @@ class DesignGradientAudit:
     near_degenerate_branch: bool
 
 
+@dataclass(frozen=True)
+class RobustAggregationSpec:
+    """Fixed policy for reducing several surface/field-line objectives."""
+
+    method: str = "softmax"
+    softmax_temperature: float = 0.05
+
+    def __post_init__(self) -> None:
+        if self.method not in ("weighted_mean", "worst_case", "softmax"):
+            raise ValueError(
+                "aggregation method must be 'weighted_mean', 'worst_case', or 'softmax'"
+            )
+        if self.softmax_temperature <= 0.0:
+            raise ValueError("softmax_temperature must be positive")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class RobustAggregationResult(_PyTreeDataclass):
+    """Differentiable reduction and diagnostics over fixed design samples."""
+
+    scalar_objective: object
+    weighted_mean: object
+    worst_case: object
+    softmax_objective: object
+    sample_objectives: object
+    normalized_weights: object
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "scalar_objective",
+        "weighted_mean",
+        "worst_case",
+        "softmax_objective",
+        "sample_objectives",
+        "normalized_weights",
+    )
+
+
 def build_optimization_species(
     knobs: OptimizationKnobs,
     base_species: SpeciesParams | None = None,
@@ -479,6 +518,87 @@ def audit_design_gradient(
             False if branch_gap is None else abs(float(branch_gap)) <= branch_gap_tolerance
         ),
     )
+
+
+def aggregate_design_objectives(
+    sample_objectives,
+    spec: RobustAggregationSpec | None = None,
+    *,
+    sample_weights=None,
+) -> RobustAggregationResult:
+    """Reduce fixed surface/field-line samples without breaking JAX gradients.
+
+    The sample axis may have any shape and is flattened in a deterministic
+    row-major order. Weights are static optimization controls rather than
+    differentiated parameters.
+    """
+
+    spec = spec or RobustAggregationSpec()
+    values = jnp.ravel(jnp.asarray(sample_objectives))
+    if values.size == 0:
+        raise ValueError("at least one design sample is required")
+    if sample_weights is None:
+        weights = jnp.full(values.shape, 1.0 / values.size, dtype=values.dtype)
+    else:
+        raw_weights = np.ravel(np.asarray(sample_weights, dtype=float))
+        if raw_weights.shape != values.shape:
+            raise ValueError("sample_weights must have the same size as sample_objectives")
+        if not np.all(np.isfinite(raw_weights)) or np.any(raw_weights < 0.0):
+            raise ValueError("sample_weights must be finite and nonnegative")
+        total_weight = float(np.sum(raw_weights))
+        if total_weight <= 0.0:
+            raise ValueError("sample_weights must contain a positive weight")
+        weights = jnp.asarray(raw_weights / total_weight, dtype=values.dtype)
+    weighted_mean = jnp.sum(weights * values)
+    worst_case = jnp.max(values)
+    temperature = jnp.asarray(spec.softmax_temperature, dtype=values.dtype)
+    log_weights = jnp.where(weights > 0.0, jnp.log(weights), -jnp.inf)
+    softmax_objective = temperature * jax.scipy.special.logsumexp(
+        values / temperature + log_weights
+    )
+    if spec.method == "weighted_mean":
+        scalar = weighted_mean
+    elif spec.method == "worst_case":
+        scalar = worst_case
+    else:
+        scalar = softmax_objective
+    return RobustAggregationResult(
+        scalar_objective=scalar,
+        weighted_mean=weighted_mean,
+        worst_case=worst_case,
+        softmax_objective=softmax_objective,
+        sample_objectives=values,
+        normalized_weights=weights,
+    )
+
+
+def robust_scan_objective(
+    scan: OptimizationScanResult,
+    spec: RobustAggregationSpec | None = None,
+    *,
+    sample_weights=None,
+) -> RobustAggregationResult:
+    """Aggregate a fixed rho/alpha/ky scan as one robust design objective."""
+
+    expected_shape = (
+        scan.rho_values.shape[0],
+        scan.alpha_values.shape[0],
+        scan.ky_indices.shape[0],
+    )
+    if scan.objectives.shape != expected_shape:
+        raise ValueError(
+            f"scan objectives must have rho/alpha/ky shape {expected_shape}; "
+            f"got {scan.objectives.shape}"
+        )
+    if sample_weights is not None and np.asarray(sample_weights).shape != expected_shape:
+        raise ValueError(f"scan weights must have rho/alpha/ky shape {expected_shape}")
+    return aggregate_design_objectives(
+        scan.objectives,
+        spec,
+        sample_weights=sample_weights,
+    )
+
+
 def scan_single_surface_objective(
     knobs: OptimizationKnobs,
     velocity_grid: VelocityGrid,
