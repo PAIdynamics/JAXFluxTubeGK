@@ -159,14 +159,25 @@ def test_stella_parallel_response_uses_sign_dependent_near_centering():
     )
     np.testing.assert_allclose(
         response.mass_matrix[positive_v_index, 0],
-        jnp.asarray([0.51, 0.0, 0.0, 0.49]),
+        jnp.asarray([0.51, 0.0, 0.0, 0.0]),
     )
     np.testing.assert_allclose(
         response.derivative[positive_v_index, 0],
-        jnp.asarray([1.0, 0.0, 0.0, -1.0]) / spacing,
+        jnp.asarray([1.0, 0.0, 0.0, 0.0]) / spacing,
     )
     np.testing.assert_allclose(response.left_dt, 0.0204)
     np.testing.assert_allclose(response.right_dt, 0.0196)
+
+    periodic_response = build_implicit_parallel_response_precompute(
+        precompute,
+        0.04,
+        spatial_scheme="stella_near_centered",
+        periodic_parallel_boundary=True,
+    )
+    np.testing.assert_allclose(
+        periodic_response.mass_matrix[positive_v_index, 0],
+        jnp.asarray([0.51, 0.0, 0.0, 0.49]),
+    )
 
 
 def test_rhs_precompute_shapes_and_zero_input_terms():

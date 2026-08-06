@@ -74,12 +74,16 @@ def build_implicit_parallel_response_precompute(
     spatial_scheme: str = "spectral",
     zed_upwind: float = 0.02,
     time_upwind: float = 0.02,
+    periodic_parallel_boundary: bool = False,
 ) -> ImplicitParallelResponsePrecompute:
     """Build a midpoint Schur complement for streaming, field drive, and QN.
 
     ``dt`` is the duration of one application.  The distribution-space block
     is inverted independently for every parallel velocity, while the dense
-    Schur complement has only the electrostatic-field dimension.
+    Schur complement has only the electrostatic-field dimension. The stella
+    scheme defaults to its zero-incoming extended-domain boundary; periodic
+    wrapping must be requested explicitly for zonal or otherwise periodic
+    chains.
     """
 
     if precompute.n_species != 1:
@@ -111,8 +115,11 @@ def build_implicit_parallel_response_precompute(
         left_dt = right_dt = 0.5 * jnp.asarray(dt, dtype=dtype)
     else:
         spacing = jnp.sum(jnp.asarray(precompute.field.w_z)) / derivative_base.shape[0]
-        forward = jnp.roll(identity_z, -1, axis=0)
-        backward = jnp.roll(identity_z, 1, axis=0)
+        forward = jnp.diag(jnp.ones(derivative_base.shape[0] - 1, dtype=dtype), 1)
+        backward = jnp.diag(jnp.ones(derivative_base.shape[0] - 1, dtype=dtype), -1)
+        if periodic_parallel_boundary:
+            forward = forward.at[-1, 0].set(1.0)
+            backward = backward.at[0, -1].set(1.0)
         plus = 0.5 * (1.0 + zed_upwind)
         minus = 0.5 * (1.0 - zed_upwind)
         positive_mass = plus * identity_z + minus * forward
