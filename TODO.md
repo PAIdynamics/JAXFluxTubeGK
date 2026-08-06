@@ -283,6 +283,13 @@ validation work in Priority 3.
   domain. Do not substitute the rejected GKW open stencil or promote either
   experimental coupled response as the production default before profile
   parity passes.
+  Source-following discriminators now also rule out three partial fixes:
+  zero-incoming rather than periodic nonzonal boundary rows, separate
+  centering of the streaming/Maxwellian factors, and a single full response
+  after the explicit stage all leave the `t=200` profile error near
+  `0.169-0.179`. Before another long run, instrument one stella implicit step
+  and compare its incoming state, inhomogeneous solve, response-solved field,
+  and final distribution stage-by-stage against the JAX response.
 - [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
   production optimization blocked until the readiness ledger passes.
 - [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a

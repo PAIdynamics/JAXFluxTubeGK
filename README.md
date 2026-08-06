@@ -292,7 +292,10 @@ phase-aligned profile error remains about `0.115`. A quasineutrality-coupled
 Schur response and an opt-in `stella_implicit` near-centered diagnostic are
 available, but neither yet closes profile parity. The latter reproduces
 stella's `0.51/0.49` spatial/time weights; matching stella's centered
-z-dependent prefactors and exact delta-phi response construction remains open.
+z-dependent prefactors, zero-incoming nonzonal boundaries, and full-step
+ordering individually does not close profile parity. A stage-resolved stella
+implicit-step replay is the next validation gate for the exact response
+construction.
 Reference export rejects half-window omega changes above 0.02 by default;
 `--allow-unconverged-omega` is diagnostic-only.
 

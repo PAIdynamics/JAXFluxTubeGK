@@ -67,6 +67,15 @@ flux-tube geometry contract from in-memory Fourier output without a repository
   inhomogeneous/homogeneous delta-phi response construction.
 - Verified the complete standalone x64 suite after the coupled-response work:
   378 tests pass and 20 explicitly external tests are deselected.
+- Corrected the opt-in stella response to use zero-incoming boundaries for the
+  nonzonal one-segment W7-X modes, then matched stella's separate cell
+  centering of the streaming coefficient and Maxwellian and its single
+  full-step post-explicit response ordering. Focused algebra, boundary, and
+  integration tests pass. Controlled `t=200` runs leave the `ky=0.3`
+  phase-aligned profile error near `0.169`, so none of these partial source
+  corrections closes the gate. The next discriminator is a stage-resolved
+  one-step trace of stella's inhomogeneous solve, field response, and final PDF
+  sweep; further long-time tuning is deferred until that replay agrees.
 
 The target architecture is:
 
