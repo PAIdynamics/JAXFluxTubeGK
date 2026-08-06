@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Executive Summary
 
@@ -15,6 +15,26 @@ Priority 2 now supplies optional live DESC, VMEC++, and GVEC adapters. VMEC++
 loads its installed named W7-X design, runs it, and constructs the complete
 flux-tube geometry contract from in-memory Fourier output without a repository
 `wout` file. The externally validated W7-X scientific gate remains open.
+
+### 2026-08-06: Priority 3 Native Velocity and Mirror Discriminator
+
+- Added a provider-neutral, zero-free midpoint parallel-velocity grid with
+  symmetric Simpson weights and rescaled Gauss-Laguerre mu quadrature. The W7-X
+  scan selects it without storing provider state or equilibrium artifacts.
+- Replaced its ill-conditioned global derivative with bounded local polynomial
+  stencils. The production CFL estimate improved from `7.8e-9` to `5.5e-2`,
+  making `dt=0.02` valid.
+- Added an opt-in physical `2*pi*B*dv*dmu` measure consistent with the solver's
+  normalized Maxwellian and the verified stella replay normalization.
+- Added a Strang-split, semi-Lagrangian mirror advance with a zero-incoming
+  velocity boundary. This removed the spurious explicit-mirror branch: a
+  `t=20` precheck moved growth from approximately 1.0 to 0.00894.
+- Ran the full `ky=0.3`, 32x8, `t=200` discriminator in `/private/tmp`. It
+  produced `(gamma, omega)=(0.01794, 0.01246)` with growth/frequency errors
+  `0.00832/0.01531`, both below 0.02. Profile error remains 0.1634 and the
+  late-window growth delta is 0.0256, so Priority 3 remains open for converged
+  `t=500` per-ky references, implicit parallel streaming, and cubic mirror
+  interpolation.
 
 The target architecture is:
 

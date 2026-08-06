@@ -427,8 +427,14 @@ def _status_payload(
     focus_profile_error_span = max(profile_errors) - min(profile_errors)
     velocity_sensitive = focus_frequency_error_span > 2.0e-2 or focus_profile_error_span > 2.0e-2
     stella_velocity_case_present = any(
-        str(item["velocity_backend"]) == "finite_difference"
+        str(item["velocity_backend"]) in ("finite_difference", "midpoint_gauss_laguerre")
         and int(item["n_vpar"]) >= 16
+        and int(item["n_mu"]) >= 8
+        for item in run_summaries
+    )
+    native_mirror_case_present = any(
+        str(item["velocity_backend"]) == "midpoint_gauss_laguerre"
+        and int(item["n_vpar"]) >= 32
         and int(item["n_mu"]) >= 8
         for item in run_summaries
     )
@@ -441,6 +447,13 @@ def _status_payload(
     if passed:
         status = "pass"
         next_action = "promote the passing velocity/backend controls into the W7-X readiness gate"
+    elif native_mirror_case_present:
+        status = "open_profile_after_native_mirror"
+        next_action = (
+            "extend the native 32x8 solver and pinned stella runs to converged "
+            "per-ky windows, then add stella-equivalent implicit parallel "
+            "streaming and cubic mirror interpolation if profile parity remains open"
+        )
     elif stella_velocity_case_present and not focus_closed:
         status = "open_rhs_terms_after_velocity_discriminator"
         next_action = (
@@ -480,6 +493,7 @@ def _status_payload(
         "focus_profile_error_span": focus_profile_error_span,
         "velocity_sensitive": velocity_sensitive,
         "stella_velocity_case_present": stella_velocity_case_present,
+        "native_mirror_case_present": native_mirror_case_present,
         "focus_gate_closed": focus_closed,
         "run_summaries": run_summaries,
         "next_action": next_action,

@@ -264,9 +264,15 @@ validation work in Priority 3.
   evaluated against converged per-ky reference windows.
 - [ ] Replace the reduced convergence ladder with production controls in
   parallel and velocity resolution, backend, modes, field-line length,
-  timestep, and growth window. The next focused discriminator is provider-native
-  32×8 velocity quadrature/FLR with stella-equivalent implicit parallel
-  treatment; do not substitute the rejected GKW open stencil.
+  timestep, and growth window. The provider-neutral zero-free 32×8
+  midpoint/Gauss-Laguerre quadrature, physical phase-space measure, and
+  semi-Lagrangian mirror split are now implemented. At `ky=0.3`, `t=200` they
+  move the solver to `(gamma, omega)=(0.01794, 0.01246)` and close the scalar
+  0.02 tolerances against the old transient fixture, while profile error remains
+  0.163 and the solver window is not yet converged. Next extend both solver and
+  pinned stella to converged per-ky windows, then implement stella-equivalent
+  implicit parallel streaming and cubic mirror interpolation if profile parity
+  remains open; do not substitute the rejected GKW open stencil.
 - [ ] Run guarded CPU timing only after parity and convergence pass; keep DESC
   production optimization blocked until the readiness ledger passes.
 - [ ] Optionally run the sibling GX W7-X workflow on a CUDA machine as a
