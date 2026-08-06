@@ -48,3 +48,18 @@ environment, and import it from outside the checkout:
 
 CI runs lint, the standalone suite, and this packaging check without sibling
 repositories or external provider installations.
+
+## Scientific claim ledger
+
+Priority 5 confidence gaps are available as a compact machine-readable ledger:
+
+```bash
+.venv/bin/python examples/report_validation_confidence.py
+```
+
+The report keeps full GKW state-history parity, the growing multi-time GKW
+velocity-slice error, and the low-`ky` Cyclone/GX branch-shape gap explicitly
+open. `validation_claim_readiness` and `require_validation_claim_ready` map
+each gap to the broad scientific claims it blocks. Independent stella evidence
+supersedes the two GKW gaps only for the converged W7-X linear branch; it does
+not promote a general GKW/Cyclone history-parity claim.

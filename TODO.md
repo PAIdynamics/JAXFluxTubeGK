@@ -316,12 +316,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 
 ## Priority 5: Confidence Gaps and Deferred Physics
 
-- [ ] Keep GKW selected-mode state-history and multi-time velocity-slice gaps
+- [x] Keep GKW selected-mode state-history and multi-time velocity-slice gaps
   visible until closed or superseded by an independent stellarator reference.
 - [ ] Decide whether Chebyshev/GKW finite-difference velocity collocation is
   the production CPU backend or the Hermite-Laguerre backend must become fully
   production capable first.
-- [ ] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
+- [x] Keep the multi-ky Cyclone/GX low-ky branch-shape gap in the validation
   ledger.
 - [ ] Validate kinetic-electron TEM physics.
 - [ ] Add collisions and electromagnetic perturbations.

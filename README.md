@@ -543,10 +543,13 @@ Passing guardrails:
 
 Open blockers:
 
-- end-to-end gradients through production MHD solvers and the Priority 4 W7-X
-  design loop,
+- end-to-end gradients through production MHD solvers and unrestricted shape
+  optimization beyond the completed reduced Priority 4 W7-X loop,
 - convergence of the independent low-`ky` stella branches before making a
   broader spectral claim,
+- full GKW state-history/long-time velocity-slice parity and the low-`ky`
+  Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
+  confidence ledger,
 - full nonlinear turbulence and full DESC optimization.
 
 Read `STATUS.md` for the latest state and `TODO.md` for the next concrete

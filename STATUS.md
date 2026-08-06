@@ -23,6 +23,20 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-06: Priority 5 Confidence Ledger
+
+- Added a schema-versioned machine-readable ledger for the open full GKW
+  selected-mode history, long-time velocity-slice, and low-`ky` Cyclone/GX
+  branch-shape gaps.
+- Broad GKW/GX parity claims now fail an explicit readiness guard with the
+  blocking gap identifier. The converged W7-X linear claim records that its
+  independent stella gate narrowly supersedes the two GKW gaps without closing
+  or hiding them.
+- The ledger retains the observed GKW velocity-slice growth from `3.99e-3` at
+  step 20 to `3.67e-2` at step 800 against the unchanged `2e-2` tolerance.
+- No external state/history fixture was added; reports are generated on demand
+  and may be written to caller-selected scratch storage.
+
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
 - Added `DesignObjectiveSpec`/`design_objective` as the stable public contract
