@@ -215,6 +215,7 @@ def patch_stella_mirror_stage_trace(source_path: Path) -> bool:
    integer, parameter :: stellarator_gk_mirror_trace_ikx = 1
    integer, parameter :: stellarator_gk_mirror_trace_unit = 9315
    character(len=*), parameter :: stellarator_gk_mirror_trace_filename = '{TRACE_FILENAME}'
+   logical :: stellarator_gk_mirror_trace_initialised = .false.
 
 """
     text = _replace_once(text, module_marker, module_marker + module_state)
@@ -300,11 +301,18 @@ IMPLICIT_TRACE_HELPERS = r"""
 
    subroutine stellarator_gk_open_implicit_trace()
       implicit none
+      logical :: trace_exists
       if (.not. stellarator_gk_trace_initialised) then
-         open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
-              status='replace', action='write')
-         write (stellarator_gk_trace_unit, '(A)') &
-              'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
+         inquire (file=stellarator_gk_trace_filename, exist=trace_exists)
+         if (trace_exists) then
+            open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
+                 status='old', position='append', action='write')
+         else
+            open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
+                 status='replace', action='write')
+            write (stellarator_gk_trace_unit, '(A)') &
+                 'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
+         end if
          stellarator_gk_trace_initialised = .true.
       else
          open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
@@ -328,8 +336,16 @@ MIRROR_TRACE_HELPER = r"""
       integer :: iz, ivmu, iv, imu, is
       if (.not. proc0 .or. istep /= 1) return
       if (stellarator_gk_mirror_trace_iky > naky .or. stellarator_gk_mirror_trace_ikx > nakx) return
-      open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
-           status='old', position='append', action='write')
+      if (.not. stellarator_gk_mirror_trace_initialised) then
+         open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+              status='replace', action='write')
+         write (stellarator_gk_mirror_trace_unit, '(A)') &
+              'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
+         stellarator_gk_mirror_trace_initialised = .true.
+      else
+         open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+              status='old', position='append', action='write')
+      end if
       do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
          iv = iv_idx(vmu_lo, ivmu); imu = imu_idx(vmu_lo, ivmu); is = is_idx(vmu_lo, ivmu)
          do iz = -nzgrid, nzgrid
