@@ -167,6 +167,22 @@ def test_stella_parallel_response_uses_sign_dependent_near_centering():
     )
     np.testing.assert_allclose(response.left_dt, 0.0204)
     np.testing.assert_allclose(response.right_dt, 0.0196)
+    np.testing.assert_allclose(
+        response.streaming_coefficient,
+        jnp.einsum(
+            "vij,vj->vi",
+            response.mass_matrix,
+            precompute.rhs.parallel_streaming_coeff[0],
+        ),
+    )
+    np.testing.assert_allclose(
+        response.field_maxwellian,
+        jnp.einsum(
+            "vij,vmj->vmi",
+            response.mass_matrix,
+            precompute.rhs.maxwellian[0],
+        ),
+    )
 
     periodic_response = build_implicit_parallel_response_precompute(
         precompute,

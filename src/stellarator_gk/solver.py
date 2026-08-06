@@ -53,6 +53,8 @@ class ImplicitParallelResponsePrecompute(_PyTreeDataclass):
     field_inverse: object
     mass_matrix: object
     derivative: object
+    streaming_coefficient: object
+    field_maxwellian: object
     left_dt: object
     right_dt: object
 
@@ -62,6 +64,8 @@ class ImplicitParallelResponsePrecompute(_PyTreeDataclass):
         "field_inverse",
         "mass_matrix",
         "derivative",
+        "streaming_coefficient",
+        "field_maxwellian",
         "left_dt",
         "right_dt",
     )
@@ -136,7 +140,11 @@ def build_implicit_parallel_response_precompute(
         left_dt = 0.5 * (1.0 + time_upwind) * jnp.asarray(dt, dtype=dtype)
         right_dt = 0.5 * (1.0 - time_upwind) * jnp.asarray(dt, dtype=dtype)
 
-    operator = -coefficient[:, :, None] * derivative
+    streaming_coefficient = jnp.einsum("vij,vj->vi", mass_matrix, coefficient)
+    field_maxwellian = jnp.einsum(
+        "vij,vmj->vmi", mass_matrix, precompute.rhs.maxwellian[0]
+    )
+    operator = -streaming_coefficient[:, :, None] * derivative
     left_inverse = jnp.linalg.solve(
         mass_matrix - left_dt * operator,
         jnp.broadcast_to(identity_z, operator.shape),
@@ -150,7 +158,13 @@ def build_implicit_parallel_response_precompute(
     )
 
     def field_response_column(phi):
-        drive = left_dt * _implicit_parallel_field_drive(phi, precompute, derivative)
+        drive = left_dt * _implicit_parallel_field_drive(
+            phi,
+            precompute,
+            derivative,
+            streaming_coefficient,
+            field_maxwellian,
+        )
         correction = _apply_parallel_left_inverse(drive, left_inverse)
         return _solve_phi(correction, precompute)
 
@@ -164,6 +178,8 @@ def build_implicit_parallel_response_precompute(
         field_inverse=jnp.linalg.inv(field_matrix),
         mass_matrix=mass_matrix,
         derivative=derivative,
+        streaming_coefficient=streaming_coefficient,
+        field_maxwellian=field_maxwellian,
         left_dt=left_dt,
         right_dt=right_dt,
     )
@@ -181,8 +197,14 @@ def implicit_parallel_response_step(
         raise ValueError("distribution must have shape (vpar,mu,z,kx,ky)")
     phi_old = _solve_phi(distribution, precompute)
     rhs_state = _apply_parallel_matrix(distribution, response.mass_matrix) + response.right_dt * (
-        _implicit_parallel_streaming(distribution, precompute, response.derivative)
-        + _implicit_parallel_field_drive(phi_old, precompute, response.derivative)
+        _implicit_parallel_streaming(distribution, response)
+        + _implicit_parallel_field_drive(
+            phi_old,
+            precompute,
+            response.derivative,
+            response.streaming_coefficient,
+            response.field_maxwellian,
+        )
     )
     uncoupled = _apply_parallel_left_inverse(rhs_state, response.left_inverse)
     phi_shape = phi_old.shape
@@ -191,7 +213,13 @@ def implicit_parallel_response_step(
     ).reshape(phi_shape)
     correction = _apply_parallel_left_inverse(
         response.left_dt
-        * _implicit_parallel_field_drive(phi_new, precompute, response.derivative),
+        * _implicit_parallel_field_drive(
+            phi_new,
+            precompute,
+            response.derivative,
+            response.streaming_coefficient,
+            response.field_maxwellian,
+        ),
         response.left_inverse,
     )
     return uncoupled + correction
@@ -205,21 +233,25 @@ def _apply_parallel_matrix(distribution, matrix):
     return jnp.einsum("vij,vmjxy->vmixy", matrix, distribution)
 
 
-def _implicit_parallel_streaming(distribution, precompute, derivative):
-    differentiated = _apply_parallel_matrix(distribution, derivative)
-    coefficient = jnp.asarray(precompute.rhs.parallel_streaming_coeff)[0]
-    return -coefficient[:, None, :, None, None] * differentiated
+def _implicit_parallel_streaming(distribution, response):
+    differentiated = _apply_parallel_matrix(distribution, response.derivative)
+    return -response.streaming_coefficient[:, None, :, None, None] * differentiated
 
 
-def _implicit_parallel_field_drive(phi, precompute, derivative):
+def _implicit_parallel_field_drive(
+    phi,
+    precompute,
+    derivative,
+    streaming_coefficient,
+    field_maxwellian,
+):
     rhs = precompute.rhs
     gyro_phi = rhs.flr_factors.bessel_j0[0] * phi[None, :, :, :]
     differentiated = jnp.einsum("vij,mjxy->vmixy", derivative, gyro_phi)
-    coefficient = jnp.asarray(rhs.parallel_streaming_coeff)[0]
     return (
         -rhs.charge_over_temperature[0]
-        * coefficient[:, None, :, None, None]
-        * rhs.maxwellian[0, ..., None, None]
+        * streaming_coefficient[:, None, :, None, None]
+        * field_maxwellian[..., None, None]
         * differentiated
     )
 
