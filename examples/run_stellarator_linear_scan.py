@@ -247,6 +247,11 @@ def _parse_args(argv: list[str] | None = None):
         choices=("explicit", "semi_lagrangian"),
         default="explicit",
     )
+    parser.add_argument(
+        "--mirror-interpolation",
+        choices=("linear", "cubic"),
+        default="linear",
+    )
     parser.add_argument("--parallel-recurrence-rate", type=float, default=0.0)
     parser.add_argument("--velocity-recurrence-rate", type=float, default=0.0)
     parser.add_argument("--perpendicular-damping", type=float)
@@ -647,6 +652,7 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 velocity.vpar,
                 mirror_coefficient,
                 precompute,
+                mirror_interpolation=args.mirror_interpolation,
                 store_history=False,
             ).state
         )
@@ -925,6 +931,7 @@ def _write_scan_outputs(output_dir: Path, scan, geometry, fourier, args, geometr
             "ikxspace": args.ikxspace,
             "parallel_derivative_model": args.parallel_derivative_model,
             "mirror_advance": args.mirror_advance,
+            "mirror_interpolation": args.mirror_interpolation,
             "species": {
                 "charge": args.charge,
                 "mass": args.mass,

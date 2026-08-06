@@ -58,6 +58,36 @@ def test_semi_lagrangian_mirror_step_translates_linear_profile():
     np.testing.assert_allclose(with_species_axis, advanced)
 
 
+def test_cubic_semi_lagrangian_mirror_step_translates_cubic_profile():
+    vpar = jnp.linspace(-2.0, 2.0, 17)
+    profile = vpar**3 - 0.4 * vpar**2 + 0.2 * vpar - 0.7
+    state = profile[:, None, None, None, None].astype(jnp.complex128)
+    coefficient = jnp.asarray([[0.3]])
+
+    advanced = semi_lagrangian_mirror_step(
+        state,
+        0.2,
+        vpar,
+        coefficient,
+        interpolation="cubic",
+    )
+    shifted = vpar + 0.06
+    expected = shifted**3 - 0.4 * shifted**2 + 0.2 * shifted - 0.7
+
+    np.testing.assert_allclose(advanced[2:-2, 0, 0, 0, 0], expected[2:-2], atol=2e-13)
+
+
+def test_semi_lagrangian_mirror_step_rejects_unknown_interpolation():
+    with np.testing.assert_raises_regex(ValueError, "interpolation"):
+        semi_lagrangian_mirror_step(
+            jnp.zeros((4, 1, 1, 1, 1)),
+            0.1,
+            jnp.linspace(-1.0, 1.0, 4),
+            jnp.zeros((1, 1)),
+            interpolation="spline",
+        )
+
+
 def test_split_mirror_integrator_matches_characteristic_for_zero_rhs():
     vpar = jnp.linspace(-2.0, 2.0, 9)
     state = vpar[:, None, None, None, None].astype(jnp.complex128)

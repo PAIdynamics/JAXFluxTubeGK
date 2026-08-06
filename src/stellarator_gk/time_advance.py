@@ -116,8 +116,15 @@ def integrate_fixed_step(
     )
 
 
-def semi_lagrangian_mirror_step(state, dt, vpar, mirror_coefficient):
-    """Advance ``dg/dt = a(mu,z) dg/dvpar`` by linear characteristic tracing.
+def semi_lagrangian_mirror_step(
+    state,
+    dt,
+    vpar,
+    mirror_coefficient,
+    *,
+    interpolation: str = "linear",
+):
+    """Advance ``dg/dt = a(mu,z) dg/dvpar`` by characteristic tracing.
 
     The distribution must use ``(vpar,mu,z,kx,ky)`` ordering and the parallel
     velocity nodes must be uniformly spaced. Values traced beyond the velocity
@@ -135,6 +142,8 @@ def semi_lagrangian_mirror_step(state, dt, vpar, mirror_coefficient):
         raise ValueError("mirror_coefficient must have shape (mu,z)")
     if vpar.ndim != 1 or vpar.shape[0] != state.shape[0] or vpar.shape[0] < 2:
         raise ValueError("vpar must be one-dimensional and match the state")
+    if interpolation not in ("linear", "cubic"):
+        raise ValueError("interpolation must be 'linear' or 'cubic'")
 
     spacing = vpar[1] - vpar[0]
     source_index = (
@@ -147,18 +156,35 @@ def semi_lagrangian_mirror_step(state, dt, vpar, mirror_coefficient):
     mu_index = jnp.arange(state.shape[1])[None, :, None]
     z_index = jnp.arange(state.shape[2])[None, None, :]
 
-    lower_values = state[
-        jnp.clip(lower, 0, state.shape[0] - 1), mu_index, z_index, :, :
-    ]
-    upper_values = state[
-        jnp.clip(upper, 0, state.shape[0] - 1), mu_index, z_index, :, :
-    ]
-    lower_valid = (lower >= 0) & (lower < state.shape[0])
-    upper_valid = (upper >= 0) & (upper < state.shape[0])
-    lower_values = jnp.where(lower_valid[..., None, None], lower_values, 0.0)
-    upper_values = jnp.where(upper_valid[..., None, None], upper_values, 0.0)
+    def values_at(index):
+        values = state[
+            jnp.clip(index, 0, state.shape[0] - 1), mu_index, z_index, :, :
+        ]
+        valid = (index >= 0) & (index < state.shape[0])
+        return jnp.where(valid[..., None, None], values, 0.0)
+
     fraction = fraction[..., None, None]
-    return (1.0 - fraction) * lower_values + fraction * upper_values
+    if interpolation == "linear":
+        return (1.0 - fraction) * values_at(lower) + fraction * values_at(upper)
+
+    left = values_at(lower - 1)
+    center_left = values_at(lower)
+    center_right = values_at(lower + 1)
+    right = values_at(lower + 2)
+    weight_left = -fraction * (fraction - 1.0) * (fraction - 2.0) / 6.0
+    weight_center_left = (
+        (fraction + 1.0) * (fraction - 1.0) * (fraction - 2.0) / 2.0
+    )
+    weight_center_right = -(
+        (fraction + 1.0) * fraction * (fraction - 2.0) / 2.0
+    )
+    weight_right = (fraction + 1.0) * fraction * (fraction - 1.0) / 6.0
+    return (
+        weight_left * left
+        + weight_center_left * center_left
+        + weight_center_right * center_right
+        + weight_right * right
+    )
 
 
 def integrate_fixed_step_split_mirror(
@@ -169,6 +195,7 @@ def integrate_fixed_step_split_mirror(
     vpar,
     mirror_coefficient,
     *rhs_args,
+    mirror_interpolation: str = "linear",
     filter_fn=None,
     store_history: bool = True,
 ):
@@ -180,9 +207,21 @@ def integrate_fixed_step_split_mirror(
     dt = jnp.asarray(dt)
 
     def step(value):
-        value = semi_lagrangian_mirror_step(value, 0.5 * dt, vpar, mirror_coefficient)
+        value = semi_lagrangian_mirror_step(
+            value,
+            0.5 * dt,
+            vpar,
+            mirror_coefficient,
+            interpolation=mirror_interpolation,
+        )
         value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
-        return semi_lagrangian_mirror_step(value, 0.5 * dt, vpar, mirror_coefficient)
+        return semi_lagrangian_mirror_step(
+            value,
+            0.5 * dt,
+            vpar,
+            mirror_coefficient,
+            interpolation=mirror_interpolation,
+        )
 
     if store_history:
         def body(carry, _index):
