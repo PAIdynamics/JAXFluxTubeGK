@@ -293,18 +293,26 @@ explicit scratch inputs and are not stored as canonical W7-X design artifacts.
 
 ## Priority 4: Differentiable Design Integration
 
-- [ ] Define a stable objective API from equilibrium/provider parameters to
+- [x] Define a stable objective API from equilibrium/provider parameters to
   growth rate, real frequency, mode-structure penalties, and quasilinear
   proxies.
-- [ ] Add finite-difference checks of gradients through geometry and time
+- [x] Add finite-difference checks of gradients through geometry and time
   advance, including near-degenerate eigenmode/branch cases.
-- [ ] Define remeshing and topology-change behavior: gradients are valid only
+- [x] Define remeshing and topology-change behavior: gradients are valid only
   within a fixed grid/field-line connectivity contract, and optimization must
   detect when rebuilding is required.
-- [ ] Demonstrate a reduced W7-X design loop through a real MHD provider before
+- [x] Demonstrate a reduced W7-X design loop through a real MHD provider before
   claiming full shape optimization.
-- [ ] Add multiple surfaces and field lines, robust aggregation objectives,
+- [x] Add multiple surfaces and field lines, robust aggregation objectives,
   checkpointing, and reproducible optimization metadata.
+
+Acceptance gate: **passed for reduced fixed-topology design integration**. The
+stable objective, gradient audits, remeshing detection, robust multi-sample
+aggregation, and checkpoint schema are covered by standalone tests. A local
+smoke run completed center/plus/minus solves from VMEC++'s installed
+`w7x-standard` configuration and retained only an external JSON record. This
+does not claim differentiation through VMEC++, unrestricted boundary-shape
+optimization, or nonlinear turbulent transport; those remain deferred.
 
 ## Priority 5: Confidence Gaps and Deferred Physics
 

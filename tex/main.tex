@@ -1082,6 +1082,10 @@ The following quantities are static/non-differentiable:
   \item random initialization keys.
 \end{itemize}
 For stellarator optimization, a differentiable equilibrium code may provide geometry arrays and their sensitivities.  The gyrokinetic solver should not require differentiating through an integer remeshing or topology change.
+The implementation enforces this boundary with a versioned topology contract
+that fingerprints velocity and parallel nodes and backends, perpendicular mode
+sets, twist-and-shift connectivity, and provider field-line metadata.  A changed
+fingerprint invalidates compiled objectives, checkpoints, and gradients.
 In the present implementation, imported DESC-style arrays are accepted as a
 \texttt{desc} geometry model in the single-surface objective; the direct DESC object
 adapter is optional and remains outside the solver-core dependency chain.
@@ -1095,7 +1099,8 @@ above.  The core package in \path{src/stellarator_gk/} contains PyTree parameter
 objects, Fourier grids, spectral and finite-difference derivative backends,
 analytic and imported stellarator geometry adapters, quasineutrality solvers,
 term-level linear RHS assembly, RK4 time advance, growth/frequency diagnostics,
-linear objectives, and fixed-topology optimization helpers.  The production
+stable design objectives, gradient audits, robust multi-sample aggregation,
+fixed-topology guards, and schema-versioned optimization checkpoints.  The production
 physics target remains linear electrostatic gyrokinetics with adiabatic
 electrons; nonlinear turbulence and extended physics are deferred to
 Sec.~\ref{sec:nonlinear-extension}.
@@ -1198,15 +1203,24 @@ nonnormal spectrum with slowly separating branches.
 
 \subsection{Optimization status}
 
-The optimization layer is useful for plumbing and reduced studies.  It exposes
-single-surface objectives, scans over \(\rho\), \(\alpha\), and \(k_y\),
-selected-growth and quasilinear proxy objectives, benchmark-target least-square
-wrappers, and examples that differentiate through a fixed number of RK4 steps.
-DESC coupling currently uses sampled geometry arrays or optional DESC path
-loading; integer topology and remeshing remain static.  W7-X external parity
-and guarded timing now pass for the converged linear branch, but the DESC
-examples remain reduced until Priority 4 validates gradients through a real MHD
-solve and defines remeshing/topology-change behavior.
+The reduced fixed-topology optimization milestone is complete.  The public
+objective contract composes selected, hard-maximum, or smooth-maximum growth,
+real-frequency targets, phase-invariant complex mode-structure penalties, and
+quasilinear proxies.  Reverse-mode derivatives are checked against central
+differences through geometry arrays and time advance, with explicit diagnostics
+for near-degenerate \(k_y\) branches.  Fixed scans over \(\rho\), \(\alpha\), and
+\(k_y\) support weighted-mean, hard-worst-case, and differentiable
+soft-worst-case reduction.  Checkpoints retain the complete sample tensor,
+objective policy, topology fingerprints, provider provenance, revisions,
+command, seed, parameters, and iteration history.
+
+A reduced W7-X loop loads the installed VMEC++ named configuration, performs
+fresh center/plus/minus equilibrium solves for a boundary harmonic, converts
+each result in memory, verifies fixed topology, and takes an outer finite-
+difference step.  No equilibrium artifact is stored in the repository.  This
+demonstrates the real MHD provider boundary but does not differentiate through
+VMEC++, claim unrestricted equilibrium-shape optimization, or predict nonlinear
+turbulent heat flux.
 
 \subsection{Production criteria}
 
@@ -1218,9 +1232,10 @@ The trusted linear W7-X branch now satisfies:
   timestep, split-ordering, initial-state, and growth-window controls;
   \item guarded CPU timing of the validated advance after parity passes.
 \end{enumerate}
-Production design optimization additionally requires the Priority 4 real-MHD
-gradient and topology gates.  A broader low-\(k_y\) spectral claim additionally
-requires converged independent reference windows.
+Production full-shape design optimization additionally requires a
+differentiable equilibrium provider (or a validated sensitivity interface) and
+physics beyond the present reduced linear objective.  A broader low-\(k_y\)
+spectral claim additionally requires converged independent reference windows.
 
 
 \section{Nonlinear and Extended Physics Roadmap}

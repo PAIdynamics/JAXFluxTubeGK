@@ -17,6 +17,35 @@ flux-tube geometry contract from in-memory Fourier output without a repository
 `wout` file. The externally validated W7-X scientific gate passes for the
 converged unstable `ky=0.3` branch. Priority 3 is complete; unconverged low-`ky`
 stella windows remain diagnostics rather than grounds for relaxing the gate.
+Priority 4 is also complete at the reduced fixed-topology boundary: stable
+design objectives, gradient audits, topology guards, robust multi-sample
+aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
+implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
+claimed.
+
+### 2026-08-06: Priority 4 Reduced Design Integration Complete
+
+- Added `DesignObjectiveSpec`/`design_objective` as the stable public contract
+  for selected, hard-max, or smooth-max growth; real-frequency targeting;
+  phase-invariant complex mode structure; and quasilinear proxy terms.
+- Added reverse-mode-versus-central-difference audits through geometry and time
+  advance. Branch-gap diagnostics expose near-degenerate `ky` modes, and the
+  smooth aggregation path has a finite gradient at exact degeneracy.
+- Added a schema-versioned `OptimizationTopologyContract` over velocity and
+  parallel nodes/backends, Fourier modes, connectivity, and provider linking.
+  Restarts and compiled objectives reject topology changes and require rebuild.
+- Ran `examples/vmecpp_w7x_design_loop.py` locally against VMEC++'s installed
+  `w7x-standard` input. One iteration completed three fresh equilibrium solves,
+  in-memory provider conversion, fixed-topology checks, and an outer central
+  finite-difference step; its JSON record stayed under `/private/tmp`.
+- Added fixed `(rho, alpha, ky)` robust aggregation with normalized weights and
+  weighted-mean, hard-worst-case, and differentiable soft-worst-case results.
+- Added schema-v1 optimization checkpoints carrying sample axes and values,
+  objective/aggregation policy, topology fingerprints, design parameters,
+  provider provenance, code/dependency revisions, command, seed, and history.
+- Priority 4's acceptance gate is reduced design integration. VMEC++ and GVEC
+  remain non-differentiable providers, while full equilibrium-shape AD and
+  nonlinear heat-flux optimization remain Priority 5 work.
 
 ### 2026-08-06: Priority 3 Closure
 
@@ -37,7 +66,7 @@ stella windows remain diagnostics rather than grounds for relaxing the gate.
   scratch output and the validated advance. A 100-step run took 13.34 s end to
   end, including geometry load, JAX compilation, and diagnostics; estimated
   memory was 5.13 MiB.
-- Priority 4 may now build on the validated linear branch. This does not claim
+- This validated linear branch is the basis for Priority 4. It does not claim
   end-to-end MHD gradients, nonlinear turbulence, or CUDA/GX parity.
 
 ### 2026-08-06: Priority 3 Native Velocity and Mirror Discriminator
@@ -157,7 +186,9 @@ Implemented in `src/stellarator_gk/`:
 - fixed-step RK4, modal filtering, CFL estimates, growth/frequency/mode-shape
   diagnostics, and state normalization;
 - dense reduced-size operator/eigensystem helpers;
-- differentiable objectives and fixed-topology reduced optimization wrappers;
+- stable differentiable design objectives, branch/gradient audits,
+  fixed-topology guards, robust multi-sample aggregation, and reproducible
+  optimization checkpoints;
 - Hermite-Laguerre transforms, moments, hypercollision helpers, and a reduced
   GX-style moment RHS.  This moment path is not integrated as the production
   kinetic solver backend.

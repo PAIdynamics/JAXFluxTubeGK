@@ -208,6 +208,36 @@ They preserve the schema and provenance but are non-differentiable after
 reload. See [`docs/geometry_provider.md`](docs/geometry_provider.md) for the
 complete units, signs, topology, validation, and caching contract.
 
+## Differentiable Design Interface
+
+`DesignObjectiveSpec` and `design_objective` provide a stable, named contract
+for growth rate, real-frequency targets, phase-invariant complex mode-shape
+penalties, and quasilinear proxies. Gradient audits compare JAX reverse-mode
+derivatives with central differences and report near-degenerate `ky` branches.
+`OptimizationTopologyContract` rejects reuse after a grid, mode-connectivity,
+field-line-linking, or provider-topology change.
+
+Fixed scans over multiple surfaces, field lines, and `ky` values can be reduced
+with weighted-mean, hard-worst-case, or differentiable soft-worst-case
+objectives. Schema-versioned checkpoints retain objective policies, sample
+coordinates, topology fingerprints, parameters, provider and dependency
+revisions, command, random seed, and iteration history. See
+[`docs/optimization_integration.md`](docs/optimization_integration.md).
+
+To exercise the real MHD boundary, prepare the MHD profile and run:
+
+```bash
+JAX_ENABLE_X64=1 uv run --no-sync python \
+  examples/vmecpp_w7x_design_loop.py \
+  --iterations 1 --n-z 16 --n-vpar 2 --n-mu 2 --n-steps 1 \
+  --output /tmp/optimal-fusion-vmecpp-w7x-design/smoke.json
+```
+
+This obtains W7-X from VMEC++, performs fresh finite-difference equilibrium
+solves, and keeps its record outside the repository. It demonstrates reduced
+provider integration, not autodifferentiation through VMEC++ or production
+full-boundary shape optimization.
+
 ## Common Workflows
 
 ### Validation Gates
