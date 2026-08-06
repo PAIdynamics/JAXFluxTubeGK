@@ -115,7 +115,7 @@ claimed.
   These pass the declared 10%/20%/25% and `1e-3` gates, closing the
   kinetic-electron TEM validation gap.
 
-### 2026-08-06: Parallel Ampere Field Foundation
+### 2026-08-06: Electromagnetic Field Foundations
 
 - Added a differentiable GKW-normalized mixed-variable `A_parallel` solve with
   the numerical velocity-grid skin term used by the `g`-to-`f` cancellation.
@@ -126,9 +126,15 @@ claimed.
   pinned Gyaradax checkout. The source/diagonal tolerance accounts for the
   documented difference between optimal-fusion's differentiable Cephes `J0`
   approximation and Gyaradax's `jax.scipy` implementation.
+- Added the coupled kinetic `phi`/`B_parallel` field solve, gyrokinetic
+  `B_parallel` response factor, beta-zero limit, and differentiation tests.
+  All coupled coefficients independently match pinned Gyaradax.
+- The new parity test exposed and fixed the large-argument `J1` approximation
+  incorrectly erasing physical oscillatory sign changes; a SciPy comparison
+  now covers both signs beyond the asymptotic threshold.
 - This is an algebraic field foundation, not full electromagnetic evolution.
-  Coupling `A_parallel` into the kinetic RHS, adding `B_parallel`, and passing
-  independent electromagnetic trajectory parity remain open.
+  Coupling the fields into the kinetic RHS and passing independent
+  electromagnetic trajectory parity remain open.
 
 ### 2026-08-06: Conservative Collision Foundation
 

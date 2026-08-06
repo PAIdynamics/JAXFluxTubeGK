@@ -9,6 +9,7 @@ from stellarator_gk import (
     FLRFactors,
     SpeciesParams,
     bessel_j0,
+    bessel_j1_hat,
     equilibrium_gradient_drive_coefficient,
     gamma0,
     magnetic_drift_frequency,
@@ -45,11 +46,19 @@ def test_bessel_j0_matches_scipy_and_has_small_argument_limit():
 
 
 def test_bessel_j0_gradient_matches_minus_j1():
-    points = jnp.asarray([0.2, 1.0, 9.0])
+    points = jnp.asarray([-12.0, 0.2, 1.0, 9.0, 12.0])
 
     grad_values = jax.vmap(jax.grad(lambda value: bessel_j0(value)))(points)
 
     np.testing.assert_allclose(grad_values, -special.j1(np.asarray(points)), rtol=4e-7, atol=2e-7)
+
+
+def test_bessel_j1_hat_preserves_large_argument_oscillations_and_origin_limit():
+    points = jnp.asarray([0.0, 1.0e-7, 9.0, 12.0, -12.0])
+    safe = np.where(np.abs(np.asarray(points)) > 0.0, np.asarray(points), 1.0)
+    expected = np.where(np.abs(np.asarray(points)) > 0.0, 2.0 * special.j1(safe) / safe, 1.0)
+
+    np.testing.assert_allclose(bessel_j1_hat(points), expected, rtol=5e-7, atol=2e-8)
 
 
 def test_gamma0_uses_scaled_bessel_and_remains_finite():

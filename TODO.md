@@ -357,9 +357,9 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   inter-species exchange, and add electromagnetic `A_parallel`/`B_parallel`
   perturbations with independent parity gates. The conserving BGK model is not
   a substitute for this acceptance claim. A differentiable mixed-variable
-  `A_parallel` algebraic solve now closes its discrete residual and its
-  precomputed source/diagonal agree with pinned Gyaradax; RHS coupling,
-  `B_parallel`, and production electromagnetic trajectory parity remain open.
+  `A_parallel` algebraic solve and coupled kinetic `phi`/`B_parallel` solve now
+  agree with pinned Gyaradax precomputes; RHS coupling and production
+  electromagnetic trajectory parity remain open.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

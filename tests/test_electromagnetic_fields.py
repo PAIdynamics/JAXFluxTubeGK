@@ -14,11 +14,13 @@ from stellarator_gk import (
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_ampere_precompute,
+    build_perpendicular_magnetic_precompute,
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
     parallel_ampere_residual,
     solve_parallel_ampere,
+    solve_perpendicular_magnetic_fields,
 )
 from stellarator_gk.tem_validation import _build_tem_system, gyaradax_tem_case_spec
 
@@ -111,6 +113,47 @@ def test_parallel_ampere_beta_response_is_differentiable():
     assert np.isfinite(float(derivative))
 
 
+def test_perpendicular_magnetic_solve_has_electrostatic_limit_and_beta_response():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    linear = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species, field_model="kinetic"
+    )
+    state = jax.random.normal(
+        jax.random.key(7), (2, 8, 4, parallel.z.shape[0], 3, 2)
+    ).astype(jnp.complex128)
+    electrostatic = build_perpendicular_magnetic_precompute(
+        velocity, geometry, species, linear.rhs.flr_factors, beta=0.0
+    )
+    electromagnetic = build_perpendicular_magnetic_precompute(
+        velocity, geometry, species, linear.rhs.flr_factors, beta=0.01
+    )
+
+    phi_es, bpar_es = solve_perpendicular_magnetic_fields(state, electrostatic)
+    phi_em, bpar_em = solve_perpendicular_magnetic_fields(state, electromagnetic)
+
+    np.testing.assert_allclose(bpar_es, 0.0, atol=0.0)
+    assert np.all(np.isfinite(np.asarray(phi_es)))
+    assert np.all(np.isfinite(np.asarray(phi_em)))
+    assert float(jnp.max(jnp.abs(bpar_em))) > 0.0
+
+
+def test_perpendicular_magnetic_response_is_differentiable():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+    linear = build_linear_residual_precompute(
+        velocity, parallel, fourier, geometry, species, field_model="kinetic"
+    )
+    state = jnp.ones((2, 8, 4, parallel.z.shape[0], 3, 2))
+
+    def objective(beta):
+        precompute = build_perpendicular_magnetic_precompute(
+            velocity, geometry, species, linear.rhs.flr_factors, beta=beta
+        )
+        phi, bpar = solve_perpendicular_magnetic_fields(state, precompute)
+        return jnp.sum(jnp.abs(phi) ** 2 + jnp.abs(bpar) ** 2)
+
+    assert np.isfinite(float(jax.grad(objective)(0.01)))
+
+
 @pytest.mark.external
 def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
     import sys
@@ -173,3 +216,72 @@ def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
         rtol=2e-13,
         atol=2e-13,
     )
+
+
+@pytest.mark.external
+def test_perpendicular_magnetic_precompute_matches_pinned_gyaradax(gyaradax_root):
+    import sys
+
+    if str(gyaradax_root) not in sys.path:
+        sys.path.insert(0, str(gyaradax_root))
+    from gyaradax.geometry import compute_geometry
+    from gyaradax.integrals import _species_bessel_gamma, precompute_bpar
+    from gyaradax.params import GKParams
+
+    spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
+    velocity, _parallel, _fourier, geometry, species, linear = _build_tem_system(spec)
+    observed = build_perpendicular_magnetic_precompute(
+        velocity, geometry, species, linear.rhs.flr_factors, beta=0.01
+    )
+    kthnorm = spec.q / (2.0 * np.pi * spec.eps)
+    reference_geometry = compute_geometry(
+        q=spec.q,
+        shat=spec.shat,
+        eps=spec.eps,
+        ns=8,
+        nvpar=8,
+        nmu=4,
+        vpar_max=3.0,
+        nkx=1,
+        nky=1,
+        nperiod=2,
+        kxmax=spec.ky * kthnorm,
+        krhomax=spec.ky * kthnorm,
+        geom_type="s-alpha",
+    )
+    masses = jnp.asarray([1.0, spec.electron_mass])
+    params = GKParams(
+        adiabatic_electrons=False,
+        beta=0.01,
+        mas=masses,
+        signz=jnp.asarray([1.0, -1.0]),
+        tmp=jnp.ones(2),
+        de=jnp.ones(2),
+        vthrat=jnp.sqrt(1.0 / masses),
+        dgrid=1.0,
+    )
+    species_geometry = dict(reference_geometry)
+    species_geometry.update(
+        mas=params.mas,
+        signz=params.signz,
+        tmp=params.tmp,
+        de=params.de,
+        vthrat=params.vthrat,
+    )
+    reference_bessel, _ = _species_bessel_gamma(species_geometry)
+    species_precompute = {"bessel": reference_bessel}
+    reference = precompute_bpar(reference_geometry, params, species_precompute)
+
+    for name, reference_name in (
+        ("phi_weight", "phi_weight"),
+        ("bpar_weight", "bpar_weight"),
+        ("denominator", "phi_diag"),
+        ("bpar_chi_factor", "bpar_chi_factor"),
+    ):
+        np.testing.assert_allclose(
+            getattr(observed, name),
+            reference[reference_name],
+            rtol=5e-7,
+            atol=2e-12,
+            err_msg=name,
+        )

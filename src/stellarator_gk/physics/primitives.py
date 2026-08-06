@@ -56,6 +56,29 @@ def _bessel_j0_jvp(primals, tangents):
     return bessel_j0(x), -_bessel_j1(x) * x_dot
 
 
+@jax.custom_jvp
+def bessel_j1_hat(x):
+    """Evaluate ``2 J_1(x) / x`` with its analytic value at the origin."""
+
+    x = jnp.asarray(x)
+    ax = jnp.abs(x)
+    safe_x = jnp.where(ax > 1.0e-5, x, jnp.ones_like(x))
+    series = 1.0 - x**2 / 8.0 + x**4 / 192.0
+    return jnp.where(ax <= 1.0e-5, series, 2.0 * _bessel_j1(x) / safe_x)
+
+
+@bessel_j1_hat.defjvp
+def _bessel_j1_hat_jvp(primals, tangents):
+    (x,) = primals
+    (x_dot,) = tangents
+    ax = jnp.abs(x)
+    safe_x = jnp.where(ax > 1.0e-5, x, jnp.ones_like(x))
+    regular = 2.0 * bessel_j0(x) / safe_x - 4.0 * _bessel_j1(x) / safe_x**2
+    series = -x / 4.0 + x**3 / 48.0
+    derivative = jnp.where(ax <= 1.0e-5, series, regular)
+    return bessel_j1_hat(x), derivative * x_dot
+
+
 def gamma0(b):
     """Evaluate the gyrokinetic polarization factor ``Gamma_0(b) = I_0(b) exp(-b)``."""
 
@@ -279,7 +302,9 @@ def _bessel_j1(x):
     tiny = x * (0.5 - y / 16.0 + y * y / 384.0)
     small = _bessel_j1_small(jnp.where(ax < 8.0, x, 0.0))
     large = _bessel_j1_large(jnp.where(ax >= 8.0, ax, 8.0))
-    large = jnp.copysign(large, x)
+    # The asymptotic expression already oscillates in sign for positive x;
+    # only apply odd parity for negative arguments.
+    large = jnp.where(x < 0.0, -large, large)
     return jnp.where(ax < 1.0e-5, tiny, jnp.where(ax < 8.0, small, large))
 
 

@@ -8,9 +8,12 @@ from .collisions import (
 )
 from .electromagnetic import (
     ParallelAmperePrecompute,
+    PerpendicularMagneticPrecompute,
     build_parallel_ampere_precompute,
+    build_perpendicular_magnetic_precompute,
     parallel_ampere_residual,
     solve_parallel_ampere,
+    solve_perpendicular_magnetic_fields,
 )
 from .nonlinear import (
     ExBPseudospectralPrecompute,
@@ -22,6 +25,7 @@ from .nonlinear import (
 from .primitives import (
     FLRFactors,
     bessel_j0,
+    bessel_j1_hat,
     equilibrium_gradient_drive_coefficient,
     gamma0,
     magnetic_drift_frequency,
@@ -120,6 +124,7 @@ __all__ = [
     "ConservingBGKPrecompute",
     "ExBPseudospectralPrecompute",
     "ParallelAmperePrecompute",
+    "PerpendicularMagneticPrecompute",
     "KineticQuasineutralityPrecompute",
     "GKWArakawaIghStencil",
     "GKWParallelStencil",
@@ -134,12 +139,14 @@ __all__ = [
     "adiabatic_quasineutrality_residual",
     "adiabatic_quasineutrality_residual_from_density",
     "bessel_j0",
+    "bessel_j1_hat",
     "build_hermite_laguerre_basis",
     "build_adiabatic_quasineutrality_precompute",
     "build_kinetic_quasineutrality_precompute",
     "build_conserving_bgk_precompute",
     "build_exb_pseudospectral_precompute",
     "build_parallel_ampere_precompute",
+    "build_perpendicular_magnetic_precompute",
     "build_gkw_igh_stencil",
     "build_gkw_parallel_stencil",
     "build_linear_rhs_precompute",
@@ -202,6 +209,7 @@ __all__ = [
     "solve_kinetic_electron_phi",
     "solve_kinetic_electron_phi_from_density",
     "solve_parallel_ampere",
+    "solve_perpendicular_magnetic_fields",
     "spectral_to_velocity_grid",
     "thermodynamic_drive_factor",
     "thermal_speed",

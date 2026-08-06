@@ -11,11 +11,13 @@ runtime dependencies.
 The current production milestone is a trusted linear W7-X stellarator run.  The
 code can already run reduced stellarator scans, reduced optimization examples,
 Rosenbluth-Hinton and Cyclone gates, and several geometry/code-to-code parity
-checks. A conservative model-collision operator and a dealiased nonlinear ExB
-path with adaptive CFL control now exist as development foundations. Full
-nonlinear turbulence validation, production DESC shape optimization, converged
-production Landau/Fokker--Planck collisions, and electromagnetic effects remain
-explicitly deferred. The pinned heavy-electron kinetic TEM benchmark passes.
+checks. A conservative model-collision operator, a dealiased nonlinear ExB
+path with adaptive CFL control, and independently parity-checked algebraic
+`A_parallel` and coupled `phi`/`B_parallel` field solves now exist as
+development foundations. Full nonlinear turbulence validation, production DESC
+shape optimization, converged production Landau/Fokker--Planck collisions, and
+electromagnetic RHS evolution remain explicitly deferred. The pinned
+heavy-electron kinetic TEM benchmark passes.
 
 ## Example Geometry
 
