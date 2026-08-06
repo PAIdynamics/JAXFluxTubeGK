@@ -104,16 +104,19 @@ claimed.
   notebook configuration (`32x32x16`, 200 windows of 20 steps, `dt=0.01`)
   reproduces `gamma=0.66370834`, `omega=-1.02976757`, and final time `40`.
 - Added a local reference-matched TEM profile with GKW cell-centered parallel
-  and velocity grids, zero-incoming boundaries, fused `igh` recurrence, and
-  velocity-independent `cosine2` initialization.
+  and velocity grids, zero-incoming boundaries, Gyaradax's separable upwind
+  streaming/trapping backend, and velocity-independent `cosine2`
+  initialization. The fused `gkw_igh` backend remains the separate GKW
+  convention path.
 - Corrected the explicit wave-number contract: public GKW `kthrho=0.7` maps to
   internal `krho=0.56548668` through `kthnorm=q/(2*pi*eps)` for s-alpha. The
   producer now records both values.
-- The final-time-40 local result is `gamma=0.63379954`, `omega=-1.01859892`.
-  Relative growth and frequency errors are 4.51% and 1.08%; the phase-aligned
-  complex `phi(z)` error is 2.85%, and late-window growth drift is `4.8e-15`.
-  These pass the declared 10%/20%/25% and `1e-3` gates, closing the
-  kinetic-electron TEM validation gap.
+- The final-time-40 local result is `gamma=0.6637083371`,
+  `omega=-1.0297675735`. Relative growth and frequency errors are `2.23e-9`
+  and `1.02e-9`; the phase-aligned complex `phi(z)` error is `8.84e-10`, and
+  late-window growth drift is `2.35e-14`. These pass the declared
+  10%/20%/25% and `1e-3` gates, closing the kinetic-electron TEM validation
+  gap with substantially tighter observed parity.
 
 ### 2026-08-06: Electromagnetic Field Foundations
 
@@ -142,10 +145,12 @@ claimed.
   `chi=J0*phi+chi_A+chi_B`, and the two explicit `B_parallel` compression terms
   into the linear RHS. The exact beta-zero residual, JIT, and beta-gradient
   tests pass.
-- The isolated finite-beta RHS increment matches pinned Gyaradax on the same
-  mixed state. Full RHS equality remains limited by the already tracked
-  electrostatic GKW streaming/mirror stencil baseline, so electromagnetic
-  timestep/trajectory parity is not yet claimed.
+- Fields, mixed-to-physical state recovery, the isolated finite-beta increment,
+  and the complete one-state RHS match pinned Gyaradax on the same mixed state.
+  The former full-RHS mismatch was an operator-routing error: Gyaradax's JAX
+  backend uses separable upwind streaming and trapping, whereas `gkw_igh` is
+  the fused GKW convention path. Electromagnetic time-advance and trajectory
+  parity are not yet claimed.
 - Added a differentiable electromagnetic CFL bound covering the mixed-state
   amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
   at finite beta and conservatively dominates the exact row sum of a small

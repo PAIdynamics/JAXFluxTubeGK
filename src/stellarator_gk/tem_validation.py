@@ -73,13 +73,17 @@ class TemCaseSpec:
             raise ValueError("recurrence-control rates must be nonnegative")
         if self.parallel_backend not in ("fourier", "finite_difference"):
             raise ValueError("parallel_backend must be 'fourier' or 'finite_difference'")
-        if self.parallel_derivative_model not in ("matrix", "gkw_igh"):
-            raise ValueError("parallel_derivative_model must be 'matrix' or 'gkw_igh'")
-        if self.parallel_derivative_model == "gkw_igh" and (
+        if self.parallel_derivative_model not in ("matrix", "gkw_upwind", "gkw_igh"):
+            raise ValueError(
+                "parallel_derivative_model must be 'matrix', 'gkw_upwind', or 'gkw_igh'"
+            )
+        if self.parallel_derivative_model in ("gkw_upwind", "gkw_igh") and (
             self.parallel_backend != "finite_difference"
             or self.velocity_backend != "finite_difference"
         ):
-            raise ValueError("gkw_igh requires finite-difference parallel and velocity grids")
+            raise ValueError(
+                "GKW derivative models require finite-difference parallel and velocity grids"
+            )
         if self.initial_condition not in ("generic", "gyaradax_cosine2"):
             raise ValueError("unsupported TEM initial condition")
 
@@ -174,7 +178,13 @@ def tem_species(spec: TemCaseSpec | None = None) -> tuple[SpeciesParams, Species
 
 
 def gyaradax_tem_case_spec() -> TemCaseSpec:
-    """Return the exact local discretization profile for the pinned TEM producer."""
+    """Return the exact local discretization profile for the pinned TEM producer.
+
+    The pinned Gyaradax JAX backend advances parallel streaming with a
+    separable upwind derivative and applies velocity-space trapping
+    separately.  ``gkw_igh`` remains the fused GKW convention backend and is
+    deliberately not selected for this producer-parity profile.
+    """
 
     q = 1.4
     eps = 0.18
@@ -191,7 +201,7 @@ def gyaradax_tem_case_spec() -> TemCaseSpec:
         n_mu=16,
         velocity_backend="finite_difference",
         parallel_backend="finite_difference",
-        parallel_derivative_model="gkw_igh",
+        parallel_derivative_model="gkw_upwind",
         initial_condition="gyaradax_cosine2",
     )
 
@@ -436,7 +446,9 @@ def _build_tem_system(spec: TemCaseSpec):
         FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(spec.ky,))
     )
     mode_connectivity = (
-        build_mode_connectivity(fourier) if spec.parallel_derivative_model == "gkw_igh" else None
+        build_mode_connectivity(fourier)
+        if spec.parallel_derivative_model in ("gkw_upwind", "gkw_igh")
+        else None
     )
     geometry = build_s_alpha_geometry(
         parallel,

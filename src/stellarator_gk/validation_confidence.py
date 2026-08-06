@@ -124,11 +124,11 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             superseded_for_claims=(),
             evidence=(
                 "At GKW kthrho=0.7 (internal krho=0.56548668) the converged local "
-                "result gamma=0.63379954 and omega=-1.01859892 agrees with pinned "
-                "Gyaradax gamma=0.66370834 and omega=-1.02976757 within declared "
-                "10%/20% tolerances. The "
-                "phase-aligned complex phi(z) relative L2 error is 0.0285 against "
-                "a 0.25 tolerance, and late growth drift is 4.8e-15."
+                "result gamma=0.6637083371 and omega=-1.0297675735 agrees with "
+                "pinned Gyaradax gamma=0.6637083356 and omega=-1.0297675725. "
+                "Relative growth, frequency, and phase-aligned complex phi(z) "
+                "errors are 2.23e-9, 1.02e-9, and 8.84e-10; late growth drift is "
+                "2.35e-14."
             ),
             next_action=(
                 "Retain the revision-pinned producer and repeat the gate when the "
@@ -138,20 +138,22 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
         ValidationConfidenceGap(
             identifier="production_collisions_electromagnetic_parity",
             status="open",
-            summary="Production collisions and electromagnetic fields lack parity.",
+            summary="Production collision and electromagnetic trajectory parity remain open.",
             blocks_claims=("collisional_electromagnetic_production_physics",),
             superseded_for_claims=(),
             evidence=(
                 "A differentiable species-local conserving BGK model is integrated, "
                 "but no Landau/Fokker--Planck inter-species operator is validated. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
-                "isolated electromagnetic RHS increment match pinned Gyaradax. The "
-                "EM timestep bound dominates a small exact operator row sum; the "
-                "production trajectory gate remains open."
+                "complete one-state electromagnetic RHS match pinned Gyaradax when "
+                "both codes use its separable upwind backend. The EM timestep bound "
+                "dominates a small exact operator row sum; the production trajectory "
+                "gate remains open."
             ),
             next_action=(
-                "Close the electrostatic stencil baseline, then compare dispersion, "
-                "growth, and mode structure against revision-pinned independent runs."
+                "Compare electromagnetic time advance, dispersion, growth, and mode "
+                "structure against revision-pinned independent runs, and separately "
+                "validate a Landau/Fokker--Planck inter-species collision operator."
             ),
         ),
         ValidationConfidenceGap(

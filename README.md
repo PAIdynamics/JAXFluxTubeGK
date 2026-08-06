@@ -587,7 +587,8 @@ Open blockers:
 - full GKW state-history/long-time velocity-slice parity and the low-`ky`
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
-- production collision and electromagnetic parity,
+- production Landau/Fokker--Planck collision parity and electromagnetic
+  time-advance/dispersion parity (one-state field and full-RHS parity pass),
 - statistically stationary, resolution-converged nonlinear heat flux with an
   independent parity gate, and full DESC optimization.
 

@@ -81,7 +81,7 @@ def test_gyaradax_tem_profile_matches_pinned_producer_discretization():
     assert spec.n_mu == 16
     assert spec.velocity_backend == "finite_difference"
     assert spec.parallel_backend == "finite_difference"
-    assert spec.parallel_derivative_model == "gkw_igh"
+    assert spec.parallel_derivative_model == "gkw_upwind"
     assert spec.ky == pytest.approx(0.7 / (spec.q / (2.0 * np.pi * spec.eps)))
     np.testing.assert_allclose(np.diff(parallel.z), 3.0 / 32.0)
     np.testing.assert_allclose(parallel.z[0], -1.5 + 1.5 / 32.0)

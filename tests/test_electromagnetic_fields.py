@@ -472,7 +472,7 @@ def test_perpendicular_magnetic_precompute_matches_pinned_gyaradax(gyaradax_root
 
 
 @pytest.mark.external
-def test_electromagnetic_rhs_increment_matches_pinned_gyaradax(gyaradax_root):
+def test_full_electromagnetic_rhs_matches_pinned_gyaradax(gyaradax_root):
     import sys
 
     if str(gyaradax_root) not in sys.path:
@@ -497,7 +497,7 @@ def test_electromagnetic_rhs_increment_matches_pinned_gyaradax(gyaradax_root):
         parallel_recurrence_rate=0.0,
         velocity_recurrence_rate=0.0,
         mode_connectivity=build_mode_connectivity(fourier),
-        parallel_derivative_model=spec.parallel_derivative_model,
+        parallel_derivative_model="gkw_upwind",
         beta=0.01,
     )
     mixed = _initial_tem_state(electrostatic, parallel, spec)
@@ -596,4 +596,11 @@ def test_electromagnetic_rhs_increment_matches_pinned_gyaradax(gyaradax_root):
         rtol=2e-6,
         atol=2e-10,
         err_msg="electromagnetic_rhs_increment",
+    )
+    np.testing.assert_allclose(
+        observed_rhs,
+        reference_rhs,
+        rtol=2e-6,
+        atol=2e-10,
+        err_msg="full_electromagnetic_rhs",
     )

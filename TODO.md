@@ -345,10 +345,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and reproduces `gamma=0.66370834`, `omega=-1.02976757` at GKW
   `kthrho=0.7` (`krho=0.56548668` after the s-alpha `kthnorm` conversion).
   A reference-matched local profile uses the same `32x32x16` grid,
-  cell-centered finite differences, fused GKW `igh` operator, and `cosine2`
-  initialization. At final time 40, growth differs by 4.51%, frequency by
-  1.08%, and the phase-aligned complex mode structure by 2.85%, passing the
-  declared 10%/20%/25% tolerances with negligible late-window drift.
+  cell-centered finite differences, Gyaradax's separable upwind
+  streaming/trapping backend, and `cosine2` initialization. At final time 40,
+  relative growth, frequency, and phase-aligned complex mode-structure errors
+  are `2.23e-9`, `1.02e-9`, and `8.84e-10`, with late-window growth drift
+  `2.35e-14`. The fused `gkw_igh` path remains available for GKW convention
+  parity but is not the discrete operator used by this Gyaradax producer.
 - [x] Add a differentiable collision foundation to the production collocation
   residual. The current species-local linearized BGK model preserves discrete
   density, parallel momentum, and energy exactly and contributes to the CFL
@@ -361,12 +363,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   agree with pinned Gyaradax precomputes. The mixed `g` to physical `f`
   transform and generalized-potential `A_parallel` coefficient also match the
   pinned reference. Linear RHS coupling now includes the generalized-potential
-  drive and both `B_parallel` compression terms; its isolated electromagnetic
-  increment agrees with pinned Gyaradax. The mixed-field CFL estimate includes
-  the `g`-to-`f` gain and all three algebraic field feedback paths and bounds a
-  small exact dense-operator row sum. Production dispersion/growth/mode-
-  structure trajectory parity remains open, as does the pre-existing
-  electrostatic stencil baseline gap.
+  drive and both `B_parallel` compression terms. Fields, physical-state
+  recovery, the isolated electromagnetic increment, and the complete
+  one-state RHS agree with pinned Gyaradax when the matched separable-upwind
+  backend is selected. The mixed-field CFL estimate includes the `g`-to-`f`
+  gain and all three algebraic field feedback paths and bounds a small exact
+  dense-operator row sum. Production electromagnetic time-advance,
+  dispersion/growth, and mode-structure trajectory parity remain open.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
