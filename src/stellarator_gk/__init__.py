@@ -387,8 +387,11 @@ from .physics import (
     velocity_grid_to_spectral,
 )
 from .solver import (
+    ImplicitParallelResponsePrecompute,
     LinearResidualPrecompute,
+    build_implicit_parallel_response_precompute,
     build_linear_residual_precompute,
+    implicit_parallel_response_step,
     jitted_linear_residual,
     linear_residual,
 )
@@ -415,6 +418,7 @@ from .time_advance import (
 __all__ = [
     "DerivativeBackend",
     "AdiabaticElectronParams",
+    "ImplicitParallelResponsePrecompute",
     "AdiabaticQuasineutralityPrecompute",
     "BenchmarkGateResult",
     "BenchmarkOptimizationResult",
@@ -643,6 +647,8 @@ __all__ = [
     "integrate_fixed_step",
     "integrate_fixed_step_split_mirror",
     "build_implicit_parallel_streaming_propagator",
+    "build_implicit_parallel_response_precompute",
+    "implicit_parallel_response_step",
     "implicit_parallel_streaming_step",
     "jitted_linear_residual",
     "k_perp_squared",

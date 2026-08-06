@@ -47,6 +47,7 @@ from stellarator_gk import (
     VmecppGeometryProvider,
     build_desc_geometry_from_arrays,
     build_fourier_grid,
+    build_implicit_parallel_response_precompute,
     build_implicit_parallel_streaming_propagator,
     build_linear_residual_precompute,
     build_mode_connectivity,
@@ -64,6 +65,8 @@ from stellarator_gk import (
     mode_chain_amplitude,
     normalize_by_ky_amplitude,
     parallel_streaming,
+    parallel_field_drive,
+    implicit_parallel_response_step,
     real_frequency,
     resolve_geometry,
     run_desc_gx_eik_external_geometry_gate,
@@ -246,7 +249,7 @@ def _parse_args(argv: list[str] | None = None):
     )
     parser.add_argument(
         "--parallel-advance",
-        choices=("explicit", "implicit_midpoint"),
+        choices=("explicit", "implicit_midpoint", "coupled_implicit_midpoint"),
         default="explicit",
     )
     parser.add_argument(
@@ -650,6 +653,7 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
     state = _initial_state(velocity, parallel, fourier, args.initial_amplitude)
     solve_phi = jax.jit(lambda state_value: solve_field_from_state(state_value, precompute))
     parallel_propagator = None
+    parallel_response_step = None
     residual_function = linear_residual
     if args.parallel_advance == "implicit_midpoint":
         if args.parallel_derivative_model != "matrix":
@@ -666,6 +670,31 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 residual_precompute.rhs.D_z,
                 residual_precompute.rhs.parallel_streaming_coeff,
             )
+    elif args.parallel_advance == "coupled_implicit_midpoint":
+        if args.parallel_derivative_model != "matrix":
+            raise ValueError(
+                "coupled_implicit_midpoint parallel advance requires the matrix derivative"
+            )
+        response = build_implicit_parallel_response_precompute(precompute, 0.5 * args.dt)
+
+        def parallel_response_step(state_value):
+            return implicit_parallel_response_step(state_value, precompute, response)
+
+        def residual_function(state_value, residual_precompute):
+            phi = solve_field_from_state(state_value, residual_precompute)
+            return (
+                linear_residual(state_value, precomputed=residual_precompute)
+                - parallel_streaming(
+                    state_value,
+                    residual_precompute.rhs.D_z,
+                    residual_precompute.rhs.parallel_streaming_coeff,
+                )
+                - parallel_field_drive(
+                    phi,
+                    residual_precompute.rhs.D_z,
+                    residual_precompute.rhs,
+                )
+            )
 
     if args.mirror_advance == "semi_lagrangian":
         advance_window = jax.jit(
@@ -679,6 +708,7 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 precompute,
                 mirror_interpolation=args.mirror_interpolation,
                 parallel_streaming_propagator=parallel_propagator,
+                parallel_response_step_fn=parallel_response_step,
                 store_history=False,
             ).state
         )

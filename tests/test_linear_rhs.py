@@ -12,6 +12,7 @@ from stellarator_gk import (
     SpeciesParams,
     VelocityGridSpec,
     build_fourier_grid,
+    build_implicit_parallel_response_precompute,
     build_linear_residual_precompute,
     build_linear_rhs_precompute,
     build_parallel_grid,
@@ -28,6 +29,8 @@ from stellarator_gk import (
     parallel_field_drive,
     parallel_recurrence_control,
     parallel_streaming,
+    implicit_parallel_response_step,
+    solve_adiabatic_electron_phi,
     velocity_recurrence_control,
 )
 from stellarator_gk.benchmarks import (
@@ -82,6 +85,57 @@ def _setup(species=None, *, n_z=16, zonal_correction=False):
         electron_params=electrons,
     )
     return velocity, parallel, fourier, geometry, species, rhs_precompute, residual_precompute
+
+
+def test_implicit_parallel_response_matches_dense_midpoint_system():
+    velocity = build_velocity_grid(
+        VelocityGridSpec(n_vpar=2, n_mu=2, vpar_max=1.5, mu_max=1.0)
+    )
+    parallel = build_parallel_grid(
+        ParallelGridSpec(n_z=4, z_min=0.0, z_max=1.0, topology="periodic")
+    )
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    geometry = build_s_alpha_geometry(
+        parallel,
+        GeometryScalarParams(q=1.3, shat=0.7, eps=0.18),
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        _ion(),
+        electron_params=AdiabaticElectronParams(density=1.0, temperature=1.0),
+    )
+    shape = (2, 2, 4, 1, 1)
+    dt = 0.03
+    response = build_implicit_parallel_response_precompute(precompute, dt)
+
+    def parallel_action(state):
+        phi = solve_adiabatic_electron_phi(state, precompute.field)
+        return parallel_streaming(
+            state,
+            precompute.rhs.D_z,
+            precompute.rhs.parallel_streaming_coeff,
+        ) + parallel_field_drive(phi, precompute.rhs.D_z, precompute.rhs)
+
+    size = int(np.prod(shape))
+    basis = jnp.eye(size, dtype=jnp.complex128).reshape((size,) + shape)
+    operator = jax.vmap(parallel_action)(basis).reshape(size, size).T
+    initial = (
+        jnp.arange(size, dtype=jnp.float64)
+        + 1j * jnp.arange(size - 1, -1, -1, dtype=jnp.float64)
+    ).reshape(shape) / size
+    identity = jnp.eye(size, dtype=jnp.complex128)
+    expected = jnp.linalg.solve(
+        identity - 0.5 * dt * operator,
+        (identity + 0.5 * dt * operator) @ initial.reshape(-1),
+    ).reshape(shape)
+
+    actual = implicit_parallel_response_step(initial, precompute, response)
+    np.testing.assert_allclose(actual, expected, rtol=2.0e-12, atol=2.0e-12)
 
 
 def test_rhs_precompute_shapes_and_zero_input_terms():

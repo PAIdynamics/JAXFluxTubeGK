@@ -197,6 +197,7 @@ def integrate_fixed_step_split_mirror(
     *rhs_args,
     mirror_interpolation: str = "linear",
     parallel_streaming_propagator=None,
+    parallel_response_step_fn=None,
     filter_fn=None,
     store_history: bool = True,
 ):
@@ -206,6 +207,15 @@ def integrate_fixed_step_split_mirror(
         raise ValueError("n_steps must be nonnegative")
     state = jnp.asarray(state)
     dt = jnp.asarray(dt)
+    if parallel_streaming_propagator is not None and parallel_response_step_fn is not None:
+        raise ValueError("choose either a streaming propagator or a coupled response step")
+
+    def parallel_step(value):
+        if parallel_response_step_fn is not None:
+            return parallel_response_step_fn(value)
+        if parallel_streaming_propagator is not None:
+            return implicit_parallel_streaming_step(value, parallel_streaming_propagator)
+        return value
 
     def step(value):
         value = semi_lagrangian_mirror_step(
@@ -215,11 +225,9 @@ def integrate_fixed_step_split_mirror(
             mirror_coefficient,
             interpolation=mirror_interpolation,
         )
-        if parallel_streaming_propagator is not None:
-            value = implicit_parallel_streaming_step(value, parallel_streaming_propagator)
+        value = parallel_step(value)
         value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
-        if parallel_streaming_propagator is not None:
-            value = implicit_parallel_streaming_step(value, parallel_streaming_propagator)
+        value = parallel_step(value)
         return semi_lagrangian_mirror_step(
             value,
             0.5 * dt,

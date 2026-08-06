@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 import jax
+import jax.numpy as jnp
 
 from .physics.quasineutrality import (
     AdiabaticElectronParams,
@@ -18,6 +19,8 @@ from .physics.rhs_terms import (
     LinearRHSPrecompute,
     build_linear_rhs_precompute,
     linear_residual_from_phi,
+    parallel_field_drive,
+    parallel_streaming,
 )
 from .types import FourierGrid, ParallelGrid, SpeciesParams, VelocityGrid, _PyTreeDataclass
 
@@ -40,6 +43,116 @@ class LinearResidualPrecompute(_PyTreeDataclass):
             raise ValueError("field_model must be 'adiabatic' or 'kinetic'")
         if self.n_species < 1:
             raise ValueError("n_species must be at least 1")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class ImplicitParallelResponsePrecompute(_PyTreeDataclass):
+    """Schur-complement data for a field-coupled midpoint parallel step."""
+
+    left_inverse: object
+    field_matrix: object
+    half_dt: object
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "left_inverse",
+        "field_matrix",
+        "half_dt",
+    )
+
+
+def build_implicit_parallel_response_precompute(
+    precompute: LinearResidualPrecompute,
+    dt,
+) -> ImplicitParallelResponsePrecompute:
+    """Build a midpoint Schur complement for streaming, field drive, and QN.
+
+    ``dt`` is the duration of one application.  The distribution-space block
+    is inverted independently for every parallel velocity, while the dense
+    Schur complement has only the electrostatic-field dimension.
+    """
+
+    if precompute.n_species != 1:
+        raise NotImplementedError("implicit parallel response currently supports one species")
+    if precompute.rhs.parallel_derivative_model != "matrix":
+        raise ValueError("implicit parallel response requires the matrix parallel derivative")
+
+    derivative = jnp.asarray(precompute.rhs.D_z)
+    coefficient = jnp.asarray(precompute.rhs.parallel_streaming_coeff)
+    if coefficient.ndim == 3 and coefficient.shape[0] == 1:
+        coefficient = coefficient[0]
+    if derivative.ndim != 2 or derivative.shape[0] != derivative.shape[1]:
+        raise ValueError("D_z must be square")
+    if coefficient.ndim != 2 or coefficient.shape[1] != derivative.shape[0]:
+        raise ValueError("parallel_streaming_coeff must have shape (vpar,z)")
+
+    operator = -coefficient[:, :, None] * derivative[None, :, :]
+    dtype = jnp.result_type(derivative, coefficient, jnp.asarray(dt))
+    identity_z = jnp.eye(derivative.shape[0], dtype=dtype)
+    half_dt = 0.5 * jnp.asarray(dt, dtype=dtype)
+    left_inverse = jnp.linalg.solve(
+        identity_z[None, :, :] - half_dt * operator,
+        jnp.broadcast_to(identity_z, operator.shape),
+    )
+
+    bessel = jnp.asarray(precompute.rhs.flr_factors.bessel_j0)
+    n_z, n_kx, n_ky = map(int, bessel.shape[-3:])
+    n_field = n_z * n_kx * n_ky
+    field_basis = jnp.eye(n_field, dtype=jnp.result_type(dtype, jnp.complex64)).reshape(
+        n_field, n_z, n_kx, n_ky
+    )
+
+    def field_response_column(phi):
+        drive = half_dt * parallel_field_drive(phi, derivative, precompute.rhs)
+        correction = _apply_parallel_left_inverse(drive, left_inverse)
+        return _solve_phi(correction, precompute)
+
+    response_columns = jax.vmap(field_response_column)(field_basis).reshape(
+        n_field, n_field
+    )
+    field_matrix = jnp.eye(n_field, dtype=response_columns.dtype) - response_columns.T
+    return ImplicitParallelResponsePrecompute(
+        left_inverse=left_inverse,
+        field_matrix=field_matrix,
+        half_dt=half_dt,
+    )
+
+
+def implicit_parallel_response_step(
+    distribution,
+    precompute: LinearResidualPrecompute,
+    response: ImplicitParallelResponsePrecompute,
+):
+    """Apply a coupled implicit-midpoint parallel/QN response step."""
+
+    distribution = jnp.asarray(distribution)
+    if distribution.ndim != 5:
+        raise ValueError("distribution must have shape (vpar,mu,z,kx,ky)")
+    phi_old = _solve_phi(distribution, precompute)
+    rhs_state = distribution + response.half_dt * (
+        parallel_streaming(
+            distribution,
+            precompute.rhs.D_z,
+            precompute.rhs.parallel_streaming_coeff,
+        )
+        + parallel_field_drive(phi_old, precompute.rhs.D_z, precompute.rhs)
+    )
+    uncoupled = _apply_parallel_left_inverse(rhs_state, response.left_inverse)
+    phi_shape = phi_old.shape
+    phi_new = jnp.linalg.solve(
+        response.field_matrix,
+        _solve_phi(uncoupled, precompute).reshape(-1),
+    ).reshape(phi_shape)
+    correction = _apply_parallel_left_inverse(
+        response.half_dt
+        * parallel_field_drive(phi_new, precompute.rhs.D_z, precompute.rhs),
+        response.left_inverse,
+    )
+    return uncoupled + correction
+
+
+def _apply_parallel_left_inverse(distribution, left_inverse):
+    return jnp.einsum("vij,vmjxy->vmixy", left_inverse, distribution)
 
 
 def build_linear_residual_precompute(
