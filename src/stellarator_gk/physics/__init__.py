@@ -1,5 +1,11 @@
 """Backend-neutral physics primitives for gyrokinetic solver construction."""
 
+from .collisions import (
+    ConservingBGKPrecompute,
+    build_conserving_bgk_precompute,
+    collision_moments,
+    conserving_bgk_collision,
+)
 from .primitives import (
     FLRFactors,
     bessel_j0,
@@ -98,6 +104,7 @@ __all__ = [
     "HermiteLaguerreBasis",
     "AdiabaticElectronParams",
     "AdiabaticQuasineutralityPrecompute",
+    "ConservingBGKPrecompute",
     "KineticQuasineutralityPrecompute",
     "GKWArakawaIghStencil",
     "GKWParallelStencil",
@@ -115,12 +122,15 @@ __all__ = [
     "build_hermite_laguerre_basis",
     "build_adiabatic_quasineutrality_precompute",
     "build_kinetic_quasineutrality_precompute",
+    "build_conserving_bgk_precompute",
     "build_gkw_igh_stencil",
     "build_gkw_parallel_stencil",
     "build_linear_rhs_precompute",
     "build_velocity_basis",
     "density_moment",
     "default_adiabatic_electron_params",
+    "collision_moments",
+    "conserving_bgk_collision",
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",

@@ -1270,6 +1270,18 @@ Other extensions should be added only after the linear electrostatic baseline is
   \item nonlinear heat-flux objectives.
 \end{itemize}
 
+As an intermediate collision model, the collocation solver may use a
+species-local linearized BGK operator
+\begin{equation}
+  C_s[f_s] = -\nu_s\left(f_s-\mathcal{P}_s f_s\right),
+\end{equation}
+where the discrete projection $\mathcal{P}_s$ spans $F_{M,s}$,
+$v_\parallel F_{M,s}$, and $\mathcal{E}_s F_{M,s}$ in the same quadrature used
+by the field solve.  This construction conserves the discrete density,
+parallel-momentum, and energy moments species by species.  It is a
+differentiable model-collision foundation, not a replacement for a validated
+Landau/Fokker--Planck operator with inter-species exchange.
+
 
 \section{Testing and Benchmark Contract}
 

@@ -8,6 +8,7 @@ from typing import ClassVar
 import jax
 import jax.numpy as jnp
 
+from .physics.collisions import build_conserving_bgk_precompute, conserving_bgk_collision
 from .physics.quasineutrality import (
     AdiabaticElectronParams,
     build_adiabatic_quasineutrality_precompute,
@@ -32,8 +33,9 @@ class LinearResidualPrecompute(_PyTreeDataclass):
     field: object
     field_model: str = "adiabatic"
     n_species: int = 1
+    collisions: object = None
 
-    _dynamic_fields: ClassVar[tuple[str, ...]] = ("rhs", "field")
+    _dynamic_fields: ClassVar[tuple[str, ...]] = ("rhs", "field", "collisions")
     _static_fields: ClassVar[tuple[str, ...]] = ("field_model", "n_species")
 
     def __post_init__(self):
@@ -275,6 +277,7 @@ def build_linear_residual_precompute(
     mode_connectivity=None,
     parallel_derivative_model: str = "matrix",
     phase_space_measure=None,
+    collision_frequency=None,
 ) -> LinearResidualPrecompute:
     """Build the coupled linear RHS and electrostatic field precompute."""
 
@@ -316,11 +319,20 @@ def build_linear_residual_precompute(
                 fourier_grid=fourier_grid,
                 phase_space_measure=phase_space_measure,
             )
+    collisions = None
+    if collision_frequency is not None:
+        collisions = build_conserving_bgk_precompute(
+            velocity_grid,
+            geometry.B,
+            species,
+            collision_frequency,
+        )
     return LinearResidualPrecompute(
         rhs=rhs,
         field=field,
         field_model=normalized_model,
         n_species=rhs.n_species,
+        collisions=collisions,
     )
 
 
@@ -350,7 +362,10 @@ def linear_residual(
     if not isinstance(precompute, LinearResidualPrecompute):
         raise TypeError("precomputed must be LinearResidualPrecompute or LinearRHSPrecompute")
     solved_phi = phi if phi is not None else _solve_phi(distribution, precompute)
-    return linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
+    residual = linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
+    if precompute.collisions is not None:
+        residual = residual + conserving_bgk_collision(distribution, precompute.collisions)
+    return residual
 
 
 @jax.jit

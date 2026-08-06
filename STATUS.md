@@ -78,6 +78,19 @@ claimed.
   clean and the x64 standalone suite reports 430 passed with 20 external tests
   deselected.
 
+### 2026-08-06: Conservative Collision Foundation
+
+- Added an optional species-local linearized BGK operator to the collocation
+  residual. Its discrete Maxwellian projection preserves density, parallel
+  momentum, and energy independently at each parallel point and Fourier mode.
+- Collision frequencies remain differentiable solver inputs, and their
+  stiffness is included in the explicit timestep estimate. Multispecies and
+  single-species conservation, null-space, residual-integration, CFL, JIT, and
+  gradient tests pass.
+- This closes the model-collision implementation slice only. A validated
+  Landau/Fokker--Planck operator with inter-species exchange and electromagnetic
+  field evolution remain open Priority 5 physics gates.
+
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
 - Added `DesignObjectiveSpec`/`design_objective` as the stable public contract

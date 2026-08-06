@@ -691,6 +691,7 @@ def estimate_linear_cfl_dt(
     parallel_recurrence_radius = jnp.asarray(0.0)
     velocity_recurrence_radius = jnp.asarray(0.0)
     field_response_radius = jnp.asarray(0.0)
+    collision_radius = jnp.asarray(0.0)
     derivative_model = getattr(rhs, "parallel_derivative_model", "matrix")
     if derivative_model == "matrix" and hasattr(rhs, "parallel_recurrence_operator"):
         parallel_recurrence_radius = jnp.max(
@@ -702,6 +703,10 @@ def estimate_linear_cfl_dt(
         ) * jnp.max(jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1))
     if getattr(precompute, "field_model", None) == "kinetic":
         field_response_radius = _electrostatic_field_response_radius(precompute)
+    if getattr(precompute, "collisions", None) is not None:
+        # I-P is bounded by two in the weighted projection norm. The factor is
+        # deliberately conservative for the infinity-norm estimate used here.
+        collision_radius = 2.0 * jnp.max(jnp.abs(precompute.collisions.frequency))
     radius = (
         parallel_radius
         + mirror_radius
@@ -710,6 +715,7 @@ def estimate_linear_cfl_dt(
         + parallel_recurrence_radius
         + velocity_recurrence_radius
         + field_response_radius
+        + collision_radius
     )
     return jnp.asarray(safety * rk4_radius) / jnp.maximum(radius, jnp.asarray(floor))
 

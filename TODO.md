@@ -341,7 +341,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and the kinetic-quasineutrality field response. The corrected default
   reduced-case bound is `3.54e-3`; quantitative external parity remains the
   acceptance gate.
-- [ ] Add collisions and electromagnetic perturbations.
+- [x] Add a differentiable collision foundation to the production collocation
+  residual. The current species-local linearized BGK model preserves discrete
+  density, parallel momentum, and energy exactly and contributes to the CFL
+  bound.
+- [ ] Validate a production Landau/Fokker--Planck collision operator including
+  inter-species exchange, and add electromagnetic `A_parallel`/`B_parallel`
+  perturbations with independent parity gates. The conserving BGK model is not
+  a substitute for this acceptance claim.
 - [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
   timestep control, saturated heat-flux diagnostics, and nonlinear parity.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
