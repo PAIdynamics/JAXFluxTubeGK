@@ -73,3 +73,32 @@ def test_w7x_production_cpu_timing_smoke_override_runs_residual_timing(tmp_path)
     assert payload["timing"]["repeats"] == 1
     assert payload["timing"]["best_execute_seconds_per_rhs"] >= 0.0
     assert payload["timing"]["estimated_rk4_rhs_calls"] == 24
+
+
+def test_stella_production_timing_uses_validated_advance_controls(tmp_path):
+    module = _load_module()
+    geometry = tmp_path / "reference.geometry"
+    args = module._parse_args(
+        [
+            "--preset",
+            "stella-production",
+            "--stella-geometry",
+            str(geometry),
+            "--n-windows",
+            "7",
+        ]
+    )
+
+    controls = module.timing_controls(args)
+    scan_args = module._stella_scan_args(args, tmp_path / "scratch")
+
+    assert controls["n_z"] == 256
+    assert controls["n_vpar"] == 32
+    assert controls["n_mu"] == 8
+    assert controls["ky_values"] == (0.3,)
+    assert scan_args[scan_args.index("--mirror-interpolation") + 1] == "stella_cubic"
+    assert scan_args[scan_args.index("--parallel-advance") + 1] == "stella_implicit"
+    assert scan_args[scan_args.index("--initial-condition") + 1] == (
+        "stella_maxwellian"
+    )
+    assert scan_args[scan_args.index("--n-windows") + 1] == "7"

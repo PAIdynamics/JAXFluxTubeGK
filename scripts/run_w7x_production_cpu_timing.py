@@ -10,9 +10,12 @@ development timing run that is explicitly labeled as not production-validated.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
+import sys
+import tempfile
 from time import perf_counter
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
@@ -95,6 +98,14 @@ def run_w7x_cpu_timing(args: argparse.Namespace) -> dict[str, object]:
             "production_timing_estimate_only" if parity_ready else "development_estimate_only"
         )
         artifact["passed"] = False
+        _write_json(args.output, artifact)
+        return artifact
+
+    if args.preset == "stella-production":
+        artifact["timing"] = _benchmark_stella_production_scan(args)
+        artifact["timing_scope"] = (
+            "end_to_end_including_geometry_load_jax_compile_and_diagnostics"
+        )
         _write_json(args.output, artifact)
         return artifact
 
@@ -217,6 +228,19 @@ def timing_controls(args: argparse.Namespace) -> dict[str, object]:
             "vpar_max": 2.0,
             "mu_max": 1.5,
         }
+    elif args.preset == "stella-production":
+        defaults = {
+            "n_z": 256,
+            "field_line_periods": 1,
+            "n_kx": 1,
+            "kx_max": 0.0,
+            "ikxspace": 1,
+            "n_vpar": 32,
+            "n_mu": 8,
+            "ky_values": (0.3,),
+            "vpar_max": 3.0,
+            "mu_max": 4.916958697837631,
+        }
     else:
         defaults = {
             "n_z": 256,
@@ -247,6 +271,82 @@ def timing_controls(args: argparse.Namespace) -> dict[str, object]:
     if args.ky_values is not None:
         defaults["ky_values"] = _parse_float_tuple(args.ky_values)
     return defaults
+
+
+def _benchmark_stella_production_scan(args: argparse.Namespace) -> dict[str, object]:
+    if args.stella_geometry is None:
+        raise ValueError("stella-production timing requires --stella-geometry")
+    module_path = ROOT / "examples/run_stellarator_linear_scan.py"
+    spec = importlib.util.spec_from_file_location(
+        "_optimal_fusion_stella_production_timing_scan", module_path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load stellarator scan from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory(prefix="optimal-fusion-w7x-timing-") as scratch:
+        scan_args = _stella_scan_args(args, Path(scratch))
+        start = perf_counter()
+        exit_code = module.main(scan_args)
+        wall_seconds = perf_counter() - start
+    if exit_code != 0:
+        raise RuntimeError(f"source-matched W7-X timing scan exited with {exit_code}")
+    n_steps = args.steps_per_window * args.n_windows
+    return {
+        "wall_seconds": float(wall_seconds),
+        "steps": int(n_steps),
+        "windows": int(args.n_windows),
+        "seconds_per_step_including_compile": float(wall_seconds / n_steps),
+        "scratch_artifacts_retained": False,
+        "algorithm": "ssp_rk3_then_stella_cubic_mirror_then_implicit_response",
+    }
+
+
+def _stella_scan_args(args: argparse.Namespace, output_dir: Path) -> list[str]:
+    controls = timing_controls(args)
+    return [
+        "--geometry-source",
+        "stella-geometry",
+        "--stella-geometry",
+        str(args.stella_geometry),
+        "--output-dir",
+        str(output_dir),
+        "--n-kx",
+        str(controls["n_kx"]),
+        "--kx-max",
+        str(controls["kx_max"]),
+        "--ikxspace",
+        str(controls["ikxspace"]),
+        "--ky-values",
+        ",".join(str(value) for value in controls["ky_values"]),
+        "--n-vpar",
+        str(controls["n_vpar"]),
+        "--n-mu",
+        str(controls["n_mu"]),
+        "--vpar-max",
+        str(controls["vpar_max"]),
+        "--mu-max",
+        str(controls["mu_max"]),
+        "--velocity-backend",
+        "midpoint_gauss_laguerre",
+        "--velocity-measure-normalization",
+        "full_gyroangle",
+        "--mirror-advance",
+        "semi_lagrangian",
+        "--mirror-interpolation",
+        "stella_cubic",
+        "--parallel-advance",
+        "stella_implicit",
+        "--initial-condition",
+        "stella_maxwellian",
+        "--dt",
+        "0.1",
+        "--steps-per-window",
+        str(args.steps_per_window),
+        "--n-windows",
+        str(args.n_windows),
+    ]
 
 
 def _blocked_artifact(args: argparse.Namespace, parity_ready: bool) -> dict[str, object]:
@@ -327,7 +427,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--eik-reference", type=Path)
     parser.add_argument(
         "--preset",
-        choices=("production-control", "smoke"),
+        choices=("production-control", "stella-production", "smoke"),
         default="production-control",
     )
     parser.add_argument("--estimate-only", action="store_true")
@@ -350,6 +450,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--n-ky", type=int, default=28)
     parser.add_argument("--ky-max", type=float, default=2.7)
     parser.add_argument("--ky-values")
+    parser.add_argument("--stella-geometry", type=Path)
     return parser.parse_args(argv)
 
 
