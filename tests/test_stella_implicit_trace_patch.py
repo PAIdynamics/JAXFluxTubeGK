@@ -3,6 +3,7 @@ from pathlib import Path
 from scripts.prepare_stella_w7x_implicit_trace_run import (
     TRACE_FILENAME,
     patch_stella_implicit_stage_trace,
+    patch_stella_explicit_stage_trace,
     patch_stella_mirror_stage_trace,
 )
 from scripts.replay_w7x_stella_implicit_stage import _metrics
@@ -73,3 +74,27 @@ def test_mirror_trace_patch_instruments_first_mirror_stage(tmp_path: Path):
     assert "mirror_input_pdf" in patched
     assert "mirror_final_pdf" in patched
     assert TRACE_FILENAME in patched
+
+
+def test_explicit_trace_patch_instruments_rk3_stages(tmp_path: Path):
+    source = tmp_path / "gyrokinetic_equation_explicit.f90"
+    source.write_text(
+        "module gyrokinetic_equation_explicit\n"
+        "   private\n"
+        "contains\n"
+        "      g0 = g\n"
+        "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n"
+        "            g1 = g0 + g1\n"
+        "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n"
+        "            g2 = g1 + g2\n"
+        "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n"
+        "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n"
+        "end module gyrokinetic_equation_explicit\n",
+        encoding="utf-8",
+    )
+
+    assert patch_stella_explicit_stage_trace(source) is True
+    assert patch_stella_explicit_stage_trace(source) is False
+    patched = source.read_text(encoding="utf-8")
+    for stage in ("input", "rhs1", "state1", "rhs2", "state2", "rhs3", "final"):
+        assert f"explicit_{stage}_pdf" in patched
