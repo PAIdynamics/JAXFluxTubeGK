@@ -1,4 +1,4 @@
-"""Run the revision-pinned Gyaradax heavy-electron TEM reference in scratch storage."""
+"""Run a revision-pinned Gyaradax kinetic-electron linear reference in scratch."""
 
 from __future__ import annotations
 
@@ -75,9 +75,9 @@ def main() -> None:
         dvp=float(geometry["dvp"]),
         kxmax=float(np.max(np.abs(np.asarray(geometry["kxrh"])))) or 1.0,
         kymax=float(np.max(np.asarray(geometry["krho"]))) or 1.0,
-        nlapar=False,
-        nlbpar=False,
-        beta=0.0,
+        nlapar=args.nlapar,
+        nlbpar=args.nlbpar,
+        beta=args.beta,
         drive_scale=1.0,
         idisp=2,
         cfl_safety=0.9,
@@ -136,6 +136,10 @@ def main() -> None:
             "n_vpar": args.n_vpar,
             "n_mu": args.n_mu,
             "nperiod": args.nperiod,
+            "field_model": "electromagnetic" if args.nlapar else "kinetic",
+            "nlapar": args.nlapar,
+            "nlbpar": args.nlbpar,
+            "beta": args.beta,
         },
         "steps_per_window": args.steps_per_window,
         "n_windows": args.n_windows,
@@ -189,7 +193,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--electron-temperature-gradient", type=float, default=6.9)
     parser.add_argument("--electron-mass", type=float, default=0.01)
     parser.add_argument("--vpar-max", type=float, default=3.0)
-    return parser.parse_args(argv)
+    parser.add_argument("--nlapar", action="store_true")
+    parser.add_argument("--nlbpar", action="store_true")
+    parser.add_argument("--beta", type=float, default=0.0)
+    args = parser.parse_args(argv)
+    if args.nlbpar and not args.nlapar:
+        parser.error("--nlbpar requires --nlapar")
+    if args.nlapar and args.beta <= 0.0:
+        parser.error("--nlapar requires a positive --beta")
+    if not args.nlapar and args.beta != 0.0:
+        parser.error("--beta requires --nlapar")
+    return args
 
 
 if __name__ == "__main__":

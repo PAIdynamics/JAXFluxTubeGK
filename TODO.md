@@ -369,8 +369,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   backend is selected. One RK4 step and an unnormalized five-step trajectory
   also agree, exercising repeated mixed-state field solves. The mixed-field
   CFL estimate includes the `g`-to-`f` gain and all three algebraic field
-  feedback paths and bounds a small exact dense-operator row sum. Long-time
-  electromagnetic dispersion/growth and mode-structure parity remain open.
+  feedback paths and bounds a small exact dense-operator row sum. A
+  revision-pinned reduced `8x8x4`, beta-0.01 run reaches final time 10 and
+  passes the unchanged growth/frequency/mode/drift gate with errors
+  `2.30e-3`, `2.23e-9`, `6.82e-10`, and drift `7.23e-5`. The producer writes
+  only to caller-selected scratch storage. A production-grid electromagnetic
+  resolution ladder and Landau/Fokker--Planck inter-species collisions remain
+  open before closing this combined item.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

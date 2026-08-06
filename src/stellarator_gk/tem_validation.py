@@ -19,7 +19,11 @@ from .grids import (
     build_velocity_grid,
 )
 from .diagnostics import mode_amplitude
-from .physics import kinetic_quasineutrality_residual, solve_kinetic_electron_phi
+from .physics import (
+    kinetic_quasineutrality_residual,
+    solve_electromagnetic_fields,
+    solve_kinetic_electron_phi,
+)
 from .solver import build_linear_residual_precompute, linear_residual
 from .time_advance import estimate_linear_cfl_dt, integrate_fixed_step
 from .types import (
@@ -337,6 +341,8 @@ def run_tem_physics_preflight(
 def run_reduced_tem_linear_smoke(
     spec: TemCaseSpec | None = None,
     *,
+    field_model: str = "kinetic",
+    beta: float = 0.0,
     dt: float | None = None,
     cfl_fraction: float = 0.5,
     steps_per_window: int = 20,
@@ -347,13 +353,36 @@ def run_reduced_tem_linear_smoke(
     """Evolve a reduced kinetic-electron case and report branch diagnostics."""
 
     spec = spec or TemCaseSpec()
+    if field_model not in ("kinetic", "electromagnetic"):
+        raise ValueError("field_model must be 'kinetic' or 'electromagnetic'")
+    if beta < 0.0 or (field_model == "electromagnetic" and beta <= 0.0):
+        raise ValueError("beta must be positive for electromagnetic runs")
     if not 0.0 < cfl_fraction <= 1.0:
         raise ValueError("cfl_fraction must lie in (0, 1]")
     if steps_per_window < 1 or n_windows < 3:
         raise ValueError("steps_per_window must be positive and n_windows at least three")
     if not 0.0 <= late_fraction < 1.0:
         raise ValueError("late_fraction must lie in [0, 1)")
-    _velocity, parallel, _fourier, _geometry, _species, precompute = _build_tem_system(spec)
+    velocity, parallel, fourier, geometry, species, precompute = _build_tem_system(spec)
+    if field_model == "electromagnetic":
+        mode_connectivity = (
+            build_mode_connectivity(fourier)
+            if spec.parallel_derivative_model in ("gkw_upwind", "gkw_igh")
+            else None
+        )
+        precompute = build_linear_residual_precompute(
+            velocity,
+            parallel,
+            fourier,
+            geometry,
+            species,
+            field_model="electromagnetic",
+            parallel_recurrence_rate=spec.parallel_recurrence_rate,
+            velocity_recurrence_rate=spec.velocity_recurrence_rate,
+            mode_connectivity=mode_connectivity,
+            parallel_derivative_model=spec.parallel_derivative_model,
+            beta=beta,
+        )
     cfl = float(estimate_linear_cfl_dt(precompute))
     timestep = cfl_fraction * cfl if dt is None else float(dt)
     if timestep <= 0.0 or (
@@ -361,7 +390,12 @@ def run_reduced_tem_linear_smoke(
     ):
         raise ValueError(f"dt must be positive and no larger than estimated CFL {cfl:.6g}")
     state = _initial_tem_state(precompute, parallel, spec)
-    field = solve_kinetic_electron_phi(state, precompute.field)
+    def solve_phi(values):
+        if field_model == "electromagnetic":
+            return solve_electromagnetic_fields(values, precompute.field)[0]
+        return solve_kinetic_electron_phi(values, precompute.field)
+
+    field = solve_phi(state)
     initial_amplitude = mode_amplitude(field)[0, 0]
     state = state / initial_amplitude
     initial_probe = field[parallel.z.shape[0] // 2, 0, 0] / initial_amplitude
@@ -375,7 +409,7 @@ def run_reduced_tem_linear_smoke(
             precompute,
             store_history=False,
         ).state
-        next_field = solve_kinetic_electron_phi(advanced, precompute.field)
+        next_field = solve_phi(advanced)
         amplitude = mode_amplitude(next_field)[0, 0]
         safe_amplitude = jnp.maximum(amplitude, jnp.asarray(1.0e-300, dtype=amplitude.dtype))
         normalized = advanced / safe_amplitude
@@ -385,7 +419,7 @@ def run_reduced_tem_linear_smoke(
     state, (window_amplitudes, window_probes) = jax.lax.scan(
         advance_window, state, jnp.arange(n_windows)
     )
-    final_field = solve_kinetic_electron_phi(state, precompute.field)[:, 0, 0]
+    final_field = solve_phi(state)[:, 0, 0]
     final_norm = jnp.sqrt(jnp.sum(jnp.abs(final_field) ** 2))
     final_mode = final_field / final_norm
     phase_anchor = final_mode[parallel.z.shape[0] // 2]
@@ -414,7 +448,11 @@ def run_reduced_tem_linear_smoke(
     )
     return TemLinearSmokeResult(
         schema_version=TEM_PREFLIGHT_SCHEMA_VERSION,
-        status="reduced_tem_time_advance_not_external_validation",
+        status=(
+            "reduced_electromagnetic_time_advance_not_external_validation"
+            if field_model == "electromagnetic"
+            else "reduced_tem_time_advance_not_external_validation"
+        ),
         growth_rate=growth,
         frequency=frequency,
         late_window_growth_delta=late_delta,

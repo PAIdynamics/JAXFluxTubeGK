@@ -1,5 +1,8 @@
 import dataclasses
 import json
+from pathlib import Path
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -71,6 +74,34 @@ def test_reduced_tem_time_advance_rejects_timestep_above_cfl():
         run_reduced_tem_linear_smoke(dt=1.0, steps_per_window=1, n_windows=3)
 
 
+def test_reduced_electromagnetic_time_advance_uses_coupled_fields():
+    result = run_reduced_tem_linear_smoke(
+        field_model="electromagnetic",
+        beta=0.01,
+        steps_per_window=1,
+        n_windows=3,
+    )
+
+    assert result.finite
+    assert result.status == "reduced_electromagnetic_time_advance_not_external_validation"
+    assert result.estimated_cfl_dt > 0.0
+
+
+@pytest.mark.parametrize(
+    ("field_model", "beta", "message"),
+    [
+        ("unsupported", 0.0, "field_model"),
+        ("electromagnetic", 0.0, "beta must be positive"),
+        ("kinetic", -0.01, "beta must be positive"),
+    ],
+)
+def test_reduced_tem_time_advance_rejects_invalid_field_configuration(
+    field_model, beta, message
+):
+    with pytest.raises(ValueError, match=message):
+        run_reduced_tem_linear_smoke(field_model=field_model, beta=beta)
+
+
 def test_gyaradax_tem_profile_matches_pinned_producer_discretization():
     spec = gyaradax_tem_case_spec()
     _velocity, parallel, _fourier, _geometry, _species, precompute = _build_tem_system(spec)
@@ -102,6 +133,80 @@ def test_gyaradax_tem_runner_requires_explicit_external_root_and_output(tmp_path
     assert args.output == tmp_path / "tem.json"
     assert args.n_windows == 200
     assert args.steps_per_window == 20
+
+
+def test_gyaradax_tem_runner_accepts_electromagnetic_controls(tmp_path):
+    args = _parse_args(
+        [
+            "--gyaradax-root",
+            str(tmp_path / "gyaradax"),
+            "--output",
+            str(tmp_path / "em.json"),
+            "--nlapar",
+            "--nlbpar",
+            "--beta",
+            "0.01",
+        ]
+    )
+
+    assert args.nlapar
+    assert args.nlbpar
+    assert args.beta == pytest.approx(0.01)
+
+
+@pytest.mark.external
+def test_long_electromagnetic_trajectory_matches_pinned_gyaradax(
+    gyaradax_root, tmp_path
+):
+    output = tmp_path / "gyaradax-em.json"
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "run_gyaradax_tem_reference.py"),
+            "--gyaradax-root",
+            str(gyaradax_root),
+            "--output",
+            str(output),
+            "--n-z",
+            "8",
+            "--n-vpar",
+            "8",
+            "--n-mu",
+            "4",
+            "--n-windows",
+            "500",
+            "--steps-per-window",
+            "20",
+            "--dt",
+            "0.001",
+            "--nlapar",
+            "--nlbpar",
+            "--beta",
+            "0.01",
+        ],
+        cwd=root,
+        check=True,
+    )
+    spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
+    result = run_reduced_tem_linear_smoke(
+        spec,
+        field_model="electromagnetic",
+        beta=0.01,
+        dt=0.001,
+        steps_per_window=20,
+        n_windows=500,
+        allow_timestep_above_conservative_bound=True,
+    )
+    report = compare_tem_external_reference(
+        result,
+        load_tem_external_reference(output),
+    )
+
+    assert report.passed
+    assert report.growth_relative_error < 0.01
+    assert report.frequency_relative_error < 1.0e-6
+    assert report.mode_structure_relative_l2_error < 1.0e-7
 
 
 def test_tem_external_reference_loader_and_quantitative_gate(tmp_path):

@@ -151,8 +151,12 @@ claimed.
   backend uses separable upwind streaming and trapping, whereas `gkw_igh` is
   the fused GKW convention path. One RK4 step and a five-step unnormalized
   trajectory also match, covering repeated self-consistent field solves.
-  Long-time electromagnetic dispersion/growth and mode-structure parity are
-  not yet claimed.
+  Added on-demand electromagnetic controls to the revision-pinned producer and
+  local linear smoke runner. A reduced `8x8x4`, beta-0.01 final-time-10 run
+  passes the growth/frequency/mode/drift gate: relative errors are `2.30e-3`,
+  `2.23e-9`, and `6.82e-10`, with late growth drift `7.23e-5`. No generated
+  reference is stored in the repository. Production-grid resolution
+  convergence remains open.
 - Added a differentiable electromagnetic CFL bound covering the mixed-state
   amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
   at finite beta and conservatively dominates the exact row sum of a small
