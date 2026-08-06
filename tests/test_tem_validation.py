@@ -9,9 +9,12 @@ import pytest
 
 from stellarator_gk.tem_validation import (
     TemCaseSpec,
+    TemExternalReference,
+    TemLinearSmokeResult,
     _build_tem_system,
     _initial_tem_state,
     compare_tem_external_reference,
+    compare_tem_resolution_ladder,
     gyaradax_tem_case_spec,
     load_tem_external_reference,
     run_reduced_tem_linear_smoke,
@@ -19,6 +22,10 @@ from stellarator_gk.tem_validation import (
     tem_species,
 )
 from scripts.run_gyaradax_tem_reference import _parse_args
+from scripts.run_gyaradax_em_resolution_ladder import (
+    _parse_args as _parse_ladder_args,
+    _parse_resolution,
+)
 
 
 def test_tem_species_are_charge_neutral_and_electron_driven():
@@ -154,6 +161,20 @@ def test_gyaradax_tem_runner_accepts_electromagnetic_controls(tmp_path):
     assert args.beta == pytest.approx(0.01)
 
 
+def test_gyaradax_em_resolution_ladder_defaults_and_parser(tmp_path):
+    args = _parse_ladder_args(
+        [
+            "--gyaradax-root",
+            str(tmp_path / "gyaradax"),
+            "--output-dir",
+            str(tmp_path / "ladder"),
+        ]
+    )
+
+    assert args.resolutions == [(8, 8, 4), (12, 12, 6), (16, 16, 8)]
+    assert _parse_resolution("20x24x10") == (20, 24, 10)
+
+
 @pytest.mark.external
 def test_long_electromagnetic_trajectory_matches_pinned_gyaradax(
     gyaradax_root, tmp_path
@@ -244,6 +265,55 @@ def test_tem_external_reference_loader_and_quantitative_gate(tmp_path):
         dataclasses.replace(result, growth_rate=2.0 * result.growth_rate), reference
     )
     assert not failed.passed
+
+
+def test_tem_resolution_ladder_requires_parity_and_finest_pair_convergence():
+    def result(growth, frequency):
+        return TemLinearSmokeResult(
+            schema_version=1,
+            status="reduced_electromagnetic_time_advance_not_external_validation",
+            growth_rate=growth,
+            frequency=frequency,
+            late_window_growth_delta=1.0e-5,
+            final_time=10.0,
+            dt=0.001,
+            estimated_cfl_dt=1.0e-4,
+            steps_per_window=20,
+            n_windows=500,
+            finite=True,
+            electron_direction_frequency=True,
+            externally_validated=False,
+            mode_structure=(1.0 + 0.0j, 0.0 + 0.0j),
+        )
+
+    def reference(growth, frequency):
+        return TemExternalReference(
+            revision="pinned",
+            case={"field_model": "electromagnetic"},
+            growth_rate=growth,
+            frequency=frequency,
+            final_time=10.0,
+            mode_structure=(1.0 + 0.0j, 0.0 + 0.0j),
+        )
+
+    results = (result(0.65, -1.14), result(0.621, -1.099))
+    references = (reference(0.649, -1.14), reference(0.6214, -1.099))
+    report = compare_tem_resolution_ladder(results, references)
+
+    assert report.passed
+    assert report.local_growth_relative_change < 0.05
+    assert report.local_frequency_relative_change < 0.05
+
+    failed = compare_tem_resolution_ladder(
+        (results[0], dataclasses.replace(results[1], growth_rate=0.5)),
+        references,
+    )
+    assert not failed.passed
+
+
+def test_tem_resolution_ladder_rejects_incomplete_or_invalid_inputs():
+    with pytest.raises(ValueError, match="matching result/reference"):
+        compare_tem_resolution_ladder((), ())
 
 
 @pytest.mark.parametrize(

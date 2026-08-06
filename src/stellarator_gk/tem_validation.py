@@ -157,6 +157,20 @@ class TemExternalParityReport:
     late_growth_drift_tolerance: float
 
 
+@dataclass(frozen=True)
+class TemResolutionConvergenceReport:
+    """Cross-code parity and finest-pair convergence for a resolution ladder."""
+
+    passed: bool
+    rung_parity: tuple[TemExternalParityReport, ...]
+    local_growth_relative_change: float
+    local_frequency_relative_change: float
+    reference_growth_relative_change: float
+    reference_frequency_relative_change: float
+    growth_convergence_tolerance: float
+    frequency_convergence_tolerance: float
+
+
 def tem_species(spec: TemCaseSpec | None = None) -> tuple[SpeciesParams, SpeciesParams]:
     """Return charge-neutral kinetic ions/electrons for the TEM preflight."""
 
@@ -279,6 +293,50 @@ def compare_tem_external_reference(
         frequency_tolerance=frequency_tolerance,
         mode_structure_tolerance=mode_structure_tolerance,
         late_growth_drift_tolerance=late_growth_drift_tolerance,
+    )
+
+
+def compare_tem_resolution_ladder(
+    results: tuple[TemLinearSmokeResult, ...],
+    references: tuple[TemExternalReference, ...],
+    *,
+    growth_convergence_tolerance: float = 0.05,
+    frequency_convergence_tolerance: float = 0.05,
+) -> TemResolutionConvergenceReport:
+    """Evaluate per-rung parity and convergence between the finest two rungs."""
+
+    if len(results) != len(references) or len(results) < 2:
+        raise ValueError("resolution ladders require matching result/reference rungs")
+    if growth_convergence_tolerance <= 0.0 or frequency_convergence_tolerance <= 0.0:
+        raise ValueError("resolution convergence tolerances must be positive")
+    parity = tuple(
+        compare_tem_external_reference(result, reference)
+        for result, reference in zip(results, references, strict=True)
+    )
+    local_growth_change = _relative_error(results[-2].growth_rate, results[-1].growth_rate)
+    local_frequency_change = _relative_error(results[-2].frequency, results[-1].frequency)
+    reference_growth_change = _relative_error(
+        references[-2].growth_rate, references[-1].growth_rate
+    )
+    reference_frequency_change = _relative_error(
+        references[-2].frequency, references[-1].frequency
+    )
+    passed = bool(
+        all(report.passed for report in parity)
+        and local_growth_change <= growth_convergence_tolerance
+        and local_frequency_change <= frequency_convergence_tolerance
+        and reference_growth_change <= growth_convergence_tolerance
+        and reference_frequency_change <= frequency_convergence_tolerance
+    )
+    return TemResolutionConvergenceReport(
+        passed=passed,
+        rung_parity=parity,
+        local_growth_relative_change=local_growth_change,
+        local_frequency_relative_change=local_frequency_change,
+        reference_growth_relative_change=reference_growth_change,
+        reference_frequency_relative_change=reference_frequency_change,
+        growth_convergence_tolerance=growth_convergence_tolerance,
+        frequency_convergence_tolerance=frequency_convergence_tolerance,
     )
 
 
@@ -568,9 +626,11 @@ __all__ = [
     "TemExternalParityReport",
     "TemExternalReference",
     "TemPhysicsPreflightReport",
+    "TemResolutionConvergenceReport",
     "TemLinearSmokeResult",
     "gyaradax_tem_case_spec",
     "compare_tem_external_reference",
+    "compare_tem_resolution_ladder",
     "load_tem_external_reference",
     "run_reduced_tem_linear_smoke",
     "run_tem_physics_preflight",

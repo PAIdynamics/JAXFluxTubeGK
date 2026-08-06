@@ -498,6 +498,22 @@ local matched profile uses that internal value directly. The output records
 both conventions plus provenance, case parameters, timestep range, and window
 histories; it is not stored in the repository.
 
+The same producer can drive an electromagnetic resolution ladder without
+committing generated references:
+
+```bash
+JAX_ENABLE_X64=1 uv run --extra reference python \
+  scripts/run_gyaradax_em_resolution_ladder.py \
+  --gyaradax-root /path/to/gyaradax \
+  --expected-revision 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234 \
+  --output-dir /tmp/optimal-fusion-em-ladder
+```
+
+The default `8x8x4`, `12x12x6`, and `16x16x8` rungs enforce independent
+parity at every rung and 5% growth/frequency convergence between the finest
+two. Higher production-grid rungs can be supplied by repeating
+`--resolution NZxNVPARxNMU`.
+
 ## Using the Python API
 
 The examples are the best starting point.  For direct API use, build grids and
@@ -588,8 +604,9 @@ Open blockers:
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
 - production Landau/Fokker--Planck collision parity and electromagnetic
-  production-grid resolution convergence (one-state field/full-RHS, five-step
-  RK4, and reduced final-time-10 dispersion parity pass),
+  full-production-grid confirmation (one-state field/full-RHS, five-step RK4,
+  reduced final-time-10 dispersion parity, and the default EM resolution
+  ladder pass),
 - statistically stationary, resolution-converged nonlinear heat flux with an
   independent parity gate, and full DESC optimization.
 

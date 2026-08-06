@@ -138,7 +138,7 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
         ValidationConfidenceGap(
             identifier="production_collisions_electromagnetic_parity",
             status="open",
-            summary="Production collision and EM resolution-convergence parity remain open.",
+            summary="Production collisions and full-grid EM confirmation remain open.",
             blocks_claims=("collisional_electromagnetic_production_physics",),
             superseded_for_claims=(),
             evidence=(
@@ -148,14 +148,15 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "
                 "upwind backend. A reduced final-time-10 finite-beta run also passes "
-                "growth, frequency, mode-shape, and late-drift gates. The EM timestep "
-                "bound dominates a small exact operator row sum; a production-grid "
-                "resolution ladder remains open."
+                "growth, frequency, mode-shape, and late-drift gates. The default EM "
+                "ladder passes per-rung parity and 5% finest-pair convergence at "
+                "12x12x6 -> 16x16x8. The EM timestep bound dominates a small exact "
+                "operator row sum; higher production-grid confirmation remains open."
             ),
             next_action=(
-                "Repeat the electromagnetic dispersion gate over a production-grid "
-                "resolution ladder, and separately validate a Landau/Fokker--Planck "
-                "inter-species collision operator."
+                "Extend the electromagnetic ladder to higher production-grid rungs, "
+                "and separately validate a Landau/Fokker--Planck inter-species "
+                "collision operator."
             ),
         ),
         ValidationConfidenceGap(

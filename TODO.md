@@ -373,9 +373,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   revision-pinned reduced `8x8x4`, beta-0.01 run reaches final time 10 and
   passes the unchanged growth/frequency/mode/drift gate with errors
   `2.30e-3`, `2.23e-9`, `6.82e-10`, and drift `7.23e-5`. The producer writes
-  only to caller-selected scratch storage. A production-grid electromagnetic
-  resolution ladder and Landau/Fokker--Planck inter-species collisions remain
-  open before closing this combined item.
+  only to caller-selected scratch storage. The on-demand default resolution
+  ladder also passes: its finest `12x12x6 -> 16x16x8` pair changes local
+  growth and frequency by `4.64%` and `3.93%`, below the declared 5% gate,
+  while both rungs independently retain Gyaradax parity. A higher
+  production-grid confirmation and Landau/Fokker--Planck inter-species
+  collisions remain open before closing this combined item.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -157,6 +157,13 @@ claimed.
   `2.23e-9`, and `6.82e-10`, with late growth drift `7.23e-5`. No generated
   reference is stored in the repository. Production-grid resolution
   convergence remains open.
+- Added an on-demand electromagnetic resolution-ladder runner. It regenerates
+  independent references in caller-selected scratch storage and requires both
+  per-rung Gyaradax parity and finest-pair convergence. The measured
+  `12x12x6 -> 16x16x8` pair passes the 5% gate: local relative growth and
+  frequency changes are `4.64%` and `3.93%`; per-rung growth parity errors are
+  `8.95e-4` and `2.43e-4`, while frequency and mode errors remain near
+  `1e-9`. A higher production-grid confirmation remains evidence-gated.
 - Added a differentiable electromagnetic CFL bound covering the mixed-state
   amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
   at finite beta and conservatively dominates the exact row sum of a small
