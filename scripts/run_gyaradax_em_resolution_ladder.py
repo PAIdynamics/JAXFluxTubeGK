@@ -18,6 +18,12 @@ from stellarator_gk import (
 )
 
 
+RESOLUTION_PROFILES = {
+    "reduced": ((8, 8, 4), (12, 12, 6), (16, 16, 8)),
+    "production": ((16, 16, 8), (24, 24, 12), (32, 32, 16)),
+}
+
+
 def _parse_resolution(value: str) -> tuple[int, int, int]:
     try:
         values = tuple(int(item) for item in value.lower().split("x"))
@@ -34,6 +40,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--expected-revision")
     parser.add_argument(
+        "--profile",
+        choices=tuple(RESOLUTION_PROFILES),
+        default="reduced",
+        help="named rung set used when --resolution is not supplied",
+    )
+    parser.add_argument(
         "--resolution",
         type=_parse_resolution,
         action="append",
@@ -48,7 +60,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--frequency-convergence-tolerance", type=float, default=0.05)
     args = parser.parse_args(argv)
     if args.resolutions is None:
-        args.resolutions = [(8, 8, 4), (12, 12, 6), (16, 16, 8)]
+        args.resolutions = list(RESOLUTION_PROFILES[args.profile])
     if len(args.resolutions) < 2:
         parser.error("at least two --resolution rungs are required")
     if args.n_windows < 3 or args.steps_per_window < 1:
@@ -138,6 +150,7 @@ def main(argv: list[str] | None = None) -> None:
     payload = {
         "schema_version": 1,
         "producer": "optimal-fusion/gyaradax-electromagnetic-resolution-ladder",
+        "profile": args.profile if args.resolutions == list(RESOLUTION_PROFILES[args.profile]) else "custom",
         "beta": args.beta,
         "dt": args.dt,
         "steps_per_window": args.steps_per_window,

@@ -174,6 +174,18 @@ def test_gyaradax_em_resolution_ladder_defaults_and_parser(tmp_path):
     assert args.resolutions == [(8, 8, 4), (12, 12, 6), (16, 16, 8)]
     assert _parse_resolution("20x24x10") == (20, 24, 10)
 
+    production = _parse_ladder_args(
+        [
+            "--gyaradax-root",
+            str(tmp_path / "gyaradax"),
+            "--output-dir",
+            str(tmp_path / "production-ladder"),
+            "--profile",
+            "production",
+        ]
+    )
+    assert production.resolutions == [(16, 16, 8), (24, 24, 12), (32, 32, 16)]
+
 
 @pytest.mark.external
 def test_long_electromagnetic_trajectory_matches_pinned_gyaradax(

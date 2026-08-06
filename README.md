@@ -511,8 +511,10 @@ JAX_ENABLE_X64=1 uv run --extra reference python \
 
 The default `8x8x4`, `12x12x6`, and `16x16x8` rungs enforce independent
 parity at every rung and 5% growth/frequency convergence between the finest
-two. Higher production-grid rungs can be supplied by repeating
-`--resolution NZxNVPARxNMU`.
+two. Add `--profile production` for the declared `16x16x8`, `24x24x12`, and
+`32x32x16` confirmation ladder. Custom rungs can be supplied by repeating
+`--resolution NZxNVPARxNMU`; generated references and summaries remain in the
+caller-selected output directory.
 
 ## Using the Python API
 
