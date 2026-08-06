@@ -365,6 +365,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
+Acceptance status: **implementation foundations advanced; scientific gate
+remains open**. The standalone suite covers the model collision operator,
+nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
+be marked complete until the external TEM, production collision/EM, stationary
+nonlinear-flux, and unrestricted shape-optimization claims named above pass.
+
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 
 - [ ] Split the 16k-line `benchmarks.py` into focused fixture I/O, Cyclone/GKW,

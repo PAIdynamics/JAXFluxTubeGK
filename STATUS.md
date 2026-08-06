@@ -23,11 +23,27 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-06: Priority 5 Implementation Campaign Verification
+
+- Corrected the kinetic-electron timestep estimate, integrated a conservative
+  BGK collision foundation, and added the dealiased nonlinear ExB residual,
+  combined adaptive CFL driver, and saturated-flux window statistics.
+- The complete standalone x64 suite passes with **442 passed and 20 external
+  tests deselected in 492.55 s**. Repository-wide Ruff and whitespace checks
+  also pass. The recurring missing `bitx` hook message is unrelated and does
+  not affect these results.
+- Priority 5 is not declared scientifically complete: converged external TEM
+  parity, production Landau/Fokker--Planck plus electromagnetic parity,
+  stationary nonlinear heat-flux parity, and unrestricted full-shape
+  optimization remain evidence-gated work.
+
 ### 2026-08-06: Priority 5 Confidence Ledger
 
 - Added a schema-versioned machine-readable ledger for the open full GKW
   selected-mode history, long-time velocity-slice, and low-`ky` Cyclone/GX
-  branch-shape gaps.
+  branch-shape gaps. The ledger now also blocks unsupported production claims
+  for kinetic-electron TEM, collisional/electromagnetic physics, nonlinear
+  turbulence, and unrestricted equilibrium-shape optimization.
 - Broad GKW/GX parity claims now fail an explicit readiness guard with the
   blocking gap identifier. The converged W7-X linear claim records that its
   independent stella gate narrowly supersedes the two GKW gaps without closing

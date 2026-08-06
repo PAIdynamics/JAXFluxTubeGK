@@ -11,9 +11,11 @@ runtime dependencies.
 The current production milestone is a trusted linear W7-X stellarator run.  The
 code can already run reduced stellarator scans, reduced optimization examples,
 Rosenbluth-Hinton and Cyclone gates, and several geometry/code-to-code parity
-checks.  Full nonlinear turbulence, production DESC shape optimization,
-kinetic-electron TEM validation, collisions, and electromagnetic effects are
-explicitly deferred.
+checks. A conservative model-collision operator and a dealiased nonlinear ExB
+path with adaptive CFL control now exist as development foundations. Full
+nonlinear turbulence validation, production DESC shape optimization, converged
+kinetic-electron TEM parity, production Landau/Fokker--Planck collisions, and
+electromagnetic effects remain explicitly deferred.
 
 ## Example Geometry
 
@@ -561,7 +563,10 @@ Open blockers:
 - full GKW state-history/long-time velocity-slice parity and the low-`ky`
   Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
-- full nonlinear turbulence and full DESC optimization.
+- converged independent kinetic-electron TEM growth/frequency/mode structure,
+- production collision and electromagnetic parity,
+- statistically stationary, resolution-converged nonlinear heat flux with an
+  independent parity gate, and full DESC optimization.
 
 Read `STATUS.md` for the latest state and `TODO.md` for the next concrete
 tasks.

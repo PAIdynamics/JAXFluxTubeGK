@@ -133,6 +133,55 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "structure against a revision-pinned GKW, stella, GX, or Gyaradax run."
             ),
         ),
+        ValidationConfidenceGap(
+            identifier="production_collisions_electromagnetic_parity",
+            status="open",
+            summary="Production collisions and electromagnetic fields lack parity.",
+            blocks_claims=("collisional_electromagnetic_production_physics",),
+            superseded_for_claims=(),
+            evidence=(
+                "A differentiable species-local conserving BGK model is integrated, "
+                "but no Landau/Fokker--Planck inter-species operator or A_parallel/"
+                "B_parallel evolution has passed an external validation gate."
+            ),
+            next_action=(
+                "Implement the collision and electromagnetic field contracts in "
+                "separate slices, then compare conservation, damping, dispersion, "
+                "and mode structure against revision-pinned independent runs."
+            ),
+        ),
+        ValidationConfidenceGap(
+            identifier="nonlinear_stationary_heat_flux_parity",
+            status="open",
+            summary="Nonlinear stationary heat-flux parity is not established.",
+            blocks_claims=("nonlinear_turbulence_validation",),
+            superseded_for_claims=(),
+            evidence=(
+                "The dealiased ExB bracket, combined CFL driver, and saturation "
+                "statistics pass unit tests, but no stationary resolution/domain "
+                "ladder or independent heat-flux comparison has been accepted."
+            ),
+            next_action=(
+                "Run a revision-pinned nonlinear benchmark through transient, "
+                "stationarity, resolution, box-size, and independent parity gates."
+            ),
+        ),
+        ValidationConfidenceGap(
+            identifier="full_equilibrium_shape_optimization",
+            status="open",
+            summary="Unrestricted equilibrium-shape optimization is not validated.",
+            blocks_claims=("production_equilibrium_shape_optimization",),
+            superseded_for_claims=(),
+            evidence=(
+                "Reduced fixed-topology W7-X optimization passes, while end-to-end "
+                "MHD autodiff, remeshing transitions, and production transport "
+                "objectives are not established."
+            ),
+            next_action=(
+                "Close the remaining geometry, gradient, timing, and physics gates "
+                "before extending the optimizer to unrestricted boundary parameters."
+            ),
+        ),
     )
 
 
