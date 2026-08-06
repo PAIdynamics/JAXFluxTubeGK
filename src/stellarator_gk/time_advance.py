@@ -142,13 +142,14 @@ def semi_lagrangian_mirror_step(
         raise ValueError("mirror_coefficient must have shape (mu,z)")
     if vpar.ndim != 1 or vpar.shape[0] != state.shape[0] or vpar.shape[0] < 2:
         raise ValueError("vpar must be one-dimensional and match the state")
-    if interpolation not in ("linear", "cubic"):
-        raise ValueError("interpolation must be 'linear' or 'cubic'")
+    if interpolation not in ("linear", "cubic", "stella_cubic"):
+        raise ValueError("interpolation must be 'linear', 'cubic', or 'stella_cubic'")
 
     spacing = vpar[1] - vpar[0]
+    displacement = jnp.asarray(dt, dtype=vpar.dtype) * coefficient[None, :, :] / spacing
     source_index = (
         jnp.arange(vpar.shape[0], dtype=vpar.dtype)[:, None, None]
-        + jnp.asarray(dt, dtype=vpar.dtype) * coefficient[None, :, :] / spacing
+        + displacement
     )
     lower = jnp.floor(source_index).astype(jnp.int32)
     fraction = source_index - lower
@@ -166,6 +167,48 @@ def semi_lagrangian_mirror_step(
     fraction = fraction[..., None, None]
     if interpolation == "linear":
         return (1.0 - fraction) * values_at(lower) + fraction * values_at(upper)
+
+    if interpolation == "stella_cubic":
+        # stella traces characteristics with an integer shift truncated toward
+        # zero, then uses a direction-aware four-point Lagrange stencil.  Its
+        # outgoing point is deliberately linear when the integer shift is zero;
+        # incoming points use zero ghost cells.  Keeping this as an explicit
+        # provider convention avoids silently changing the generic cubic path.
+        shift = jnp.trunc(displacement).astype(jnp.int32)
+        direction = jnp.where(displacement >= 0.0, 1, -1).astype(jnp.int32)
+        location = jnp.abs(displacement - shift)
+        target = jnp.arange(vpar.shape[0], dtype=jnp.int32)[:, None, None]
+        base = target + shift
+        location_5d = location[..., None, None]
+        w0 = -location_5d * (location_5d - 2.0) * (location_5d - 1.0) / 6.0
+        w1 = (
+            3.0
+            * (location_5d - 2.0)
+            * (location_5d - 1.0)
+            * (location_5d + 1.0)
+            / 6.0
+        )
+        w2 = (
+            -3.0
+            * location_5d
+            * (location_5d - 2.0)
+            * (location_5d + 1.0)
+            / 6.0
+        )
+        w3 = location_5d * (location_5d - 1.0) * (location_5d + 1.0) / 6.0
+        cubic = (
+            w0 * values_at(base - direction)
+            + w1 * values_at(base)
+            + w2 * values_at(base + direction)
+            + w3 * values_at(base + 2 * direction)
+        )
+        linear = (1.0 - location_5d) * values_at(base) + location_5d * values_at(
+            base + direction
+        )
+        outgoing = (shift == 0) & (
+            target == jnp.where(direction > 0, 0, vpar.shape[0] - 1)
+        )
+        return jnp.where(outgoing[..., None, None], linear, cubic)
 
     left = values_at(lower - 1)
     center_left = values_at(lower)
@@ -199,6 +242,7 @@ def integrate_fixed_step_split_mirror(
     parallel_streaming_propagator=None,
     parallel_response_step_fn=None,
     parallel_response_splitting: str = "strang",
+    explicit_scheme: str = "rk4",
     filter_fn=None,
     store_history: bool = True,
 ):
@@ -210,8 +254,12 @@ def integrate_fixed_step_split_mirror(
     dt = jnp.asarray(dt)
     if parallel_streaming_propagator is not None and parallel_response_step_fn is not None:
         raise ValueError("choose either a streaming propagator or a coupled response step")
-    if parallel_response_splitting not in ("strang", "after"):
-        raise ValueError("parallel_response_splitting must be 'strang' or 'after'")
+    if parallel_response_splitting not in ("strang", "after", "stella_after"):
+        raise ValueError(
+            "parallel_response_splitting must be 'strang', 'after', or 'stella_after'"
+        )
+    if explicit_scheme not in ("rk3", "rk4"):
+        raise ValueError("explicit_scheme must be 'rk3' or 'rk4'")
 
     def parallel_step(value):
         if parallel_response_step_fn is not None:
@@ -221,6 +269,16 @@ def integrate_fixed_step_split_mirror(
         return value
 
     def step(value):
+        if parallel_response_splitting == "stella_after":
+            value = _ssp_rk3_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+            value = semi_lagrangian_mirror_step(
+                value,
+                dt,
+                vpar,
+                mirror_coefficient,
+                interpolation=mirror_interpolation,
+            )
+            return parallel_step(value)
         value = semi_lagrangian_mirror_step(
             value,
             0.5 * dt,
@@ -230,7 +288,11 @@ def integrate_fixed_step_split_mirror(
         )
         if parallel_response_splitting == "strang":
             value = parallel_step(value)
-        value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        value = (
+            _ssp_rk3_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+            if explicit_scheme == "rk3"
+            else rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        )
         value = parallel_step(value)
         return semi_lagrangian_mirror_step(
             value,
@@ -259,6 +321,18 @@ def integrate_fixed_step_split_mirror(
         dt=dt,
         n_steps=int(n_steps),
     )
+
+
+def _ssp_rk3_step(state, dt, rhs_fn, *rhs_args, filter_fn=None):
+    """Advance one explicit step with stella's three-stage SSP RK3 formula."""
+
+    first_rhs = rhs_fn(state, *rhs_args)
+    first = state + dt * first_rhs
+    second_rhs = rhs_fn(first, *rhs_args)
+    second = first + dt * second_rhs
+    third_rhs = rhs_fn(second, *rhs_args)
+    result = state / 3.0 + 0.5 * first + (second + dt * third_rhs) / 6.0
+    return result if filter_fn is None else filter_fn(result)
 
 
 def build_implicit_parallel_streaming_propagator(D_z, parallel_coefficient, dt):

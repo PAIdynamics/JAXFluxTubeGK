@@ -79,6 +79,26 @@ def test_cubic_semi_lagrangian_mirror_step_translates_cubic_profile():
     np.testing.assert_allclose(advanced[2:-2, 0, 0, 0, 0], expected[2:-2], atol=2e-13)
 
 
+def test_stella_cubic_uses_linear_outgoing_point_and_zero_ghosts():
+    vpar = jnp.linspace(-2.0, 2.0, 9)
+    state = (vpar**3)[:, None, None, None, None].astype(jnp.complex128)
+    coefficient = jnp.asarray([[0.4]])
+
+    advanced = semi_lagrangian_mirror_step(
+        state, 0.25, vpar, coefficient, interpolation="stella_cubic"
+    )
+
+    fraction = 0.2
+    np.testing.assert_allclose(
+        advanced[0, 0, 0, 0, 0],
+        (1.0 - fraction) * state[0, 0, 0, 0, 0] + fraction * state[1, 0, 0, 0, 0],
+    )
+    shifted = vpar + 0.1
+    np.testing.assert_allclose(
+        advanced[1:-2, 0, 0, 0, 0], shifted[1:-2] ** 3, atol=2e-13
+    )
+
+
 def test_semi_lagrangian_mirror_step_rejects_unknown_interpolation():
     with np.testing.assert_raises_regex(ValueError, "interpolation"):
         semi_lagrangian_mirror_step(
@@ -126,6 +146,33 @@ def test_split_integrator_can_apply_parallel_response_once_after_explicit_stage(
         store_history=False,
     )
     np.testing.assert_allclose(result.state, 2.2)
+
+
+def test_stella_split_uses_ssp_rk3_then_full_mirror_then_response():
+    state = jnp.ones((5, 1, 1, 1, 1), dtype=jnp.complex128)
+    calls = []
+
+    def response(value):
+        calls.append(value)
+        return 2.0 * value
+
+    result = integrate_fixed_step_split_mirror(
+        state,
+        0.1,
+        1,
+        lambda value: value,
+        jnp.linspace(-2.0, 2.0, 5),
+        jnp.zeros((1, 1)),
+        mirror_interpolation="stella_cubic",
+        parallel_response_step_fn=response,
+        parallel_response_splitting="stella_after",
+        explicit_scheme="rk3",
+        store_history=False,
+    )
+
+    expected_rk3 = 1.0 + 0.1 + 0.1**2 / 2.0 + 0.1**3 / 6.0
+    np.testing.assert_allclose(result.state, 2.0 * expected_rk3)
+    assert len(calls) == 1
 
 
 def test_implicit_parallel_streaming_matches_midpoint_amplification():

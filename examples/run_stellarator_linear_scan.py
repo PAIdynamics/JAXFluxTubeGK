@@ -723,7 +723,12 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 parallel_streaming_propagator=parallel_propagator,
                 parallel_response_step_fn=parallel_response_step,
                 parallel_response_splitting=(
-                    "after" if args.parallel_advance == "stella_implicit" else "strang"
+                    "stella_after"
+                    if args.parallel_advance == "stella_implicit"
+                    else "strang"
+                ),
+                explicit_scheme=(
+                    "rk3" if args.parallel_advance == "stella_implicit" else "rk4"
                 ),
                 store_history=False,
             ).state
