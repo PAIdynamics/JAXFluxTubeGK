@@ -755,6 +755,7 @@ def estimate_linear_cfl_dt(
     velocity_recurrence_radius = jnp.asarray(0.0)
     field_response_radius = jnp.asarray(0.0)
     collision_radius = jnp.asarray(0.0)
+    distribution_gain = jnp.asarray(1.0)
     derivative_model = getattr(rhs, "parallel_derivative_model", "matrix")
     if derivative_model == "matrix" and hasattr(rhs, "parallel_recurrence_operator"):
         parallel_recurrence_radius = jnp.max(
@@ -766,20 +767,24 @@ def estimate_linear_cfl_dt(
         ) * jnp.max(jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1))
     if getattr(precompute, "field_model", None) == "kinetic":
         field_response_radius = _electrostatic_field_response_radius(precompute)
+    if getattr(precompute, "field_model", None) == "electromagnetic":
+        distribution_gain, field_response_radius = _electromagnetic_field_response_radius(
+            precompute
+        )
     if getattr(precompute, "collisions", None) is not None:
         # I-P is bounded by two in the weighted projection norm. The factor is
         # deliberately conservative for the infinity-norm estimate used here.
         collision_radius = 2.0 * jnp.max(jnp.abs(precompute.collisions.frequency))
-    radius = (
+    distribution_radius = (
         parallel_radius
         + mirror_radius
         + drift_radius
         + damping_radius
         + parallel_recurrence_radius
         + velocity_recurrence_radius
-        + field_response_radius
         + collision_radius
     )
+    radius = distribution_gain * distribution_radius + field_response_radius
     return jnp.asarray(safety * rk4_radius) / jnp.maximum(radius, jnp.asarray(floor))
 
 
@@ -832,6 +837,80 @@ def _electrostatic_field_response_radius(precompute):
         * gyro_radius
     ) * dz_radius * jnp.max(phi_radius)
     return equilibrium + drift + parallel
+
+
+def _electromagnetic_field_response_radius(precompute):
+    """Bound mixed-state feedback from ``A_parallel``, ``phi``, and ``B_parallel``."""
+
+    rhs = precompute.rhs
+    fields = precompute.field
+    ampere = fields.ampere
+    perpendicular = fields.perpendicular
+
+    ampere_denominator = jnp.asarray(ampere.denominator)
+    ampere_floor = jnp.asarray(ampere.denominator_floor, dtype=ampere_denominator.dtype)
+    safe_ampere = jnp.maximum(jnp.abs(ampere_denominator), ampere_floor)
+    apar_radius = jnp.sum(jnp.abs(ampere.source_weight), axis=(0, 1, 2)) / safe_ampere
+    physical_gain = jnp.max(
+        1.0
+        + jnp.abs(ampere.g_to_f_factor)
+        * apar_radius[None, None, None, ...]
+    )
+
+    perpendicular_denominator = jnp.asarray(perpendicular.denominator)
+    perpendicular_floor = jnp.asarray(
+        perpendicular.denominator_floor, dtype=perpendicular_denominator.dtype
+    )
+    safe_perpendicular = jnp.maximum(
+        jnp.abs(perpendicular_denominator), perpendicular_floor
+    )
+    constant_mode = jnp.abs(ampere.kperp_squared) < perpendicular_floor
+    phi_radius = physical_gain * jnp.sum(
+        jnp.abs(perpendicular.phi_weight), axis=(0, 1, 2)
+    ) / safe_perpendicular
+    bpar_radius = physical_gain * jnp.sum(
+        jnp.abs(perpendicular.bpar_weight), axis=(0, 1, 2)
+    ) / safe_perpendicular
+    phi_radius = jnp.where(constant_mode, 0.0, phi_radius)
+    bpar_radius = jnp.where(constant_mode, 0.0, bpar_radius)
+
+    bessel = jnp.asarray(rhs.flr_factors.bessel_j0)[:, None, ...]
+    gyro_phi_radius = jnp.abs(bessel) * phi_radius[None, None, None, ...]
+    gyro_bpar_radius = (
+        jnp.abs(perpendicular.bpar_chi_factor)
+        * bpar_radius[None, None, None, ...]
+    )
+    gyro_chi_radius = (
+        gyro_phi_radius
+        + jnp.abs(ampere.apar_chi_factor) * apar_radius[None, None, None, ...]
+        + gyro_bpar_radius
+    )
+
+    maxwellian = jnp.asarray(rhs.maxwellian)[..., None, None]
+    drive = jnp.asarray(rhs.drive_factor)[..., None, None]
+    ky = jnp.asarray(rhs.ky)[None, None, None, None, None, :]
+    ey = jnp.asarray(rhs.E_y)[None, None, None, :, None, None]
+    equilibrium = jnp.max(jnp.abs(ey * ky * maxwellian * drive) * gyro_chi_radius)
+
+    field_coefficient = jnp.abs(
+        rhs.charge_over_temperature[:, None, None, None, None, None]
+        * rhs.parallel_streaming_coeff[:, :, None, :, None, None]
+        * maxwellian
+    )
+    dz_radius = jnp.max(jnp.sum(jnp.abs(rhs.D_z), axis=1))
+    parallel = jnp.max(field_coefficient) * dz_radius * (
+        jnp.max(gyro_phi_radius) + jnp.max(gyro_bpar_radius)
+    )
+
+    drift_coefficient = jnp.abs(
+        rhs.charge_over_temperature[:, None, None, None, None, None]
+        * rhs.magnetic_drift_frequency
+        * maxwellian
+    )
+    drift = jnp.max(
+        drift_coefficient * (gyro_phi_radius + gyro_bpar_radius)
+    )
+    return physical_gain, equilibrium + parallel + drift
 
 
 def _apply_filter(state, filter_fn):

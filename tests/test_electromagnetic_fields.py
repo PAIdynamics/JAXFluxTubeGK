@@ -19,6 +19,8 @@ from stellarator_gk import (
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
+    dense_matrix_from_action,
+    estimate_linear_cfl_dt,
     linear_residual,
     mixed_to_physical_distribution,
     parallel_ampere_residual,
@@ -257,6 +259,66 @@ def test_electromagnetic_linear_residual_has_finite_nonzero_beta_response():
     assert np.isfinite(float(value))
     assert np.isfinite(float(derivative))
     assert float(jnp.abs(derivative)) > 0.0
+
+
+def test_electromagnetic_cfl_bound_includes_mixed_field_feedback():
+    velocity, parallel, fourier, geometry, species, _ampere = _setup()
+
+    def bound(beta):
+        precompute = build_linear_residual_precompute(
+            velocity,
+            parallel,
+            fourier,
+            geometry,
+            species,
+            field_model="electromagnetic",
+            beta=beta,
+        )
+        return estimate_linear_cfl_dt(precompute)
+
+    beta_zero = bound(0.0)
+    finite_beta = bound(0.01)
+    derivative = jax.grad(bound)(0.01)
+
+    assert np.isfinite(float(beta_zero))
+    assert np.isfinite(float(finite_beta))
+    assert finite_beta > 0.0
+    assert finite_beta < beta_zero
+    assert np.isfinite(float(derivative))
+
+
+def test_electromagnetic_cfl_bound_dominates_small_dense_operator_row_sum():
+    velocity = build_velocity_grid(VelocityGridSpec(n_vpar=3, n_mu=2, vpar_max=2.0, mu_max=2.0))
+    parallel = build_parallel_grid(
+        ParallelGridSpec(n_z=3, z_min=-0.5, z_max=0.5, topology="periodic")
+    )
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    geometry = build_s_alpha_geometry(
+        parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18)
+    )
+    species = (
+        SpeciesParams(1.0, 1.0, 1.0, 1.0, 2.2, 0.0),
+        SpeciesParams(-1.0, 0.01, 1.0, 1.0, 2.2, 6.9),
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="electromagnetic",
+        beta=0.01,
+    )
+    template = jnp.zeros((2, 3, 2, 3, 1, 1), dtype=jnp.complex128)
+    matrix = dense_matrix_from_action(
+        lambda state: linear_residual(state, precomputed=precompute), template
+    )
+    exact_row_sum = jnp.max(jnp.sum(jnp.abs(matrix), axis=1))
+    estimated_dt = estimate_linear_cfl_dt(precompute, safety=1.0, rk4_radius=1.0)
+
+    assert estimated_dt <= 1.0 / exact_row_sum
 
 
 @pytest.mark.external

@@ -146,6 +146,10 @@ claimed.
   mixed state. Full RHS equality remains limited by the already tracked
   electrostatic GKW streaming/mirror stencil baseline, so electromagnetic
   timestep/trajectory parity is not yet claimed.
+- Added a differentiable electromagnetic CFL bound covering the mixed-state
+  amplification and `A_parallel`, `phi`, and `B_parallel` feedback. It tightens
+  at finite beta and conservatively dominates the exact row sum of a small
+  dense coupled operator.
 
 ### 2026-08-06: Conservative Collision Foundation
 
