@@ -72,6 +72,9 @@ claimed.
 - Fixed the explicit CFL estimator to include matrix-backend parallel and
   velocity recurrence operators. The previous estimate omitted these active
   fourth-order terms and became increasingly unsafe as resolution increased.
+- Repository-wide verification after these Priority 5 changes passes: Ruff is
+  clean and the x64 standalone suite reports 430 passed with 20 external tests
+  deselected.
 
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
