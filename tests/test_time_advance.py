@@ -112,6 +112,22 @@ def test_split_mirror_integrator_matches_characteristic_for_zero_rhs():
     )
 
 
+def test_split_integrator_can_apply_parallel_response_once_after_explicit_stage():
+    state = jnp.ones((2, 1, 1, 1, 1), dtype=jnp.complex128)
+    result = integrate_fixed_step_split_mirror(
+        state,
+        0.1,
+        1,
+        lambda value: jnp.ones_like(value),
+        jnp.asarray([-1.0, 1.0]),
+        jnp.zeros((1, 1)),
+        parallel_response_step_fn=lambda value: 2.0 * value,
+        parallel_response_splitting="after",
+        store_history=False,
+    )
+    np.testing.assert_allclose(result.state, 2.2)
+
+
 def test_implicit_parallel_streaming_matches_midpoint_amplification():
     derivative = jnp.asarray([[0.0, 1.0], [-1.0, 0.0]])
     coefficient = jnp.asarray([[0.7, 0.7], [-0.4, -0.4]])

@@ -682,7 +682,7 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
             )
         response = build_implicit_parallel_response_precompute(
             precompute,
-            0.5 * args.dt,
+            (args.dt if args.parallel_advance == "stella_implicit" else 0.5 * args.dt),
             spatial_scheme=(
                 "stella_near_centered"
                 if args.parallel_advance == "stella_implicit"
@@ -722,6 +722,9 @@ def _run_scan(args, geometry, parallel, velocity, fourier, connectivity):
                 mirror_interpolation=args.mirror_interpolation,
                 parallel_streaming_propagator=parallel_propagator,
                 parallel_response_step_fn=parallel_response_step,
+                parallel_response_splitting=(
+                    "after" if args.parallel_advance == "stella_implicit" else "strang"
+                ),
                 store_history=False,
             ).state
         )

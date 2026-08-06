@@ -198,6 +198,7 @@ def integrate_fixed_step_split_mirror(
     mirror_interpolation: str = "linear",
     parallel_streaming_propagator=None,
     parallel_response_step_fn=None,
+    parallel_response_splitting: str = "strang",
     filter_fn=None,
     store_history: bool = True,
 ):
@@ -209,6 +210,8 @@ def integrate_fixed_step_split_mirror(
     dt = jnp.asarray(dt)
     if parallel_streaming_propagator is not None and parallel_response_step_fn is not None:
         raise ValueError("choose either a streaming propagator or a coupled response step")
+    if parallel_response_splitting not in ("strang", "after"):
+        raise ValueError("parallel_response_splitting must be 'strang' or 'after'")
 
     def parallel_step(value):
         if parallel_response_step_fn is not None:
@@ -225,7 +228,8 @@ def integrate_fixed_step_split_mirror(
             mirror_coefficient,
             interpolation=mirror_interpolation,
         )
-        value = parallel_step(value)
+        if parallel_response_splitting == "strang":
+            value = parallel_step(value)
         value = rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
         value = parallel_step(value)
         return semi_lagrangian_mirror_step(
