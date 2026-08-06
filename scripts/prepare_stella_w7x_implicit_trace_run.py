@@ -230,7 +230,11 @@ def patch_stella_mirror_stage_trace(source_path: Path) -> bool:
             fields_updated = .false.
          end if
 """
-    text = _replace_once(text, mirror_block, traced_block)
+    if mirror_block not in text:
+        raise ValueError("could not find stella's implicit mirror block")
+    # The same block appears in both ADI orderings.  Patch only the first,
+    # explicit-then-implicit branch used by the reference (flip_flop=false).
+    text = text.replace(mirror_block, traced_block, 1)
     text = _replace_once(
         text,
         "end module gyrokinetic_equation_implicit\n",
