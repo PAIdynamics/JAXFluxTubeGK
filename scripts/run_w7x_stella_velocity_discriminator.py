@@ -102,6 +102,8 @@ def default_velocity_cases() -> tuple[StellaVelocityCase, ...]:
             parallel_advance="implicit_midpoint",
             vpar_max=3.0,
             mu_max=4.916958697837631,
+            dt=0.1,
+            steps_per_window=1,
         ),
     )
 
@@ -456,11 +458,11 @@ def _status_payload(
         status = "pass"
         next_action = "promote the passing velocity/backend controls into the W7-X readiness gate"
     elif native_mirror_case_present:
-        status = "open_profile_after_native_mirror"
+        status = "open_parallel_response_profile"
         next_action = (
-            "extend the native 32x8 solver and pinned stella runs to converged "
-            "per-ky windows, then add stella-equivalent implicit parallel "
-            "streaming and cubic mirror interpolation if profile parity remains open"
+            "replace the periodic spectral midpoint streaming split with the "
+            "source-equivalent extended-domain near-centered response solve, "
+            "including its quasineutrality-coupled field response"
         )
     elif stella_velocity_case_present and not focus_closed:
         status = "open_rhs_terms_after_velocity_discriminator"

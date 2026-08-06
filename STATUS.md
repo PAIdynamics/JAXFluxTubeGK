@@ -37,6 +37,20 @@ flux-tube geometry contract from in-memory Fourier output without a repository
   interpolation.
 - Verified the complete standalone x64 suite after these changes: 373 passed
   and 20 external tests were deselected.
+- Added source-default cubic mirror interpolation and a differentiable
+  implicit-midpoint parallel streaming propagator. The latter is precomputed
+  per parallel-velocity node and Strang-split around the explicit field/RHS
+  terms.
+- Repeated the native `ky=0.3` gate at `t=500` against the converged pinned
+  stella output. With `dt=0.02`, growth/frequency/profile errors are
+  `0.00395/0.00064/0.11498`; matching stella's `dt=0.1` gives
+  `0.00396/0.00062/0.11489`. Scalar parity is closed and timestep dependence is
+  negligible, but complex-profile parity remains open.
+- Profile audits ruled out z reversal, complex conjugation, periodic shifts,
+  and a simple linear phase gauge. The residual blocker is the source-specific
+  extended-domain near-centered streaming response coupled to the
+  quasineutrality field response; the current implicit spectral propagator does
+  not claim equivalence to that algorithm.
 
 The target architecture is:
 
