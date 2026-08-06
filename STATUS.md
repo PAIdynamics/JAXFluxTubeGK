@@ -91,6 +91,22 @@ claimed.
   Landau/Fokker--Planck operator with inter-species exchange and electromagnetic
   field evolution remain open Priority 5 physics gates.
 
+### 2026-08-06: Nonlinear ExB Foundation
+
+- Added the gyroaveraged nonlinear term `-{J0 phi,f}` using Hermitian
+  half-spectrum reconstruction, 3/2-padded two-dimensional FFTs, real-space
+  bracket evaluation, and truncation to retained modes.
+- Nonlinear grids now fail early unless they contain centered, uniform `kx`
+  modes and a uniform nonnegative `ky` half spectrum beginning at zero. The
+  operator is integrated with the electrostatic residual and has a padded-grid
+  ExB advective CFL estimator.
+- Manufactured Fourier coefficients, antisymmetry, constant-field invariance,
+  JIT, amplitude/CFL scaling, grid rejection, and residual integration pass.
+- Added candidate saturated-flux statistics reporting the mean, sample
+  deviation, standard error, and relative window drift. An adaptive nonlinear
+  driver, converged stationary heat flux, and external nonlinear parity remain
+  open before claiming nonlinear turbulence readiness.
+
 ### 2026-08-06: Priority 4 Reduced Design Integration Complete
 
 - Added `DesignObjectiveSpec`/`design_objective` as the stable public contract

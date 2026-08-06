@@ -6,6 +6,13 @@ from .collisions import (
     collision_moments,
     conserving_bgk_collision,
 )
+from .nonlinear import (
+    ExBPseudospectralPrecompute,
+    build_exb_pseudospectral_precompute,
+    estimate_nonlinear_exb_dt,
+    exb_pseudospectral_bracket,
+    nonlinear_exb_term,
+)
 from .primitives import (
     FLRFactors,
     bessel_j0,
@@ -105,6 +112,7 @@ __all__ = [
     "AdiabaticElectronParams",
     "AdiabaticQuasineutralityPrecompute",
     "ConservingBGKPrecompute",
+    "ExBPseudospectralPrecompute",
     "KineticQuasineutralityPrecompute",
     "GKWArakawaIghStencil",
     "GKWParallelStencil",
@@ -123,6 +131,7 @@ __all__ = [
     "build_adiabatic_quasineutrality_precompute",
     "build_kinetic_quasineutrality_precompute",
     "build_conserving_bgk_precompute",
+    "build_exb_pseudospectral_precompute",
     "build_gkw_igh_stencil",
     "build_gkw_parallel_stencil",
     "build_linear_rhs_precompute",
@@ -134,6 +143,8 @@ __all__ = [
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",
+    "estimate_nonlinear_exb_dt",
+    "exb_pseudospectral_bracket",
     "gkw_parallel_field_drive",
     "gkw_parallel_streaming",
     "gkw_igh_streaming_mirror",
@@ -164,6 +175,7 @@ __all__ = [
     "mirror_force",
     "normalized_hermite_functions",
     "normalized_energy",
+    "nonlinear_exb_term",
     "parallel_field_drive",
     "parallel_heat_flux_moment",
     "parallel_recurrence_control",

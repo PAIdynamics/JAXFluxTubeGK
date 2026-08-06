@@ -349,8 +349,16 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   inter-species exchange, and add electromagnetic `A_parallel`/`B_parallel`
   perturbations with independent parity gates. The conserving BGK model is not
   a substitute for this acceptance claim.
-- [ ] Add the nonlinear ExB pseudo-spectral bracket, dealiasing, nonlinear
-  timestep control, saturated heat-flux diagnostics, and nonlinear parity.
+- [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
+  centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
+  with the electrostatic residual, and provide an amplitude-aware nonlinear
+  CFL estimate.
+- [x] Add candidate-saturation radial/heat-flux window statistics with mean,
+  variance, standard error, and relative drift diagnostics.
+- [ ] Add an adaptive nonlinear time-advance driver, demonstrate statistically
+  stationary heat flux with resolution/domain convergence, and pass an
+  independent nonlinear parity gate. The operator and diagnostics alone do
+  not establish a turbulence claim.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

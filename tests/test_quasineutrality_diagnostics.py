@@ -23,6 +23,7 @@ from stellarator_gk import (
     ky_spectrum,
     mode_amplitude,
     radial_flux_spectrum,
+    saturated_radial_flux_statistics,
     solve_adiabatic_electron_phi,
     solve_adiabatic_electron_phi_from_density,
     solve_kinetic_electron_phi,
@@ -261,3 +262,20 @@ def test_electron_param_validation():
         AdiabaticElectronParams(density=0.0, temperature=1.0)
     with np.testing.assert_raises(ValueError):
         AdiabaticElectronParams(density=1.0, temperature=-1.0)
+
+
+def test_saturated_flux_statistics_report_mean_uncertainty_and_drift():
+    times = jnp.arange(6.0)
+    phi = jnp.ones((6, 2, 1, 1), dtype=jnp.complex128)
+    levels = jnp.asarray([0.0, 1.0, 2.0, 4.0, 4.0, 4.0])
+    response = 1j * levels[:, None, None, None] * phi
+
+    report = saturated_radial_flux_statistics(
+        phi, response, times, jnp.asarray([1.0]), start_fraction=0.5
+    )
+
+    np.testing.assert_allclose(report.mean, 4.0)
+    np.testing.assert_allclose(report.standard_deviation, 0.0)
+    np.testing.assert_allclose(report.standard_error, 0.0)
+    np.testing.assert_allclose(report.relative_window_drift, 0.0)
+    assert report.n_samples == 3

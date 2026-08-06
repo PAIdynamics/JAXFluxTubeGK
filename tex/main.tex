@@ -1259,7 +1259,12 @@ The implementation should be pseudospectral:
   \item compute the bracket in real space;
   \item FFT back and truncate to the retained spectral grid.
 \end{enumerate}
-This is not required for the first linear solver.
+The implemented nonlinear foundation follows this construction for centered
+$k_x$ modes and the nonnegative-$k_y$ Hermitian half spectrum.  It also
+evaluates an advective timestep bound from the padded-grid ExB velocity.
+Production nonlinear readiness additionally requires adaptive time advance,
+statistically stationary heat flux, resolution and box-size convergence, and
+independent-code parity.
 
 Other extensions should be added only after the linear electrostatic baseline is validated:
 \begin{itemize}

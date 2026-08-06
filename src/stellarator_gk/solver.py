@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from .physics.collisions import build_conserving_bgk_precompute, conserving_bgk_collision
+from .physics.nonlinear import nonlinear_exb_term
 from .physics.quasineutrality import (
     AdiabaticElectronParams,
     build_adiabatic_quasineutrality_precompute,
@@ -366,6 +367,23 @@ def linear_residual(
     if precompute.collisions is not None:
         residual = residual + conserving_bgk_collision(distribution, precompute.collisions)
     return residual
+
+
+def nonlinear_residual(
+    distribution,
+    precomputed: LinearResidualPrecompute,
+    spectral_precomputed,
+    *,
+    phi=None,
+):
+    """Return the electrostatic residual including dealiased nonlinear ExB advection."""
+
+    solved_phi = phi if phi is not None else _solve_phi(distribution, precomputed)
+    return linear_residual(
+        distribution, precomputed=precomputed, phi=solved_phi
+    ) + nonlinear_exb_term(
+        distribution, solved_phi, precomputed.rhs, spectral_precomputed
+    )
 
 
 @jax.jit
