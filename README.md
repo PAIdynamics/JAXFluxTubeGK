@@ -917,7 +917,8 @@ repository, and records its SHA-256, revision, physics/box contract, run
 command, and summarization command. The summarizer rejects a changed input,
 revision, or NetCDF path. The final campaign also compares the GX case contract
 to the finest local rung, so an unrelated stationary GX run cannot satisfy the
-independent parity gate.
+independent parity gate. The helper explicitly zeros GX species collisions and
+sets a large step ceiling so the declared `t_max=500` controls termination.
 
 Generate the matching local reduced trajectory in caller-owned storage with:
 

@@ -65,6 +65,7 @@ def patch_gx_nonlinear_input(
         ("Physics", "beta", "0.0"),
         ("Physics", "nonlinear_mode", "true"),
         ("Time", "t_max", repr(float(final_time))),
+        ("Time", "nstep", "100000000"),
         ("Initialization", "random_init", "true"),
         ("Initialization", "random_seed", str(random_seed)),
         ("Initialization", "init_amp", "1.0e-3"),
@@ -73,6 +74,7 @@ def patch_gx_nonlinear_input(
         ("Geometry", "Rmaj", "2.77778"),
         ("Geometry", "qinp", "1.4"),
         ("Geometry", "shat", "0.8"),
+        ("species", "vnewk", "[0.0, 0.0]"),
         ("Dissipation", "hypercollisions", "true"),
         ("Dissipation", "hyper", "true"),
         ("Dissipation", "D_hyper", "0.05"),
@@ -156,6 +158,7 @@ def prepare_gx_nonlinear_heat_flux_run(
             "electrostatic": True,
             "hyperdiffusion": 0.05,
             "hyperdiffusion_order": 4,
+            "collision_frequency": 0.0,
         },
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")

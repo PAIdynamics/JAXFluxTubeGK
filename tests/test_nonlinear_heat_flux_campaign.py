@@ -268,6 +268,7 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
         "electrostatic": True,
         "hyperdiffusion": 0.05,
         "hyperdiffusion_order": 4,
+        "collision_frequency": 0.0,
     }
     gx = _write_report(
         tmp_path / "gx.json",

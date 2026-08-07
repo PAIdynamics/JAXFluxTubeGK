@@ -222,6 +222,7 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
         "electrostatic": True,
         "hyperdiffusion": float(local["hyperdiffusion"]),
         "hyperdiffusion_order": 4,
+        "collision_frequency": float(local["collision_frequency"]),
     }
     checks = {
         key: (

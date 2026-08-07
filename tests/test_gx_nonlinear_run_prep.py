@@ -36,6 +36,9 @@ _INPUT = """[Dimensions]
 [Geometry]
  geo_option = "s-alpha"
 
+[species]
+ vnewk = [0.1, 0.2]
+
 [Dissipation]
  hyper = true
 
@@ -64,8 +67,10 @@ def test_patch_gx_nonlinear_input_matches_local_case() -> None:
     assert parsed["Domain"]["jtwist"] == 1
     assert parsed["Physics"]["beta"] == 0.0
     assert parsed["Time"]["t_max"] == 500.0
+    assert parsed["Time"]["nstep"] == 100000000
     assert parsed["Geometry"]["eps"] == pytest.approx(0.18)
     assert parsed["Dissipation"]["D_hyper"] == pytest.approx(0.05)
+    assert parsed["species"]["vnewk"] == [0.0, 0.0]
     assert parsed["Diagnostics"]["fluxes"] is True
 
 
