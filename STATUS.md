@@ -23,6 +23,30 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Priority 5 Reproducibility and Correlated Statistics
+
+- Fixed native-only dependency preparation: `--skip-project` no longer runs an
+  unrelated Python package check when only native dependencies are requested.
+  Pinned stella revision `564ca09b89904c231421c17c00068a9362061278` now
+  configures and builds successfully as a native arm64 executable through the
+  declared bootstrap workflow.
+- Regenerated the coarse nonlinear trajectory with the source-matched GX
+  total-energy diagnostic. A different checkpoint schedule produces a distinct
+  chaotic realization: time 220-to-300 fails narrowly (`-0.2204` drift), and
+  the merged time-220-to-400 window fails at `-0.6913` drift despite flat field
+  growth (`0.00424`). The heat and total-energy traces agree to roundoff, so
+  particle flux is not responsible.
+- Replaced adaptive-step-count-weighted statistics with physical-time-weighted
+  block statistics for both local and GX reports. The merged window's naive
+  error near `0.6%` becomes a credible `7.12%` block error across 17 blocks.
+- Checkpoints and reports now carry schema-v1 trajectory lineage: originating
+  seed, initial amplitude, zonal fraction, and every segment endpoint. Legacy
+  lineage-free checkpoints fail closed, and the merger rejects segments from
+  different initializations.
+- The earlier single passing coarse window is retained only as debugging
+  history, not acceptance evidence. Robust coarse stationarity, resolution and
+  domain convergence, and an independent GX run remain open.
+
 ### 2026-08-07: Nonlinear Priority 5 Acceptance Gate
 
 - The shared nonlinear loader now requires each local or GX producer's explicit

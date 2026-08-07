@@ -45,8 +45,8 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
         metric.name: metric.value
         for metric in by_id["nonlinear_stationary_heat_flux_parity"].metrics
     }
-    assert nonlinear_metrics["coarse_stationary_mean_native_flux"] == pytest.approx(-25.7841)
-    assert nonlinear_metrics["coarse_stationary_relative_drift"] == pytest.approx(5.72e-2)
+    assert nonlinear_metrics["regenerated_merged_mean_gx_qgb"] == pytest.approx(-24.2322731)
+    assert nonlinear_metrics["regenerated_merged_relative_drift"] == pytest.approx(-0.69131945)
 
 
 def test_w7x_claim_records_narrow_independent_supersession():

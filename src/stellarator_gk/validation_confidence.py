@@ -191,12 +191,17 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "The dealiased ExB bracket, combined CFL driver, and saturation "
                 "statistics pass unit tests, and the collocation heat response matches "
                 "direct quadrature. A corrected twist-and-shift 12x12x6, 9x5 trajectory "
-                "produced the first accepted local window at t=220--300: mean native flux "
-                "-25.7841, relative standard error 0.462%, relative drift 0.0572, and "
-                "nonzonal-potential growth -1.93e-3. The following t=300--400 segment has "
-                "a consistent mean (-26.256, 1.8% change) but correctly fails its drift "
-                "gate. Contract-checked restarts and a segment merger support windows "
-                "independent of checkpoint boundaries. The GX summarizer and local producer "
+                "once produced a passing t=220--300 candidate, but an independently staged "
+                "regeneration does not reproduce that decision. Its source-matched GX-energy "
+                "t=220--300 window has mean -26.6568, block relative error 6.47%, and drift "
+                "-0.2204. Extending and merging t=220--400 gives mean -24.2323, 17 physical-"
+                "time blocks, block relative error 7.12%, drift -0.6913, and nonzonal growth "
+                "0.00424, so it remains nonstationary. The heat and total-energy traces agree "
+                "to roundoff; checkpoint staging sensitivity, not particle flux, explains the "
+                "different chaotic realization. Adaptive traces now use time-weighted block "
+                "statistics instead of treating every correlated RK step as independent. "
+                "Checkpoints and reports retain initialization and segment lineage. "
+                "The GX summarizer and local producer "
                 "now emit explicit stationarity decisions, and the shared loader preserves "
                 "those decisions instead of accepting rejected windows from drift alone. "
                 "A fail-closed campaign command evaluates separate resolution and domain "
@@ -207,15 +212,15 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "its historical non-advective heat moment."
             ),
             next_action=(
-                "Run independently initialized resolved and wider-domain stationary rungs, "
-                "run the pinned GX case with the source-matched total-energy diagnostic, "
-                "then execute the combined campaign gate."
+                "Extend multiple lineage-identified coarse realizations until stationary "
+                "block windows are robust, then run resolved/wider-domain rungs and the "
+                "pinned GX case before executing the combined campaign gate."
             ),
             metrics=(
-                ConfidenceMetric("coarse_stationary_mean_native_flux", -25.7841),
-                ConfidenceMetric("coarse_stationary_relative_standard_error", 4.62e-3),
-                ConfidenceMetric("coarse_stationary_relative_drift", 5.72e-2),
-                ConfidenceMetric("coarse_stationary_nonzonal_growth", -1.93e-3),
+                ConfidenceMetric("regenerated_merged_mean_gx_qgb", -24.232273096839844),
+                ConfidenceMetric("regenerated_merged_block_relative_error", 7.124978e-2),
+                ConfidenceMetric("regenerated_merged_relative_drift", -6.91319448348199e-1),
+                ConfidenceMetric("regenerated_merged_nonzonal_growth", 4.2386475e-3),
             ),
         ),
         ValidationConfidenceGap(

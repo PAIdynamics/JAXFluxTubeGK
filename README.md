@@ -671,12 +671,20 @@ JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
   --checkpoint-output /scratch/nonlinear-t120.npz
 ```
 
-The checkpoint records complex state, absolute time, and a schema-versioned
-grid/physics contract. Restarts reject changed topology, gradients, damping,
-or collision controls. The resumed JSON statistics cover only the new segment,
-which lets an initial transient be excluded deliberately. Stationarity also
-requires at least 100 window samples and duration 10 by default; both controls
-are configurable but should be declared unchanged for acceptance ladders. It
+The checkpoint records complex state, absolute time, a schema-versioned
+grid/physics contract, and trajectory lineage. Restarts reject changed
+topology, gradients, damping, collision controls, or checkpoints lacking the
+lineage schema. Reports preserve the originating seed, initial amplitude,
+zonal fraction, and complete segment-end schedule; this matters because a
+truncated adaptive step at a checkpoint boundary can eventually select a
+different chaotic realization. The resumed JSON statistics cover only the new
+segment, which lets an initial transient be excluded deliberately.
+
+Flux means are weighted by physical time, not by the number of accepted
+adaptive steps. Uncertainty is estimated from equal-duration block means
+(default block duration 5), and stationarity requires at least six blocks in
+addition to 100 samples and duration 10. These controls are configurable but
+should remain unchanged for acceptance ladders. The gate
 also fits the logarithmic nonzonal-potential growth rate over exactly the same
 window and requires its magnitude below `0.02` by default, preventing a slowly
 growing or decaying field from passing on an accidentally flat flux interval.
@@ -692,9 +700,11 @@ Merge new-format contiguous segments and recompute one candidate window with:
   --output /tmp/nonlinear-t220-t400-merged.json
 ```
 
-The merger fails on gaps, reordered segments, normalization differences, or
-changes to any grid/physics contract field. Its output is schema-v1 and can be
-passed directly to the convergence and parity comparison functions.
+The merger fails on gaps, reordered segments, normalization differences,
+trajectory-initialization differences, or changes to any grid/physics contract
+field. It recomputes the physical-time blocks over the merged window. Its
+output is schema-v1 and can be passed directly to the convergence and parity
+comparison functions.
 
 Both local and GX schema-v1 reports carry a required top-level `stationary`
 decision. Downstream convergence and parity preserve this producer decision in

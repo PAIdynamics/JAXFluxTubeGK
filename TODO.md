@@ -536,6 +536,21 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   moment separately. The checkbox remains open because the stationary
   resolution/domain rungs and pinned GX run are scientific evidence that
   cannot be replaced by acceptance plumbing.
+  A source-matched regeneration invalidated the earlier single-window success
+  as acceptance evidence. Changing the checkpoint schedule from `0->20->60`
+  to `0->60` perturbs one adaptive step and eventually produces a distinct
+  chaotic realization. Its time-220-to-300 GX-energy window has mean
+  `-26.6568`, block relative error `6.47%`, and drift `-0.2204`; merging through
+  time 400 gives mean `-24.2323`, 17 physical-time blocks, block relative error
+  `7.12%`, drift `-0.6913`, and nonzonal growth `0.00424`. It correctly fails.
+  The local/GX-energy and non-advective-heat traces agree to roundoff, ruling
+  out residual particle flux as the discrepancy. Local and GX summarizers now
+  use physical-time-weighted block means rather than timestep-count-weighted
+  means and naive independent-sample errors. New checkpoints fail closed
+  without schema-v1 trajectory lineage and carry the originating seed,
+  amplitude, zonal fraction, and complete segment-end schedule into reports.
+  The next numerical gate is robust stationarity across lineage-identified
+  coarse realizations before spending resources on resolved/domain ladders.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
