@@ -685,6 +685,11 @@ The merger fails on gaps, reordered segments, normalization differences, or
 changes to any grid/physics contract field. Its output is schema-v1 and can be
 passed directly to the convergence and parity comparison functions.
 
+Both local and GX schema-v1 reports carry a required top-level `stationary`
+decision. Downstream convergence and parity preserve this producer decision in
+addition to applying their drift and uncertainty limits, so a rejected window
+cannot be promoted later by a weaker subset of the gates.
+
 Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination
 decisions. This reduces repeated dispatch overhead without moving nonsmooth
@@ -696,6 +701,25 @@ and GX `Q/Q_GB` labels deliberately fail comparison unless a documented
 `local_to_reference_factor` is supplied. Resolution and box-size ladders use
 `compare_nonlinear_heat_flux_convergence(...)` and require every rung to be
 stationary before testing the finest-pair mean.
+
+Once caller-owned stationary reports exist, evaluate the complete nonlinear
+gate with separate resolution and domain ladders:
+
+```bash
+.venv/bin/python scripts/validate_nonlinear_heat_flux_campaign.py \
+  --resolution-report /scratch/resolution-coarse.json \
+  --resolution-report /scratch/resolution-fine.json \
+  --domain-report /scratch/domain-narrow.json \
+  --domain-report /scratch/domain-wide.json \
+  --reference-report /scratch/gx-cyclone-nonlinear.json \
+  --local-to-reference-factor FACTOR \
+  --output /scratch/nonlinear-campaign.json
+```
+
+`FACTOR` must come from a documented derivation of the local native diagnostic
+and GX `Q/Q_GB`; it must not be fitted to make the flux means agree. The command
+exits nonzero unless resolution convergence, domain convergence, and
+independent parity all pass.
 
 ## Current Validation Status
 

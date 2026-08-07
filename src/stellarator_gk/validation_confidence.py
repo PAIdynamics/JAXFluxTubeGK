@@ -189,26 +189,31 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             superseded_for_claims=(),
             evidence=(
                 "The dealiased ExB bracket, combined CFL driver, and saturation "
-                "statistics pass unit tests. The per-species collocation heat response "
-                "J0*T_s*(E_s-3/2)*f_s now matches direct velocity quadrature, but no "
-                "stationary resolution/domain ladder or independent heat-flux comparison "
-                "has been accepted. A revision-pinned GX NetCDF summarizer now provides "
-                "the external mean/uncertainty/drift data contract without storing output. "
-                "A deterministic local producer now emits the matching field, heat-response, "
-                "flux, and stationarity report; only a short nonstationary smoke has run. "
-                "A shared acceptance layer now enforces stationary low-uncertainty windows, "
-                "mean parity, and stationary finest-pair convergence, while rejecting the "
-                "native-local/GX-Q-over-Q_GB normalization mismatch unless an explicit "
-                "conversion factor is supplied. Reduced local final-time-20 and 100 "
-                "discriminators both fail the 0.2 drift gate (0.335 and -0.523), with "
-                "native mean flux near -3.2e-8; extending the window did not produce a plateau."
-                " A ky=0.3 run exposed and fixed a false stationarity positive: flux drift "
-                "passed while potential RMS decayed to 52.5% of its initial value, so local "
-                "acceptance now also requires amplitude retention."
+                "statistics pass unit tests, and the collocation heat response matches "
+                "direct quadrature. A corrected twist-and-shift 12x12x6, 9x5 trajectory "
+                "produced the first accepted local window at t=220--300: mean native flux "
+                "-25.7841, relative standard error 0.462%, relative drift 0.0572, and "
+                "nonzonal-potential growth -1.93e-3. The following t=300--400 segment has "
+                "a consistent mean (-26.256, 1.8% change) but correctly fails its drift "
+                "gate. Contract-checked restarts and a segment merger support windows "
+                "independent of checkpoint boundaries. The GX summarizer and local producer "
+                "now emit explicit stationarity decisions, and the shared loader preserves "
+                "those decisions instead of accepting rejected windows from drift alone. "
+                "A fail-closed campaign command evaluates separate resolution and domain "
+                "ladders plus independent parity. No second stationary local rung or GX "
+                "comparison has yet passed, and native-local versus GX Q/Q_GB normalization "
+                "still requires an independently derived positive conversion factor."
             ),
             next_action=(
-                "Use state/phi RMS diagnostics to discriminate initial growth, damping, "
-                "domain, and saturation before running matched GX and local ladders."
+                "Run independently initialized resolved and wider-domain stationary rungs, "
+                "derive the native-to-GX heat-flux normalization from both codes' declared "
+                "units, then run the pinned GX case and execute the combined campaign gate."
+            ),
+            metrics=(
+                ConfidenceMetric("coarse_stationary_mean_native_flux", -25.7841),
+                ConfidenceMetric("coarse_stationary_relative_standard_error", 4.62e-3),
+                ConfidenceMetric("coarse_stationary_relative_drift", 5.72e-2),
+                ConfidenceMetric("coarse_stationary_nonzonal_growth", -1.93e-3),
             ),
         ),
         ValidationConfidenceGap(
@@ -238,9 +243,7 @@ def validation_claim_readiness(
 
     ledger = priority5_confidence_gaps() if gaps is None else tuple(gaps)
     blockers = tuple(
-        gap.identifier
-        for gap in ledger
-        if gap.status == "open" and claim in gap.blocks_claims
+        gap.identifier for gap in ledger if gap.status == "open" and claim in gap.blocks_claims
     )
     superseded = tuple(
         gap.identifier

@@ -23,6 +23,22 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Nonlinear Priority 5 Acceptance Gate
+
+- The shared nonlinear loader now requires each local or GX producer's explicit
+  stationarity decision. Resolution and parity checks cannot reinterpret a
+  report rejected for duration, amplitude retention, or field growth as
+  stationary merely because its flux drift and uncertainty are small.
+- Added one fail-closed campaign evaluator for separate resolution and domain
+  ladders plus independent-reference parity. Every rung and the reference must
+  be producer-accepted, and local/GX normalization requires an explicit
+  positive conversion factor.
+- Updated the confidence ledger with the accepted coarse `12x12x6`, `9x5`
+  time-220-to-300 candidate (`-25.7841` native mean flux, `0.462%` relative
+  error, `0.0572` drift, `-1.93e-3` nonzonal growth). This is one local rung,
+  not resolution/domain convergence or GX parity; those evidence gates remain
+  open.
+
 ### 2026-08-07: Production Electromagnetic Resolution Gate
 
 - Added a named on-demand production ladder with `16x16x8`, `24x24x12`, and

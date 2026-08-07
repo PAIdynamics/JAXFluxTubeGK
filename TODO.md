@@ -523,6 +523,15 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   normalization or grid/physics changes, and recomputes uncertainty, drift,
   amplitude ratio, and fitted field growth over one merged window. New-format
   segments can therefore feed the existing convergence/parity layer directly.
+  Both local and GX producers now record an explicit top-level stationarity
+  decision. The shared loader requires and preserves that decision, preventing
+  a producer-rejected duration, amplitude, or growth window from being accepted
+  later using drift and uncertainty alone. A standalone campaign evaluator now
+  requires separate two-or-more-rung resolution and domain ladders plus an
+  independently stationary reference comparison, and exits nonzero unless all
+  three gates pass. The checkbox remains open because the second stationary
+  local rungs, the native-to-GX normalization derivation, and the pinned GX run
+  are scientific evidence that cannot be replaced by acceptance plumbing.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

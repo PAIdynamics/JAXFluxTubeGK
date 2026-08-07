@@ -30,8 +30,7 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
         if identifier != "kinetic_electron_tem_external_parity"
     )
     velocity_metrics = {
-        metric.name: metric.value
-        for metric in by_id["gkw_multi_time_velocity_slice"].metrics
+        metric.name: metric.value for metric in by_id["gkw_multi_time_velocity_slice"].metrics
     }
     assert velocity_metrics["step_20_complex_max_error"] == pytest.approx(3.99e-3)
     assert velocity_metrics["step_800_complex_max_error"] == pytest.approx(3.67e-2)
@@ -42,6 +41,12 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
     }
     assert em_metrics["em_local_growth_finest_change"] == pytest.approx(2.19627e-2)
     assert em_metrics["em_finest_growth_parity_error"] == pytest.approx(1.71945e-5)
+    nonlinear_metrics = {
+        metric.name: metric.value
+        for metric in by_id["nonlinear_stationary_heat_flux_parity"].metrics
+    }
+    assert nonlinear_metrics["coarse_stationary_mean_native_flux"] == pytest.approx(-25.7841)
+    assert nonlinear_metrics["coarse_stationary_relative_drift"] == pytest.approx(5.72e-2)
 
 
 def test_w7x_claim_records_narrow_independent_supersession():
