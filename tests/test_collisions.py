@@ -16,6 +16,8 @@ from stellarator_gk import (
     build_laguerre_legendre_collision_precompute,
     build_stella_laguerre_legendre_response,
     build_stella_laguerre_legendre_delta,
+    build_stella_laguerre_legendre_driver,
+    build_stella_laguerre_legendre_collision_precompute,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -711,6 +713,57 @@ def test_stella_recursive_delta1_is_jittable_and_differentiable():
     value, gradient = jax.jit(jax.value_and_grad(objective))(geometry.B)
     assert bool(jnp.isfinite(value))
     assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_stella_normalized_driver_is_jittable_and_differentiable():
+    velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    labels = ((1, 0, 0),)
+    measure = jnp.ones((8, 6, parallel.z.size)) / (8 * 6)
+    gyroaverage = jnp.ones((2, 1, 6, parallel.z.size, 1, 1))
+
+    def objective(magnetic_field):
+        delta = build_stella_laguerre_legendre_delta(
+            velocity,
+            magnetic_field,
+            species,
+            measure,
+            component_labels=labels,
+        )
+        driver = build_stella_laguerre_legendre_driver(
+            velocity,
+            magnetic_field,
+            species,
+            measure,
+            delta,
+            gyroaverage,
+            component_labels=labels,
+        )
+        return jnp.vdot(driver, driver)
+
+    value, gradient = jax.jit(jax.value_and_grad(objective))(geometry.B)
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_stella_collision_precompute_assembles_local_driver_and_response():
+    velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    measure = jnp.ones((8, 6, parallel.z.size)) / (8 * 6)
+    gyroaverage = jnp.ones((2, 1, 6, parallel.z.size, 1, 1))
+    precompute = build_stella_laguerre_legendre_collision_precompute(
+        velocity,
+        geometry.B,
+        species,
+        jnp.asarray(((0.2, 0.3), (0.4, 0.5))),
+        measure,
+        gyroaverage,
+        component_labels=((1, 0, 0),),
+    )
+    state = jax.random.normal(jax.random.key(141), (2, 8, 6, parallel.z.size, 1, 1))
+    result = jax.jit(laguerre_legendre_collision)(state, precompute)
+
+    assert result.shape == state.shape
+    assert bool(jnp.all(jnp.isfinite(result)))
+    assert bool(jnp.all(jnp.isfinite(precompute.row_sum_bound)))
 
 
 @pytest.mark.external

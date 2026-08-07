@@ -438,6 +438,156 @@ def build_stella_laguerre_legendre_response(
     return jnp.stack(responses, axis=2)
 
 
+def build_stella_laguerre_legendre_driver(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    velocity_measure,
+    delta_j,
+    gyroaverage,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...],
+):
+    """Construct stella-normalized Laguerre--Legendre driver coefficients.
+
+    This is the non-exact-conservation branch used by the pinned collision
+    discriminator. ``delta_j`` follows the response builder's six-dimensional
+    pair/component contract and ``gyroaverage`` follows its six-dimensional
+    species/order contract. The returned driver includes the complete velocity
+    measure and ``psijnorm`` normalization.
+    """
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    labels = tuple(tuple(int(value) for value in label) for label in component_labels)
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    magnetic_field = jnp.asarray(B)
+    measure = jnp.asarray(velocity_measure)
+    deltas = jnp.asarray(delta_j)
+    gyroaverages = jnp.asarray(gyroaverage)
+    expected_delta = (
+        n_species,
+        n_species,
+        len(labels),
+        vpar.size,
+        mu.size,
+        magnetic_field.size,
+    )
+    if deltas.shape != expected_delta:
+        raise ValueError(f"delta_j has shape {deltas.shape}, expected {expected_delta}")
+    if measure.shape != expected_delta[3:]:
+        raise ValueError(
+            f"velocity_measure has shape {measure.shape}, expected {expected_delta[3:]}"
+        )
+    if gyroaverages.ndim != 6 or gyroaverages.shape[0] != n_species:
+        raise ValueError("gyroaverage must have shape (species,|m|,mu,z,kx,ky)")
+    if gyroaverages.shape[2:4] != (mu.size, magnetic_field.size):
+        raise ValueError("gyroaverage mu/z axes do not match the velocity and field grids")
+    if any(degree < 0 or abs(order) > degree or laguerre < 0 for degree, order, laguerre in labels):
+        raise ValueError("component labels require l >= |m| and j >= 0")
+
+    speed = jnp.sqrt(
+        vpar[:, None, None] ** 2 + 2.0 * mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    maxwellian = jnp.exp(-(speed**2))
+    masses = jnp.stack([jnp.asarray(item.mass) for item in species_tuple])
+    drivers = []
+    for component, (degree, order, laguerre) in enumerate(labels):
+        polynomial = speed**degree * _associated_laguerre(laguerre, degree + 0.5, speed**2)
+        pair_norms = []
+        for target in range(n_species):
+            background_norms = []
+            for background in range(n_species):
+                if degree == 0 and laguerre == 0:
+                    norm = jnp.ones_like(magnetic_field)
+                else:
+                    mass_ratio = masses[target] / masses[background]
+                    direct = deltas[target, background, component]
+                    swapped = deltas[background, target, component]
+                    if degree == 0 and laguerre == 1:
+                        direct_integrand = -(speed**2) * direct * mass_ratio**-3.5
+                        swapped_integrand = -(speed**2) * swapped
+                    else:
+                        direct_integrand = polynomial * direct * mass_ratio**-3.5
+                        swapped_integrand = polynomial * swapped
+                    norm = jnp.where(
+                        mass_ratio < 1.0,
+                        jnp.sum(measure * swapped_integrand, axis=(0, 1)),
+                        jnp.sum(measure * direct_integrand, axis=(0, 1)),
+                    ) / (4.0 * pi)
+                background_norms.append(norm)
+            pair_norms.append(jnp.stack(background_norms))
+        psijnorm = jnp.stack(pair_norms)
+        clm = (-1) ** order * (
+            (2 * degree + 1) * factorial(degree + order) / (4.0 * pi * factorial(degree - order))
+        ) ** 0.5
+        legendre = _stella_associated_legendre(degree, -order, vpar[:, None, None] / speed)
+        sign = -1.0 if order < 0 and abs(order) % 2 else 1.0
+        component_drivers = []
+        for target in range(n_species):
+            background_drivers = []
+            for background in range(n_species):
+                coefficient = (
+                    sign
+                    * clm
+                    * measure[:, :, :, None, None]
+                    / maxwellian[:, :, :, None, None]
+                    * legendre[:, :, :, None, None]
+                    * deltas[background, target, component, :, :, :, None, None]
+                    * gyroaverages[background, abs(order), None, :, :, :, :]
+                    / psijnorm[target, background, None, None, :, None, None]
+                )
+                background_drivers.append(coefficient)
+            component_drivers.append(jnp.stack(background_drivers))
+        drivers.append(jnp.stack(component_drivers))
+    return jnp.stack(drivers, axis=2)
+
+
+def build_stella_laguerre_legendre_collision_precompute(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    velocity_measure,
+    gyroaverage,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...],
+) -> LaguerreLegendreCollisionPrecompute:
+    """Assemble locally constructed stella-normalized collision coefficients."""
+
+    delta = build_stella_laguerre_legendre_delta(
+        velocity_grid,
+        B,
+        species,
+        velocity_measure,
+        component_labels=component_labels,
+    )
+    driver = build_stella_laguerre_legendre_driver(
+        velocity_grid,
+        B,
+        species,
+        velocity_measure,
+        delta,
+        gyroaverage,
+        component_labels=component_labels,
+    )
+    response = build_stella_laguerre_legendre_response(
+        velocity_grid,
+        B,
+        species,
+        pair_frequency,
+        delta,
+        gyroaverage,
+        component_labels=component_labels,
+    )
+    return build_laguerre_legendre_collision_precompute(
+        driver,
+        response,
+        component_labels=component_labels,
+    )
+
+
 def build_laguerre_legendre_collision_precompute(
     driver,
     response,
@@ -1307,6 +1457,8 @@ __all__ = [
     "build_laguerre_legendre_collision_precompute",
     "build_stella_laguerre_legendre_response",
     "build_stella_laguerre_legendre_delta",
+    "build_stella_laguerre_legendre_driver",
+    "build_stella_laguerre_legendre_collision_precompute",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",

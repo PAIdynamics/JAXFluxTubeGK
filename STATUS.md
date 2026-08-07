@@ -70,9 +70,14 @@ claimed.
   compatible and differentiable. The recursive `Delta_j` implementation now
   consumes the full native `integrate_vmu` measure and reproduces every traced
   `j=0,1` value at `7.84e-13` scaled L2, including the mass-ratio
-  self-adjointness branch. The remaining collision physics blocker is
-  normalized driver construction and parity on a second independently
-  generated state.
+  self-adjointness branch. The normalized driver is now independently built
+  from the reversed-pair recurrence, Maxwellian, background gyroaverage,
+  velocity measure, and locally evaluated `psijnorm`; all 44,928 native
+  coefficients agree at `3.07e-11` scaled L2. A single public constructor now
+  assembles local driver and response tensors into the differentiable low-rank
+  precompute. The remaining collision physics blocker is parity on a second
+  independently generated state and an explicit accounting of stella's
+  implicit response-system solve.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

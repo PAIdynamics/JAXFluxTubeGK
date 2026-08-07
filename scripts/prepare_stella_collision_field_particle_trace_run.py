@@ -25,6 +25,7 @@ COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.d
 FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
 PRIMITIVE_TRACE_FILENAME = "stellarator_gk_collision_field_particle_primitives.dat"
 QUADRATURE_TRACE_FILENAME = "stellarator_gk_collision_velocity_quadrature.dat"
+DRIVER_TRACE_FILENAME = "stellarator_gk_collision_field_particle_drivers.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -58,8 +59,10 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      complex :: stellarator_gk_component_increment\n"
         "      complex :: stellarator_gk_factor_increment, stellarator_gk_psi\n"
         "      real :: stellarator_gk_response_basis, stellarator_gk_response_sign\n"
+        "      real :: stellarator_gk_driver_basis, stellarator_gk_driver_clm\n"
         "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n"
-        "      integer :: stellarator_gk_primitive_unit, stellarator_gk_quadrature_unit\n",
+        "      integer :: stellarator_gk_primitive_unit, stellarator_gk_quadrature_unit\n"
+        "      integer :: stellarator_gk_driver_unit\n",
     )
     text = _replace_once(
         text,
@@ -136,6 +139,12 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                  '# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1'
             write(stellarator_gk_primitive_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu bmag frequency clm legendre gyroaverage mass_factor delta_j sign basis'
+            open(newunit=stellarator_gk_driver_unit, file='{DRIVER_TRACE_FILENAME}', &
+                 status='replace', action='write')
+            write(stellarator_gk_driver_unit, '(a)') &
+                 '# schema=stellarator_gk_stella_collision_fieldpart_drivers_v1'
+            write(stellarator_gk_driver_unit, '(a)') &
+                 '# iv imu iky ikx iz tube target background l m j vpa mu measure clm legendre gyroaverage delta_j maxwellian psijnorm sign driver'
             open(newunit=stellarator_gk_quadrature_unit, file='{QUADRATURE_TRACE_FILENAME}', &
                  status='replace', action='write')
             write(stellarator_gk_quadrature_unit, '(a)') &
@@ -229,6 +238,31 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                                    deltaj(ll1, jj1, is, isb, iv, imu, ia, iz), &
                                    stellarator_gk_response_sign, &
                                    stellarator_gk_response_basis
+                              stellarator_gk_driver_clm = (-1)**mm1 * &
+                                   sqrt(((2 * ll1 + 1) * &
+                                   gamma(ll1 + mm1 + 1.)) / &
+                                   (4 * pi * gamma(ll1 - mm1 + 1.)))
+                              stellarator_gk_driver_basis = &
+                                   stellarator_gk_response_sign * &
+                                   wgts_vpa(iv) * wgts_mu(ia, iz, imu) * &
+                                   stellarator_gk_driver_clm * &
+                                   legendre_vpamu(ll1, -mm1, iv, imu, iz) * &
+                                   jm(imu, abs(mm1), iky, ikx, iz, isb) * &
+                                   deltaj(ll1, jj1, isb, is, iv, imu, ia, iz) / &
+                                   mw(iv, imu, iz, isb) / &
+                                   psijnorm(ll1, jj1, is, isb, iz)
+                              write(stellarator_gk_driver_unit, *) iv, imu, &
+                                   iky, ikx, iz, it, is, isb, ll1, mm1, jj1, &
+                                   vpa(iv), mu(imu), &
+                                   wgts_vpa(iv) * wgts_mu(ia, iz, imu), &
+                                   stellarator_gk_driver_clm, &
+                                   legendre_vpamu(ll1, -mm1, iv, imu, iz), &
+                                   jm(imu, abs(mm1), iky, ikx, iz, isb), &
+                                   deltaj(ll1, jj1, isb, is, iv, imu, ia, iz), &
+                                   mw(iv, imu, iz, isb), &
+                                   psijnorm(ll1, jj1, is, isb, iz), &
+                                   stellarator_gk_response_sign, &
+                                   stellarator_gk_driver_basis
                            end do
                         end do
                      end do
@@ -240,6 +274,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
          if (proc0) close(stellarator_gk_component_unit)
          if (proc0) close(stellarator_gk_factor_unit)
          if (proc0) close(stellarator_gk_primitive_unit)
+         if (proc0) close(stellarator_gk_driver_unit)
          deallocate (stellarator_gk_component_input)
 
       end if
@@ -362,11 +397,13 @@ def prepare_trace_run(
                 "factor_trace_output": str(run_dir / FACTOR_TRACE_FILENAME),
                 "primitive_trace_output": str(run_dir / PRIMITIVE_TRACE_FILENAME),
                 "quadrature_trace_output": str(run_dir / QUADRATURE_TRACE_FILENAME),
+                "driver_trace_output": str(run_dir / DRIVER_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
                 "primitive_trace_quantity": "independent factors of each response basis",
                 "quadrature_trace_quantity": "velocity nodes and integrate_vmu weights",
+                "driver_trace_quantity": "normalized background-space driver coefficients",
                 "serial_execution_required": True,
             },
             indent=2,

@@ -1,5 +1,6 @@
 from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
+    DRIVER_TRACE_FILENAME,
     FACTOR_TRACE_FILENAME,
     PRIMITIVE_TRACE_FILENAME,
     QUADRATURE_TRACE_FILENAME,
@@ -61,12 +62,14 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert FACTOR_TRACE_FILENAME in patched
     assert PRIMITIVE_TRACE_FILENAME in patched
     assert QUADRATURE_TRACE_FILENAME in patched
+    assert DRIVER_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
     assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
     assert "legendre_vpamu(ll1, mm1, iv, imu, iz)" in patched
     assert "stellarator_gk_response_sign" in patched
     assert "wgts_mu(ia, iz, imu)" in patched
+    assert "psijnorm(ll1, jj1, is, isb, iz)" in patched
 
 
 def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):

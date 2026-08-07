@@ -441,8 +441,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `4.25e-13`. The higher-`j` orthogonalization recurrence now uses the traced
   `integrate_vmu` product weights and stella's mass-ratio self-adjointness
   branch; all `j=0,1` values agree across the same trace at `7.84e-13` scaled
-  L2. The remaining collision blocker is local construction of the normalized
-  driver tensor, followed by a second-state coefficient/action parity test.
+  L2. The normalized moment driver is now built locally from the recursive
+  reversed-pair `Delta_j`, Maxwellian, gyroaverage, complete velocity measure,
+  and pairwise `psijnorm`; it matches 44,928 traced coefficients at `3.07e-11`
+  scaled L2. A public builder assembles the independently constructed driver
+  and response into the JIT/differentiable low-rank precompute. The remaining
+  collision blocker is a second-state coefficient/action parity test that also
+  distinguishes the direct low-rank operator from stella's implicit response-
+  system solve.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
