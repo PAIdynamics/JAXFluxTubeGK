@@ -36,6 +36,19 @@ def _write_primitive(path: Path, *, basis_scale: float = 1.0) -> Path:
     return path
 
 
+def _write_quadrature(path: Path) -> Path:
+    rows = "".join(
+        f"{iv} {imu} 0 {vpa} {mu} 1.2 0.5 1\n"
+        for iv, vpa in ((1, -1), (2, 1))
+        for imu, mu in ((1, 0.5), (2, 1.0))
+    )
+    path.write_text(
+        "# schema=stellarator_gk_stella_collision_velocity_quadrature_v1\n"
+        "# iv imu iz vpa mu bmag w_vpa w_mu\n" + rows
+    )
+    return path
+
+
 def test_primitive_summary_reconstructs_local_response(tmp_path):
     report = summarize_primitive_trace(
         _write_primitive(tmp_path / "primitives.dat"),
@@ -46,6 +59,17 @@ def test_primitive_summary_reconstructs_local_response(tmp_path):
     assert report["metrics"]["primitive_product_to_native_relative_l2"] == 0.0
     assert report["metrics"]["local_builder_to_native_relative_l2"] == 0.0
     assert report["metrics"]["local_delta0_to_native_relative_l2"] < 1.0e-14
+
+
+def test_primitive_summary_reconstructs_recursive_delta_with_quadrature(tmp_path):
+    report = summarize_primitive_trace(
+        _write_primitive(tmp_path / "primitives.dat"),
+        quadrature_path=_write_quadrature(tmp_path / "quadrature.dat"),
+        expected_revision="564ca09",
+    )
+
+    assert report["status"] == "local_response_and_recursive_delta_construction_passed"
+    assert report["metrics"]["local_recursive_delta_to_native_scaled_l2"] < 1.0e-14
 
 
 def test_primitive_summary_rejects_invalid_product(tmp_path):

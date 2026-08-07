@@ -67,9 +67,12 @@ claimed.
   primitive trace spans 44,928 rows: its seven-factor product is exact and the
   local response agrees at `1.84e-14` relative L2. The JAX incomplete-gamma
   implementation of analytic `Delta_0` agrees at `4.25e-13` and remains JIT-
-  compatible and differentiable. The remaining collision physics blocker is
-  the higher-`j` recurrence, normalized driver construction, and parity on a
-  second independently generated state.
+  compatible and differentiable. The recursive `Delta_j` implementation now
+  consumes the full native `integrate_vmu` measure and reproduces every traced
+  `j=0,1` value at `7.84e-13` scaled L2, including the mass-ratio
+  self-adjointness branch. The remaining collision physics blocker is
+  normalized driver construction and parity on a second independently
+  generated state.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

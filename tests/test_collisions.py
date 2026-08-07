@@ -15,6 +15,7 @@ from stellarator_gk import (
     build_fokker_planck_precompute,
     build_laguerre_legendre_collision_precompute,
     build_stella_laguerre_legendre_response,
+    build_stella_laguerre_legendre_delta,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -659,6 +660,57 @@ def test_stella_delta0_rejects_negative_polynomial_degree():
             laguerre_degree=-1,
             legendre_degree=0,
         )
+
+
+def test_stella_recursive_delta_reduces_to_analytic_delta0():
+    velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    labels = ((0, 0, 0), (1, -1, 0), (1, 0, 0), (1, 1, 0))
+    measure = (
+        velocity.w_vpar[:, None, None]
+        * velocity.w_mu[None, :, None]
+        * jnp.ones((1, 1, parallel.z.size))
+    )
+    recursive = build_stella_laguerre_legendre_delta(
+        velocity,
+        geometry.B,
+        species,
+        measure,
+        component_labels=labels,
+    )
+    speed = jnp.sqrt(
+        velocity.vpar[:, None, None] ** 2
+        + 2.0 * velocity.mu[None, :, None] * geometry.B[None, None, :]
+    )
+    expected = stella_laguerre_legendre_delta0(
+        speed,
+        species[0].mass,
+        species[1].mass,
+        laguerre_degree=0,
+        legendre_degree=1,
+    )
+
+    np.testing.assert_allclose(recursive[0, 1, 1], expected, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(recursive[0, 1, 2], expected, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(recursive[0, 1, 3], expected, rtol=2e-13, atol=2e-13)
+
+
+def test_stella_recursive_delta1_is_jittable_and_differentiable():
+    velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    measure = jnp.ones((8, 6, parallel.z.size)) / (8 * 6)
+
+    def objective(magnetic_field):
+        delta = build_stella_laguerre_legendre_delta(
+            velocity,
+            magnetic_field,
+            species,
+            measure,
+            component_labels=((0, 0, 1),),
+        )
+        return jnp.vdot(delta, delta)
+
+    value, gradient = jax.jit(jax.value_and_grad(objective))(geometry.B)
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.all(jnp.isfinite(gradient)))
 
 
 @pytest.mark.external

@@ -648,6 +648,8 @@ JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_field_particle_primitives.py \
   --primitives \
     /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_primitives.dat \
+  --quadrature \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_velocity_quadrature.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --output /tmp/optimal-fusion-stella-collision-trace/primitive-summary.json
 ```
@@ -661,8 +663,11 @@ JAX low-rank kernel at roundoff. The primitive validator separately checks
 collision frequency, spherical-harmonic normalization, associated Legendre
 factor, gyroaverage, mass scaling, `Delta_j`, and sign. The local response
 builder matches all 44,928 native rows at `1.84e-14` relative L2, while its
-analytic `Delta_0` matches at `4.25e-13`. Higher-`j` recurrence and normalized
-driver construction are still required before enabling a production model.
+analytic `Delta_0` matches at `4.25e-13`. The recursive `Delta_j` builder
+consumes the native velocity-measure
+contract and matches every traced `j=0,1` value at `7.84e-13` scaled L2, so the
+remaining coefficient task before enabling a production model is the
+normalized driver.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

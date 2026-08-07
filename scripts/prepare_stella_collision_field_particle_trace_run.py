@@ -24,6 +24,7 @@ TRACE_FILENAME = "stellarator_gk_collision_field_particle_trace.dat"
 COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.dat"
 FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
 PRIMITIVE_TRACE_FILENAME = "stellarator_gk_collision_field_particle_primitives.dat"
+QUADRATURE_TRACE_FILENAME = "stellarator_gk_collision_velocity_quadrature.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -58,7 +59,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      complex :: stellarator_gk_factor_increment, stellarator_gk_psi\n"
         "      real :: stellarator_gk_response_basis, stellarator_gk_response_sign\n"
         "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n"
-        "      integer :: stellarator_gk_primitive_unit\n",
+        "      integer :: stellarator_gk_primitive_unit, stellarator_gk_quadrature_unit\n",
     )
     text = _replace_once(
         text,
@@ -86,7 +87,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      use grids_velocity, only: vpa\n"
         "      use grids_velocity, only: set_vpa_weights\n",
         "      use grids_velocity, only: nmu, nvpa\n"
-        "      use grids_velocity, only: vpa, mu\n"
+        "      use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu\n"
         "      use grids_velocity, only: set_vpa_weights\n",
     )
     snapshot = """      g = g_in
@@ -135,6 +136,22 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                  '# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1'
             write(stellarator_gk_primitive_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu bmag frequency clm legendre gyroaverage mass_factor delta_j sign basis'
+            open(newunit=stellarator_gk_quadrature_unit, file='{QUADRATURE_TRACE_FILENAME}', &
+                 status='replace', action='write')
+            write(stellarator_gk_quadrature_unit, '(a)') &
+                 '# schema=stellarator_gk_stella_collision_velocity_quadrature_v1'
+            write(stellarator_gk_quadrature_unit, '(a)') &
+                 '# iv imu iz vpa mu bmag w_vpa w_mu'
+            do iz = -nzgrid, nzgrid
+               do iv = 1, nvpa
+                  do imu = 1, nmu
+                     write(stellarator_gk_quadrature_unit, *) iv, imu, iz, &
+                          vpa(iv), mu(imu), bmag(ia, iz), wgts_vpa(iv), &
+                          wgts_mu(ia, iz, imu)
+                  end do
+               end do
+            end do
+            close(stellarator_gk_quadrature_unit)
          end if
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
 """,
@@ -344,10 +361,12 @@ def prepare_trace_run(
                 "component_trace_output": str(run_dir / COMPONENT_TRACE_FILENAME),
                 "factor_trace_output": str(run_dir / FACTOR_TRACE_FILENAME),
                 "primitive_trace_output": str(run_dir / PRIMITIVE_TRACE_FILENAME),
+                "quadrature_trace_output": str(run_dir / QUADRATURE_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
                 "primitive_trace_quantity": "independent factors of each response basis",
+                "quadrature_trace_quantity": "velocity nodes and integrate_vmu weights",
                 "serial_execution_required": True,
             },
             indent=2,

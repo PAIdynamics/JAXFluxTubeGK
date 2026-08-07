@@ -438,9 +438,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   A 44,928-row primitive trace verifies the raw native factor product exactly
   and the independent JAX response at `1.84e-14` relative L2. The analytic
   incomplete-gamma construction of `Delta_0` also matches stella at
-  `4.25e-13`. The remaining collision blocker is local construction of the
-  higher `Delta_j` recurrence and normalized driver tensor, followed by a
-  second-state coefficient/action parity test.
+  `4.25e-13`. The higher-`j` orthogonalization recurrence now uses the traced
+  `integrate_vmu` product weights and stella's mass-ratio self-adjointness
+  branch; all `j=0,1` values agree across the same trace at `7.84e-13` scaled
+  L2. The remaining collision blocker is local construction of the normalized
+  driver tensor, followed by a second-state coefficient/action parity test.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -212,6 +212,155 @@ def stella_laguerre_legendre_delta0(
     return jnp.nan_to_num(result * prefactor)
 
 
+def _associated_laguerre(degree: int, alpha: float, argument):
+    if degree == 0:
+        return jnp.ones_like(argument)
+    previous = jnp.ones_like(argument)
+    current = 1.0 + alpha - argument
+    for index in range(2, degree + 1):
+        following = (
+            (2 * index - 1 + alpha - argument) * current - (index - 1 + alpha) * previous
+        ) / index
+        previous, current = current, following
+    return current
+
+
+def build_stella_laguerre_legendre_delta(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    velocity_measure,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...],
+):
+    """Construct stella's collision-frequency-free ``Delta_j`` responses.
+
+    ``velocity_measure`` is the full ``integrate_vmu`` weight product with
+    shape ``(vpar, mu, z)``. The returned array has shape
+    ``(target, background, component, vpar, mu, z)``. This implements the
+    recursive orthogonalization used by stella, including its mass-ratio
+    self-adjointness branch, without depending on stella at runtime.
+    """
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    labels = tuple(tuple(int(value) for value in label) for label in component_labels)
+    if any(len(label) != 3 for label in labels):
+        raise ValueError("component labels must contain (l,m,j)")
+    if any(degree < 0 or abs(order) > degree or laguerre < 0 for degree, order, laguerre in labels):
+        raise ValueError("component labels require l >= |m| and j >= 0")
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    magnetic_field = jnp.asarray(B)
+    measure = jnp.asarray(velocity_measure)
+    expected_measure = (vpar.size, mu.size, magnetic_field.size)
+    if measure.shape != expected_measure:
+        raise ValueError(f"velocity_measure has shape {measure.shape}, expected {expected_measure}")
+    speed = jnp.sqrt(
+        vpar[:, None, None] ** 2 + 2.0 * mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    masses = jnp.stack([jnp.asarray(item.mass) for item in species_tuple])
+    delta_cache = {}
+    psi_cache = {}
+
+    def velocity_polynomial(laguerre: int, legendre: int):
+        return speed**legendre * _associated_laguerre(laguerre, legendre + 0.5, speed**2)
+
+    def integrate(values):
+        return jnp.sum(measure * values, axis=(0, 1))
+
+    def delta(
+        orthogonal_degree: int,
+        input_degree: int,
+        legendre: int,
+        target: int,
+        background: int,
+    ):
+        key = (orthogonal_degree, input_degree, legendre, target, background)
+        if key not in delta_cache:
+            if orthogonal_degree == 0:
+                value = stella_laguerre_legendre_delta0(
+                    speed,
+                    masses[target],
+                    masses[background],
+                    laguerre_degree=input_degree,
+                    legendre_degree=legendre,
+                )
+            else:
+                value = delta(
+                    orthogonal_degree - 1,
+                    input_degree,
+                    legendre,
+                    target,
+                    background,
+                ) - psi(
+                    orthogonal_degree - 1,
+                    input_degree,
+                    legendre,
+                    target,
+                    background,
+                )[None, None, :] * delta(
+                    orthogonal_degree - 1,
+                    orthogonal_degree - 1,
+                    legendre,
+                    target,
+                    background,
+                )
+            delta_cache[key] = value
+        return delta_cache[key]
+
+    def psi(
+        orthogonal_degree: int,
+        input_degree: int,
+        legendre: int,
+        target: int,
+        background: int,
+    ):
+        key = (orthogonal_degree, input_degree, legendre, target, background)
+        if key not in psi_cache:
+            swapped = delta(
+                orthogonal_degree,
+                orthogonal_degree,
+                legendre,
+                background,
+                target,
+            )
+            numerator = integrate(velocity_polynomial(input_degree, legendre) * swapped)
+            direct = delta(
+                orthogonal_degree,
+                orthogonal_degree,
+                legendre,
+                target,
+                background,
+            )
+            direct_denominator = integrate(
+                velocity_polynomial(orthogonal_degree, legendre)
+                * direct
+                * (masses[background] / masses[target]) ** 3.5
+            )
+            swapped_denominator = integrate(
+                velocity_polynomial(orthogonal_degree, legendre) * swapped
+            )
+            denominator = jnp.where(
+                masses[background] / masses[target] < 1.0,
+                direct_denominator,
+                swapped_denominator,
+            )
+            psi_cache[key] = numerator / denominator
+        return psi_cache[key]
+
+    pairs = []
+    for target in range(len(species_tuple)):
+        backgrounds = []
+        for background in range(len(species_tuple)):
+            components = [
+                delta(laguerre, laguerre, legendre, target, background)
+                for legendre, _order, laguerre in labels
+            ]
+            backgrounds.append(jnp.stack(components))
+        pairs.append(jnp.stack(backgrounds))
+    return jnp.stack(pairs)
+
+
 def build_stella_laguerre_legendre_response(
     velocity_grid: VelocityGrid,
     B,
@@ -1157,6 +1306,7 @@ __all__ = [
     "build_fokker_planck_precompute",
     "build_laguerre_legendre_collision_precompute",
     "build_stella_laguerre_legendre_response",
+    "build_stella_laguerre_legendre_delta",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",

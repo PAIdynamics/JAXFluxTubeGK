@@ -12,6 +12,7 @@ from scripts.summarize_stella_collision_field_particle_components import _read_v
 from scripts.summarize_stella_collision_field_particle_factors import _axis_lookup
 from stellarator_gk import (
     SpeciesParams,
+    build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_response,
     build_velocity_grid_from_nodes,
     stella_laguerre_legendre_delta0,
@@ -42,6 +43,8 @@ PRIMITIVE_COLUMNS = (
     "sign",
     "basis",
 )
+
+QUADRATURE_COLUMNS = ("iv", "imu", "iz", "vpa", "mu", "bmag", "w_vpa", "w_mu")
 
 
 def _set_consistent(array: np.ndarray, index: tuple[int, ...], value: float) -> None:
@@ -133,9 +136,75 @@ def reconstruct_response_with_local_builder(rows: np.ndarray) -> np.ndarray:
     return np.asarray([response[index] for index in row_indices])
 
 
+def reconstruct_delta_with_local_builder(
+    rows: np.ndarray, quadrature_rows: np.ndarray
+) -> np.ndarray:
+    """Construct all traced Delta_j values using native nodes and quadrature only."""
+
+    axes = {
+        "iv": _axis_lookup(rows[:, 0]),
+        "imu": _axis_lookup(rows[:, 1]),
+        "iz": _axis_lookup(rows[:, 4]),
+        "target": _axis_lookup(rows[:, 6]),
+        "background": _axis_lookup(rows[:, 7]),
+    }
+    labels = tuple(
+        tuple(int(value) for value in label) for label in np.unique(rows[:, 8:11], axis=0)
+    )
+    label_lookup = {label: index for index, label in enumerate(labels)}
+    n_vpa = axes["iv"][0].size
+    n_mu = axes["imu"][0].size
+    n_z = axes["iz"][0].size
+    n_species = axes["target"][0].size
+    vpar = np.full(n_vpa, np.nan)
+    mu = np.full(n_mu, np.nan)
+    magnetic_field = np.full(n_z, np.nan)
+    measure = np.full((n_vpa, n_mu, n_z), np.nan)
+    for row in quadrature_rows:
+        iv = axes["iv"][1][int(row[0])]
+        imu = axes["imu"][1][int(row[1])]
+        iz = axes["iz"][1][int(row[2])]
+        _set_consistent(vpar, (iv,), row[3])
+        _set_consistent(mu, (imu,), row[4])
+        _set_consistent(magnetic_field, (iz,), row[5])
+        _set_consistent(measure, (iv, imu, iz), row[6] * row[7])
+    mass_factor = np.full((n_species, n_species), np.nan)
+    row_indices = []
+    for row in rows:
+        target = axes["target"][1][int(row[6])]
+        background = axes["background"][1][int(row[7])]
+        component = label_lookup[tuple(int(value) for value in row[8:11])]
+        iv = axes["iv"][1][int(row[0])]
+        imu = axes["imu"][1][int(row[1])]
+        iz = axes["iz"][1][int(row[4])]
+        _set_consistent(mass_factor, (target, background), row[18])
+        row_indices.append((target, background, component, iv, imu, iz))
+    arrays = (vpar, mu, magnetic_field, measure, mass_factor)
+    if not all(np.isfinite(array).all() for array in arrays):
+        raise ValueError("quadrature trace does not span the primitive coefficient grid")
+    masses = mass_factor[:, 0] ** (-2.0 / 3.0)
+    species = tuple(SpeciesParams(1.0, mass, 1.0, 1.0, 0.0, 0.0) for mass in masses)
+    grid = build_velocity_grid_from_nodes(
+        vpar=vpar,
+        mu=mu,
+        w_vpar=np.ones_like(vpar),
+        w_mu=np.ones_like(mu),
+        backend="stella_trace",
+    )
+    delta = build_stella_laguerre_legendre_delta(
+        grid,
+        magnetic_field,
+        species,
+        measure,
+        component_labels=labels,
+    )
+    return np.asarray([delta[index] for index in row_indices])
+
+
 def summarize_primitive_trace(
     primitive_path: Path,
     *,
+    quadrature_path: Path | None = None,
     expected_revision: str,
     reconstruction_tolerance: float = 1.0e-10,
 ) -> dict[str, object]:
@@ -189,7 +258,23 @@ def summarize_primitive_trace(
         raise ValueError(
             f"local analytic delta0 does not match native delta_j: relative L2={delta0_error:.6g}"
         )
-    return {
+    delta_error = None
+    if quadrature_path is not None:
+        quadrature_rows = _read_values(
+            quadrature_path,
+            columns=len(QUADRATURE_COLUMNS),
+            schema="stellarator_gk_stella_collision_velocity_quadrature_v1",
+        )
+        local_delta = reconstruct_delta_with_local_builder(rows, quadrature_rows)
+        native_delta = rows[:, 19]
+        delta_scale = max(float(np.linalg.norm(native_delta)), 1.0)
+        delta_error = float(np.linalg.norm(local_delta - native_delta) / delta_scale)
+        if delta_error > reconstruction_tolerance:
+            raise ValueError(
+                "local recursive delta_j does not match native delta_j: "
+                f"scaled L2={delta_error:.6g}"
+            )
+    report = {
         "schema_version": 1,
         "benchmark": "stella_collision_field_particle_response_primitives",
         "status": "local_response_and_delta0_construction_passed",
@@ -202,18 +287,25 @@ def summarize_primitive_trace(
             "local_delta0_to_native_relative_l2": delta0_error,
             "native_basis_l2": float(np.linalg.norm(basis)),
         },
-        "scope": "response and analytic delta0 construction; higher delta_j and gyroaverage are native inputs",
+        "scope": "response and analytic delta0 construction; gyroaverage is a native input",
     }
+    if delta_error is not None:
+        report["status"] = "local_response_and_recursive_delta_construction_passed"
+        report["quadrature_trace"] = str(Path(quadrature_path).resolve())
+        report["metrics"]["local_recursive_delta_to_native_scaled_l2"] = delta_error
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--primitives", type=Path, required=True)
+    parser.add_argument("--quadrature", type=Path)
     parser.add_argument("--expected-revision", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     report = summarize_primitive_trace(
         args.primitives,
+        quadrature_path=args.quadrature,
         expected_revision=args.expected_revision,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
