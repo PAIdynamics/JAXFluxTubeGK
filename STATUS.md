@@ -23,6 +23,24 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Native stella Collision Discriminator
+
+- Added a scratch-only paired native-stella producer that changes only
+  `fieldpart` between two collision-only, one-step Fokker--Planck runs and fails
+  if their initial diagnostics differ.
+- Against pinned stella revision
+  `564ca09b89904c231421c17c00068a9362061278`, the initial diagnostics agree
+  exactly. Enabling the field-particle path changes final `h2_vs_vpamus` by
+  `31.14%` in relative L2, `g2_vs_vpamus` by `0.1996%`, and `phi2` by `108.18%`.
+  The compact case is therefore a sensitive native discriminator.
+- The stella NetCDF incorrectly embeds the enclosing optimal-fusion revision
+  (`db79a4d-dirty`) for this out-of-tree build. The producer records provenance
+  from the actual stella checkout and treats the embedded tag as informational.
+- This advances but does not close the collision gate: squared, reduced NetCDF
+  diagnostics cannot establish signed collision-action or coefficient parity.
+  The next implementation is a scratch-build stella trace of the field-particle
+  increment on a controlled distribution, followed by a common-grid comparison.
+
 ### 2026-08-07: Priority 5 Reproducibility and Correlated Statistics
 
 - Fixed native-only dependency preparation: `--skip-project` no longer runs an

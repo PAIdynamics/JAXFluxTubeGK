@@ -154,7 +154,12 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "stencils, couples both distributions, and conserves density plus "
                 "combined momentum/energy separately for every collision pair. GKW "
                 "cannot close this gate because its conservation operator is not "
-                "global; stella coefficient/action parity is still absent. "
+                "global. A paired one-step run against pinned stella revision "
+                "564ca09b89904c231421c17c00068a9362061278 now has exactly matched "
+                "initial diagnostics and a 31.14% relative-L2 field-particle effect "
+                "in h2_vs_vpamus (0.1996% in g2_vs_vpamus). This establishes a "
+                "sensitive native discriminator, but the squared reduced diagnostic "
+                "does not expose signed coefficients/action, so parity is still absent. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "
@@ -169,8 +174,9 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "row sum, closing the production-grid electromagnetic sub-gap."
             ),
             next_action=(
-                "Build an executable compact stella Laguerre--Legendre field-particle "
-                "reference and compare reciprocal inter-species coefficients and action."
+                "Add a scratch-build stella trace of the signed Laguerre--Legendre "
+                "field-particle increment on a controlled distribution, then compare "
+                "reciprocal inter-species coefficients and action on a common grid."
             ),
             metrics=(
                 ConfidenceMetric("em_local_growth_finest_change", 2.1962696972943164e-2),
@@ -179,6 +185,8 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 ConfidenceMetric("em_reference_frequency_finest_change", 1.205835737686247e-2),
                 ConfidenceMetric("em_finest_growth_parity_error", 1.719448606648505e-5),
                 ConfidenceMetric("em_finest_mode_parity_error", 7.576553792617767e-10),
+                ConfidenceMetric("stella_fieldpart_h2_relative_l2_effect", 0.3113869790194909),
+                ConfidenceMetric("stella_fieldpart_g2_relative_l2_effect", 0.0019958403448710844),
             ),
         ),
         ValidationConfidenceGap(

@@ -400,9 +400,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   pair, and preserves each pair's species densities and combined physical
   momentum/energy to roundoff. Its pairwise induced-norm bound enters the CFL
   estimate. This closes the reciprocal data-flow and conservation architecture,
-  but not the physics gate: stella's Laguerre--Legendre field-particle
-  coefficients and action still require an executable independent parity
-  contract before this item can close.
+  but not the physics gate. A caller-owned paired run against pinned stella
+  revision `564ca09b89904c231421c17c00068a9362061278` now supplies an executable
+  native discriminator. Its field-particle-on/off inputs have identical initial
+  diagnostics, while one implicit step changes `h2_vs_vpamus` by `31.14%` in
+  relative L2 (`g2_vs_vpamus` changes by `0.1996%`). This proves that the compact
+  case is sensitive to stella's Laguerre--Legendre field-particle path. It does
+  not expose the signed collision action, so coefficient/action parity still
+  requires a stella trace or diagnostic extension before this item can close.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

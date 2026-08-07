@@ -594,6 +594,24 @@ combined momentum and energy independently for each unordered species pair.
 It establishes reciprocal software coupling, not stella/Landau coefficient
 parity; production collision claims remain blocked.
 
+Run the paired native-stella field-particle discriminator in caller-owned
+scratch storage after preparing the pinned validation dependency:
+
+```bash
+python3 scripts/bootstrap_dependencies.py --dependency stella \
+  --local-root .. --skip-project
+.venv/bin/python scripts/run_stella_collision_field_particle_discriminator.py \
+  --output-dir /tmp/optimal-fusion-stella-collisions \
+  --stella-executable .dependencies/bin/stella \
+  --stella-source ../stella
+```
+
+The report verifies identical initial diagnostics and measures the one-step
+field-particle effect. It records the revision from the stella source checkout;
+the executable's embedded NetCDF version is informational because some
+out-of-tree builds resolve the enclosing repository instead. This discriminator
+does not replace the remaining signed coefficient/action parity test.
+
 `gyrokinetic_heat_response(...)` supplies the collocation-space
 `J0 T_s (E_s-3/2) f_s` velocity moment used with `radial_flux_spectrum(...)`.
 This makes nonlinear heat-flux histories measurable from evolved states; it
