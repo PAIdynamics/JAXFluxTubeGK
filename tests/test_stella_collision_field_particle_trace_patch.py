@@ -1,6 +1,7 @@
 from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
     FACTOR_TRACE_FILENAME,
+    PRIMITIVE_TRACE_FILENAME,
     TRACE_FILENAME,
     patch_stella_collision_field_particle_trace,
     prepare_trace_run,
@@ -13,6 +14,7 @@ contains
    subroutine advance_implicit_fp(phi, apar, bpar, g)
 
       use mp, only: sum_allreduce
+      use calculations_finite_differences, only: tridag
       use grids_velocity, only: nmu, nvpa
       use grids_velocity, only: vpa
       use grids_velocity, only: set_vpa_weights
@@ -56,9 +58,12 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert TRACE_FILENAME in patched
     assert COMPONENT_TRACE_FILENAME in patched
     assert FACTOR_TRACE_FILENAME in patched
+    assert PRIMITIVE_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
     assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
+    assert "legendre_vpamu(ll1, mm1, iv, imu, iz)" in patched
+    assert "stellarator_gk_response_sign" in patched
 
 
 def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
@@ -74,7 +79,12 @@ def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
     assert target.read_text() == original
     assert metadata.is_file()
     assert (output / "build_stella_collision_trace.sh").is_file()
+    assert (
+        f"-DFORTRAN_GIT_WORKING_TREE={source_root}"
+        in (output / "build_stella_collision_trace.sh").read_text()
+    )
     assert (output / "run/collision_field_particle_trace.in").is_file()
-    assert "stellarator_gk collision field-particle trace patch" in (
-        output / "stella" / target.relative_to(source_root)
-    ).read_text()
+    assert (
+        "stellarator_gk collision field-particle trace patch"
+        in (output / "stella" / target.relative_to(source_root)).read_text()
+    )

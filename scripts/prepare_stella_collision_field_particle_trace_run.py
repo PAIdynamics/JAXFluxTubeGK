@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 from pathlib import Path
 
@@ -22,6 +23,7 @@ TARGET = Path("STELLA_CODE/dissipation/collisions_fokkerplanck.f90")
 TRACE_FILENAME = "stellarator_gk_collision_field_particle_trace.dat"
 COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.dat"
 FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
+PRIMITIVE_TRACE_FILENAME = "stellarator_gk_collision_field_particle_primitives.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -54,8 +56,9 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      complex, dimension(:, :), allocatable :: stellarator_gk_component_input\n"
         "      complex :: stellarator_gk_component_increment\n"
         "      complex :: stellarator_gk_factor_increment, stellarator_gk_psi\n"
-        "      real :: stellarator_gk_response_basis\n"
-        "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n",
+        "      real :: stellarator_gk_response_basis, stellarator_gk_response_sign\n"
+        "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n"
+        "      integer :: stellarator_gk_primitive_unit\n",
     )
     text = _replace_once(
         text,
@@ -69,6 +72,13 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "   subroutine advance_implicit_fp(phi, apar, bpar, g)\n\n"
         "      use mp, only: sum_allreduce\n"
         "      use mp, only: proc0\n",
+    )
+    text = _replace_once(
+        text,
+        "      use mp, only: proc0\n      use calculations_finite_differences, only: tridag\n",
+        "      use mp, only: proc0\n"
+        "      use calculations_finite_differences, only: tridag\n"
+        "      use geometry, only: bmag\n",
     )
     text = _replace_once(
         text,
@@ -119,6 +129,12 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                  '# schema=stellarator_gk_stella_collision_fieldpart_factors_v1'
             write(stellarator_gk_factor_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu psi_re psi_im basis rhs_re rhs_im'
+            open(newunit=stellarator_gk_primitive_unit, file='{PRIMITIVE_TRACE_FILENAME}', &
+                 status='replace', action='write')
+            write(stellarator_gk_primitive_unit, '(a)') &
+                 '# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1'
+            write(stellarator_gk_primitive_unit, '(a)') &
+                 '# iv imu iky ikx iz tube target background l m j vpa mu bmag frequency clm legendre gyroaverage mass_factor delta_j sign basis'
          end if
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
 """,
@@ -173,8 +189,10 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                                    * jm(imu, abs(mm1), iky, ikx, iz, is) &
                                    * (spec(is)%mass / spec(isb)%mass)**(-1.5) &
                                    * deltaj(ll1, jj1, is, isb, iv, imu, ia, iz)
-                              if (mm1 < 0) stellarator_gk_response_basis = &
-                                   (-1)**mm1 * stellarator_gk_response_basis
+                              stellarator_gk_response_sign = 1.0
+                              if (mm1 < 0) stellarator_gk_response_sign = (-1)**mm1
+                              stellarator_gk_response_basis = &
+                                   stellarator_gk_response_sign * stellarator_gk_response_basis
                               stellarator_gk_factor_increment = stellarator_gk_psi &
                                    * stellarator_gk_response_basis
                               write(stellarator_gk_factor_unit, *) iv, imu, iky, &
@@ -184,6 +202,16 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                                    stellarator_gk_response_basis, &
                                    real(stellarator_gk_factor_increment), &
                                    aimag(stellarator_gk_factor_increment)
+                              write(stellarator_gk_primitive_unit, *) iv, imu, &
+                                   iky, ikx, iz, it, is, isb, ll1, mm1, jj1, &
+                                   vpa(iv), mu(imu), bmag(ia, iz), &
+                                   spec(is)%vnew(isb), clm, &
+                                   legendre_vpamu(ll1, mm1, iv, imu, iz), &
+                                   jm(imu, abs(mm1), iky, ikx, iz, is), &
+                                   (spec(is)%mass / spec(isb)%mass)**(-1.5), &
+                                   deltaj(ll1, jj1, is, isb, iv, imu, ia, iz), &
+                                   stellarator_gk_response_sign, &
+                                   stellarator_gk_response_basis
                            end do
                         end do
                      end do
@@ -194,6 +222,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
          end do
          if (proc0) close(stellarator_gk_component_unit)
          if (proc0) close(stellarator_gk_factor_unit)
+         if (proc0) close(stellarator_gk_primitive_unit)
          deallocate (stellarator_gk_component_input)
 
       end if
@@ -289,7 +318,12 @@ def prepare_trace_run(
     input_path.write_text(stella_collision_input(field_particle=True), encoding="utf-8")
     build_script = output_root / "build_stella_collision_trace.sh"
     run_script = output_root / "run_stella_collision_trace.sh"
-    build_script.write_text(_build_script_text(), encoding="utf-8")
+    build_script_text = _build_script_text().replace(
+        'cmake "${SOURCE_DIR}" -B "${BUILD_DIR}"',
+        'cmake "${SOURCE_DIR}" -B "${BUILD_DIR}" '
+        + shlex.quote(f"-DFORTRAN_GIT_WORKING_TREE={stella_source}"),
+    )
+    build_script.write_text(build_script_text, encoding="utf-8")
     run_script.write_text(_run_script_text(input_path.name), encoding="utf-8")
     build_script.chmod(0o755)
     run_script.chmod(0o755)
@@ -309,9 +343,11 @@ def prepare_trace_run(
                 "trace_output": str(run_dir / TRACE_FILENAME),
                 "component_trace_output": str(run_dir / COMPONENT_TRACE_FILENAME),
                 "factor_trace_output": str(run_dir / FACTOR_TRACE_FILENAME),
+                "primitive_trace_output": str(run_dir / PRIMITIVE_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
+                "primitive_trace_quantity": "independent factors of each response basis",
                 "serial_execution_required": True,
             },
             indent=2,
