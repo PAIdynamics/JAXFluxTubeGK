@@ -694,9 +694,13 @@ state can be generated without rebuilding the instrumented executable:
 That state changes the native aggregate collision RHS to L2 `2.46052e-3` and
 replays through the local solved-psi factor kernel at `1.39e-13` relative L2;
 its driver and primitive coefficients are byte-identical to the first state.
-The remaining acceptance requirement is independent construction of stella's
-implicit test-particle/response-system solve for `psi`, which is distinct from
-the direct normalized low-rank operator assembled above.
+`implicit_laguerre_legendre_collision(...)` combines a supplied
+`I-dt*C_test` matrix with the local low-rank coefficients using the same
+inhomogeneous inversion and response-system ordering as stella. Its Woodbury
+form matches an independently materialized dense backward-Euler solve at
+roundoff and remains differentiable. The remaining collision acceptance
+requirement is construction and native parity of stella's exact differential
+test-particle matrix.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

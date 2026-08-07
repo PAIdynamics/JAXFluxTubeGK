@@ -20,6 +20,7 @@ from .collisions import (
     laguerre_legendre_collision,
     laguerre_legendre_collision_components,
     laguerre_legendre_collision_components_from_moments,
+    implicit_laguerre_legendre_collision,
     stella_laguerre_legendre_delta0,
 )
 from .electromagnetic import (
@@ -194,6 +195,7 @@ __all__ = [
     "laguerre_legendre_collision",
     "laguerre_legendre_collision_components",
     "laguerre_legendre_collision_components_from_moments",
+    "implicit_laguerre_legendre_collision",
     "stella_laguerre_legendre_delta0",
     "dissipation",
     "drift_field_drive",

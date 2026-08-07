@@ -33,6 +33,7 @@ from stellarator_gk import (
     laguerre_legendre_collision,
     laguerre_legendre_collision_components,
     laguerre_legendre_collision_components_from_moments,
+    implicit_laguerre_legendre_collision,
     linear_residual,
     stella_laguerre_legendre_delta0,
 )
@@ -527,6 +528,43 @@ def test_laguerre_legendre_row_sum_bound_bounds_dense_operator():
     matrix = jax.jacfwd(flattened_operator)(jnp.zeros(np.prod(state_shape)))
     exact_bounds = jnp.max(jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1)
     assert bool(jnp.all(exact_bounds <= precompute.row_sum_bound * (1.0 + 2e-12)))
+
+
+def test_implicit_laguerre_legendre_solve_matches_dense_backward_euler():
+    shape = (1, 1, 2, 2, 2, 1, 1, 1)
+    driver = jax.random.normal(jax.random.key(121), shape) / 20.0
+    response = jax.random.normal(jax.random.key(122), shape) / 15.0
+    precompute = build_laguerre_legendre_collision_precompute(
+        driver,
+        response,
+        component_labels=((0, 0, 1), (1, 0, 0)),
+    )
+    state = jax.random.normal(jax.random.key(123), (1, 2, 2, 1, 1, 1))
+    test_particle = jnp.asarray(
+        (
+            (1.2, -0.03, 0.0, 0.0),
+            (-0.02, 1.1, -0.01, 0.0),
+            (0.0, -0.04, 1.15, -0.02),
+            (0.0, 0.0, -0.03, 1.08),
+        )
+    )
+    dt = 0.07
+
+    collision = jax.jit(implicit_laguerre_legendre_collision)(state, test_particle, precompute, dt)
+    driver_matrix = driver.reshape(2, 4)
+    response_matrix = response.reshape(2, 4).T
+    dense_matrix = test_particle - dt * response_matrix @ driver_matrix
+    expected_advanced = jnp.linalg.solve(dense_matrix, state.reshape(4))
+    expected = (expected_advanced - state.reshape(4)) / dt
+
+    np.testing.assert_allclose(collision.reshape(4), expected, rtol=2e-13, atol=2e-13)
+
+    def objective(values):
+        result = implicit_laguerre_legendre_collision(values, test_particle, precompute, dt)
+        return jnp.vdot(result, result)
+
+    gradient = jax.jit(jax.grad(objective))(state)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
 
 
 def test_laguerre_legendre_contract_rejects_invalid_component_labels():

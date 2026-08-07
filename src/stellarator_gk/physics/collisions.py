@@ -669,6 +669,64 @@ def laguerre_legendre_collision(distribution, precompute: LaguerreLegendreCollis
     return result[0] if original_ndim == 5 else result
 
 
+def implicit_laguerre_legendre_collision(
+    distribution,
+    test_particle_matrix,
+    precompute: LaguerreLegendreCollisionPrecompute,
+    dt,
+):
+    """Apply the coupled backward-Euler test/field-particle collision solve.
+
+    ``test_particle_matrix`` is ``I - dt*C_tp`` with shape ``(state,state)``
+    or ``(z,kx,ky,state,state)``, where ``state = species*vpar*mu``. The
+    low-rank response system is solved through the Woodbury identity, matching
+    stella's implicit ordering without forming a dense field-particle matrix.
+    """
+
+    values = jnp.asarray(distribution)
+    original_ndim = values.ndim
+    if original_ndim == 5 and precompute.n_species == 1:
+        values = values[None, ...]
+    expected = (precompute.n_species, *precompute.driver.shape[3:])
+    if values.shape != expected:
+        raise ValueError(f"distribution has shape {values.shape}, expected {expected}")
+    n_species, n_vpar, n_mu, n_z, n_kx, n_ky = values.shape
+    state_size = n_species * n_vpar * n_mu
+    pair_size = n_species * n_species * precompute.driver.shape[2]
+    batch_shape = (n_z, n_kx, n_ky)
+    matrix = jnp.asarray(test_particle_matrix)
+    if matrix.shape == (state_size, state_size):
+        matrix = jnp.broadcast_to(matrix, (*batch_shape, state_size, state_size))
+    elif matrix.shape != (*batch_shape, state_size, state_size):
+        raise ValueError(
+            "test_particle_matrix must have shape (state,state) or "
+            f"(z,kx,ky,state,state), got {matrix.shape}"
+        )
+    state = values.transpose(3, 4, 5, 0, 1, 2).reshape(*batch_shape, state_size)
+    species_identity = jnp.eye(n_species, dtype=values.dtype)
+    driver_matrix = jnp.einsum(
+        "abcvmzxy,sb->zxyabcsvm",
+        precompute.driver,
+        species_identity,
+    ).reshape(*batch_shape, pair_size, state_size)
+    response_matrix = jnp.einsum(
+        "abcvmzxy,sa->zxysvmabc",
+        precompute.response,
+        species_identity,
+    ).reshape(*batch_shape, state_size, pair_size)
+    inhomogeneous = jnp.linalg.solve(matrix, state[..., None])[..., 0]
+    response = jnp.linalg.solve(matrix, jnp.asarray(dt) * response_matrix)
+    response_system = jnp.eye(pair_size, dtype=values.dtype) - jnp.matmul(driver_matrix, response)
+    moments = jnp.linalg.solve(
+        response_system,
+        jnp.matmul(driver_matrix, inhomogeneous[..., None]),
+    )
+    advanced = inhomogeneous + jnp.matmul(response, moments)[..., 0]
+    collision = (advanced - state) / jnp.asarray(dt)
+    result = collision.reshape(*batch_shape, n_species, n_vpar, n_mu).transpose(3, 4, 5, 0, 1, 2)
+    return result[0] if original_ndim == 5 else result
+
+
 def build_fokker_planck_precompute(
     velocity_grid: VelocityGrid,
     B,
@@ -1468,5 +1526,6 @@ __all__ = [
     "laguerre_legendre_collision",
     "laguerre_legendre_collision_components",
     "laguerre_legendre_collision_components_from_moments",
+    "implicit_laguerre_legendre_collision",
     "stella_laguerre_legendre_delta0",
 ]

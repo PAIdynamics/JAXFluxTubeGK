@@ -80,8 +80,11 @@ claimed.
   state, its aggregate collision RHS has L2 `2.46052e-3`, and local solved-psi
   factor replay agrees at `1.39e-13`. Driver and primitive traces are byte-
   identical across states, confirming coefficient state independence. The
-  remaining collision physics blocker is independent parity for stella's
-  implicit test-particle/response-system construction of `psi`.
+  differentiable Woodbury implementation now reproduces the full coupled
+  backward-Euler test/field-particle solve and matches a direct dense solve at
+  roundoff. The remaining collision physics blocker is therefore narrowed to
+  construction and native parity of stella's differential test-particle
+  matrix.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
