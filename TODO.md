@@ -460,7 +460,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   growth. The amplitude gate acts on nonzonal potential RMS and reports
   per-`ky` ratios, preventing zonal energy from masking heat-carrying modes.
   Long-time saturation is now the active discriminator before a resolution
-  and box ladder.
+  and box ladder. At final time 60, both hyperdiffusion `0.005` and `0.05`
+  remain strongly growing in the `5x4` box; expanding to the intended `9x5`
+  box delays but does not plateau by time 40 (nonzonal RMS `365x`, flux drift
+  `-4.48`). That run also exposed an artificially large randomly seeded zonal
+  potential. The producer now defaults the zonal seed to zero, with an explicit
+  opt-in fraction, so zonal flow must arise from nonlinear transfer. The
+  zero-zonal `9x5` long-time run is the next saturation discriminator.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

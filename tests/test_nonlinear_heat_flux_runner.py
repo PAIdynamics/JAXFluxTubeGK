@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 from examples.run_nonlinear_heat_flux import (
     _hyperdiffusion,
+    _initial_state,
     _parse_args,
     _phi_rms_diagnostics,
 )
@@ -19,6 +21,7 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
     assert args.n_kx == 9
     assert args.n_ky == 5
     assert args.min_phi_rms_ratio == pytest.approx(0.8)
+    assert args.initial_zonal_fraction == pytest.approx(0.0)
     assert args.gx_fprim * args.rmaj_over_lref == pytest.approx(2.222224)
     assert args.gx_tprim * args.rmaj_over_lref == pytest.approx(6.9166722)
     assert damping.shape == (5, 3)
@@ -43,3 +46,18 @@ def test_phi_rms_diagnostics_separates_zonal_and_nonzonal_amplitudes():
         [10.0, 0.5, 0.5]
     )
     assert float(diagnostics["phi_rms_ratio"]) > 1.0
+
+
+def test_initial_state_does_not_seed_zonal_potential_by_default():
+    precompute = SimpleNamespace(
+        n_species=1,
+        rhs=SimpleNamespace(
+            maxwellian=np.ones((1, 2, 2, 3)),
+            flr_factors=SimpleNamespace(bessel_j0=np.ones((1, 2, 2, 3, 3, 2))),
+        ),
+    )
+
+    state = _initial_state(precompute, 1.0e-3, 17)
+
+    np.testing.assert_allclose(np.asarray(state[..., 0]), 0.0, atol=0.0)
+    assert np.max(np.abs(np.asarray(state[..., 1]))) > 0.0

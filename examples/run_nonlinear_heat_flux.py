@@ -42,7 +42,7 @@ def _hyperdiffusion(fourier, coefficient: float):
     )
 
 
-def _initial_state(precompute, amplitude: float, seed: int):
+def _initial_state(precompute, amplitude: float, seed: int, zonal_fraction: float = 0.0):
     # maxwellian is (species,vpar,mu,z); Fourier topology comes from FLR J0.
     fourier_shape = precompute.rhs.flr_factors.bessel_j0.shape[-2:]
     shape = precompute.rhs.maxwellian.shape + fourier_shape
@@ -50,6 +50,7 @@ def _initial_state(precompute, amplitude: float, seed: int):
     state = amplitude * precompute.rhs.maxwellian[..., None, None] * noise
     if precompute.n_species == 1:
         state = state[0]
+    state = state.at[..., :, 0].multiply(zonal_fraction)
     # Enforce the real-field Hermitian constraint on the ky=0 line.
     center = fourier_shape[0] // 2
     ky_zero = state[..., :, 0]
@@ -102,6 +103,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--gx-tprim", type=float, default=2.49)
     parser.add_argument("--hyperdiffusion", type=float, default=0.05)
     parser.add_argument("--initial-amplitude", type=float, default=1.0e-3)
+    parser.add_argument("--initial-zonal-fraction", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--start-fraction", type=float, default=0.5)
     parser.add_argument("--max-relative-drift", type=float, default=0.2)
@@ -115,6 +117,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("phase-space sizes must be at least 2 and final-time positive")
     if args.min_phi_rms_ratio <= 0.0:
         parser.error("min-phi-rms-ratio must be positive")
+    if not 0.0 <= args.initial_zonal_fraction <= 1.0:
+        parser.error("initial-zonal-fraction must lie in [0, 1]")
     if min(args.rmaj_over_lref, args.gx_fprim, args.gx_tprim) <= 0.0:
         parser.error("rmaj-over-lref, gx-fprim, and gx-tprim must be positive")
     return args
@@ -163,7 +167,12 @@ def main(argv: list[str] | None = None) -> None:
         perpendicular_damping=_hyperdiffusion(fourier, args.hyperdiffusion),
     )
     spectral = build_exb_pseudospectral_precompute(fourier)
-    initial = _initial_state(precompute, args.initial_amplitude, args.seed)
+    initial = _initial_state(
+        precompute,
+        args.initial_amplitude,
+        args.seed,
+        zonal_fraction=args.initial_zonal_fraction,
+    )
     result = integrate_nonlinear_adaptive(
         initial, args.final_time, precompute, spectral, store_history=True
     )

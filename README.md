@@ -623,6 +623,11 @@ The local producer makes the GX profile conversion explicit: its default
 enter the local residual as `R/Ln` and `R/LT`. All three inputs and both derived
 gradients are recorded in the JSON report.
 
+The default random perturbation seeds only nonzonal modes. This avoids a large
+artificial `ky=0` potential from the weak zonal polarization denominator and
+lets zonal flows arise through nonlinear mode transfer. Use
+`--initial-zonal-fraction` only for a controlled zonal-seed experiment.
+
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`. The stationarity amplitude guard is
 applied to the heat-carrying nonzonal potential rather than the total field;
