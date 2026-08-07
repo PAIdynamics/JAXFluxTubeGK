@@ -338,6 +338,12 @@ claimed.
   time `0.2 -> 0.4` exactly. It exposed and fixed a short-window false positive:
   stationarity now additionally requires 100 samples and duration 10 by
   default, so the two-step segment correctly fails.
+- Compiled the nonlinear CFL evaluation and complete RK4 accepted step while
+  leaving adaptive termination and acceptance host-controlled. Focused time-
+  advance/nonlinear tests pass (`31 passed`). A `12x12x6`, `9x5` corrected-
+  topology segment reaches time 20 in 572 steps and `49.36 s` wall time while
+  writing a contract-checked checkpoint. Statistical gates, not bitwise trace
+  identity, remain the nonlinear acceptance contract.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

@@ -109,7 +109,9 @@ def integrate_fixed_step(
     dt = jnp.asarray(dt)
 
     if not store_history:
-        return _integrate_fixed_step_endpoints(state, dt, n_steps, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        return _integrate_fixed_step_endpoints(
+            state, dt, n_steps, rhs_fn, *rhs_args, filter_fn=filter_fn
+        )
 
     def body(carry, _index):
         next_state = rk4_step(carry, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
@@ -137,6 +139,7 @@ def integrate_adaptive(
     max_steps: int = 100_000,
     filter_fn=None,
     store_history: bool = True,
+    compile_step: bool = False,
 ):
     """Advance with RK4 using a state-dependent accepted timestep.
 
@@ -156,12 +159,37 @@ def integrate_adaptive(
     states = [state] if store_history else []
     times = [time]
     steps = []
+    if compile_step:
+        evaluate_timestep = jax.jit(lambda value, *args: timestep_fn(value, *args))
+        advance = jax.jit(
+            lambda value, dt, *args: rk4_step(
+                value,
+                dt,
+                rhs_fn,
+                *args,
+                filter_fn=filter_fn,
+            )
+        )
+    else:
+
+        def evaluate_timestep(value, *args):
+            return timestep_fn(value, *args)
+
+        def advance(value, dt, *args):
+            return rk4_step(
+                value,
+                dt,
+                rhs_fn,
+                *args,
+                filter_fn=filter_fn,
+            )
+
     while time < final_time and len(steps) < max_steps:
-        proposed = float(timestep_fn(state, *rhs_args))
+        proposed = float(evaluate_timestep(state, *rhs_args))
         if not np.isfinite(proposed) or proposed <= 0.0:
             raise ValueError("timestep_fn must return a finite positive value")
         dt = min(proposed, final_time - time)
-        state = rk4_step(state, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
+        state = advance(state, dt, *rhs_args)
         time += dt
         steps.append(dt)
         times.append(time)
@@ -210,10 +238,7 @@ def semi_lagrangian_mirror_step(
 
     spacing = vpar[1] - vpar[0]
     displacement = jnp.asarray(dt, dtype=vpar.dtype) * coefficient[None, :, :] / spacing
-    source_index = (
-        jnp.arange(vpar.shape[0], dtype=vpar.dtype)[:, None, None]
-        + displacement
-    )
+    source_index = jnp.arange(vpar.shape[0], dtype=vpar.dtype)[:, None, None] + displacement
     lower = jnp.floor(source_index).astype(jnp.int32)
     fraction = source_index - lower
     upper = lower + 1
@@ -221,9 +246,7 @@ def semi_lagrangian_mirror_step(
     z_index = jnp.arange(state.shape[2])[None, None, :]
 
     def values_at(index):
-        values = state[
-            jnp.clip(index, 0, state.shape[0] - 1), mu_index, z_index, :, :
-        ]
+        values = state[jnp.clip(index, 0, state.shape[0] - 1), mu_index, z_index, :, :]
         valid = (index >= 0) & (index < state.shape[0])
         return jnp.where(valid[..., None, None], values, 0.0)
 
@@ -244,20 +267,8 @@ def semi_lagrangian_mirror_step(
         base = target + shift
         location_5d = location[..., None, None]
         w0 = -location_5d * (location_5d - 2.0) * (location_5d - 1.0) / 6.0
-        w1 = (
-            3.0
-            * (location_5d - 2.0)
-            * (location_5d - 1.0)
-            * (location_5d + 1.0)
-            / 6.0
-        )
-        w2 = (
-            -3.0
-            * location_5d
-            * (location_5d - 2.0)
-            * (location_5d + 1.0)
-            / 6.0
-        )
+        w1 = 3.0 * (location_5d - 2.0) * (location_5d - 1.0) * (location_5d + 1.0) / 6.0
+        w2 = -3.0 * location_5d * (location_5d - 2.0) * (location_5d + 1.0) / 6.0
         w3 = location_5d * (location_5d - 1.0) * (location_5d + 1.0) / 6.0
         cubic = (
             w0 * values_at(base - direction)
@@ -265,12 +276,8 @@ def semi_lagrangian_mirror_step(
             + w2 * values_at(base + direction)
             + w3 * values_at(base + 2 * direction)
         )
-        linear = (1.0 - location_5d) * values_at(base) + location_5d * values_at(
-            base + direction
-        )
-        outgoing = (shift == 0) & (
-            target == jnp.where(direction > 0, 0, vpar.shape[0] - 1)
-        )
+        linear = (1.0 - location_5d) * values_at(base) + location_5d * values_at(base + direction)
+        outgoing = (shift == 0) & (target == jnp.where(direction > 0, 0, vpar.shape[0] - 1))
         return jnp.where(outgoing[..., None, None], linear, cubic)
 
     left = values_at(lower - 1)
@@ -278,12 +285,8 @@ def semi_lagrangian_mirror_step(
     center_right = values_at(lower + 1)
     right = values_at(lower + 2)
     weight_left = -fraction * (fraction - 1.0) * (fraction - 2.0) / 6.0
-    weight_center_left = (
-        (fraction + 1.0) * (fraction - 1.0) * (fraction - 2.0) / 2.0
-    )
-    weight_center_right = -(
-        (fraction + 1.0) * fraction * (fraction - 2.0) / 2.0
-    )
+    weight_center_left = (fraction + 1.0) * (fraction - 1.0) * (fraction - 2.0) / 2.0
+    weight_center_right = -((fraction + 1.0) * fraction * (fraction - 2.0) / 2.0)
     weight_right = (fraction + 1.0) * fraction * (fraction - 1.0) / 6.0
     return (
         weight_left * left
@@ -318,9 +321,7 @@ def integrate_fixed_step_split_mirror(
     if parallel_streaming_propagator is not None and parallel_response_step_fn is not None:
         raise ValueError("choose either a streaming propagator or a coupled response step")
     if parallel_response_splitting not in ("strang", "after", "stella_after"):
-        raise ValueError(
-            "parallel_response_splitting must be 'strang', 'after', or 'stella_after'"
-        )
+        raise ValueError("parallel_response_splitting must be 'strang', 'after', or 'stella_after'")
     if explicit_scheme not in ("rk3", "rk4"):
         raise ValueError("explicit_scheme must be 'rk3' or 'rk4'")
 
@@ -366,6 +367,7 @@ def integrate_fixed_step_split_mirror(
         )
 
     if store_history:
+
         def body(carry, _index):
             next_state = step(carry)
             return next_state, next_state
@@ -470,7 +472,9 @@ def growth_rate(amplitude_start, amplitude_end, t_start, t_end, amplitude_floor:
     amplitude_end = jnp.asarray(amplitude_end)
     duration = jnp.asarray(t_end) - jnp.asarray(t_start)
     floor = jnp.asarray(amplitude_floor, dtype=amplitude_end.real.dtype)
-    return (jnp.log(jnp.maximum(amplitude_end, floor)) - jnp.log(jnp.maximum(amplitude_start, floor))) / duration
+    return (
+        jnp.log(jnp.maximum(amplitude_end, floor)) - jnp.log(jnp.maximum(amplitude_start, floor))
+    ) / duration
 
 
 def real_frequency(
@@ -758,13 +762,13 @@ def estimate_linear_cfl_dt(
     distribution_gain = jnp.asarray(1.0)
     derivative_model = getattr(rhs, "parallel_derivative_model", "matrix")
     if derivative_model == "matrix" and hasattr(rhs, "parallel_recurrence_operator"):
-        parallel_recurrence_radius = jnp.max(
-            jnp.abs(rhs.parallel_recurrence_coeff)
-        ) * jnp.max(jnp.sum(jnp.abs(rhs.parallel_recurrence_operator), axis=1))
+        parallel_recurrence_radius = jnp.max(jnp.abs(rhs.parallel_recurrence_coeff)) * jnp.max(
+            jnp.sum(jnp.abs(rhs.parallel_recurrence_operator), axis=1)
+        )
     if derivative_model != "gkw_igh" and hasattr(rhs, "velocity_recurrence_operator"):
-        velocity_recurrence_radius = jnp.max(
-            jnp.abs(rhs.velocity_recurrence_coeff)
-        ) * jnp.max(jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1))
+        velocity_recurrence_radius = jnp.max(jnp.abs(rhs.velocity_recurrence_coeff)) * jnp.max(
+            jnp.sum(jnp.abs(rhs.velocity_recurrence_operator), axis=1)
+        )
     if getattr(precompute, "field_model", None) == "kinetic":
         field_response_radius = _electrostatic_field_response_radius(precompute)
     if getattr(precompute, "field_model", None) == "electromagnetic":
@@ -806,9 +810,7 @@ def _electrostatic_field_response_radius(precompute):
     # phi(z,kx,ky) is local in Fourier space and is a weighted velocity-space
     # reduction. This is its exact infinity-norm row sum before optional zonal
     # corrections, which are irrelevant to the non-zonal TEM path.
-    phi_radius = jnp.sum(jnp.abs(field.phi_weight), axis=(0, 1, 2)) / jnp.abs(
-        safe_denominator
-    )
+    phi_radius = jnp.sum(jnp.abs(field.phi_weight), axis=(0, 1, 2)) / jnp.abs(safe_denominator)
 
     bessel = jnp.asarray(rhs.flr_factors.bessel_j0)
     maxwellian = jnp.asarray(rhs.maxwellian)[..., None, None]
@@ -817,9 +819,7 @@ def _electrostatic_field_response_radius(precompute):
     ey = jnp.asarray(rhs.E_y)[None, None, None, :, None, None]
     gyro_radius = jnp.abs(bessel[:, None, ...])
 
-    equilibrium = jnp.max(
-        jnp.abs(ey * ky * maxwellian * drive) * gyro_radius * phi_radius
-    )
+    equilibrium = jnp.max(jnp.abs(ey * ky * maxwellian * drive) * gyro_radius * phi_radius)
     drift = jnp.max(
         jnp.abs(
             rhs.charge_over_temperature[:, None, None, None, None, None]
@@ -831,14 +831,18 @@ def _electrostatic_field_response_radius(precompute):
     )
 
     dz_radius = jnp.max(jnp.sum(jnp.abs(rhs.D_z), axis=1))
-    parallel = jnp.max(
-        jnp.abs(
-            rhs.charge_over_temperature[:, None, None, None, None, None]
-            * rhs.parallel_streaming_coeff[:, :, None, :, None, None]
-            * maxwellian
+    parallel = (
+        jnp.max(
+            jnp.abs(
+                rhs.charge_over_temperature[:, None, None, None, None, None]
+                * rhs.parallel_streaming_coeff[:, :, None, :, None, None]
+                * maxwellian
+            )
+            * gyro_radius
         )
-        * gyro_radius
-    ) * dz_radius * jnp.max(phi_radius)
+        * dz_radius
+        * jnp.max(phi_radius)
+    )
     return equilibrium + drift + parallel
 
 
@@ -855,34 +859,31 @@ def _electromagnetic_field_response_radius(precompute):
     safe_ampere = jnp.maximum(jnp.abs(ampere_denominator), ampere_floor)
     apar_radius = jnp.sum(jnp.abs(ampere.source_weight), axis=(0, 1, 2)) / safe_ampere
     physical_gain = jnp.max(
-        1.0
-        + jnp.abs(ampere.g_to_f_factor)
-        * apar_radius[None, None, None, ...]
+        1.0 + jnp.abs(ampere.g_to_f_factor) * apar_radius[None, None, None, ...]
     )
 
     perpendicular_denominator = jnp.asarray(perpendicular.denominator)
     perpendicular_floor = jnp.asarray(
         perpendicular.denominator_floor, dtype=perpendicular_denominator.dtype
     )
-    safe_perpendicular = jnp.maximum(
-        jnp.abs(perpendicular_denominator), perpendicular_floor
-    )
+    safe_perpendicular = jnp.maximum(jnp.abs(perpendicular_denominator), perpendicular_floor)
     constant_mode = jnp.abs(ampere.kperp_squared) < perpendicular_floor
-    phi_radius = physical_gain * jnp.sum(
-        jnp.abs(perpendicular.phi_weight), axis=(0, 1, 2)
-    ) / safe_perpendicular
-    bpar_radius = physical_gain * jnp.sum(
-        jnp.abs(perpendicular.bpar_weight), axis=(0, 1, 2)
-    ) / safe_perpendicular
+    phi_radius = (
+        physical_gain
+        * jnp.sum(jnp.abs(perpendicular.phi_weight), axis=(0, 1, 2))
+        / safe_perpendicular
+    )
+    bpar_radius = (
+        physical_gain
+        * jnp.sum(jnp.abs(perpendicular.bpar_weight), axis=(0, 1, 2))
+        / safe_perpendicular
+    )
     phi_radius = jnp.where(constant_mode, 0.0, phi_radius)
     bpar_radius = jnp.where(constant_mode, 0.0, bpar_radius)
 
     bessel = jnp.asarray(rhs.flr_factors.bessel_j0)[:, None, ...]
     gyro_phi_radius = jnp.abs(bessel) * phi_radius[None, None, None, ...]
-    gyro_bpar_radius = (
-        jnp.abs(perpendicular.bpar_chi_factor)
-        * bpar_radius[None, None, None, ...]
-    )
+    gyro_bpar_radius = jnp.abs(perpendicular.bpar_chi_factor) * bpar_radius[None, None, None, ...]
     gyro_chi_radius = (
         gyro_phi_radius
         + jnp.abs(ampere.apar_chi_factor) * apar_radius[None, None, None, ...]
@@ -901,8 +902,10 @@ def _electromagnetic_field_response_radius(precompute):
         * maxwellian
     )
     dz_radius = jnp.max(jnp.sum(jnp.abs(rhs.D_z), axis=1))
-    parallel = jnp.max(field_coefficient) * dz_radius * (
-        jnp.max(gyro_phi_radius) + jnp.max(gyro_bpar_radius)
+    parallel = (
+        jnp.max(field_coefficient)
+        * dz_radius
+        * (jnp.max(gyro_phi_radius) + jnp.max(gyro_bpar_radius))
     )
 
     drift_coefficient = jnp.abs(
@@ -910,9 +913,7 @@ def _electromagnetic_field_response_radius(precompute):
         * rhs.magnetic_drift_frequency
         * maxwellian
     )
-    drift = jnp.max(
-        drift_coefficient * (gyro_phi_radius + gyro_bpar_radius)
-    )
+    drift = jnp.max(drift_coefficient * (gyro_phi_radius + gyro_bpar_radius))
     return physical_gain, equilibrium + parallel + drift
 
 

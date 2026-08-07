@@ -667,6 +667,11 @@ which lets an initial transient be excluded deliberately. Stationarity also
 requires at least 100 window samples and duration 10 by default; both controls
 are configurable but should be declared unchanged for acceptance ladders.
 
+Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
+one complete RK4 step while retaining host-controlled accept/termination
+decisions. This reduces repeated dispatch overhead without moving nonsmooth
+adaptive decisions onto the differentiable trajectory path.
+
 Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
 evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux
 and GX `Q/Q_GB` labels deliberately fail comparison unless a documented

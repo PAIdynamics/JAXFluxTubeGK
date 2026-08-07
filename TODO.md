@@ -493,6 +493,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   segment. The stationarity gate now also requires at least 100 samples and
   duration 10 by default, closing a false positive found in a two-step restart
   smoke. Extending the corrected time-60 state is the next numerical run.
+  The nonlinear driver now compiles the CFL evaluation and complete RK4 step
+  while keeping adaptive acceptance host-controlled. A production-shape
+  `12x12x6`, `9x5` time-20 segment completes in `49.36 s` and 572 steps with a
+  valid checkpoint, making staged long-time runs practical.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

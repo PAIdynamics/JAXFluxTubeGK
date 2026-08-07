@@ -146,9 +146,7 @@ def build_implicit_parallel_response_precompute(
         positive_derivative = (forward - identity_z) / spacing
         negative_derivative = (identity_z - backward) / spacing
         positive_rhs = -jnp.mean(coefficient, axis=1) >= 0.0
-        mass_matrix = jnp.where(
-            positive_rhs[:, None, None], positive_mass, negative_mass
-        )
+        mass_matrix = jnp.where(positive_rhs[:, None, None], positive_mass, negative_mass)
         derivative = jnp.where(
             positive_rhs[:, None, None], positive_derivative, negative_derivative
         )
@@ -156,9 +154,7 @@ def build_implicit_parallel_response_precompute(
         right_dt = 0.5 * (1.0 - time_upwind) * jnp.asarray(dt, dtype=dtype)
 
     streaming_coefficient = jnp.einsum("vij,vj->vi", mass_matrix, coefficient)
-    field_maxwellian = jnp.einsum(
-        "vij,vmj->vmi", mass_matrix, precompute.rhs.maxwellian[0]
-    )
+    field_maxwellian = jnp.einsum("vij,vmj->vmi", mass_matrix, precompute.rhs.maxwellian[0])
     operator = -streaming_coefficient[:, :, None] * derivative
     left_inverse = jnp.linalg.solve(
         mass_matrix - left_dt * operator,
@@ -183,9 +179,7 @@ def build_implicit_parallel_response_precompute(
         correction = _apply_parallel_left_inverse(drive, left_inverse)
         return _solve_phi(correction, precompute)
 
-    response_columns = jax.vmap(field_response_column)(field_basis).reshape(
-        n_field, n_field
-    )
+    response_columns = jax.vmap(field_response_column)(field_basis).reshape(n_field, n_field)
     field_matrix = jnp.eye(n_field, dtype=response_columns.dtype) - response_columns.T
     return ImplicitParallelResponsePrecompute(
         left_inverse=left_inverse,
@@ -223,9 +217,9 @@ def implicit_parallel_response_step(
     )
     uncoupled = _apply_parallel_left_inverse(rhs_state, response.left_inverse)
     phi_shape = phi_old.shape
-    phi_new = (
-        response.field_inverse @ _solve_phi(uncoupled, precompute).reshape(-1)
-    ).reshape(phi_shape)
+    phi_new = (response.field_inverse @ _solve_phi(uncoupled, precompute).reshape(-1)).reshape(
+        phi_shape
+    )
     correction = _apply_parallel_left_inverse(
         response.left_dt
         * _implicit_parallel_field_drive(
@@ -414,10 +408,7 @@ def linear_residual(
             jnp.asarray(precompute.rhs.flr_factors.bessel_j0)[:, None, ...]
             * solved_phi[None, None, None, ...]
         )
-        gyro_bpar = (
-            precompute.field.perpendicular.bpar_chi_factor
-            * bpar[None, None, None, ...]
-        )
+        gyro_bpar = precompute.field.perpendicular.bpar_chi_factor * bpar[None, None, None, ...]
         gyro_chi = (
             gyro_phi
             + precompute.field.ampere.apar_chi_factor * apar[None, None, None, ...]
@@ -436,13 +427,9 @@ def linear_residual(
         residual = linear_residual_from_phi(distribution, solved_phi, precompute.rhs)
     if precompute.collisions is not None:
         if isinstance(precompute.collisions, ConservingBGKPrecompute):
-            collision_term = conserving_bgk_collision(
-                collision_distribution, precompute.collisions
-            )
+            collision_term = conserving_bgk_collision(collision_distribution, precompute.collisions)
         else:
-            collision_term = fokker_planck_collision(
-                collision_distribution, precompute.collisions
-            )
+            collision_term = fokker_planck_collision(collision_distribution, precompute.collisions)
         residual = residual + collision_term
     return residual
 
@@ -461,9 +448,7 @@ def nonlinear_residual(
     solved_phi = phi if phi is not None else _solve_phi(distribution, precomputed)
     return linear_residual(
         distribution, precomputed=precomputed, phi=solved_phi
-    ) + nonlinear_exb_term(
-        distribution, solved_phi, precomputed.rhs, spectral_precomputed
-    )
+    ) + nonlinear_exb_term(distribution, solved_phi, precomputed.rhs, spectral_precomputed)
 
 
 def estimate_nonlinear_residual_dt(
@@ -478,8 +463,7 @@ def estimate_nonlinear_residual_dt(
 
     phi = _solve_phi(distribution, precomputed)
     gyro_phi = (
-        jnp.asarray(precomputed.rhs.flr_factors.bessel_j0)
-        * jnp.asarray(phi)[None, None, ...]
+        jnp.asarray(precomputed.rhs.flr_factors.bessel_j0) * jnp.asarray(phi)[None, None, ...]
     )
     linear_dt = estimate_linear_cfl_dt(precomputed, safety=linear_safety)
     nonlinear_dt = estimate_nonlinear_exb_dt(
@@ -519,6 +503,7 @@ def integrate_nonlinear_adaptive(
         spectral_precomputed,
         max_steps=max_steps,
         store_history=store_history,
+        compile_step=True,
     )
 
 

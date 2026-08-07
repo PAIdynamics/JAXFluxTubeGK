@@ -59,6 +59,23 @@ def test_adaptive_integrator_reaches_final_time_and_records_accepted_steps():
     assert jnp.min(result.dt_history) < jnp.max(result.dt_history)
 
 
+def test_compiled_adaptive_step_matches_uncompiled_path():
+    def rhs(state, rate):
+        return rate * state
+
+    def timestep(_state, _rate):
+        return jnp.asarray(0.037)
+
+    arguments = (jnp.asarray(1.2), 0.2, rhs, timestep, jnp.asarray(-0.4))
+    direct = integrate_adaptive(*arguments)
+    compiled = integrate_adaptive(*arguments, compile_step=True)
+
+    np.testing.assert_allclose(compiled.state, direct.state, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(compiled.history, direct.history, rtol=2e-13, atol=2e-13)
+    np.testing.assert_allclose(compiled.times, direct.times, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(compiled.dt_history, direct.dt_history, rtol=0.0, atol=0.0)
+
+
 def test_semi_lagrangian_mirror_step_translates_linear_profile():
     vpar = jnp.linspace(-2.0, 2.0, 9)
     state = vpar[:, None, None, None, None].astype(jnp.complex128)
@@ -111,9 +128,7 @@ def test_stella_cubic_uses_linear_outgoing_point_and_zero_ghosts():
         (1.0 - fraction) * state[0, 0, 0, 0, 0] + fraction * state[1, 0, 0, 0, 0],
     )
     shifted = vpar + 0.1
-    np.testing.assert_allclose(
-        advanced[1:-2, 0, 0, 0, 0], shifted[1:-2] ** 3, atol=2e-13
-    )
+    np.testing.assert_allclose(advanced[1:-2, 0, 0, 0, 0], shifted[1:-2] ** 3, atol=2e-13)
 
 
 def test_semi_lagrangian_mirror_step_rejects_unknown_interpolation():
@@ -204,9 +219,7 @@ def test_implicit_parallel_streaming_matches_midpoint_amplification():
     state = jnp.arange(8, dtype=jnp.float64).reshape(2, 1, 2, 2, 1).astype(jnp.complex128)
 
     observed = implicit_parallel_streaming_step(state, propagator)
-    expected = jnp.stack(
-        [propagator[index] @ state[index, 0, :, :, 0] for index in range(2)]
-    )
+    expected = jnp.stack([propagator[index] @ state[index, 0, :, :, 0] for index in range(2)])
 
     np.testing.assert_allclose(observed[:, 0, :, :, 0], expected, rtol=2e-13, atol=2e-13)
     np.testing.assert_allclose(
@@ -283,10 +296,12 @@ def test_mode_chain_growth_frequency_and_normalization():
         connectivity=connectivity,
     )
 
-    expected_amplitude = jnp.asarray([
-        jnp.sqrt(jnp.sum(weights)),
-        jnp.sqrt(jnp.sum(weights) * 3.0 * 1.25),
-    ])
+    expected_amplitude = jnp.asarray(
+        [
+            jnp.sqrt(jnp.sum(weights)),
+            jnp.sqrt(jnp.sum(weights) * 3.0 * 1.25),
+        ]
+    )
     np.testing.assert_allclose(amplitude, expected_amplitude, rtol=2e-13, atol=2e-13)
     np.testing.assert_allclose(diagnostics.growth_rate, gamma, rtol=2e-13, atol=2e-13)
     np.testing.assert_allclose(diagnostics.frequency, omega, rtol=2e-13, atol=2e-13)
