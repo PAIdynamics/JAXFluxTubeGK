@@ -478,6 +478,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `1.99e-16`, `1.08e-16`, `7.15e-17`, and `8.27e-17`. The remaining matrix
   work is therefore finite-difference interior and boundary assembly plus the
   already isolated diagonal gyro term, not collision-frequency normalization.
+  The local gyro-diagonal constructor now matches all 208 nonzero-`k_perp`
+  native matrix differences with `6.65e-14` maximum absolute error. The only
+  remaining differential-matrix gap is the zero-`k_perp` finite-difference
+  interior and boundary assembly.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

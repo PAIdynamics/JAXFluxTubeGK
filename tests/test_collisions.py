@@ -20,6 +20,7 @@ from stellarator_gk import (
     build_stella_laguerre_legendre_driver,
     build_stella_laguerre_legendre_collision_precompute,
     build_stella_test_particle_primitives,
+    build_stella_test_particle_gyro_diagonal,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -558,6 +559,16 @@ def test_stella_test_particle_primitives_are_jittable_and_differentiable():
     gradient = jax.jit(jax.grad(coefficient_sum))(frequencies)
     assert bool(jnp.all(jnp.isfinite(gradient)))
     assert bool(jnp.all(gradient > 0.0))
+
+    gyro = build_stella_test_particle_gyro_diagonal(
+        velocity,
+        magnetic_field,
+        species,
+        observed,
+        0.01,
+    )
+    assert gyro.shape == (2, 6, 2, 2)
+    assert bool(jnp.all(gyro >= 0.0))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

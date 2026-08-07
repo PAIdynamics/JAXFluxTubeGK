@@ -60,6 +60,13 @@ claimed.
   frequency normalization is closed; only finite-difference stencil assembly
   and the independently isolated gyro diagonal remain before full matrix
   parity.
+- Added the local gyro-diffusion diagonal using the validated primitive arrays,
+  species `sqrt(T*m)/|Z|` scale, and ordered electron-ion factors. Across all
+  208 nonzero-`kperp` native matrices it agrees with the matrix-minus-base
+  diagonal to `6.65e-14` maximum absolute error. The corresponding relative L2
+  is `1.19e-9` because the comparison subtracts nearly unit diagonal matrices.
+  The zero-`kperp` finite-difference interior/boundary stencil is now the sole
+  remaining matrix-construction blocker.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

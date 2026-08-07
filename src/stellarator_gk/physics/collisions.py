@@ -216,6 +216,77 @@ def build_stella_test_particle_primitives(
         deflection=deflection,
         mixed_diffusion=mixed_diffusion,
     )
+
+
+def build_stella_test_particle_gyro_diagonal(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    primitives: StellaTestParticlePrimitives,
+    dt,
+    *,
+    gyro_scale=1.0,
+    deflection_scale=1.0,
+    electron_parallel_scale=1.0,
+    electron_deflection_scale=1.0,
+    electron_index: int | None = 1,
+    ion_index: int | None = 0,
+):
+    """Return stella's contribution to ``I-dt*C_test`` per unit ``kperp2``.
+
+    The result has ``(species, vpar, mu, z)`` layout and is purely diagonal in
+    velocity and species. ``primitives`` must use the same electron-ion knob
+    values; stella applies the corresponding factors once more in this term.
+    """
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    magnetic_field = jnp.asarray(B)
+    parallel_scale = jnp.ones((n_species, n_species), dtype=magnetic_field.dtype)
+    deflection_pair_scale = jnp.ones_like(parallel_scale)
+    if (
+        electron_index is not None
+        and ion_index is not None
+        and electron_index != ion_index
+    ):
+        parallel_scale = parallel_scale.at[electron_index, ion_index].set(
+            electron_parallel_scale
+        )
+        deflection_pair_scale = deflection_pair_scale.at[
+            electron_index, ion_index
+        ].set(electron_deflection_scale)
+    parallel = jnp.sum(
+        primitives.parallel_diffusion
+        * parallel_scale[:, :, None, None, None],
+        axis=1,
+    )
+    deflection = jnp.sum(
+        primitives.deflection
+        * deflection_pair_scale[:, :, None, None, None],
+        axis=1,
+    )
+    bmu = magnetic_field[None, None, :] * mu[None, :, None]
+    velocity_squared = vpar[:, None, None] ** 2
+    smz = jnp.asarray(
+        [
+            jnp.abs(jnp.sqrt(item.temperature * item.mass) / item.charge)
+            for item in species_tuple
+        ]
+    )
+    return (
+        jnp.asarray(dt)
+        * jnp.asarray(gyro_scale)
+        * 0.5
+        * (smz[:, None, None, None] / magnetic_field[None, None, None, :]) ** 2
+        * (
+            parallel * bmu[None, ...]
+            + jnp.asarray(deflection_scale)
+            * deflection
+            * (velocity_squared + bmu)[None, ...]
+        )
+    )
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
@@ -1691,6 +1762,7 @@ __all__ = [
     "build_stella_laguerre_legendre_driver",
     "build_stella_laguerre_legendre_collision_precompute",
     "build_stella_test_particle_primitives",
+    "build_stella_test_particle_gyro_diagonal",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",

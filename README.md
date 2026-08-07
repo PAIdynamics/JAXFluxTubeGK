@@ -755,6 +755,11 @@ species masses, and pair frequencies. All 624 native rows agree at relative L2
 errors below `2e-16`. The remaining differential-matrix gap is confined to
 finite-difference interior/boundary assembly and the diagonal gyro term.
 
+`build_stella_test_particle_gyro_diagonal(...)` closes the latter term. The
+local result matches all 208 nonzero-`k_perp` native matrix differences with
+`6.65e-14` maximum absolute error. The remaining matrix gap is only stella's
+zero-`k_perp` finite-difference interior and boundary assembly.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 
