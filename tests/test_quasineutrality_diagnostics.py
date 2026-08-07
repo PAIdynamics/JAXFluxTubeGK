@@ -17,6 +17,7 @@ from stellarator_gk import (
     build_kinetic_quasineutrality_precompute,
     build_velocity_grid,
     default_adiabatic_electron_params,
+    gyrokinetic_heat_response,
     kinetic_quasineutrality_residual,
     kinetic_quasineutrality_residual_from_density,
     kxky_spectrum,
@@ -279,3 +280,42 @@ def test_saturated_flux_statistics_report_mean_uncertainty_and_drift():
     np.testing.assert_allclose(report.standard_error, 0.0)
     np.testing.assert_allclose(report.relative_window_drift, 0.0)
     assert report.n_samples == 3
+
+
+def test_gyrokinetic_heat_response_matches_direct_species_quadrature():
+    velocity, fourier, B, species, _precompute = _setup()
+    shape = (
+        velocity.vpar.size,
+        velocity.mu.size,
+        B.size,
+        fourier.kx.size,
+        fourier.ky.size,
+    )
+    distribution = (
+        jax.random.normal(jax.random.key(91), shape)
+        + 1j * jax.random.normal(jax.random.key(92), shape)
+    )
+    kperp2 = (1.0 + 0.2 * jnp.arange(B.size))[:, None, None] * (
+        fourier.kx[None, :, None] ** 2 + fourier.ky[None, None, :] ** 2
+    )
+    flr = species_flr_factors(species, velocity.mu, B, kperp2)
+    observed = jax.jit(gyrokinetic_heat_response)(
+        distribution,
+        velocity,
+        B,
+        species,
+        flr.bessel_j0,
+    )
+    energy = (
+        velocity.vpar[:, None, None] ** 2
+        + 2.0 * velocity.mu[None, :, None] * B[None, None, :]
+    ) / species.temperature
+    weighted = (
+        distribution
+        * flr.bessel_j0[None, ...]
+        * species.temperature
+        * (energy[..., None, None] - 1.5)
+    )
+    expected = velocity_space_integral(weighted, velocity, B)
+
+    np.testing.assert_allclose(observed, expected, rtol=2e-13, atol=2e-13)

@@ -594,6 +594,11 @@ combined momentum and energy independently for each unordered species pair.
 It establishes reciprocal software coupling, not stella/Landau coefficient
 parity; production collision claims remain blocked.
 
+`gyrokinetic_heat_response(...)` supplies the collocation-space
+`J0 T_s (E_s-3/2) f_s` velocity moment used with `radial_flux_spectrum(...)`.
+This makes nonlinear heat-flux histories measurable from evolved states; it
+does not by itself establish stationarity or external turbulence parity.
+
 ## Current Validation Status
 
 Passing guardrails:

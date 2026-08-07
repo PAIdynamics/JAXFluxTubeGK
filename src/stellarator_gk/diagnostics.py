@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 
-from .types import VelocityGrid
+from .types import SpeciesParams, VelocityGrid
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,63 @@ def total_radial_flux(phi, response, ky, w_z=None, parseval=None, sign: float = 
     return jnp.sum(
         radial_flux_spectrum(phi, response, ky, w_z=w_z, parseval=parseval, sign=sign)
     )
+
+
+def gyrokinetic_heat_response(
+    distribution,
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    bessel_j0,
+):
+    """Return each species' gyroaveraged non-advective heat response.
+
+    The response is the discrete velocity integral of
+    ``J0 * T_s * (E_s - 3/2) * f_s``.  It can be passed directly to
+    :func:`radial_flux_spectrum` with the electrostatic potential.
+    """
+
+    values = jnp.asarray(distribution)
+    original_ndim = values.ndim
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    if original_ndim == 5 and len(species_tuple) == 1:
+        values = values[None, ...]
+    if values.ndim != 6 or values.shape[0] != len(species_tuple):
+        raise ValueError("distribution has incompatible species or phase-space shape")
+    gyroaverage = jnp.asarray(bessel_j0)
+    if gyroaverage.ndim == 4 and len(species_tuple) == 1:
+        gyroaverage = gyroaverage[None, ...]
+    expected_gyro_shape = (
+        len(species_tuple),
+        values.shape[2],
+        values.shape[3],
+        values.shape[4],
+        values.shape[5],
+    )
+    if gyroaverage.shape != expected_gyro_shape:
+        raise ValueError("bessel_j0 has incompatible species, mu, z, or Fourier shape")
+
+    vpar = jnp.asarray(velocity_grid.vpar)[None, :, None, None]
+    mu = jnp.asarray(velocity_grid.mu)[None, None, :, None]
+    B = jnp.asarray(B)[None, None, None, :]
+    temperature = jnp.asarray([item.temperature for item in species_tuple])[
+        :, None, None, None
+    ]
+    normalized_energy = (vpar**2 + 2.0 * mu * B) / temperature
+    heat_weight = temperature * (normalized_energy - 1.5)
+    measure = (
+        jnp.asarray(velocity_grid.w_vpar)[:, None, None]
+        * jnp.asarray(velocity_grid.w_mu)[None, :, None]
+        * B[0]
+    )
+    response = jnp.einsum(
+        "vmz,svmzxy,smzxy,svmz->szxy",
+        measure,
+        values,
+        gyroaverage,
+        heat_weight,
+    )
+    return response[0] if original_ndim == 5 else response
 
 
 def saturated_radial_flux_statistics(

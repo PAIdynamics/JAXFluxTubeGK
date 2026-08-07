@@ -1269,6 +1269,18 @@ fixed-step driver. Production nonlinear readiness additionally requires
 statistically stationary heat flux, resolution and box-size convergence, and
 independent-code parity.
 
+For a collocation-space state, the implemented electrostatic heat response is
+egin{equation}
+  \mathcal{Q}_{s,\mathbf{k}}(z)
+  = \int d^3v\,J_{0,s}\,T_s
+    \left(\mathcal{E}_s-\frac{3}{2}\right)f_{s,\mathbf{k}},
+end{equation}
+and its radial spectral contribution is proportional to
+(k_y\operatorname{Im}[\phi_{\mathbf{k}}^*\mathcal{Q}_{s,\mathbf{k}}]).
+The velocity integral uses the same discrete measure as the field solve.  This
+defines the evolved-state diagnostic but does not replace the stationarity,
+resolution, domain-size, and independent-code gates.
+
 Other extensions should be added only after the linear electrostatic baseline is validated:
 \begin{itemize}
   \item kinetic electrons via \eqref{eq:phi-kinetic};

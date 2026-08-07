@@ -416,6 +416,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [ ] Demonstrate statistically stationary heat flux with resolution/domain
   convergence and pass an independent nonlinear parity gate. The operator,
   adaptive driver, and diagnostics alone do not establish a turbulence claim.
+  The collocation diagnostic now evaluates the gyroaveraged non-advective heat
+  response `J0 T_s (E_s-3/2) f_s` directly from each evolved species and has a
+  JIT/direct-quadrature contract. A reproducible driven nonlinear trajectory,
+  stationarity window, resolution/box ladder, and independent GX or stella
+  heat-flux comparison are still required.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

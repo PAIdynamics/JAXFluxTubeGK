@@ -189,8 +189,10 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             superseded_for_claims=(),
             evidence=(
                 "The dealiased ExB bracket, combined CFL driver, and saturation "
-                "statistics pass unit tests, but no stationary resolution/domain "
-                "ladder or independent heat-flux comparison has been accepted."
+                "statistics pass unit tests. The per-species collocation heat response "
+                "J0*T_s*(E_s-3/2)*f_s now matches direct velocity quadrature, but no "
+                "stationary resolution/domain ladder or independent heat-flux comparison "
+                "has been accepted."
             ),
             next_action=(
                 "Run a revision-pinned nonlinear benchmark through transient, "

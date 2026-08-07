@@ -251,6 +251,10 @@ claimed.
   RK4 driver now selects the minimum of the coupled linear and instantaneous
   nonlinear CFL bounds and records every accepted step. Adaptive accept
   decisions are explicitly outside the differentiable fixed-step path.
+- Added `gyrokinetic_heat_response`, the per-species collocation quadrature of
+  `J0 T_s (E_s-3/2) f_s`. It is JIT-compatible and agrees with a direct weighted
+  velocity integral, closing the missing evolved-state-to-heat-flux diagnostic
+  connection.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 
