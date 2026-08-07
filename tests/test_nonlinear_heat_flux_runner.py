@@ -32,6 +32,8 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
     assert args.ikxspace == 1
     assert args.min_stationary_samples == 100
     assert args.min_stationary_window_duration == pytest.approx(10.0)
+    assert args.stationary_block_duration == pytest.approx(5.0)
+    assert args.min_stationary_blocks == 6
     assert args.max_absolute_phi_growth_rate == pytest.approx(0.02)
     assert args.flux_moment == "nonadvective_heat"
     assert args.gx_fprim * args.rmaj_over_lref == pytest.approx(2.222224)

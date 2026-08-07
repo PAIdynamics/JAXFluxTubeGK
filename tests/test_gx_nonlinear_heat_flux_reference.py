@@ -20,7 +20,7 @@ def test_gx_heat_flux_summary_matches_declared_stationary_window():
     assert summary["relative_window_drift"] == pytest.approx(0.0)
     assert summary["n_samples"] == 4
     assert summary["window_start_time"] == pytest.approx(4.0)
-    assert gx_flux_stationary(summary, min_samples=4, min_window_duration=3.0)
+    assert gx_flux_stationary(summary, min_samples=4, min_window_duration=3.0, min_blocks=1)
     assert not gx_flux_stationary(summary)
 
 

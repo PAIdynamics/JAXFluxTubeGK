@@ -31,6 +31,8 @@ def _segment(path, start, stop, *, hyperdiffusion=0.05):
             "hyperdiffusion": hyperdiffusion,
             "collision_frequency": 0.0,
             "flux_moment": "nonadvective_heat",
+            "stationary_block_duration": 5.0,
+            "min_stationary_blocks": 6,
         },
         "times": times.tolist(),
         "heat_flux": (5.0 + 0.02 * np.sin(times)).tolist(),
@@ -44,7 +46,7 @@ def test_merge_nonlinear_segments_recomputes_one_contiguous_window(tmp_path):
     first = _segment(tmp_path / "first.json", 20.0, 40.0)
     second = _segment(tmp_path / "second.json", 40.0, 60.0)
 
-    report = merge_nonlinear_heat_flux_segments((first, second))
+    report = merge_nonlinear_heat_flux_segments((first, second), min_blocks=4)
 
     assert report["stationary"] is True
     assert report["start_time"] == pytest.approx(20.0)

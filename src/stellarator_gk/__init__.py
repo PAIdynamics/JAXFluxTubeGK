@@ -88,6 +88,7 @@ from .geometry import (
 )
 from .diagnostics import (
     SaturatedFluxStatistics,
+    correlated_flux_statistics,
     gyrokinetic_energy_response,
     gyrokinetic_heat_response,
     kxky_spectrum,
@@ -722,6 +723,7 @@ __all__ = [
     "compare_geometry_to_gx_eik_reference",
     "compare_nonlinear_heat_flux",
     "compare_nonlinear_heat_flux_convergence",
+    "correlated_flux_statistics",
     "compare_parallel_phi_traces",
     "compare_per_ky_mode_structure_fixtures",
     "compare_selected_mode_rhs_traces",

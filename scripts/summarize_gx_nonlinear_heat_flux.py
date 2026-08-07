@@ -4,14 +4,23 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 from pathlib import Path
 import subprocess
 
 import numpy as np
 
+from stellarator_gk import correlated_flux_statistics
 
-def summarize_heat_flux(times, heat_flux, *, start_fraction: float = 0.5) -> dict:
+
+def summarize_heat_flux(
+    times,
+    heat_flux,
+    *,
+    start_fraction: float = 0.5,
+    block_duration: float = 5.0,
+) -> dict:
     """Return late-window statistics for one GX species heat-flux trace."""
 
     times = np.asarray(times, dtype=float)
@@ -28,18 +37,13 @@ def summarize_heat_flux(times, heat_flux, *, start_fraction: float = 0.5) -> dic
     if times.size - start < 2:
         raise ValueError("stationarity window must contain at least two samples")
     window_time = times[start:]
-    window_flux = heat_flux[start:]
-    mean = float(np.mean(window_flux))
-    standard_deviation = float(np.std(window_flux, ddof=1))
-    centered_time = window_time - np.mean(window_time)
-    slope = float(np.sum(centered_time * (window_flux - mean)) / np.sum(centered_time**2))
-    relative_drift = float(slope * (window_time[-1] - window_time[0]) / max(abs(mean), 1.0e-14))
-    return {
-        "mean": mean,
-        "standard_deviation": standard_deviation,
-        "standard_error": standard_deviation / np.sqrt(window_flux.size),
-        "relative_window_drift": relative_drift,
-        "n_samples": int(window_flux.size),
+    statistics = correlated_flux_statistics(
+        times,
+        heat_flux,
+        start_fraction=start_fraction,
+        block_duration=block_duration,
+    )
+    return asdict(statistics) | {
         "window_start_time": float(window_time[0]),
         "window_end_time": float(window_time[-1]),
     }
@@ -52,19 +56,21 @@ def gx_flux_stationary(
     max_relative_standard_error: float = 0.1,
     min_samples: int = 100,
     min_window_duration: float = 10.0,
+    min_blocks: int = 6,
 ) -> bool:
     """Apply the declared flux-only stationarity gate to a GX summary."""
 
     if min(max_relative_drift, max_relative_standard_error, min_window_duration) <= 0.0:
         raise ValueError("GX stationarity tolerances and duration must be positive")
-    if min_samples < 2:
-        raise ValueError("GX stationarity requires at least two samples")
+    if min_samples < 2 or min_blocks < 1:
+        raise ValueError("GX stationarity requires samples and physical-time blocks")
     relative_error = abs(float(statistics["standard_error"])) / max(
         abs(float(statistics["mean"])), 1.0e-14
     )
     duration = float(statistics["window_end_time"] - statistics["window_start_time"])
     return bool(
         int(statistics["n_samples"]) >= min_samples
+        and int(statistics["n_blocks"]) >= min_blocks
         and duration >= min_window_duration
         and abs(float(statistics["relative_window_drift"])) <= max_relative_drift
         and relative_error <= max_relative_standard_error
@@ -108,6 +114,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-relative-standard-error", type=float, default=0.1)
     parser.add_argument("--min-stationary-samples", type=int, default=100)
     parser.add_argument("--min-stationary-window-duration", type=float, default=10.0)
+    parser.add_argument("--stationary-block-duration", type=float, default=5.0)
+    parser.add_argument("--min-stationary-blocks", type=int, default=6)
     return parser.parse_args(argv)
 
 
@@ -121,7 +129,12 @@ def main(argv: list[str] | None = None) -> None:
         )
     netcdf = args.netcdf.expanduser().resolve()
     times, heat_flux = read_gx_heat_flux(netcdf, args.species_index)
-    statistics = summarize_heat_flux(times, heat_flux, start_fraction=args.start_fraction)
+    statistics = summarize_heat_flux(
+        times,
+        heat_flux,
+        start_fraction=args.start_fraction,
+        block_duration=args.stationary_block_duration,
+    )
     payload = {
         "schema_version": 1,
         "producer": "gx-nonlinear-heat-flux",
@@ -136,12 +149,15 @@ def main(argv: list[str] | None = None) -> None:
             max_relative_standard_error=args.max_relative_standard_error,
             min_samples=args.min_stationary_samples,
             min_window_duration=args.min_stationary_window_duration,
+            min_blocks=args.min_stationary_blocks,
         ),
         "stationarity_controls": {
             "max_relative_drift": args.max_relative_drift,
             "max_relative_standard_error": args.max_relative_standard_error,
             "min_stationary_samples": args.min_stationary_samples,
             "min_stationary_window_duration": args.min_stationary_window_duration,
+            "stationary_block_duration": args.stationary_block_duration,
+            "min_stationary_blocks": args.min_stationary_blocks,
         },
         "statistics": statistics,
         "times": times.tolist(),

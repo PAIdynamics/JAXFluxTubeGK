@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import jax.numpy as jnp
+import numpy as np
 
 from .types import SpeciesParams, VelocityGrid
 
@@ -18,6 +19,85 @@ class SaturatedFluxStatistics:
     standard_error: object
     relative_window_drift: object
     n_samples: int
+    n_blocks: int = 1
+    block_duration: float = 0.0
+
+
+def correlated_flux_statistics(
+    times,
+    flux,
+    *,
+    start_fraction: float = 0.5,
+    block_duration: float = 5.0,
+) -> SaturatedFluxStatistics:
+    """Estimate flux statistics using physical-time blocks.
+
+    Adaptive trajectories are sampled once per accepted step, so an ordinary
+    sample mean overweights intervals with smaller timesteps. Equal-duration
+    block means remove that bias and provide a conservative standard error for
+    autocorrelated turbulence traces.
+    """
+
+    times = np.asarray(times, dtype=float)
+    flux = np.asarray(flux, dtype=float)
+    if times.ndim != 1 or flux.shape != times.shape or times.size < 3:
+        raise ValueError("flux statistics require matching one-dimensional traces")
+    if not np.isfinite(times).all() or not np.isfinite(flux).all():
+        raise ValueError("flux statistics require finite traces")
+    if np.any(np.diff(times) <= 0.0):
+        raise ValueError("flux-statistics times must be strictly increasing")
+    if not 0.0 <= start_fraction < 1.0 or block_duration <= 0.0:
+        raise ValueError("start fraction and block duration are invalid")
+    start = min(int(times.size * start_fraction), times.size - 2)
+    window_times = times[start:]
+    window_flux = flux[start:]
+    duration = float(window_times[-1] - window_times[0])
+    if duration <= 0.0:
+        raise ValueError("flux-statistics window must have positive duration")
+    n_blocks = max(1, int(np.floor(duration / block_duration + 1.0e-12)))
+    edges = np.linspace(window_times[0], window_times[-1], n_blocks + 1)
+    block_means = np.asarray(
+        [
+            _interval_mean(window_times, window_flux, left, right)
+            for left, right in zip(edges[:-1], edges[1:], strict=True)
+        ]
+    )
+    mean = float(np.mean(block_means))
+    variance = _interval_mean(window_times, (window_flux - mean) ** 2, edges[0], edges[-1])
+    standard_deviation = float(np.sqrt(max(variance, 0.0)))
+    standard_error = (
+        float(np.std(block_means, ddof=1) / np.sqrt(n_blocks))
+        if n_blocks > 1
+        else standard_deviation / np.sqrt(window_flux.size)
+    )
+    if n_blocks > 1:
+        centers = 0.5 * (edges[:-1] + edges[1:])
+        centered_time = centers - np.mean(centers)
+        slope = float(centered_time @ (block_means - mean) / (centered_time @ centered_time))
+    else:
+        centered_time = window_times - np.mean(window_times)
+        slope = float(
+            centered_time @ (window_flux - np.mean(window_flux)) / (centered_time @ centered_time)
+        )
+    relative_drift = slope * duration / max(abs(mean), 1.0e-14)
+    return SaturatedFluxStatistics(
+        mean=mean,
+        standard_deviation=standard_deviation,
+        standard_error=standard_error,
+        relative_window_drift=relative_drift,
+        n_samples=int(window_flux.size),
+        n_blocks=n_blocks,
+        block_duration=duration / n_blocks,
+    )
+
+
+def _interval_mean(times: np.ndarray, values: np.ndarray, left: float, right: float) -> float:
+    interior = (times > left) & (times < right)
+    sample_times = np.concatenate(([left], times[interior], [right]))
+    sample_values = np.concatenate(
+        ([np.interp(left, times, values)], values[interior], [np.interp(right, times, values)])
+    )
+    return float(np.trapezoid(sample_values, sample_times) / (right - left))
 
 
 def velocity_space_integral(values, velocity_grid: VelocityGrid, B=None):

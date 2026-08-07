@@ -27,11 +27,11 @@ from stellarator_gk import (
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
+    correlated_flux_statistics,
     gyrokinetic_energy_response,
     gyrokinetic_heat_response,
     integrate_nonlinear_adaptive,
     radial_flux_spectrum,
-    saturated_radial_flux_statistics,
     solve_adiabatic_electron_phi,
 )
 
@@ -217,6 +217,8 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--min-phi-rms-ratio", type=float, default=0.8)
     parser.add_argument("--min-stationary-samples", type=int, default=100)
     parser.add_argument("--min-stationary-window-duration", type=float, default=10.0)
+    parser.add_argument("--stationary-block-duration", type=float, default=5.0)
+    parser.add_argument("--min-stationary-blocks", type=int, default=6)
     parser.add_argument("--max-absolute-phi-growth-rate", type=float, default=0.02)
     parser.add_argument("--require-stationary", action="store_true")
     args = parser.parse_args(argv)
@@ -236,6 +238,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("ikxspace must be positive and parallel-recurrence-rate nonnegative")
     if args.min_stationary_samples < 2 or args.min_stationary_window_duration <= 0.0:
         parser.error("stationarity requires at least two samples and positive window duration")
+    if args.stationary_block_duration <= 0.0 or args.min_stationary_blocks < 2:
+        parser.error("stationarity requires positive blocks and at least two block means")
     if args.max_absolute_phi_growth_rate <= 0.0:
         parser.error("max-absolute-phi-growth-rate must be positive")
     return args
@@ -340,20 +344,17 @@ def main(argv: list[str] | None = None) -> None:
         precompute.rhs.flr_factors.bessel_j0,
     )
     absolute_times = result.times + start_time
-    statistics = saturated_radial_flux_statistics(
-        phi_history,
-        heat_history,
-        absolute_times,
-        fourier.ky,
-        start_fraction=args.start_fraction,
-        w_z=geometry.w_z,
-        parseval=fourier.parseval,
-    )
     flux = jax.vmap(
         lambda phi, heat: jnp.sum(
             radial_flux_spectrum(phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval)
         )
     )(phi_history, heat_history)
+    statistics = correlated_flux_statistics(
+        absolute_times,
+        flux,
+        start_fraction=args.start_fraction,
+        block_duration=args.stationary_block_duration,
+    )
     relative_standard_error = float(
         statistics.standard_error / jnp.maximum(jnp.abs(statistics.mean), 1.0e-14)
     )
@@ -371,6 +372,7 @@ def main(argv: list[str] | None = None) -> None:
     stationary = bool(
         np.isfinite(np.asarray(result.state)).all()
         and statistics.n_samples >= args.min_stationary_samples
+        and statistics.n_blocks >= args.min_stationary_blocks
         and window_duration >= args.min_stationary_window_duration
         and abs(float(statistics.relative_window_drift)) <= args.max_relative_drift
         and relative_standard_error <= args.max_relative_standard_error

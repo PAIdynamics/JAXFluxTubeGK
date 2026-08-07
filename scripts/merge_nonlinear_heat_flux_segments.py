@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
+from stellarator_gk import correlated_flux_statistics
+
 
 _CONTRACT_KEYS = (
     "n_z",
@@ -68,6 +70,8 @@ def merge_nonlinear_heat_flux_segments(
     max_absolute_phi_growth_rate: float = 0.02,
     min_samples: int = 100,
     min_window_duration: float = 10.0,
+    block_duration: float = 5.0,
+    min_blocks: int = 6,
 ) -> dict:
     """Return a schema-v1 report for contiguous, contract-identical segments."""
 
@@ -76,8 +80,10 @@ def merge_nonlinear_heat_flux_segments(
         raise ValueError("at least one nonlinear segment is required")
     if not 0.0 <= start_fraction < 1.0:
         raise ValueError("start_fraction must lie in [0, 1)")
-    if min_samples < 2 or min_window_duration <= 0.0:
+    if min_samples < 2 or min_window_duration <= 0.0 or block_duration <= 0.0:
         raise ValueError("stationarity requires at least two samples and positive duration")
+    if min_blocks < 2:
+        raise ValueError("stationarity requires at least two physical-time blocks")
     payloads = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     if any(payload.get("schema_version") != 1 for payload in payloads):
         raise ValueError("nonlinear segments must use schema version 1")
@@ -108,14 +114,19 @@ def merge_nonlinear_heat_flux_segments(
     window_times = times[start:]
     window_flux = flux[start:]
     window_amplitude = amplitude[start:]
-    mean = float(np.mean(window_flux))
-    standard_deviation = float(np.std(window_flux, ddof=1))
-    standard_error = standard_deviation / np.sqrt(window_flux.size)
+    statistics = correlated_flux_statistics(
+        times,
+        flux,
+        start_fraction=start_fraction,
+        block_duration=block_duration,
+    )
+    mean = float(statistics.mean)
+    standard_deviation = float(statistics.standard_deviation)
+    standard_error = float(statistics.standard_error)
     relative_standard_error = standard_error / max(abs(mean), 1.0e-14)
     centered_time = window_times - np.mean(window_times)
-    slope = float(centered_time @ (window_flux - mean) / (centered_time @ centered_time))
     duration = float(window_times[-1] - window_times[0])
-    relative_drift = slope * duration / max(abs(mean), 1.0e-14)
+    relative_drift = float(statistics.relative_window_drift)
     log_amplitude = np.log(np.maximum(window_amplitude, 1.0e-14))
     growth = float(
         centered_time @ (log_amplitude - np.mean(log_amplitude)) / (centered_time @ centered_time)
@@ -123,6 +134,7 @@ def merge_nonlinear_heat_flux_segments(
     amplitude_ratio = float(amplitude[-1] / max(amplitude[0], 1.0e-14))
     stationary = bool(
         window_flux.size >= min_samples
+        and statistics.n_blocks >= min_blocks
         and duration >= min_window_duration
         and abs(relative_drift) <= max_relative_drift
         and relative_standard_error <= max_relative_standard_error
@@ -143,6 +155,8 @@ def merge_nonlinear_heat_flux_segments(
             "max_absolute_phi_growth_rate": max_absolute_phi_growth_rate,
             "min_stationary_samples": min_samples,
             "min_stationary_window_duration": min_window_duration,
+            "stationary_block_duration": block_duration,
+            "min_stationary_blocks": min_blocks,
         },
         "start_time": float(times[0]),
         "end_time": float(times[-1]),
@@ -162,6 +176,8 @@ def merge_nonlinear_heat_flux_segments(
             "standard_error": standard_error,
             "relative_window_drift": relative_drift,
             "n_samples": int(window_flux.size),
+            "n_blocks": statistics.n_blocks,
+            "block_duration": statistics.block_duration,
         },
         "times": times.tolist(),
         "heat_flux": flux.tolist(),

@@ -3,6 +3,7 @@ from dataclasses import replace
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from stellarator_gk import (
     AdiabaticElectronParams,
@@ -16,6 +17,7 @@ from stellarator_gk import (
     build_fourier_grid,
     build_kinetic_quasineutrality_precompute,
     build_velocity_grid,
+    correlated_flux_statistics,
     default_adiabatic_electron_params,
     gyrokinetic_energy_response,
     gyrokinetic_heat_response,
@@ -277,6 +279,26 @@ def test_saturated_flux_statistics_report_mean_uncertainty_and_drift():
     np.testing.assert_allclose(report.standard_error, 0.0)
     np.testing.assert_allclose(report.relative_window_drift, 0.0)
     assert report.n_samples == 3
+
+
+def test_correlated_flux_statistics_are_invariant_to_adaptive_resampling():
+    sparse_time = np.asarray([0.0, 5.0, 10.0])
+    sparse_flux = np.asarray([0.0, 10.0, 0.0])
+    dense_time = np.asarray([0.0, 4.0, 4.5, 5.0, 5.5, 6.0, 10.0])
+    dense_flux = np.interp(dense_time, sparse_time, sparse_flux)
+
+    sparse = correlated_flux_statistics(
+        sparse_time, sparse_flux, start_fraction=0.0, block_duration=5.0
+    )
+    dense = correlated_flux_statistics(
+        dense_time, dense_flux, start_fraction=0.0, block_duration=5.0
+    )
+
+    assert sparse.mean == pytest.approx(5.0)
+    assert dense.mean == pytest.approx(sparse.mean)
+    assert dense.standard_error == pytest.approx(sparse.standard_error)
+    assert dense.n_blocks == 2
+    assert np.mean(dense_flux) != pytest.approx(np.mean(sparse_flux))
 
 
 def test_gyrokinetic_heat_response_matches_direct_species_quadrature():
