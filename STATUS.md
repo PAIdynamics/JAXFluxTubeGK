@@ -311,6 +311,12 @@ claimed.
   conserving-BGK collision frequency with adaptive-CFL accounting to test
   whether unresolved velocity-space cascade is the limiter. It remains off by
   default and is not presented as GX hypercollision or Landau parity.
+- A `nu=0.1` BGK discriminator barely changes the time-60 result: nonzonal RMS
+  is `5664x` and flux drift is `-3.68`. The audit therefore moves the active
+  blocker to flux-tube topology. The current producer uses independent periodic
+  `kx` chains; production Cyclone acceptance requires shear-consistent `kx`
+  spacing plus twist-and-shift parallel connectivity. README and TODO now
+  classify the periodic-chain runs as numerical discriminators only.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

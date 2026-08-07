@@ -633,6 +633,13 @@ conserving BGK model and includes its stiffness in adaptive CFL control. It is
 off by default because it is a numerical discriminator, not a replacement for
 matching GX's hypercollision controls or for the open Landau collision gate.
 
+The current local nonlinear producer is still a numerical discriminator: its
+parallel Fourier derivative closes each `kx` chain periodically. Production
+Cyclone acceptance additionally requires the existing mode-connectivity
+machinery to be coupled to a shear-consistent `kx` grid and twist-and-shift
+parallel boundary. Reports from the present periodic-chain profile must not be
+used to claim GX nonlinear parity.
+
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`. The stationarity amplitude guard is
 applied to the heat-carrying nonzonal potential rather than the total field;

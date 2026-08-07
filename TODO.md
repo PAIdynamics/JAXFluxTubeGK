@@ -472,7 +472,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   exposes an opt-in conserving-BGK frequency whose stiffness participates in
   adaptive CFL control, allowing a velocity-dissipation discriminator. It is
   deliberately off by default and cannot satisfy external parity in place of
-  GX's documented hypercollision model.
+  GX's documented hypercollision model. A `nu=0.1` BGK run changes the time-60
+  result only slightly (nonzonal RMS `5664x`, drift `-3.68`), ruling out weak
+  velocity damping as the dominant reduced-run blocker. The next structural
+  implementation is a shear-consistent `kx` grid with twist-and-shift parallel
+  connectivity; the current producer closes each `kx` chain independently and
+  therefore remains a discriminator rather than a Cyclone acceptance case.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
