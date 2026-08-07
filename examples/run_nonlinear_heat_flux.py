@@ -54,11 +54,36 @@ def _initial_state(precompute, amplitude: float, seed: int):
     center = fourier_shape[0] // 2
     ky_zero = state[..., :, 0]
     for offset in range(1, center + 1):
-        ky_zero = ky_zero.at[..., center - offset].set(
-            jnp.conj(ky_zero[..., center + offset])
-        )
+        ky_zero = ky_zero.at[..., center - offset].set(jnp.conj(ky_zero[..., center + offset]))
     ky_zero = ky_zero.at[..., center].set(jnp.real(ky_zero[..., center]))
     return state.at[..., :, 0].set(ky_zero).astype(jnp.complex128)
+
+
+def _phi_rms_diagnostics(phi_history):
+    """Return total, nonzonal, and per-ky initial/final potential amplitudes."""
+
+    phi_history = jnp.asarray(phi_history)
+    if phi_history.ndim != 4 or phi_history.shape[-1] < 2:
+        raise ValueError("phi history must have shape (time,z,kx,ky) with at least two ky modes")
+
+    def rms(values, axes):
+        return jnp.sqrt(jnp.mean(jnp.abs(values) ** 2, axis=axes))
+
+    total = rms(phi_history, (1, 2, 3))
+    nonzonal = rms(phi_history[..., 1:], (1, 2, 3))
+    by_ky = rms(phi_history, (1, 2))
+    floor = jnp.asarray(1.0e-14, dtype=total.dtype)
+    return {
+        "phi_rms_initial": total[0],
+        "phi_rms_final": total[-1],
+        "phi_rms_ratio": total[-1] / jnp.maximum(total[0], floor),
+        "nonzonal_phi_rms_initial": nonzonal[0],
+        "nonzonal_phi_rms_final": nonzonal[-1],
+        "nonzonal_phi_rms_ratio": nonzonal[-1] / jnp.maximum(nonzonal[0], floor),
+        "phi_rms_by_ky_initial": by_ky[0],
+        "phi_rms_by_ky_final": by_ky[-1],
+        "phi_rms_ratio_by_ky": by_ky[-1] / jnp.maximum(by_ky[0], floor),
+    }
 
 
 def _parse_args(argv: list[str] | None = None):
@@ -112,9 +137,7 @@ def main(argv: list[str] | None = None) -> None:
             ky_values=tuple(args.ky_min * index for index in range(args.n_ky)),
         )
     )
-    geometry = build_s_alpha_geometry(
-        parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18)
-    )
+    geometry = build_s_alpha_geometry(parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18))
     ion = SpeciesParams(1.0, 1.0, 1.0, 1.0, 0.8, 2.49)
     precompute = build_linear_residual_precompute(
         velocity,
@@ -155,22 +178,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     flux = jax.vmap(
         lambda phi, heat: jnp.sum(
-            radial_flux_spectrum(
-                phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval
-            )
+            radial_flux_spectrum(phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval)
         )
     )(phi_history, heat_history)
     relative_standard_error = float(
         statistics.standard_error / jnp.maximum(jnp.abs(statistics.mean), 1.0e-14)
     )
-    phi_rms_initial = float(jnp.sqrt(jnp.mean(jnp.abs(phi_history[0]) ** 2)))
-    phi_rms_final = float(jnp.sqrt(jnp.mean(jnp.abs(phi_history[-1]) ** 2)))
-    phi_rms_ratio = phi_rms_final / max(phi_rms_initial, 1.0e-14)
+    phi_diagnostics = _phi_rms_diagnostics(phi_history)
     stationary = bool(
         np.isfinite(np.asarray(result.state)).all()
         and abs(float(statistics.relative_window_drift)) <= args.max_relative_drift
         and relative_standard_error <= args.max_relative_standard_error
-        and phi_rms_ratio >= args.min_phi_rms_ratio
+        and float(phi_diagnostics["nonzonal_phi_rms_ratio"]) >= args.min_phi_rms_ratio
     )
     payload = {
         "schema_version": 1,
@@ -181,9 +200,7 @@ def main(argv: list[str] | None = None) -> None:
         "stationary": stationary,
         "state_rms_initial": float(jnp.sqrt(jnp.mean(jnp.abs(result.history[0]) ** 2))),
         "state_rms_final": float(jnp.sqrt(jnp.mean(jnp.abs(result.state) ** 2))),
-        "phi_rms_initial": phi_rms_initial,
-        "phi_rms_final": phi_rms_final,
-        "phi_rms_ratio": phi_rms_ratio,
+        **{key: np.asarray(value).tolist() for key, value in phi_diagnostics.items()},
         "max_abs_heat_flux": float(jnp.max(jnp.abs(flux))),
         "relative_standard_error": relative_standard_error,
         "statistics": {key: float(value) for key, value in asdict(statistics).items()},

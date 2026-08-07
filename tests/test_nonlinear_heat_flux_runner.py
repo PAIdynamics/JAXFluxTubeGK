@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from examples.run_nonlinear_heat_flux import _hyperdiffusion, _parse_args
+from examples.run_nonlinear_heat_flux import (
+    _hyperdiffusion,
+    _parse_args,
+    _phi_rms_diagnostics,
+)
 from stellarator_gk import FourierGridSpec, build_fourier_grid
 
 
@@ -23,3 +27,17 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
 def test_nonlinear_heat_flux_runner_rejects_even_kx(tmp_path):
     with pytest.raises(SystemExit):
         _parse_args(["--output", str(tmp_path / "result.json"), "--n-kx", "4"])
+
+
+def test_phi_rms_diagnostics_separates_zonal_and_nonzonal_amplitudes():
+    phi = np.ones((2, 3, 2, 3), dtype=np.complex128)
+    phi[1, ..., 0] = 10.0
+    phi[1, ..., 1:] = 0.5
+
+    diagnostics = _phi_rms_diagnostics(phi)
+
+    assert float(diagnostics["nonzonal_phi_rms_ratio"]) == pytest.approx(0.5)
+    assert np.asarray(diagnostics["phi_rms_ratio_by_ky"]).tolist() == pytest.approx(
+        [10.0, 0.5, 0.5]
+    )
+    assert float(diagnostics["phi_rms_ratio"]) > 1.0

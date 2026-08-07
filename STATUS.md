@@ -289,6 +289,13 @@ claimed.
   final/initial potential-RMS ratio, default `0.8`; the same 284-step run
   correctly reports nonstationary at ratio `0.525`. This narrows the blocker to
   decay of the nominally driven reduced setup rather than noisy diagnostics.
+- Increasing phase-space resolution to `12x12x6` at `5x4` Fourier modes and
+  hyperdiffusion `0.005` does not cure the decay by final time 20: total
+  potential RMS ratio is `0.776`, flux drift is `0.396`, and mean native flux
+  is `-4.43e-8`. The stationarity guard now uses nonzonal potential RMS and the
+  report records total, nonzonal, and per-`ky` amplitudes, so a growing zonal
+  component cannot hide decay of heat-carrying modes. Mode-resolved linear
+  seed growth is the next discriminator before a long nonlinear ladder.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

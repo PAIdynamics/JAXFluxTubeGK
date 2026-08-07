@@ -619,7 +619,10 @@ JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
 ```
 
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
-are expected to report `stationary=false`.
+are expected to report `stationary=false`. The stationarity amplitude guard is
+applied to the heat-carrying nonzonal potential rather than the total field;
+the report also includes total, nonzonal, and per-`ky` initial/final RMS values
+so zonal growth cannot conceal decay of the turbulent spectrum.
 
 Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
 evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux
