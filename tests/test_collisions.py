@@ -23,6 +23,7 @@ from stellarator_gk import (
     estimate_linear_cfl_dt,
     fokker_planck_collision,
     fokker_planck_conserved_moments,
+    fokker_planck_pairwise_components,
     linear_residual,
 )
 
@@ -339,6 +340,63 @@ def test_xu_species_local_completion_removes_each_species_defect():
         collision_conservation_model="xu_species_local",
     )
     assert solver_precompute.collisions.conservation_model == "xu_species_local"
+
+
+def test_pairwise_exchange_conserves_each_pair_and_couples_species():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    state = (
+        jax.random.normal(
+            jax.random.key(81), (2, 8, 6, parallel.z.size, 1, 1)
+        )
+        + 1j
+        * jax.random.normal(
+            jax.random.key(82), (2, 8, 6, parallel.z.size, 1, 1)
+        )
+    )
+    precompute = build_fokker_planck_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequency=(0.2, 0.7),
+        conservation_model="pairwise_exchange",
+    )
+    components = jax.jit(fokker_planck_pairwise_components)(state, precompute)
+    collision = jax.jit(fokker_planck_collision)(state, precompute)
+
+    np.testing.assert_allclose(collision, jnp.sum(components, axis=1), atol=2e-12)
+    np.testing.assert_allclose(
+        fokker_planck_conserved_moments(collision, precompute),
+        0.0,
+        atol=4e-10,
+        rtol=0.0,
+    )
+    for pair_index, (first, second) in enumerate(precompute.pair_indices):
+        pair_values = (
+            components[first, second][None, ...]
+            if first == second
+            else jnp.stack((components[first, second], components[second, first]))
+        )
+        pair_moments = jnp.einsum(
+            "csvmz,vmz,svmzxy->czxy",
+            precompute.pair_conservation_invariants[pair_index],
+            precompute.pair_conservation_measure[pair_index],
+            pair_values,
+        )
+        np.testing.assert_allclose(pair_moments, 0.0, atol=4e-10, rtol=0.0)
+
+    changed_state = state.at[1].multiply(1.1)
+    changed_components = fokker_planck_pairwise_components(changed_state, precompute)
+    assert float(jnp.max(jnp.abs(changed_components[0, 1] - components[0, 1]))) > 1e-8
+    assert np.isfinite(float(jnp.max(precompute.row_sum_bound)))
 
 
 @pytest.mark.external

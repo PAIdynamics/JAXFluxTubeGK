@@ -149,7 +149,12 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "matches pinned Gyaradax/GKW factors, weights, and corrected action to "
                 "2e-12. The separate global completion preserves per-species density "
                 "and combined momentum/energy to roundoff, but its exchange coefficients "
-                "lack independent inter-species Landau field-particle parity. "
+                "lack independent inter-species Landau field-particle parity. An "
+                "experimental pairwise path now retains ordered target/background "
+                "stencils, couples both distributions, and conserves density plus "
+                "combined momentum/energy separately for every collision pair. GKW "
+                "cannot close this gate because its conservation operator is not "
+                "global; stella coefficient/action parity is still absent. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "
@@ -164,8 +169,8 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "row sum, closing the production-grid electromagnetic sub-gap."
             ),
             next_action=(
-                "Validate reciprocal Landau/Fokker--Planck inter-species "
-                "field-particle coefficients and action against an independent code."
+                "Build an executable compact stella Laguerre--Legendre field-particle "
+                "reference and compare reciprocal inter-species coefficients and action."
             ),
             metrics=(
                 ConfidenceMetric("em_local_growth_finest_change", 2.1962696972943164e-2),

@@ -586,6 +586,14 @@ I/O are static topology.  Continuous geometry arrays, species/profile
 parameters, RHS terms, field solves, time steps, diagnostics, and objectives are
 the differentiable path.
 
+For finite-difference Fokker--Planck collisions,
+`collision_conservation_model="xu_species_local"` reproduces the pinned
+GKW/Gyaradax local correction. The experimental `"pairwise_exchange"` option
+retains every ordered target/background stencil and conserves density plus
+combined momentum and energy independently for each unordered species pair.
+It establishes reciprocal software coupling, not stella/Landau coefficient
+parity; production collision claims remain blocked.
+
 ## Current Validation Status
 
 Passing guardrails:

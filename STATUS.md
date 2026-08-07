@@ -223,6 +223,17 @@ claimed.
   momentum and energy defects vanish to roundoff and the correction enters the
   CFL bound. This reference-parity model does not supply reciprocal
   inter-species field-particle exchange, so that production gate remains open.
+- Added the experimental `collision_conservation_model="pairwise_exchange"`
+  path. The precompute retains all ordered target/background stencils; each
+  unordered self or cross-species pair is corrected separately, and the
+  directed contributions are exposed for diagnostics. Focused JIT tests verify
+  per-pair density and combined physical momentum/energy conservation, true
+  off-diagonal distribution coupling, summed-action consistency, and a finite
+  conservative CFL contribution. GKW cannot validate this slice because its
+  source explicitly states that collision conservation has not been made
+  global. Independent stella Laguerre--Legendre coefficient/action parity is
+  still required, so this remains an experimental architecture rather than a
+  production Landau operator.
 
 ### 2026-08-06: Nonlinear ExB Foundation
 
