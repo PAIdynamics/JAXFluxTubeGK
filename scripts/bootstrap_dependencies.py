@@ -74,8 +74,7 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
                 (str(key), str(value)) for key, value in raw.get("environment", {}).items()
             ),
             macos_environment=tuple(
-                (str(key), str(value))
-                for key, value in raw.get("macos_environment", {}).items()
+                (str(key), str(value)) for key, value in raw.get("macos_environment", {}).items()
             ),
         )
 
@@ -107,6 +106,16 @@ def resolve_dependencies(
     if unknown:
         raise ValueError(f"unknown dependencies: {unknown}")
     return tuple(manifest.dependencies[name] for name in dict.fromkeys(names))
+
+
+def python_environment_changes(
+    dependencies: Sequence[Dependency], *, skip_project: bool, fetch_only: bool
+) -> bool:
+    """Return whether this invocation can modify the Python environment."""
+
+    if fetch_only:
+        return False
+    return not skip_project or any(item.install == "python" for item in dependencies)
 
 
 class Bootstrapper:
@@ -154,9 +163,7 @@ class Bootstrapper:
             self._verify_local_clone(dependency, source)
 
         commands: list[list[str]] = []
-        dependency_environment = (
-            {} if self.fetch_only else self._dependency_environment(dependency)
-        )
+        dependency_environment = {} if self.fetch_only else self._dependency_environment(dependency)
         if not self.fetch_only:
             if dependency.install == "python":
                 command = [
@@ -175,10 +182,7 @@ class Bootstrapper:
                     verify = [
                         str(self.python),
                         "-c",
-                        (
-                            "import importlib; "
-                            f"importlib.import_module({dependency.import_name!r})"
-                        ),
+                        (f"import importlib; importlib.import_module({dependency.import_name!r})"),
                     ]
                     self._run(verify, cwd=ROOT)
                     commands.append(verify)
@@ -231,7 +235,14 @@ class Bootstrapper:
             if not self.dry_run:
                 source.parent.mkdir(parents=True, exist_ok=True)
             self._run(
-                ("git", "clone", "--filter=blob:none", "--no-checkout", dependency.url, str(source)),
+                (
+                    "git",
+                    "clone",
+                    "--filter=blob:none",
+                    "--no-checkout",
+                    dependency.url,
+                    str(source),
+                ),
                 cwd=ROOT,
             )
         elif not (source / ".git").exists():
@@ -273,8 +284,7 @@ class Bootstrapper:
                 link.symlink_to(executable)
                 return
         raise RuntimeError(
-            f"{dependency.name} built but no executable was found; checked "
-            f"{dependency.executables}"
+            f"{dependency.name} built but no executable was found; checked {dependency.executables}"
         )
 
     def _render(self, command: Sequence[str], build_dir: Path) -> list[str]:
@@ -287,9 +297,7 @@ class Bootstrapper:
             "deps_dir": str(self.deps_dir),
             "python": str(self.python),
         }
-        environment = {
-            key: template.format_map(values) for key, template in dependency.environment
-        }
+        environment = {key: template.format_map(values) for key, template in dependency.environment}
         if platform.system() != "Darwin" or not dependency.macos_environment:
             return environment
         brew = shutil.which("brew")
@@ -310,10 +318,9 @@ class Bootstrapper:
         if not brew_prefix:
             raise RuntimeError("could not determine the Homebrew prefix")
         values["brew_prefix"] = brew_prefix
-        environment.update({
-            key: template.format_map(values)
-            for key, template in dependency.macos_environment
-        })
+        environment.update(
+            {key: template.format_map(values) for key, template in dependency.macos_environment}
+        )
         if not self.dry_run:
             for key, value in environment.items():
                 if key.endswith("_ROOT") and not Path(value).exists():
@@ -412,7 +419,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     bootstrapper.prepare_project()
     for dependency in dependencies:
         bootstrapper.prepare(dependency)
-    bootstrapper.verify_environment()
+    if python_environment_changes(
+        dependencies,
+        skip_project=args.skip_project,
+        fetch_only=args.fetch_only,
+    ):
+        bootstrapper.verify_environment()
     bootstrapper.finish()
     print("Dependency preparation complete.")
     if any(item.install == "native" for item in dependencies):

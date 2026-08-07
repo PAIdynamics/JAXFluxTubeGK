@@ -36,9 +36,7 @@ def test_dependency_manifest_has_pinned_profiles():
         "PYTHONPATH": "{root}/scripts/dependency_compat/desc"
     }
     assert manifest.dependencies["gx"].install == "native"
-    assert manifest.dependencies["stella"].build[0][-1] == (
-        "{build_dir}/COMPILATION/build_cmake"
-    )
+    assert manifest.dependencies["stella"].build[0][-1] == ("{build_dir}/COMPILATION/build_cmake")
 
 
 def test_profile_resolution_is_ordered_and_deduplicated():
@@ -54,6 +52,24 @@ def test_profile_resolution_is_ordered_and_deduplicated():
 
     with pytest.raises(ValueError, match="unknown dependency profile"):
         module.resolve_dependencies(manifest, ("missing",), ())
+
+
+def test_native_only_skip_project_does_not_require_python_validation():
+    module = _module()
+    manifest = module.load_manifest(ROOT / "dependencies.toml")
+
+    assert not module.python_environment_changes(
+        (manifest.dependencies["stella"],), skip_project=True, fetch_only=False
+    )
+    assert module.python_environment_changes(
+        (manifest.dependencies["desc"],), skip_project=True, fetch_only=False
+    )
+    assert module.python_environment_changes(
+        (manifest.dependencies["stella"],), skip_project=False, fetch_only=False
+    )
+    assert not module.python_environment_changes(
+        (manifest.dependencies["desc"],), skip_project=False, fetch_only=True
+    )
 
 
 def test_dry_run_renders_native_build_without_writing(tmp_path, capsys):
