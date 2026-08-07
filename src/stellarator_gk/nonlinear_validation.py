@@ -40,6 +40,20 @@ class NonlinearHeatFluxConvergenceReport:
     all_stationary: bool
 
 
+@dataclass(frozen=True)
+class NonlinearHeatFluxEnsembleReport:
+    passed: bool
+    n_lineages: int
+    n_stationary: int
+    stationary_fraction: float
+    all_lineages_unique: bool
+    ensemble_mean: float
+    between_lineage_standard_error: float
+    maximum_relative_mean_deviation: float
+    mean_spread_tolerance: float
+    minimum_stationary_fraction: float
+
+
 def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("schema_version") != 1:
@@ -148,11 +162,69 @@ def compare_nonlinear_heat_flux_convergence(
     )
 
 
+def compare_nonlinear_heat_flux_ensemble(
+    records: tuple[NonlinearHeatFluxRecord, ...],
+    lineage_ids: tuple[str, ...],
+    *,
+    minimum_lineages: int = 3,
+    mean_spread_tolerance: float = 0.15,
+    minimum_stationary_fraction: float = 1.0,
+    drift_tolerance: float = 0.20,
+    relative_standard_error_tolerance: float = 0.10,
+) -> NonlinearHeatFluxEnsembleReport:
+    """Reject cherry-picked chaotic trajectories using independent lineages."""
+
+    if len(records) != len(lineage_ids):
+        raise ValueError("records and lineage_ids must have equal length")
+    if len(records) < minimum_lineages or minimum_lineages < 2:
+        raise ValueError("nonlinear ensemble requires the declared minimum lineages")
+    if mean_spread_tolerance <= 0.0 or not 0.0 < minimum_stationary_fraction <= 1.0:
+        raise ValueError("ensemble tolerances must be positive and fraction at most one")
+    if len({record.normalization for record in records}) != 1:
+        raise ValueError("nonlinear ensemble normalizations differ")
+
+    stationary = tuple(
+        record.stationary
+        and abs(record.relative_window_drift) <= drift_tolerance
+        and abs(record.standard_error) / max(abs(record.mean), 1.0e-14)
+        <= relative_standard_error_tolerance
+        for record in records
+    )
+    means = tuple(record.mean for record in records)
+    ensemble_mean = sum(means) / len(means)
+    maximum_deviation = max(abs(value - ensemble_mean) for value in means) / max(
+        abs(ensemble_mean), 1.0e-14
+    )
+    variance = sum((value - ensemble_mean) ** 2 for value in means) / (len(means) - 1)
+    between_standard_error = (variance / len(means)) ** 0.5
+    n_stationary = sum(stationary)
+    stationary_fraction = n_stationary / len(records)
+    all_unique = len(set(lineage_ids)) == len(lineage_ids)
+    return NonlinearHeatFluxEnsembleReport(
+        passed=(
+            all_unique
+            and stationary_fraction >= minimum_stationary_fraction
+            and maximum_deviation <= mean_spread_tolerance
+        ),
+        n_lineages=len(records),
+        n_stationary=n_stationary,
+        stationary_fraction=stationary_fraction,
+        all_lineages_unique=all_unique,
+        ensemble_mean=ensemble_mean,
+        between_lineage_standard_error=between_standard_error,
+        maximum_relative_mean_deviation=maximum_deviation,
+        mean_spread_tolerance=mean_spread_tolerance,
+        minimum_stationary_fraction=minimum_stationary_fraction,
+    )
+
+
 __all__ = [
     "NonlinearHeatFluxConvergenceReport",
+    "NonlinearHeatFluxEnsembleReport",
     "NonlinearHeatFluxParityReport",
     "NonlinearHeatFluxRecord",
     "compare_nonlinear_heat_flux",
     "compare_nonlinear_heat_flux_convergence",
+    "compare_nonlinear_heat_flux_ensemble",
     "load_nonlinear_heat_flux_record",
 ]

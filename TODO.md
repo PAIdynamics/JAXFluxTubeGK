@@ -560,8 +560,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   means and naive independent-sample errors. New checkpoints fail closed
   without schema-v1 trajectory lineage and carry the originating seed,
   amplitude, zonal fraction, and complete segment-end schedule into reports.
-  The next numerical gate is robust stationarity across lineage-identified
-  coarse realizations before spending resources on resolved/domain ladders.
+  The combined campaign now requires at least three unique initialization
+  roots, producer-accepted stationarity for every lineage, and no more than
+  15% maximum deviation from the ensemble mean. This closes the possibility
+  of promoting one cherry-picked chaotic realization. The next numerical gate
+  is obtaining three passing coarse lineage reports before spending resources
+  on resolved/domain ladders.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

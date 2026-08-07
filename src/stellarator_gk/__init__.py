@@ -101,10 +101,12 @@ from .diagnostics import (
 )
 from .nonlinear_validation import (
     NonlinearHeatFluxConvergenceReport,
+    NonlinearHeatFluxEnsembleReport,
     NonlinearHeatFluxParityReport,
     NonlinearHeatFluxRecord,
     compare_nonlinear_heat_flux,
     compare_nonlinear_heat_flux_convergence,
+    compare_nonlinear_heat_flux_ensemble,
     load_nonlinear_heat_flux_record,
 )
 from .design_topology import (
@@ -652,6 +654,7 @@ __all__ = [
     "GeometryResult",
     "GeometrySignConvention",
     "NonlinearHeatFluxConvergenceReport",
+    "NonlinearHeatFluxEnsembleReport",
     "NonlinearHeatFluxParityReport",
     "NonlinearHeatFluxRecord",
     "GxEikData",
@@ -723,6 +726,7 @@ __all__ = [
     "compare_geometry_to_gx_eik_reference",
     "compare_nonlinear_heat_flux",
     "compare_nonlinear_heat_flux_convergence",
+    "compare_nonlinear_heat_flux_ensemble",
     "correlated_flux_statistics",
     "compare_parallel_phi_traces",
     "compare_per_ky_mode_structure_fixtures",

@@ -23,6 +23,20 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
+
+- Added a fail-closed ensemble gate for chaotic nonlinear trajectories. The
+  full campaign now requires at least three distinct initialization roots,
+  based on seed, initial amplitude, and zonal fraction.
+- Every lineage must retain its producer stationarity decision and pass the
+  shared drift and block-uncertainty limits. Their flux means must remain within
+  15% of the ensemble mean; between-lineage standard error is reported.
+- The resolution, domain, and independent GX gates cannot pass the overall
+  campaign without this ensemble result. This prevents checkpoint schedules or
+  a single favorable realization from being selected as acceptance evidence.
+- No new scientific pass is claimed: three stationary independent coarse
+  lineages still need to be generated before launching expensive ladders.
+
 ### 2026-08-07: Native stella Collision Discriminator
 
 - Added a scratch-only paired native-stella producer that changes only

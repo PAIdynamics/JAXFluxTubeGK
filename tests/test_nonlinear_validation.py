@@ -6,6 +6,7 @@ from stellarator_gk import (
     NonlinearHeatFluxRecord,
     compare_nonlinear_heat_flux,
     compare_nonlinear_heat_flux_convergence,
+    compare_nonlinear_heat_flux_ensemble,
     load_nonlinear_heat_flux_record,
 )
 
@@ -49,6 +50,29 @@ def test_nonlinear_convergence_requires_stationary_finest_pair():
     failed = compare_nonlinear_heat_flux_convergence((_record(3.0), _record(4.0, drift=0.3)))
     assert not failed.passed
     assert not failed.all_stationary
+
+
+def test_nonlinear_ensemble_requires_unique_stationary_consistent_lineages():
+    report = compare_nonlinear_heat_flux_ensemble(
+        (_record(3.9), _record(4.0), _record(4.1)),
+        ("seed=1", "seed=2", "seed=3"),
+    )
+    assert report.passed
+    assert report.n_stationary == 3
+    assert report.maximum_relative_mean_deviation == pytest.approx(0.025)
+
+    duplicate = compare_nonlinear_heat_flux_ensemble(
+        (_record(), _record(), _record()),
+        ("seed=1", "seed=1", "seed=3"),
+    )
+    assert not duplicate.passed
+    assert not duplicate.all_lineages_unique
+
+    rejected = compare_nonlinear_heat_flux_ensemble(
+        (_record(), _record(stationary=False), _record()),
+        ("seed=1", "seed=2", "seed=3"),
+    )
+    assert not rejected.passed
 
 
 def test_nonlinear_record_loader_validates_schema(tmp_path):

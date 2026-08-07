@@ -761,7 +761,8 @@ and GX `Q/Q_GB` labels deliberately fail comparison unless a documented
 stationary before testing the finest-pair mean.
 
 Once caller-owned stationary reports exist, evaluate the complete nonlinear
-gate with separate resolution and domain ladders:
+gate with separate resolution/domain ladders and at least three independently
+initialized coarse lineages:
 
 ```bash
 .venv/bin/python scripts/validate_nonlinear_heat_flux_campaign.py \
@@ -769,6 +770,9 @@ gate with separate resolution and domain ladders:
   --resolution-report /scratch/resolution-fine.json \
   --domain-report /scratch/domain-narrow.json \
   --domain-report /scratch/domain-wide.json \
+  --lineage-report /scratch/coarse-seed-1.json \
+  --lineage-report /scratch/coarse-seed-2.json \
+  --lineage-report /scratch/coarse-seed-3.json \
   --reference-report /scratch/gx-cyclone-nonlinear.json \
   --output /scratch/nonlinear-campaign.json
 ```
@@ -776,8 +780,9 @@ gate with separate resolution and domain ladders:
 No conversion factor is needed when the local reports were generated with
 `--flux-moment gx_total_energy`. For a genuinely different documented
 normalization, pass `--local-to-reference-factor FACTOR`; the factor must not
-be fitted to make the means agree. The command exits nonzero unless resolution
-convergence, domain convergence, and independent parity all pass.
+be fitted to make the means agree. The command exits nonzero unless all lineage
+roots are unique, every lineage is stationary, their means agree within 15%,
+and resolution convergence, domain convergence, and independent parity pass.
 
 ## Current Validation Status
 
