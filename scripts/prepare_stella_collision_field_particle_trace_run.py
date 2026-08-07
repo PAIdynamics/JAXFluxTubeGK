@@ -30,6 +30,9 @@ TEST_PARTICLE_MATRIX_TRACE_FILENAME = (
     "stellarator_gk_collision_test_particle_matrix.dat"
 )
 FINAL_STATE_TRACE_FILENAME = "stellarator_gk_collision_final_state.dat"
+TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME = (
+    "stellarator_gk_collision_test_particle_primitives.dat"
+)
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -330,6 +333,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n",
         "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n"
         "      integer :: stellarator_gk_matrix_unit\n"
+        "      integer :: stellarator_gk_tp_primitive_unit\n"
         "      integer :: stellarator_gk_matrix_row, stellarator_gk_matrix_col\n"
         "      integer :: stellarator_gk_matrix_band_row\n",
     )
@@ -375,6 +379,36 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
             end do
          end do
          close(stellarator_gk_matrix_unit)
+         open(newunit=stellarator_gk_tp_primitive_unit, &
+              file='{TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME}', &
+              status='replace', action='write')
+         write(stellarator_gk_tp_primitive_unit, '(a)') &
+              '# schema=stellarator_gk_stella_collision_test_particle_primitives_v1'
+         write(stellarator_gk_tp_primitive_unit, '(a)') &
+              '# iv imu iz target background vpa mu bmag target_mass ' // &
+              'background_mass frequency speed maxwell nupa nuD nux ' // &
+              'target_smz dvpa dmu code_dt deflknob eiediffknob ' // &
+              'eideflknob nuxfac cfac'
+         do is = 1, nspec
+            do isb = 1, nspec
+               do iz = -nzgrid, nzgrid
+                  do iv = 1, nvpa
+                     do imu = 1, nmu
+                        write(stellarator_gk_tp_primitive_unit, *) &
+                             iv, imu, iz, is, isb, vpa(iv), mu(imu), &
+                             bmag(ia, iz), spec(is)%mass, spec(isb)%mass, &
+                             spec(is)%vnew(isb), velvpamu(iv, imu, iz), &
+                             mw(iv, imu, iz, is), nupa(iv, imu, iz, is, isb), &
+                             nuD(iv, imu, iz, is, isb), &
+                             nux(iv, imu, iz, is, isb), spec(is)%smz, dvpa, &
+                             dmu(min(imu, nmu - 1)), code_dt, deflknob, &
+                             eiediffknob, eideflknob, nuxfac, cfac
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         close(stellarator_gk_tp_primitive_unit)
       end if
 
 {matrix_factorization}""",
@@ -513,6 +547,9 @@ def prepare_trace_run(
                     run_dir / TEST_PARTICLE_MATRIX_TRACE_FILENAME
                 ),
                 "final_state_trace_output": str(run_dir / FINAL_STATE_TRACE_FILENAME),
+                "test_particle_primitive_trace_output": str(
+                    run_dir / TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME
+                ),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
@@ -524,6 +561,9 @@ def prepare_trace_run(
                 ),
                 "final_state_trace_quantity": (
                     "input and final phase-space state across the complete implicit collision solve"
+                ),
+                "test_particle_primitive_trace_quantity": (
+                    "analytic collision frequencies, Maxwellian, and velocity-grid assembly inputs"
                 ),
                 "serial_execution_required": True,
             },

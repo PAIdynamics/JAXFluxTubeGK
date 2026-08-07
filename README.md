@@ -739,6 +739,22 @@ fails unless identity plus the four isolated departures reconstructs the full
 matrix. The pinned case closes at `3.77e-17` relative L2; the electron-electron
 and electron-ion blocks dominate the remaining coefficient target.
 
+The analytic coefficients beneath that matrix can be validated separately:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python \
+  scripts/summarize_stella_collision_test_particle_primitives.py \
+  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_primitives.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-primitives.json
+```
+
+`build_stella_test_particle_primitives(...)` independently constructs speed,
+Maxwellian, `nupa`, `nuD`, and `nux` arrays from velocity nodes, magnetic field,
+species masses, and pair frequencies. All 624 native rows agree at relative L2
+errors below `2e-16`. The remaining differential-matrix gap is confined to
+finite-difference interior/boundary assembly and the diagonal gyro term.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

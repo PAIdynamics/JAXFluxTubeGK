@@ -19,6 +19,7 @@ from stellarator_gk import (
     build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_driver,
     build_stella_laguerre_legendre_collision_precompute,
+    build_stella_test_particle_primitives,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -510,6 +511,53 @@ def test_materialized_test_particle_matrix_matches_stencil_action():
     expected = (state - dt * action).transpose(3, 4, 5, 0, 1, 2).reshape(parallel.z.size, 2, 1, -1)
 
     np.testing.assert_allclose(applied, expected, rtol=2e-13, atol=2e-13)
+
+
+def test_stella_test_particle_primitives_are_jittable_and_differentiable():
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=6,
+            n_mu=2,
+            vpar_max=3.0,
+            mu_max=2.0,
+            backend="finite_difference",
+        )
+    )
+    species = (
+        SpeciesParams(1.0, 1.0, 1.0, 1.0, 0.0, 0.0),
+        SpeciesParams(-1.0, 0.0005446, 1.0, 1.0, 0.0, 0.0),
+    )
+    magnetic_field = jnp.asarray((0.8, 1.2))
+
+    def coefficient_sum(frequency):
+        result = build_stella_test_particle_primitives(
+            velocity,
+            magnetic_field,
+            species,
+            frequency,
+        )
+        return jnp.sum(result.parallel_diffusion + result.deflection)
+
+    frequencies = jnp.asarray(((0.01, 0.02), (0.03, 0.04)))
+    observed = jax.jit(build_stella_test_particle_primitives)(
+        velocity,
+        magnetic_field,
+        species,
+        frequencies,
+    )
+
+    assert observed.speed.shape == (6, 2, 2)
+    assert observed.maxwellian.shape == (2, 6, 2, 2)
+    assert observed.parallel_diffusion.shape == (2, 2, 6, 2, 2)
+    np.testing.assert_allclose(
+        observed.mixed_diffusion,
+        observed.parallel_diffusion - observed.deflection,
+        rtol=2e-13,
+        atol=2e-13,
+    )
+    gradient = jax.jit(jax.grad(coefficient_sum))(frequencies)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+    assert bool(jnp.all(gradient > 0.0))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

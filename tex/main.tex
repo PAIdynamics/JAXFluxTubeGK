@@ -1372,6 +1372,13 @@ The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the
 electron--electron and electron--ion target blocks.
+The underlying analytic coefficient layer is now constructed independently
+from velocity nodes, magnetic field, species masses, and pair frequencies.  A
+624-row native trace of speed, Maxwellian, parallel diffusion, deflection, and
+mixed diffusion agrees with the differentiable JAX construction at relative
+$L_2$ errors no larger than $1.99\times10^{-16}$.  Consequently the remaining
+matrix gap is confined to finite-difference interior and boundary assembly and
+the already isolated diagonal gyro term.
 
 
 \section{Testing and Benchmark Contract}

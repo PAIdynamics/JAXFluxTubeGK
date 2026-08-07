@@ -50,6 +50,16 @@ claimed.
   (electron-electron), and `75.18` (electron-ion). The remaining coefficient
   work is therefore localized and quantitatively dominated by the electron
   target blocks.
+- Added a public JIT-compatible and differentiable constructor for stella's
+  analytic test-particle primitives: total speed, target Maxwellian, parallel
+  diffusion `nupa`, deflection `nuD`, and mixed coefficient `nux`, including
+  ordered mass ratios and electron-ion control factors.
+- A new 624-row native trace includes every physical input and grid/knob value.
+  Local relative L2 errors are `6.36e-17` (speed), `1.99e-16` (Maxwellian),
+  `1.08e-16` (`nupa`), `7.15e-17` (`nuD`), and `8.27e-17` (`nux`). Collision
+  frequency normalization is closed; only finite-difference stencil assembly
+  and the independently isolated gyro diagonal remain before full matrix
+  parity.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

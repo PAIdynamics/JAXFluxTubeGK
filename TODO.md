@@ -472,7 +472,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   relative L2. Their departure-from-identity Frobenius norms are `1.864`
   (ion-ion), `0.1213` (ion-electron), `79.86` (electron-electron), and `75.18`
   (electron-ion), so the next coefficient comparison should start with the two
-  electron target blocks.
+  electron target blocks. The analytic coefficient layer is now local and
+  differentiable: a 624-row native trace of speed, Maxwellian, `nupa`, `nuD`,
+  and `nux` agrees with the JAX constructor at relative L2 errors `6.36e-17`,
+  `1.99e-16`, `1.08e-16`, `7.15e-17`, and `8.27e-17`. The remaining matrix
+  work is therefore finite-difference interior and boundary assembly plus the
+  already isolated diagonal gyro term, not collision-frequency normalization.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

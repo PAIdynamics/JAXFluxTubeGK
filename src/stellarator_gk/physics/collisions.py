@@ -90,6 +90,134 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class StellaTestParticlePrimitives(_PyTreeDataclass):
+    """Analytic velocity-space coefficients used by stella's Landau stencil."""
+
+    speed: object
+    maxwellian: object
+    parallel_diffusion: object
+    deflection: object
+    mixed_diffusion: object
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "speed",
+        "maxwellian",
+        "parallel_diffusion",
+        "deflection",
+        "mixed_diffusion",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ()
+
+
+def build_stella_test_particle_primitives(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    *,
+    deflection_scale=1.0,
+    electron_parallel_scale=1.0,
+    electron_deflection_scale=1.0,
+    mixed_scale=1.0,
+    electron_index: int | None = 1,
+    ion_index: int | None = 0,
+    electron_ion_mass_ratio_approximation: bool = False,
+) -> StellaTestParticlePrimitives:
+    """Construct stella's normalized ``nupa``, ``nuD``, ``nux``, and ``mw``.
+
+    This is the analytic coefficient layer below stella's finite-difference
+    test-particle matrix. Velocities are normalized to each target species'
+    thermal speed, matching stella's equal-temperature local collision model.
+    Arrays use ``(target, background, vpar, mu, z)`` ordering.
+    """
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    frequencies = jnp.asarray(pair_frequency)
+    if frequencies.shape != (n_species, n_species):
+        raise ValueError(
+            f"pair_frequency has shape {frequencies.shape}, expected {(n_species, n_species)}"
+        )
+    if electron_index is not None and not 0 <= electron_index < n_species:
+        raise ValueError("electron_index is outside the species axis")
+    if ion_index is not None and not 0 <= ion_index < n_species:
+        raise ValueError("ion_index is outside the species axis")
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    magnetic_field = jnp.asarray(B)
+    speed = jnp.sqrt(
+        vpar[:, None, None] ** 2
+        + 2.0 * mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    masses = jnp.asarray([item.mass for item in species_tuple])
+    mass_ratio = masses[:, None] / masses[None, :]
+    normalized_speed = speed[None, None, ...] / jnp.sqrt(
+        mass_ratio[:, :, None, None, None]
+    )
+    safe_speed = jnp.maximum(speed, jnp.sqrt(jnp.finfo(speed.dtype).tiny))
+    safe_normalized = jnp.maximum(
+        normalized_speed,
+        jnp.sqrt(jnp.finfo(normalized_speed.dtype).tiny),
+    )
+    erf_value = erf(normalized_speed)
+    chandrasekhar = (
+        erf_value
+        - 2.0 / jnp.sqrt(jnp.asarray(pi, dtype=speed.dtype))
+        * normalized_speed
+        * jnp.exp(-(normalized_speed**2))
+    ) / (2.0 * safe_normalized**2)
+    frequency = frequencies[:, :, None, None, None]
+    parallel_diffusion = frequency * 2.0 * chandrasekhar / safe_speed[None, None, ...] ** 3
+    deflection = (
+        jnp.asarray(deflection_scale)
+        * frequency
+        * (erf_value - chandrasekhar)
+        / safe_speed[None, None, ...] ** 3
+    )
+
+    electron_ion_pair = (
+        electron_index is not None
+        and ion_index is not None
+        and electron_index != ion_index
+    )
+    if electron_ion_pair and electron_ion_mass_ratio_approximation:
+        deflection = deflection.at[electron_index, ion_index].set(
+            jnp.asarray(deflection_scale)
+            * frequencies[electron_index, ion_index]
+            / safe_speed**3
+        )
+    mixed_diffusion = jnp.asarray(mixed_scale) * (
+        parallel_diffusion - jnp.asarray(deflection_scale) * deflection
+    )
+    if electron_ion_pair:
+        mixed_diffusion = mixed_diffusion.at[electron_index, ion_index].set(
+            jnp.asarray(mixed_scale)
+            * (
+                jnp.asarray(electron_parallel_scale)
+                * parallel_diffusion[electron_index, ion_index]
+                - jnp.asarray(electron_deflection_scale)
+                * jnp.asarray(deflection_scale)
+                * deflection[electron_index, ion_index]
+            )
+        )
+        deflection = deflection.at[electron_index, ion_index].multiply(
+            jnp.asarray(electron_deflection_scale)
+        )
+    maxwell = jnp.exp(
+        -(vpar[:, None, None] ** 2)
+        - 2.0 * mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    maxwell = jnp.broadcast_to(maxwell, (n_species, *maxwell.shape))
+    return StellaTestParticlePrimitives(
+        speed=speed,
+        maxwellian=maxwell,
+        parallel_diffusion=parallel_diffusion,
+        deflection=deflection,
+        mixed_diffusion=mixed_diffusion,
+    )
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
     """Low-rank field-particle coefficients on a collocation grid.
 
@@ -1553,6 +1681,7 @@ __all__ = [
     "ConservingBGKPrecompute",
     "FokkerPlanckPrecompute",
     "LaguerreLegendreCollisionPrecompute",
+    "StellaTestParticlePrimitives",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_fokker_planck_test_particle_matrix",
@@ -1561,6 +1690,7 @@ __all__ = [
     "build_stella_laguerre_legendre_delta",
     "build_stella_laguerre_legendre_driver",
     "build_stella_laguerre_legendre_collision_precompute",
+    "build_stella_test_particle_primitives",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
