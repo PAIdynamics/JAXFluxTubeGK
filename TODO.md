@@ -519,7 +519,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   The dominant general-grid pure-mu branch is now closed on a fresh pinned
   `nmu=4` trace: its nonuniform interior and boundary rows agree at `1.42e-15`
   relative L2 and `1.53e-16` maximum absolute error. The general mixed-vpar
-  and mixed-mu rows plus production-residual selection remain.
+  and mixed-mu rows now match the same trace at `1.30e-15` and `6.48e-16`
+  relative L2. Their complete local sum matches all 4,992 native rows at
+  `9.62e-16` relative L2 and `1.80e-16` maximum absolute error. General-grid
+  differential coefficients are closed; production-residual selection remains.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

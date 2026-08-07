@@ -1,4 +1,4 @@
-"""Validate the local two-node pure-mu collision blocks against stella."""
+"""Validate locally constructed collision blocks against native stella."""
 
 from __future__ import annotations
 
@@ -22,10 +22,10 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
 from stellarator_gk import (
     SpeciesParams,
     build_stella_mu_diffusion_blocks,
+    build_stella_mu_mixed_blocks,
     build_stella_test_particle_primitives,
-    build_stella_two_mu_mixed_blocks,
-    build_stella_two_mu_vpar_mixed_blocks,
     build_stella_vpar_diffusion_blocks,
+    build_stella_vpar_mixed_blocks,
     build_velocity_grid_from_nodes,
 )
 
@@ -40,7 +40,7 @@ def summarize_two_mu_diffusion(
     expected_revision: str,
     tolerance: float = 2.0e-11,
 ) -> dict[str, object]:
-    """Compare local pure-mu boundary blocks with the native factorial split."""
+    """Compare local differential blocks with the native factorial split."""
 
     primitive = _read(primitive_trace, PRIMITIVE_SCHEMA, len(PRIMITIVE_COLUMNS))
     full_values = _read(no_mixed_full_trace, BLOCK_SCHEMA, len(BLOCK_COLUMNS))
@@ -175,7 +175,7 @@ def summarize_two_mu_diffusion(
         )
         mixed_local = tuple(
             np.asarray(item)
-            for item in build_stella_two_mu_vpar_mixed_blocks(grid, primitives, knobs["dt"])
+            for item in build_stella_vpar_mixed_blocks(grid, primitives, knobs["dt"])
         )
         mixed_error = np.concatenate(
             [
@@ -198,10 +198,17 @@ def summarize_two_mu_diffusion(
                 np.unravel_index(np.argmax(np.abs(observed - expected)), observed.shape)
                 for observed, expected in zip(mixed_local, mixed_native, strict=True)
             ]
+            block_values = [
+                (float(np.real(observed[index])), float(np.real(expected[index])))
+                for observed, expected, index in zip(
+                    mixed_local, mixed_native, block_indices, strict=True
+                )
+            ]
             raise ValueError(
                 "local two-mu mixed-vpar blocks exceed native tolerance: "
                 f"relative_l2={mixed_relative:.6e}, max_abs={mixed_maximum:.6e}, "
-                f"block_max={block_errors}, block_indices={block_indices}"
+                f"block_max={block_errors}, block_indices={block_indices}, "
+                f"block_values={block_values}"
             )
         metrics.update(
             {
@@ -221,7 +228,7 @@ def summarize_two_mu_diffusion(
         )
         mixed_mu_local = tuple(
             np.asarray(item)
-            for item in build_stella_two_mu_mixed_blocks(grid, primitives, knobs["dt"])
+            for item in build_stella_mu_mixed_blocks(grid, primitives, knobs["dt"])
         )
         mixed_mu_error = np.concatenate(
             [
@@ -291,8 +298,8 @@ def summarize_two_mu_diffusion(
                 "full_blocks_max_abs": full_maximum,
             }
         )
-        status = "local_two_mu_collision_blocks_passed"
-        scope = "complete two-node block parity; general-grid branches pending"
+        status = "local_stella_collision_blocks_passed"
+        scope = f"complete block parity on {mu.size} mu nodes"
     return {
         "schema_version": 1,
         "benchmark": "stella_collision_two_mu_diffusion_blocks",

@@ -123,6 +123,13 @@ claimed.
   two interior rows agrees at `1.42e-15` relative L2 and `1.53e-16` maximum
   absolute error. The remaining general-grid work is confined to the two mixed
   branches.
+- Generalized both mixed derivatives to nonuniform mu grids, including the
+  distinct vpar and mu ghost-boundary treatments. On the 4,992-row `nmu=4`
+  trace the mixed-vpar and mixed-mu errors are `1.30e-15` and `6.48e-16`
+  relative L2. Summing all four local components matches the complete native
+  blocks at `9.62e-16` relative L2 and `1.80e-16` maximum absolute error.
+  Differential coefficient construction is now closed; production residual
+  selection is the remaining collision integration step.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

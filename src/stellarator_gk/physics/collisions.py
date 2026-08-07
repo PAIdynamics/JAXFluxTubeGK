@@ -808,6 +808,193 @@ def build_stella_two_mu_vpar_mixed_blocks(
     return lower, diagonal, upper
 
 
+def build_stella_vpar_mixed_blocks(
+    velocity_grid: VelocityGrid,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+):
+    """Construct stella's vpar-path mixed blocks on a general mu grid."""
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.size < 2:
+        raise ValueError("the vpar mixed constructor requires at least two mu nodes")
+    nux = jnp.asarray(primitives.mixed_diffusion)
+    maxwell = jnp.asarray(primitives.maxwellian)
+    n_target, n_background, n_vpar, n_mu, n_z = nux.shape
+    dvpar = vpar[1] - vpar[0]
+    dmu = mu[1:] - mu[:-1]
+    shape = (n_target, n_background, n_vpar, n_mu, n_mu, n_z)
+    lower = jnp.zeros(shape, dtype=nux.dtype)
+    diagonal = jnp.zeros_like(lower)
+    upper = jnp.zeros_like(lower)
+
+    def node_flux(iv, imu):
+        return (
+            vpar[iv]
+            * mu[imu]
+            * nux[:, :, iv, imu, :]
+            * maxwell[:, None, iv, imu, :]
+        )
+
+    edge_factor = 0.5 * jnp.asarray(dt) / (dvpar * dmu[0])
+    averaged = 0.5 * (node_flux(0, 0) + node_flux(0, 1))
+    next_averaged = 0.5 * (node_flux(1, 0) + node_flux(1, 1))
+    diagonal = diagonal.at[:, :, 0, 0, 0, :].set(
+        edge_factor * averaged / maxwell[:, None, 0, 0, :]
+    )
+    diagonal = diagonal.at[:, :, 0, 0, 1, :].set(
+        -edge_factor * averaged / maxwell[:, None, 0, 1, :]
+    )
+    upper = upper.at[:, :, 0, 0, 0, :].set(
+        edge_factor * next_averaged / maxwell[:, None, 1, 0, :]
+    )
+    upper = upper.at[:, :, 0, 0, 1, :].set(
+        -edge_factor * next_averaged / maxwell[:, None, 1, 1, :]
+    )
+
+    last_mu = n_mu - 1
+    last_edge = dmu[-1]
+    factor = jnp.asarray(dt) / (2.0 * dvpar * last_edge)
+    upper = upper.at[:, :, 0, last_mu, last_mu - 1, :].set(
+        factor
+        * node_flux(1, last_mu)
+        / maxwell[:, None, 1, last_mu - 1, :]
+    )
+    upper = upper.at[:, :, 0, last_mu, last_mu, :].set(
+        -factor * node_flux(1, last_mu) / maxwell[:, None, 1, last_mu, :]
+    )
+
+    def interior_weights(imu):
+        dm = dmu[imu - 1]
+        dp = dmu[imu]
+        width = dm + dp
+        return (
+            (imu - 1, -(dp / dm) / width),
+            (imu, (dp / dm - dm / dp) / width),
+            (imu + 1, (dm / dp) / width),
+        )
+
+    central_factor = 0.5 * jnp.asarray(dt) / dvpar
+    for imu in range(1, n_mu - 1):
+        for column, weight in interior_weights(imu):
+            diagonal = diagonal.at[:, :, 0, imu, column, :].set(
+                -central_factor
+                * node_flux(0, imu)
+                * weight
+                / maxwell[:, None, 0, column, :]
+            )
+            upper = upper.at[:, :, 0, imu, column, :].set(
+                -central_factor
+                * node_flux(1, imu)
+                * weight
+                / maxwell[:, None, 1, column, :]
+            )
+
+    for iv in range(1, n_vpar - 1):
+        lower = lower.at[:, :, iv, 0, 0, :].set(
+            -jnp.asarray(dt)
+            * node_flux(iv - 1, 0)
+            / maxwell[:, None, iv - 1, 0, :]
+            / (2.0 * dvpar * dmu[0])
+        )
+        lower = lower.at[:, :, iv, 0, 1, :].set(
+            jnp.asarray(dt)
+            * node_flux(iv - 1, 0)
+            / maxwell[:, None, iv - 1, 1, :]
+            / (2.0 * dvpar * dmu[0])
+        )
+        upper = upper.at[:, :, iv, 0, 0, :].set(
+            jnp.asarray(dt)
+            * node_flux(iv + 1, 0)
+            / maxwell[:, None, iv + 1, 0, :]
+            / (2.0 * dvpar * dmu[0])
+        )
+        upper = upper.at[:, :, iv, 0, 1, :].set(
+            -jnp.asarray(dt)
+            * node_flux(iv + 1, 0)
+            / maxwell[:, None, iv + 1, 1, :]
+            / (2.0 * dvpar * dmu[0])
+        )
+        lower = lower.at[:, :, iv, last_mu, last_mu - 1, :].set(
+            -factor
+            * node_flux(iv - 1, last_mu)
+            / maxwell[:, None, iv - 1, last_mu - 1, :]
+        )
+        lower = lower.at[:, :, iv, last_mu, last_mu, :].set(
+            factor
+            * node_flux(iv - 1, last_mu)
+            / maxwell[:, None, iv - 1, last_mu, :]
+        )
+        upper = upper.at[:, :, iv, last_mu, last_mu - 1, :].set(
+            factor
+            * node_flux(iv + 1, last_mu)
+            / maxwell[:, None, iv + 1, last_mu - 1, :]
+        )
+        upper = upper.at[:, :, iv, last_mu, last_mu, :].set(
+            -factor
+            * node_flux(iv + 1, last_mu)
+            / maxwell[:, None, iv + 1, last_mu, :]
+        )
+        for imu in range(1, n_mu - 1):
+            for column, weight in interior_weights(imu):
+                lower = lower.at[:, :, iv, imu, column, :].set(
+                    central_factor
+                    * node_flux(iv - 1, imu)
+                    * weight
+                    / maxwell[:, None, iv - 1, column, :]
+                )
+                upper = upper.at[:, :, iv, imu, column, :].set(
+                    -central_factor
+                    * node_flux(iv + 1, imu)
+                    * weight
+                    / maxwell[:, None, iv + 1, column, :]
+                )
+
+    last = n_vpar - 1
+    averaged = 0.5 * (node_flux(last, 0) + node_flux(last, 1))
+    previous_averaged = 0.5 * (
+        node_flux(last - 1, 0) + node_flux(last - 1, 1)
+    )
+    diagonal = diagonal.at[:, :, last, 0, 0, :].set(
+        -edge_factor * averaged / maxwell[:, None, last, 0, :]
+    )
+    diagonal = diagonal.at[:, :, last, 0, 1, :].set(
+        edge_factor * averaged / maxwell[:, None, last, 1, :]
+    )
+    lower = lower.at[:, :, last, 0, 0, :].set(
+        -edge_factor * previous_averaged / maxwell[:, None, last - 1, 0, :]
+    )
+    lower = lower.at[:, :, last, 0, 1, :].set(
+        edge_factor * previous_averaged / maxwell[:, None, last - 1, 1, :]
+    )
+    lower = lower.at[:, :, last, last_mu, last_mu - 1, :].set(
+        -factor
+        * node_flux(last - 1, last_mu)
+        / maxwell[:, None, last - 1, last_mu - 1, :]
+    )
+    lower = lower.at[:, :, last, last_mu, last_mu, :].set(
+        factor
+        * node_flux(last - 1, last_mu)
+        / maxwell[:, None, last - 1, last_mu, :]
+    )
+    for imu in range(1, n_mu - 1):
+        for column, weight in interior_weights(imu):
+            lower = lower.at[:, :, last, imu, column, :].set(
+                central_factor
+                * node_flux(last - 1, imu)
+                * weight
+                / maxwell[:, None, last - 1, column, :]
+            )
+            diagonal = diagonal.at[:, :, last, imu, column, :].set(
+                central_factor
+                * node_flux(last, imu)
+                * weight
+                / maxwell[:, None, last, column, :]
+            )
+    return lower, diagonal, upper
+
+
 def build_stella_two_mu_mixed_blocks(
     velocity_grid: VelocityGrid,
     primitives: StellaTestParticlePrimitives,
@@ -954,6 +1141,162 @@ def build_stella_two_mu_mixed_blocks(
         / maxwell[:, None, last, 0, :]
         / (2.0 * dmu)
     )
+    return lower, diagonal, upper
+
+
+def build_stella_mu_mixed_blocks(
+    velocity_grid: VelocityGrid,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+):
+    """Construct stella's mu-path mixed blocks on a general mu grid."""
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.size < 2:
+        raise ValueError("the mu mixed constructor requires at least two mu nodes")
+    nux = jnp.asarray(primitives.mixed_diffusion)
+    maxwell = jnp.asarray(primitives.maxwellian)
+    n_target, n_background, n_vpar, n_mu, n_z = nux.shape
+    if n_mu != mu.size:
+        raise ValueError("primitive and velocity-grid mu dimensions differ")
+    dvpar = vpar[1] - vpar[0]
+    dmu = mu[1:] - mu[:-1]
+    shape = (n_target, n_background, n_vpar, n_mu, n_mu, n_z)
+    lower = jnp.zeros(shape, dtype=nux.dtype)
+    diagonal = jnp.zeros_like(lower)
+    upper = jnp.zeros_like(lower)
+
+    def node_flux(iv, imu):
+        return (
+            vpar[iv]
+            * mu[imu]
+            * nux[:, :, iv, imu, :]
+            * maxwell[:, None, iv, imu, :]
+        )
+
+    def set_weight(block, iv, row, column, factor, source_iv, weight, destination_iv):
+        return block.at[:, :, iv, row, column, :].set(
+            factor
+            * node_flux(source_iv, column)
+            * weight
+            / maxwell[:, None, destination_iv, column, :]
+        )
+
+    def row_weights(imu):
+        if imu == 0:
+            edge = dmu[0]
+            return (
+                (0, (edge / mu[0] - mu[0] / edge) / (mu[0] + edge)),
+                (1, (mu[0] / edge) / (mu[0] + edge)),
+            )
+        if imu == n_mu - 1:
+            return ((n_mu - 2, -1.0 / (2.0 * dmu[-1])),)
+        dm = dmu[imu - 1]
+        dp = dmu[imu]
+        width = dm + dp
+        return (
+            (imu - 1, -(dp / dm) / width),
+            (imu, (dp / dm - dm / dp) / width),
+            (imu + 1, (dm / dp) / width),
+        )
+
+    boundary_factor = jnp.asarray(dt) / dvpar
+    for imu in range(n_mu):
+        for column, weight in row_weights(imu):
+            diagonal = set_weight(
+                diagonal, 0, imu, column, boundary_factor, 0, weight, 0
+            )
+            upper = set_weight(
+                upper, 0, imu, column, -boundary_factor, 0, weight, 1
+            )
+    for imu in range(1, n_mu - 1):
+        for column, weight in row_weights(imu):
+            averaged_flux = 0.5 * (
+                node_flux(0, column) + node_flux(1, column)
+            )
+            diagonal = diagonal.at[:, :, 0, imu, column, :].set(
+                0.5
+                * boundary_factor
+                * averaged_flux
+                * weight
+                / maxwell[:, None, 0, column, :]
+            )
+            upper = upper.at[:, :, 0, imu, column, :].set(
+                -0.5
+                * boundary_factor
+                * averaged_flux
+                * weight
+                / maxwell[:, None, 1, column, :]
+            )
+
+    interior_factor = 0.5 * boundary_factor
+    for iv in range(1, n_vpar - 1):
+        for imu in range(n_mu):
+            for column, weight in row_weights(imu):
+                lower = set_weight(
+                    lower,
+                    iv,
+                    imu,
+                    column,
+                    interior_factor,
+                    iv,
+                    weight,
+                    iv - 1,
+                )
+                upper = set_weight(
+                    upper,
+                    iv,
+                    imu,
+                    column,
+                    -interior_factor,
+                    iv,
+                    weight,
+                    iv + 1,
+                )
+
+    last = n_vpar - 1
+    for imu in range(n_mu):
+        for column, weight in row_weights(imu):
+            lower = set_weight(
+                lower,
+                last,
+                imu,
+                column,
+                boundary_factor,
+                last,
+                weight,
+                last - 1,
+            )
+            diagonal = set_weight(
+                diagonal,
+                last,
+                imu,
+                column,
+                -boundary_factor,
+                last,
+                weight,
+                last,
+            )
+    for imu in range(1, n_mu - 1):
+        for column, weight in row_weights(imu):
+            averaged_flux = 0.5 * (
+                node_flux(last - 1, column) + node_flux(last, column)
+            )
+            lower = lower.at[:, :, last, imu, column, :].set(
+                0.5
+                * boundary_factor
+                * averaged_flux
+                * weight
+                / maxwell[:, None, last - 1, column, :]
+            )
+            diagonal = diagonal.at[:, :, last, imu, column, :].set(
+                -0.5
+                * boundary_factor
+                * averaged_flux
+                * weight
+                / maxwell[:, None, last, column, :]
+            )
     return lower, diagonal, upper
 
 
@@ -2550,9 +2893,11 @@ __all__ = [
     "assemble_stella_test_particle_blocks",
     "build_stella_two_mu_diffusion_blocks",
     "build_stella_mu_diffusion_blocks",
+    "build_stella_mu_mixed_blocks",
     "build_stella_two_mu_mixed_blocks",
     "build_stella_two_mu_vpar_mixed_blocks",
     "build_stella_vpar_diffusion_blocks",
+    "build_stella_vpar_mixed_blocks",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_fokker_planck_test_particle_matrix",

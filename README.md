@@ -851,6 +851,14 @@ fresh pinned `nmu=4` factorial trace exercises two interior rows and matches at
 producer accepts `--nmu` and `--nvgrid` so larger-grid parity is reproducible
 without storing native artifacts.
 
+The companion `build_stella_vpar_mixed_blocks(...)` and
+`build_stella_mu_mixed_blocks(...)` constructors extend both mixed derivatives
+to the same nonuniform grid, including interior and ghost-boundary formulas.
+On the 4,992-row `nmu=4` trace their isolated errors are `1.30e-15` and
+`6.48e-16` relative L2. All four general-grid components together reproduce
+the complete native blocks at `9.62e-16` relative L2 and `1.80e-16` maximum
+absolute error.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

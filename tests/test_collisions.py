@@ -20,6 +20,7 @@ from stellarator_gk import (
     build_stella_laguerre_legendre_driver,
     build_stella_laguerre_legendre_collision_precompute,
     build_stella_mu_diffusion_blocks,
+    build_stella_mu_mixed_blocks,
     build_stella_test_particle_primitives,
     build_stella_test_particle_gyro_diagonal,
     assemble_stella_test_particle_blocks,
@@ -27,6 +28,7 @@ from stellarator_gk import (
     build_stella_two_mu_mixed_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
     build_stella_vpar_diffusion_blocks,
+    build_stella_vpar_mixed_blocks,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -738,6 +740,36 @@ def test_stella_general_mu_diffusion_blocks_are_jittable_and_differentiable():
         jax.grad(lambda values: sum(jnp.sum(item) for item in build_blocks(values)))
     )(frequencies)
     assert bool(jnp.all(jnp.isfinite(gradient)))
+
+    def build_mixed(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_mu_mixed_blocks(velocity, primitives, 0.01)
+
+    mixed_blocks = jax.jit(build_mixed)(frequencies)
+    assert all(block.shape == (2, 2, 6, 4, 4, 2) for block in mixed_blocks)
+    assert all(bool(jnp.all(jnp.isfinite(block))) for block in mixed_blocks)
+    mixed_gradient = jax.jit(
+        jax.grad(lambda values: sum(jnp.sum(item) for item in build_mixed(values)))
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(mixed_gradient)))
+
+    def build_vpar_mixed(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_vpar_mixed_blocks(velocity, primitives, 0.01)
+
+    vpar_mixed_blocks = jax.jit(build_vpar_mixed)(frequencies)
+    assert all(block.shape == (2, 2, 6, 4, 4, 2) for block in vpar_mixed_blocks)
+    assert all(bool(jnp.all(jnp.isfinite(block))) for block in vpar_mixed_blocks)
+    vpar_mixed_gradient = jax.jit(
+        jax.grad(
+            lambda values: sum(jnp.sum(item) for item in build_vpar_mixed(values))
+        )
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(vpar_mixed_gradient)))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():
