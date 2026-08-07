@@ -88,6 +88,7 @@ from .geometry import (
 )
 from .diagnostics import (
     SaturatedFluxStatistics,
+    gyrokinetic_energy_response,
     gyrokinetic_heat_response,
     kxky_spectrum,
     ky_spectrum,
@@ -788,6 +789,7 @@ __all__ = [
     "gx_salpha_cyclone_growth_target",
     "gx_growth_rate_target",
     "heat_flux_moments",
+    "gyrokinetic_energy_response",
     "gyrokinetic_heat_response",
     "has_duplicate_stella_endpoint",
     "hypercollision_damping_rates",

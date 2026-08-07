@@ -27,6 +27,7 @@ from stellarator_gk import (
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
+    gyrokinetic_energy_response,
     gyrokinetic_heat_response,
     integrate_nonlinear_adaptive,
     radial_flux_spectrum,
@@ -206,6 +207,11 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--initial-zonal-fraction", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--start-fraction", type=float, default=0.5)
+    parser.add_argument(
+        "--flux-moment",
+        choices=("nonadvective_heat", "gx_total_energy"),
+        default="nonadvective_heat",
+    )
     parser.add_argument("--max-relative-drift", type=float, default=0.2)
     parser.add_argument("--max-relative-standard-error", type=float, default=0.1)
     parser.add_argument("--min-phi-rms-ratio", type=float, default=0.8)
@@ -321,7 +327,12 @@ def main(argv: list[str] | None = None) -> None:
     phi_history = jax.vmap(solve_adiabatic_electron_phi, in_axes=(0, None))(
         result.history, precompute.field
     )
-    heat_history = jax.vmap(gyrokinetic_heat_response, in_axes=(0, None, None, None, None))(
+    response_function = (
+        gyrokinetic_energy_response
+        if args.flux_moment == "gx_total_energy"
+        else gyrokinetic_heat_response
+    )
+    heat_history = jax.vmap(response_function, in_axes=(0, None, None, None, None))(
         result.history,
         velocity,
         geometry.B,
@@ -370,7 +381,9 @@ def main(argv: list[str] | None = None) -> None:
     payload = {
         "schema_version": 1,
         "producer": "optimal-fusion/nonlinear-heat-flux",
-        "normalization": "optimal_fusion_native",
+        "normalization": (
+            "gx_Q_over_Q_GB" if args.flux_moment == "gx_total_energy" else "optimal_fusion_native"
+        ),
         "case": {
             key: str(value) if isinstance(value, Path) else value
             for key, value in vars(args).items()

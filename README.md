@@ -615,13 +615,24 @@ Generate the matching local reduced trajectory in caller-owned storage with:
 
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
-  --output /tmp/optimal-fusion-cyclone-nonlinear.json
+  --output /tmp/optimal-fusion-cyclone-nonlinear.json \
+  --flux-moment gx_total_energy
 ```
 
 The local producer makes the GX profile conversion explicit: its default
 `fprim=0.8` and `tprim=2.49` are multiplied by `Rmaj/Lref=2.77778` before they
 enter the local residual as `R/Ln` and `R/LT`. All three inputs and both derived
 gradients are recorded in the JSON report.
+
+For GX parity, `--flux-moment gx_total_energy` evaluates the same gyroaveraged
+total-energy moment used by pinned GX revision
+`bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`. In s-alpha geometry GX has
+`grho=1`, so its flux weight is the same normalized Jacobian average used
+locally; the local nonzero-`ky` Parseval factor also matches GX's explicit
+factor of two. Reports from this mode therefore use `gx_Q_over_Q_GB` directly.
+The default `nonadvective_heat` mode retains the historical
+`T_s(E_s-3/2)f_s` diagnostic and `optimal_fusion_native` label; the two differ
+by `3/2 T_s` times the particle flux and must not be silently interchanged.
 
 The default random perturbation seeds only nonzonal modes. This avoids a large
 artificial `ky=0` potential from the weak zonal polarization denominator and
@@ -712,14 +723,14 @@ gate with separate resolution and domain ladders:
   --domain-report /scratch/domain-narrow.json \
   --domain-report /scratch/domain-wide.json \
   --reference-report /scratch/gx-cyclone-nonlinear.json \
-  --local-to-reference-factor FACTOR \
   --output /scratch/nonlinear-campaign.json
 ```
 
-`FACTOR` must come from a documented derivation of the local native diagnostic
-and GX `Q/Q_GB`; it must not be fitted to make the flux means agree. The command
-exits nonzero unless resolution convergence, domain convergence, and
-independent parity all pass.
+No conversion factor is needed when the local reports were generated with
+`--flux-moment gx_total_energy`. For a genuinely different documented
+normalization, pass `--local-to-reference-factor FACTOR`; the factor must not
+be fitted to make the means agree. The command exits nonzero unless resolution
+convergence, domain convergence, and independent parity all pass.
 
 ## Current Validation Status
 

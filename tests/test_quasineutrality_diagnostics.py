@@ -17,6 +17,7 @@ from stellarator_gk import (
     build_kinetic_quasineutrality_precompute,
     build_velocity_grid,
     default_adiabatic_electron_params,
+    gyrokinetic_energy_response,
     gyrokinetic_heat_response,
     kinetic_quasineutrality_residual,
     kinetic_quasineutrality_residual_from_density,
@@ -50,9 +51,7 @@ def _ion(**updates):
 
 def _setup(species=None, *, zonal_correction=True):
     velocity = build_velocity_grid(VelocityGridSpec(n_vpar=5, n_mu=4, vpar_max=2.0, mu_max=3.0))
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.8, ky_values=(0.0, 0.5))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.8, ky_values=(0.0, 0.5)))
     B = jnp.asarray([0.8, 0.95, 1.1, 1.25, 1.05, 0.9])
     kx = fourier.kx[None, :, None]
     ky = fourier.ky[None, None, :]
@@ -114,16 +113,16 @@ def test_native_phase_space_measure_overrides_tensor_product_weights():
 
     numerator = adiabatic_density_numerator(distribution, precompute)
 
-    expected = jnp.broadcast_to(
-        jnp.sum(measure, axis=(1, 2))[:, None, None], numerator.shape
-    )
+    expected = jnp.broadcast_to(jnp.sum(measure, axis=(1, 2))[:, None, None], numerator.shape)
     np.testing.assert_allclose(numerator, expected)
 
 
 def test_local_adiabatic_phi_solve_matches_formula_without_zonal_correction():
     velocity, _fourier, B, _species, precompute = _setup(zonal_correction=False)
     distribution = jnp.arange(velocity.vpar.shape[0] * velocity.mu.shape[0] * B.shape[0] * 3 * 2)
-    distribution = distribution.reshape(velocity.vpar.shape[0], velocity.mu.shape[0], B.shape[0], 3, 2)
+    distribution = distribution.reshape(
+        velocity.vpar.shape[0], velocity.mu.shape[0], B.shape[0], 3, 2
+    )
     distribution = (distribution + 1.0) / 100.0
 
     numerator = adiabatic_density_numerator(distribution, precompute)
@@ -198,9 +197,7 @@ def test_kinetic_phi_solve_regularizes_constant_mode():
     np.testing.assert_allclose(phi[:, fourier.ixzero, fourier.iyzero], 0.0, atol=0.0)
     np.testing.assert_allclose(residual, 0.0, rtol=0, atol=2e-13)
 
-    distribution = jnp.zeros(
-        (2, velocity.vpar.shape[0], velocity.mu.shape[0], B.shape[0], 3, 2)
-    )
+    distribution = jnp.zeros((2, velocity.vpar.shape[0], velocity.mu.shape[0], B.shape[0], 3, 2))
     phi_from_distribution = solve_kinetic_electron_phi(distribution, precompute)
     residual_from_distribution = kinetic_quasineutrality_residual(
         phi_from_distribution, distribution, precompute
@@ -291,9 +288,8 @@ def test_gyrokinetic_heat_response_matches_direct_species_quadrature():
         fourier.kx.size,
         fourier.ky.size,
     )
-    distribution = (
-        jax.random.normal(jax.random.key(91), shape)
-        + 1j * jax.random.normal(jax.random.key(92), shape)
+    distribution = jax.random.normal(jax.random.key(91), shape) + 1j * jax.random.normal(
+        jax.random.key(92), shape
     )
     kperp2 = (1.0 + 0.2 * jnp.arange(B.size))[:, None, None] * (
         fourier.kx[None, :, None] ** 2 + fourier.ky[None, None, :] ** 2
@@ -307,8 +303,7 @@ def test_gyrokinetic_heat_response_matches_direct_species_quadrature():
         flr.bessel_j0,
     )
     energy = (
-        velocity.vpar[:, None, None] ** 2
-        + 2.0 * velocity.mu[None, :, None] * B[None, None, :]
+        velocity.vpar[:, None, None] ** 2 + 2.0 * velocity.mu[None, :, None] * B[None, None, :]
     ) / species.temperature
     weighted = (
         distribution
@@ -319,3 +314,20 @@ def test_gyrokinetic_heat_response_matches_direct_species_quadrature():
     expected = velocity_space_integral(weighted, velocity, B)
 
     np.testing.assert_allclose(observed, expected, rtol=2e-13, atol=2e-13)
+
+    energy_response = jax.jit(gyrokinetic_energy_response)(
+        distribution,
+        velocity,
+        B,
+        species,
+        flr.bessel_j0,
+    )
+    particle_response = velocity_space_integral(
+        distribution * flr.bessel_j0[None, ...], velocity, B
+    )
+    np.testing.assert_allclose(
+        energy_response,
+        observed + 1.5 * species.temperature * particle_response,
+        rtol=2e-13,
+        atol=2e-13,
+    )

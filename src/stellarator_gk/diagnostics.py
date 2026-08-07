@@ -80,9 +80,7 @@ def radial_flux_spectrum(phi, response, ky, w_z=None, parseval=None, sign: float
 def total_radial_flux(phi, response, ky, w_z=None, parseval=None, sign: float = 1.0):
     """Return the total radial flux ingredient summed over ``kx`` and ``ky``."""
 
-    return jnp.sum(
-        radial_flux_spectrum(phi, response, ky, w_z=w_z, parseval=parseval, sign=sign)
-    )
+    return jnp.sum(radial_flux_spectrum(phi, response, ky, w_z=w_z, parseval=parseval, sign=sign))
 
 
 def gyrokinetic_heat_response(
@@ -122,9 +120,7 @@ def gyrokinetic_heat_response(
     vpar = jnp.asarray(velocity_grid.vpar)[None, :, None, None]
     mu = jnp.asarray(velocity_grid.mu)[None, None, :, None]
     B = jnp.asarray(B)[None, None, None, :]
-    temperature = jnp.asarray([item.temperature for item in species_tuple])[
-        :, None, None, None
-    ]
+    temperature = jnp.asarray([item.temperature for item in species_tuple])[:, None, None, None]
     normalized_energy = (vpar**2 + 2.0 * mu * B) / temperature
     heat_weight = temperature * (normalized_energy - 1.5)
     measure = (
@@ -138,6 +134,59 @@ def gyrokinetic_heat_response(
         values,
         gyroaverage,
         heat_weight,
+    )
+    return response[0] if original_ndim == 5 else response
+
+
+def gyrokinetic_energy_response(
+    distribution,
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    bessel_j0,
+):
+    """Return the gyroaveraged total-energy response used by GX heat flux.
+
+    Unlike :func:`gyrokinetic_heat_response`, this moment does not subtract
+    ``3/2 T_s`` times the particle response. The two fluxes agree only when
+    the radial particle flux vanishes.
+    """
+
+    values = jnp.asarray(distribution)
+    original_ndim = values.ndim
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    if original_ndim == 5 and len(species_tuple) == 1:
+        values = values[None, ...]
+    if values.ndim != 6 or values.shape[0] != len(species_tuple):
+        raise ValueError("distribution has incompatible species or phase-space shape")
+    gyroaverage = jnp.asarray(bessel_j0)
+    if gyroaverage.ndim == 4 and len(species_tuple) == 1:
+        gyroaverage = gyroaverage[None, ...]
+    expected_gyro_shape = (
+        len(species_tuple),
+        values.shape[2],
+        values.shape[3],
+        values.shape[4],
+        values.shape[5],
+    )
+    if gyroaverage.shape != expected_gyro_shape:
+        raise ValueError("bessel_j0 has incompatible species, mu, z, or Fourier shape")
+
+    vpar = jnp.asarray(velocity_grid.vpar)[:, None, None]
+    mu = jnp.asarray(velocity_grid.mu)[None, :, None]
+    B = jnp.asarray(B)[None, None, :]
+    energy = vpar**2 + 2.0 * mu * B
+    measure = (
+        jnp.asarray(velocity_grid.w_vpar)[:, None, None]
+        * jnp.asarray(velocity_grid.w_mu)[None, :, None]
+        * B
+    )
+    response = jnp.einsum(
+        "vmz,svmzxy,smzxy,vmz->szxy",
+        measure,
+        values,
+        gyroaverage,
+        energy,
     )
     return response[0] if original_ndim == 5 else response
 
@@ -183,8 +232,10 @@ def saturated_radial_flux_statistics(
     standard_error = standard_deviation / jnp.sqrt(flux.shape[0])
     centered_time = window_times - jnp.mean(window_times)
     slope = jnp.sum(centered_time * (flux - mean)) / jnp.sum(centered_time**2)
-    relative_drift = slope * (window_times[-1] - window_times[0]) / jnp.maximum(
-        jnp.abs(mean), jnp.asarray(1.0e-14, dtype=mean.dtype)
+    relative_drift = (
+        slope
+        * (window_times[-1] - window_times[0])
+        / jnp.maximum(jnp.abs(mean), jnp.asarray(1.0e-14, dtype=mean.dtype))
     )
     return SaturatedFluxStatistics(
         mean=mean,

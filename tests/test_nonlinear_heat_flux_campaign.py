@@ -69,3 +69,13 @@ def test_campaign_requires_two_rungs_per_axis(tmp_path):
     report = _write_report(tmp_path / "report.json", 4.0)
     with pytest.raises(ValueError, match="at least two reports"):
         evaluate_campaign((report,), (report, report), report, local_to_reference_factor=1.0)
+
+
+def test_campaign_needs_no_factor_for_source_matched_normalization(tmp_path):
+    local = _write_report(tmp_path / "local.json", 4.0, normalization="gx_Q_over_Q_GB")
+    reference = _write_report(tmp_path / "gx.json", 4.0, normalization="gx_Q_over_Q_GB")
+
+    report = evaluate_campaign((local, local), (local, local), reference)
+
+    assert report["passed"]
+    assert report["independent_parity"]["local_to_reference_factor"] == pytest.approx(1.0)

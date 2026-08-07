@@ -30,6 +30,7 @@ def _segment(path, start, stop, *, hyperdiffusion=0.05):
             "temperature_gradient_R_over_LT": 6.9166722,
             "hyperdiffusion": hyperdiffusion,
             "collision_frequency": 0.0,
+            "flux_moment": "nonadvective_heat",
         },
         "times": times.tolist(),
         "heat_flux": (5.0 + 0.02 * np.sin(times)).tolist(),

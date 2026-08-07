@@ -28,6 +28,7 @@ _CONTRACT_KEYS = (
     "temperature_gradient_R_over_LT",
     "hyperdiffusion",
     "collision_frequency",
+    "flux_moment",
 )
 
 

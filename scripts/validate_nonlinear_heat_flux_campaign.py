@@ -20,7 +20,7 @@ def evaluate_campaign(
     domain_paths: tuple[Path, ...],
     reference_path: Path,
     *,
-    local_to_reference_factor: float,
+    local_to_reference_factor: float | None = None,
     convergence_tolerance: float = 0.15,
     mean_tolerance: float = 0.20,
     drift_tolerance: float = 0.20,
@@ -66,7 +66,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--resolution-report", type=Path, action="append", required=True)
     parser.add_argument("--domain-report", type=Path, action="append", required=True)
     parser.add_argument("--reference-report", type=Path, required=True)
-    parser.add_argument("--local-to-reference-factor", type=float, required=True)
+    parser.add_argument("--local-to-reference-factor", type=float)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--convergence-tolerance", type=float, default=0.15)
     parser.add_argument("--mean-tolerance", type=float, default=0.20)
@@ -75,15 +75,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if len(args.resolution_report) < 2 or len(args.domain_report) < 2:
         parser.error("repeat both ladder report options at least twice")
-    if (
-        min(
-            args.local_to_reference_factor,
-            args.convergence_tolerance,
-            args.mean_tolerance,
-            args.drift_tolerance,
-            args.relative_standard_error_tolerance,
-        )
-        <= 0.0
+    tolerances = (
+        args.convergence_tolerance,
+        args.mean_tolerance,
+        args.drift_tolerance,
+        args.relative_standard_error_tolerance,
+    )
+    if min(tolerances) <= 0.0 or (
+        args.local_to_reference_factor is not None and args.local_to_reference_factor <= 0.0
     ):
         parser.error("normalization factor and tolerances must be positive")
     return args

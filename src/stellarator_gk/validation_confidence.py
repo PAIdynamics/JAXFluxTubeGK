@@ -201,13 +201,15 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "those decisions instead of accepting rejected windows from drift alone. "
                 "A fail-closed campaign command evaluates separate resolution and domain "
                 "ladders plus independent parity. No second stationary local rung or GX "
-                "comparison has yet passed, and native-local versus GX Q/Q_GB normalization "
-                "still requires an independently derived positive conversion factor."
+                "comparison has yet passed. Source tracing against pinned GX established "
+                "its total-energy moment, Fourier factor, and s-alpha flux weight; the local "
+                "producer now exposes the matched gx_Q_over_Q_GB diagnostic separately from "
+                "its historical non-advective heat moment."
             ),
             next_action=(
                 "Run independently initialized resolved and wider-domain stationary rungs, "
-                "derive the native-to-GX heat-flux normalization from both codes' declared "
-                "units, then run the pinned GX case and execute the combined campaign gate."
+                "run the pinned GX case with the source-matched total-energy diagnostic, "
+                "then execute the combined campaign gate."
             ),
             metrics=(
                 ConfidenceMetric("coarse_stationary_mean_native_flux", -25.7841),

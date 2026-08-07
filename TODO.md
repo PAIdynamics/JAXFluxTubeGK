@@ -433,11 +433,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   correctly reports `stationary=false`; it is plumbing evidence, not a
   turbulence result. Schema-v1 local/GX loaders and a shared acceptance layer
   now require stationary low-uncertainty windows, normalized mean-flux parity,
-  and stationary finest-pair convergence. The comparison rejects the current
-  `optimal_fusion_native` versus GX `Q/Q_GB` labels until a documented positive
-  conversion factor is supplied. Deriving and independently checking that
-  normalization, then running long resolution and box ladders, is the active
-  numerical blocker. The first driven `8x8x4`, `5x3` Fourier runs remain
+  and stationary finest-pair convergence. Historical `optimal_fusion_native`
+  reports remain intentionally incompatible with GX; new acceptance runs must
+  select the source-matched `gx_total_energy` moment. Long resolution and box
+  ladders are the active numerical blocker. The first driven `8x8x4`, `5x3`
+  Fourier runs remain
   nonstationary: at final time 20 the mean native flux is `-3.28e-8` with
   drift `0.335`, and at final time 100 it is `-3.21e-8` with drift `-0.523`
   despite `1.56%` relative standard error. Extending the window does not fix
@@ -529,9 +529,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   later using drift and uncertainty alone. A standalone campaign evaluator now
   requires separate two-or-more-rung resolution and domain ladders plus an
   independently stationary reference comparison, and exits nonzero unless all
-  three gates pass. The checkbox remains open because the second stationary
-  local rungs, the native-to-GX normalization derivation, and the pinned GX run
-  are scientific evidence that cannot be replaced by acceptance plumbing.
+  three gates pass. Source tracing against pinned GX established its
+  gyroaveraged total-energy moment, Hermitian factor, and s-alpha flux weight;
+  the local producer now exposes that exact `gx_total_energy` diagnostic with
+  the `gx_Q_over_Q_GB` label while retaining the historical non-advective heat
+  moment separately. The checkbox remains open because the stationary
+  resolution/domain rungs and pinned GX run are scientific evidence that
+  cannot be replaced by acceptance plumbing.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -38,6 +38,13 @@ claimed.
   error, `0.0572` drift, `-1.93e-3` nonzonal growth). This is one local rung,
   not resolution/domain convergence or GX parity; those evidence gates remain
   open.
+- Traced pinned GX revision `bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`
+  through its electrostatic heat-flux kernel. Added an explicit local
+  `gx_total_energy` moment matching GX's energy weight, nonzero-`ky` factor of
+  two, and s-alpha normalized Jacobian average. The historical non-advective
+  heat moment remains available under a distinct normalization label. A tiny
+  source-matched smoke produces a finite `gx_Q_over_Q_GB` report and correctly
+  remains nonstationary.
 
 ### 2026-08-07: Production Electromagnetic Resolution Gate
 
