@@ -1357,8 +1357,17 @@ $C_{\mathrm{tp}}$ remains required.
 The independently Gyaradax-matched nine-point differential stencil can now be
 materialized as $I-\Delta t C_{\mathrm{tp}}$ on each spatial/Fourier batch and
 inserted directly into this solve; its matrix application matches the original
-stencil action at roundoff.  A stricter same-executable stella matrix gate and
-production residual wiring remain before claiming full stella parity.
+stencil action at roundoff.  A scratch-only native export reconstructs all 234
+unfactorized stella matrices as real $12\times12$ operators with bandwidth 3.
+Relative to each zero-$k_\perp$ base matrix, all 208 nonzero-$k_\perp$
+corrections are diagonal and linear in $k_\perp^2$ to
+$6.44\times10^{-14}$.  A mode-by-mode replay of
+$\operatorname{solve}(I-\Delta t C_{\mathrm{tp}},
+g_{\mathrm{in}}+\Delta t C_{\mathrm{fp}})$ reproduces all 2,808 final native
+values at $1.64\times10^{-16}$ relative $L_2$.  This closes storage, sign, and
+implicit-ordering ambiguity.  Independent construction of stella's
+zero-$k_\perp$ differential coefficients and diagonal gyro term, followed by
+production residual wiring, remains before claiming full stella parity.
 
 
 \section{Testing and Benchmark Contract}

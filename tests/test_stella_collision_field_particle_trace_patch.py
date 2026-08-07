@@ -2,6 +2,7 @@ from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
     DRIVER_TRACE_FILENAME,
     FACTOR_TRACE_FILENAME,
+    FINAL_STATE_TRACE_FILENAME,
     PRIMITIVE_TRACE_FILENAME,
     QUADRATURE_TRACE_FILENAME,
     TEST_PARTICLE_MATRIX_TRACE_FILENAME,
@@ -43,6 +44,9 @@ contains
       end if
 
       deallocate (flds)
+      !fields_updated = .false.
+
+      deallocate (g_in)
    end subroutine advance_implicit_fp
    subroutine init_fp_diffmatrix
 
@@ -74,6 +78,7 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert QUADRATURE_TRACE_FILENAME in patched
     assert DRIVER_TRACE_FILENAME in patched
     assert TEST_PARTICLE_MATRIX_TRACE_FILENAME in patched
+    assert FINAL_STATE_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
     assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
@@ -83,6 +88,7 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert "psijnorm(ll1, jj1, is, isb, iz)" in patched
     assert "stellarator_gk_matrix_band_row = 2 * nb + 1" in patched
     assert "real(cdiffmat_band(stellarator_gk_matrix_band_row" in patched
+    assert "stellarator_gk_trace_collision_final_state(g_in, g)" in patched
 
 
 def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
@@ -105,6 +111,7 @@ def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
     assert (output / "run/collision_field_particle_trace.in").is_file()
     metadata_payload = metadata.read_text()
     assert TEST_PARTICLE_MATRIX_TRACE_FILENAME in metadata_payload
+    assert FINAL_STATE_TRACE_FILENAME in metadata_payload
     assert (
         "stellarator_gk collision field-particle trace patch"
         in (output / "stella" / target.relative_to(source_root)).read_text()

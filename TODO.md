@@ -449,17 +449,25 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   second trace state (`phiinit=0.017`, `width0=0.7`) changes the initial field
   norm and aggregate collision RHS (`L2=2.46052e-3`), retains byte-identical
   state-independent coefficient traces, and replays the native solved-`psi`
-  action in JAX at `1.39e-13` relative L2. The remaining collision blocker is
-  implicit response-system algebra is now implemented with a differentiable
+  action in JAX at `1.39e-13` relative L2. The implicit response-system algebra
+  is now implemented with a differentiable
   Woodbury solve and matches an independently formed dense backward-Euler
   system at roundoff. The remaining collision blocker is construction and
   native parity of stella's exact differential test-particle matrix; once that
   matrix is supplied, the complete implicit `psi` and phase-space update are
   locally determined. The independently Gyaradax-matched differential stencil
   can now be materialized as `I-dt*C_tp` and passed directly to that solve,
-  providing a complete standalone implicit operator. The stricter remaining
-  gate is same-executable stella parity for this matrix and wiring the validated
-  implicit operator into the production residual selection.
+  providing a complete standalone implicit operator. A scratch-only native
+  export now reconstructs all 234 unfactorized stella matrices. They are real
+  `12x12` operators with bandwidth 3. Across 208 nonzero-`k_perp` modes,
+  subtracting the zero-`k_perp` matrix changes only the diagonal and is linear
+  in `k_perp^2` to `6.44e-14`; this excludes band-storage indexing and
+  off-diagonal gyro diffusion as the discrepancy. Replaying the complete native
+  update as `solve(I-dt*C_tp, g_in + dt*C_fp)` matches stella's 2,808-value
+  final state at `1.64e-16` relative L2 (`9.20e-19` maximum absolute error).
+  The stricter remaining gate is independent local construction and coefficient
+  parity of stella's zero-`k_perp` differential matrix and gyro-diffusion
+  diagonal, followed by production-residual selection.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

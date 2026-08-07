@@ -709,6 +709,31 @@ original stencil action agree at roundoff. This supplies a complete standalone
 implicit collision path; a stricter same-executable stella matrix comparison
 and production-residual selection remain before claiming full stella parity.
 
+The same scratch patch now exports stella's unfactorized band matrix before
+LAPACK factorization and its final collision state. Validate the matrix
+structure and replay the complete native implicit update with:
+
+```bash
+.venv/bin/python scripts/summarize_stella_collision_test_particle_matrix.py \
+  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-matrix.json
+
+.venv/bin/python scripts/replay_stella_implicit_collision_state.py \
+  --matrix /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
+  --field-particle /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+  --final-state /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_final_state.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/implicit-collision-replay.json
+```
+
+For the pinned compact case, all 234 matrices are real `12x12` operators with
+bandwidth 3. The nonzero-`k_perp` correction is purely diagonal and linear in
+`k_perp^2` to `6.44e-14`. The reconstructed final state agrees with stella at
+`1.64e-16` relative L2. This validates storage and implicit ordering;
+independent local construction of stella's differential coefficients remains
+required.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

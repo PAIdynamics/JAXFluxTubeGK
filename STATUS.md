@@ -23,6 +23,27 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Native stella Test-Particle Matrix Boundary
+
+- Extended the non-destructive stella scratch patch to export the unfactorized
+  band matrix `I-dt*C_test` before LAPACK overwrites it, using explicit dense
+  row/column coordinates and preserving `kperp2` and timestep metadata.
+- The pinned executable produces 234 real `12x12` matrices with observed
+  bandwidth 3. All 26 `(z,species)` groups contain a zero-`kperp` base matrix.
+  Across 208 nonzero-`kperp` matrices, the correction is exactly diagonal and
+  linear in `kperp2` with maximum residual `6.44e-14`.
+- Added a final-state trace and an independent mode-by-mode replay. Applying
+  `solve(I-dt*C_test, g_in + dt*C_field)` reconstructs all 2,808 native final
+  phase-space values at `1.64e-16` relative L2 and `9.20e-19` maximum absolute
+  error. The measured field-particle effect is `9.97023e-4` of the final-state
+  L2 norm.
+- This closes LAPACK band indexing, collision sign, timestep placement,
+  gyro-correction structure, and final implicit solve ordering. It does not use
+  the native matrix as a production coefficient source. Independent local
+  construction of the zero-`kperp` differential coefficients and the diagonal
+  gyro term, followed by production residual selection, remains the collision
+  blocker.
+
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 
 - Added an explicit differentiable `reciprocal_exchange` collision completion.

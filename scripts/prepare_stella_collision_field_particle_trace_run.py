@@ -29,6 +29,7 @@ DRIVER_TRACE_FILENAME = "stellarator_gk_collision_field_particle_drivers.dat"
 TEST_PARTICLE_MATRIX_TRACE_FILENAME = (
     "stellarator_gk_collision_test_particle_matrix.dat"
 )
+FINAL_STATE_TRACE_FILENAME = "stellarator_gk_collision_final_state.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -302,8 +303,19 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
     )
     text = _replace_once(
         text,
+        "      !fields_updated = .false.\n\n"
+        "      deallocate (g_in)\n",
+        "      !fields_updated = .false.\n\n"
+        "      call stellarator_gk_trace_collision_final_state(g_in, g)\n\n"
+        "      deallocate (g_in)\n",
+    )
+    text = _replace_once(
+        text,
         "end module collisions_fokkerplanck\n",
-        FIELD_PARTICLE_TRACE_HELPER + "\nend module collisions_fokkerplanck\n",
+        FIELD_PARTICLE_TRACE_HELPER
+        + "\n"
+        + FINAL_STATE_TRACE_HELPER
+        + "\nend module collisions_fokkerplanck\n",
     )
     text = _replace_once(
         text,
@@ -406,6 +418,40 @@ FIELD_PARTICLE_TRACE_HELPER = f"""
 """
 
 
+FINAL_STATE_TRACE_HELPER = f"""
+   subroutine stellarator_gk_trace_collision_final_state(before, after)
+      use mp, only: proc0
+      use grids_velocity, only: nvpa, nmu
+      use parallelisation_layouts, only: kxkyz_lo
+      use parallelisation_layouts, only: iky_idx, ikx_idx, iz_idx, is_idx, it_idx
+      implicit none
+      complex, dimension(:, :, kxkyz_lo%llim_proc:), intent(in) :: before, after
+      integer :: unit, ikxkyz, iv, imu, iky, ikx, iz, is, it
+      if (.not. proc0) return
+      open(newunit=unit, file='{FINAL_STATE_TRACE_FILENAME}', &
+           status='replace', action='write')
+      write(unit, '(a)') '# schema=stellarator_gk_stella_collision_final_state_v1'
+      write(unit, '(a)') &
+           '# iv imu iky ikx iz tube species input_re input_im output_re output_im'
+      do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
+         iky = iky_idx(kxkyz_lo, ikxkyz)
+         ikx = ikx_idx(kxkyz_lo, ikxkyz)
+         iz = iz_idx(kxkyz_lo, ikxkyz)
+         it = it_idx(kxkyz_lo, ikxkyz)
+         is = is_idx(kxkyz_lo, ikxkyz)
+         do iv = 1, nvpa
+            do imu = 1, nmu
+               write(unit, *) iv, imu, iky, ikx, iz, it, is, &
+                    real(before(iv, imu, ikxkyz)), aimag(before(iv, imu, ikxkyz)), &
+                    real(after(iv, imu, ikxkyz)), aimag(after(iv, imu, ikxkyz))
+            end do
+         end do
+      end do
+      close(unit)
+   end subroutine stellarator_gk_trace_collision_final_state
+"""
+
+
 def prepare_trace_run(
     stella_source: Path,
     output_root: Path,
@@ -466,6 +512,7 @@ def prepare_trace_run(
                 "test_particle_matrix_trace_output": str(
                     run_dir / TEST_PARTICLE_MATRIX_TRACE_FILENAME
                 ),
+                "final_state_trace_output": str(run_dir / FINAL_STATE_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
@@ -474,6 +521,9 @@ def prepare_trace_run(
                 "driver_trace_quantity": "normalized background-space driver coefficients",
                 "test_particle_matrix_trace_quantity": (
                     "unfactorized banded I-dt*C_test matrix in dense row/column coordinates"
+                ),
+                "final_state_trace_quantity": (
+                    "input and final phase-space state across the complete implicit collision solve"
                 ),
                 "serial_execution_required": True,
             },
