@@ -570,7 +570,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   15% maximum deviation from the ensemble mean. This closes the possibility
   of promoting one cherry-picked chaotic realization. The next numerical gate
   is obtaining three passing coarse lineage reports before spending resources
-  on resolved/domain ladders.
+  on resolved/domain ladders. An attempted second-seed run exposed that direct
+  invocation without `JAX_ENABLE_X64=1` silently selected float32. The producer
+  now fails before grid construction unless x64 is active, records the choice
+  in its report, and binds checkpoint state dtype into the restart contract.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

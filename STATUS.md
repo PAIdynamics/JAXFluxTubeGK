@@ -36,6 +36,12 @@ claimed.
   a single favorable realization from being selected as acceptance evidence.
 - No new scientific pass is claimed: three stationary independent coarse
   lineages still need to be generated before launching expensive ladders.
+- A seed-18 launch caught a precision hole: direct producer invocation could
+  silently truncate requested float64/complex128 arrays when JAX x64 was not
+  enabled. The invalid run was stopped before producing evidence. The producer
+  now fails immediately with the required command, records x64 in reports, and
+  includes state dtype in checkpoint compatibility checks. Legacy checkpoints
+  are accepted only when their stored state is actually complex128.
 
 ### 2026-08-07: Native stella Collision Discriminator
 

@@ -767,6 +767,9 @@ Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination
 decisions. This reduces repeated dispatch overhead without moving nonsmooth
 adaptive decisions onto the differentiable trajectory path.
+Acceptance trajectories fail immediately unless JAX x64 is enabled. Checkpoint
+contracts also record the complex state dtype, preventing a float32 state from
+being resumed into an x64 campaign.
 
 Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
 evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux

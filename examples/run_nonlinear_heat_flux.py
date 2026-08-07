@@ -45,6 +45,13 @@ def _hyperdiffusion(fourier, coefficient: float):
     )
 
 
+def _require_x64(enabled: bool) -> None:
+    if not enabled:
+        raise RuntimeError(
+            "nonlinear acceptance runs require x64; rerun with JAX_ENABLE_X64=1"
+        )
+
+
 def _initial_state(precompute, amplitude: float, seed: int, zonal_fraction: float = 0.0):
     # maxwellian is (species,vpar,mu,z); Fourier topology comes from FLR J0.
     fourier_shape = precompute.rhs.flr_factors.bessel_j0.shape[-2:]
@@ -124,12 +131,13 @@ def _candidate_window_phi_growth(phi_history, times, start_fraction: float):
     }
 
 
-def _checkpoint_contract(args, fourier, state_shape) -> dict:
+def _checkpoint_contract(args, fourier, state_shape, state_dtype="complex128") -> dict:
     """Return the immutable numerical contract required for a safe restart."""
 
     return {
         "schema_version": 1,
         "state_shape": list(state_shape),
+        "state_dtype": str(np.dtype(state_dtype)),
         "n_z": args.n_z,
         "n_vpar": args.n_vpar,
         "n_mu": args.n_mu,
@@ -171,7 +179,9 @@ def _load_checkpoint(path: Path, expected_contract: dict):
         time = float(np.asarray(checkpoint["time"]))
         contract = json.loads(str(np.asarray(checkpoint["contract"])))
         lineage = json.loads(str(np.asarray(checkpoint["lineage"])))
-    if contract != expected_contract:
+    if "state_dtype" not in contract:
+        contract["state_dtype"] = str(state.dtype)
+    if contract != expected_contract or str(state.dtype) != expected_contract["state_dtype"]:
         raise ValueError("nonlinear checkpoint contract does not match requested run")
     if state.shape != tuple(expected_contract["state_shape"]):
         raise ValueError("nonlinear checkpoint state shape does not match its contract")
@@ -257,6 +267,7 @@ def _parse_args(argv: list[str] | None = None):
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
+    _require_x64(jax.config.x64_enabled)
     velocity = build_velocity_grid(
         VelocityGridSpec(
             n_vpar=args.n_vpar,
@@ -319,7 +330,9 @@ def main(argv: list[str] | None = None) -> None:
         args.seed,
         zonal_fraction=args.initial_zonal_fraction,
     )
-    checkpoint_contract = _checkpoint_contract(args, fourier, seeded_initial.shape)
+    checkpoint_contract = _checkpoint_contract(
+        args, fourier, seeded_initial.shape, seeded_initial.dtype
+    )
     if args.restart_from is None:
         initial = seeded_initial
         start_time = 0.0
@@ -416,6 +429,7 @@ def main(argv: list[str] | None = None) -> None:
             "temperature_gradient_R_over_LT": temperature_gradient,
             "kx": np.asarray(fourier.kx).tolist(),
             "ky": np.asarray(fourier.ky).tolist(),
+            "jax_enable_x64": bool(jax.config.x64_enabled),
         },
         "n_steps": result.n_steps,
         "start_time": start_time,

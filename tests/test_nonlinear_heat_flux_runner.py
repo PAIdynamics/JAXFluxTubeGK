@@ -11,6 +11,7 @@ from examples.run_nonlinear_heat_flux import (
     _nonzonal_phi_rms_history,
     _parse_args,
     _phi_rms_diagnostics,
+    _require_x64,
     _write_checkpoint,
 )
 from stellarator_gk import FourierGridSpec, build_fourier_grid
@@ -46,6 +47,12 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
 def test_nonlinear_heat_flux_runner_rejects_even_kx(tmp_path):
     with pytest.raises(SystemExit):
         _parse_args(["--output", str(tmp_path / "result.json"), "--n-kx", "4"])
+
+
+def test_nonlinear_heat_flux_runner_requires_x64():
+    with pytest.raises(RuntimeError, match="JAX_ENABLE_X64=1"):
+        _require_x64(False)
+    _require_x64(True)
 
 
 def test_phi_rms_diagnostics_separates_zonal_and_nonzonal_amplitudes():
@@ -116,5 +123,6 @@ def test_nonlinear_checkpoint_roundtrip_and_contract_guard(tmp_path):
     np.testing.assert_array_equal(np.asarray(restored), state)
     assert time == pytest.approx(3.5)
     assert restored_lineage == lineage
+    assert contract["state_dtype"] == "complex128"
     with pytest.raises(ValueError, match="contract does not match"):
         _load_checkpoint(path, contract | {"hyperdiffusion": 0.2})
