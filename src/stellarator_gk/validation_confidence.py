@@ -227,7 +227,11 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "ladders plus independent parity. It now also requires at least three "
                 "unique initialization roots, stationarity in every lineage, and at most "
                 "15% deviation from the ensemble mean, preventing a favorable chaotic "
-                "realization from being selected. No second stationary local rung or GX "
+                "realization from being selected. An independent x64 seed-18 lineage "
+                "through time 300 fails: its t=220--300 candidate mean is -14.3748, "
+                "block relative error 25.61%, drift 0.5378, nonzonal growth -5.89e-3, "
+                "and full-segment RMS ratio 0.750. The earlier seed-17 candidate is "
+                "therefore not initialization-robust. No second stationary local rung or GX "
                 "comparison has yet passed. Source tracing against pinned GX established "
                 "its total-energy moment, Fourier factor, and s-alpha flux weight; the local "
                 "producer now exposes the matched gx_Q_over_Q_GB diagnostic separately from "
@@ -243,6 +247,9 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 ConfidenceMetric("regenerated_merged_block_relative_error", 7.124978e-2),
                 ConfidenceMetric("regenerated_merged_relative_drift", -6.91319448348199e-1),
                 ConfidenceMetric("regenerated_merged_nonzonal_growth", 4.2386475e-3),
+                ConfidenceMetric("seed18_t220_t300_mean_gx_qgb", -14.374818270136231),
+                ConfidenceMetric("seed18_t220_t300_block_relative_error", 0.2560513848799404),
+                ConfidenceMetric("seed18_t220_t300_relative_drift", 0.5378087177639954),
             ),
         ),
         ValidationConfidenceGap(

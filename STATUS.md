@@ -42,6 +42,12 @@ claimed.
   now fails immediately with the required command, records x64 in reports, and
   includes state dtype in checkpoint compatibility checks. Legacy checkpoints
   are accepted only when their stored state is actually complex128.
+- Re-ran seed 18 correctly in x64 through the matched
+  `0->60->140->220->300` schedule. It remains nonstationary at time 300: the
+  time-220-to-300 candidate window has mean `-14.3748`, `25.61%` block error,
+  `0.5378` drift, and `-5.89e-3` nonzonal growth; the segment nonzonal RMS ratio
+  is `0.750`. This is the first genuinely independent-lineage result and shows
+  the historical seed-17 passing interval is not robust acceptance evidence.
 
 ### 2026-08-07: Native stella Collision Discriminator
 

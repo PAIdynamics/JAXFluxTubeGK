@@ -574,6 +574,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   invocation without `JAX_ENABLE_X64=1` silently selected float32. The producer
   now fails before grid construction unless x64 is active, records the choice
   in its report, and binds checkpoint state dtype into the restart contract.
+  The first independent x64 lineage (seed 18) has now been extended through
+  time 300 with the same `0->60->140->220->300` schedule. It is not stationary:
+  the time-220-to-300 segment's candidate window has mean `-14.3748`, block
+  relative error `25.61%`, drift `0.5378`, and fitted nonzonal growth
+  `-5.89e-3`; its full-segment nonzonal RMS ratio is `0.750`. The earlier
+  seed-17 candidate is therefore not robust across initialization. Seed 18
+  must be extended, and at least one further independent lineage generated,
+  before resolved/domain ladders are scientifically justified.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
