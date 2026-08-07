@@ -12,6 +12,14 @@ def _segment(path, start, stop, *, hyperdiffusion=0.05):
         "schema_version": 1,
         "producer": "optimal-fusion/nonlinear-heat-flux",
         "normalization": "optimal_fusion_native",
+        "end_time": stop,
+        "trajectory_lineage": {
+            "schema_version": 1,
+            "seed": 17,
+            "initial_amplitude": 1.0e-3,
+            "initial_zonal_fraction": 0.0,
+            "segment_end_times": [stop],
+        },
         "case": {
             "n_z": 12,
             "n_vpar": 12,

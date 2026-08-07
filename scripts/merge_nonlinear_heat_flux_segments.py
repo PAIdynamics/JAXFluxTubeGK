@@ -60,6 +60,22 @@ def _trace(payload: dict):
     return arrays
 
 
+def _lineage_root(payload: dict) -> dict:
+    lineage = payload.get("trajectory_lineage")
+    if not isinstance(lineage, dict) or lineage.get("schema_version") != 1:
+        raise ValueError("nonlinear segment lacks schema-v1 trajectory lineage")
+    end_times = lineage.get("segment_end_times")
+    if not isinstance(end_times, list) or not end_times:
+        raise ValueError("nonlinear segment trajectory lineage lacks segment endpoints")
+    end_time = float(payload.get("end_time", np.nan))
+    if not np.isfinite(end_time) or not np.isclose(float(end_times[-1]), end_time):
+        raise ValueError("nonlinear segment lineage does not terminate at its report time")
+    keys = ("seed", "initial_amplitude", "initial_zonal_fraction")
+    if any(key not in lineage for key in keys):
+        raise ValueError("nonlinear segment trajectory lineage lacks initialization controls")
+    return {key: lineage[key] for key in keys}
+
+
 def merge_nonlinear_heat_flux_segments(
     paths,
     *,
@@ -94,6 +110,9 @@ def merge_nonlinear_heat_flux_segments(
     contract = _contract(payloads[0])
     if any(_contract(payload) != contract for payload in payloads[1:]):
         raise ValueError("nonlinear segment contracts do not match")
+    lineage_root = _lineage_root(payloads[0])
+    if any(_lineage_root(payload) != lineage_root for payload in payloads[1:]):
+        raise ValueError("nonlinear segments do not share one trajectory initialization")
 
     merged = [[], [], []]
     previous_end = None
@@ -161,6 +180,13 @@ def merge_nonlinear_heat_flux_segments(
         "start_time": float(times[0]),
         "end_time": float(times[-1]),
         "stationary": stationary,
+        "trajectory_lineage": {
+            "schema_version": 1,
+            **lineage_root,
+            "source_segment_end_times": [
+                payload["trajectory_lineage"]["segment_end_times"] for payload in payloads
+            ],
+        },
         "stationary_window_duration": duration,
         "relative_standard_error": relative_standard_error,
         "nonzonal_phi_rms_initial": float(amplitude[0]),

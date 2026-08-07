@@ -101,12 +101,20 @@ def test_nonlinear_checkpoint_roundtrip_and_contract_guard(tmp_path):
     grid = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.1)))
     state = np.arange(12).reshape(2, 3, 2).astype(np.complex128) * (1.0 + 0.5j)
     contract = _checkpoint_contract(args, grid, state.shape)
+    lineage = {
+        "schema_version": 1,
+        "seed": 17,
+        "initial_amplitude": 1.0e-3,
+        "initial_zonal_fraction": 0.0,
+        "segment_end_times": [3.5],
+    }
     path = tmp_path / "restart.npz"
 
-    _write_checkpoint(path, state, 3.5, contract)
-    restored, time = _load_checkpoint(path, contract)
+    _write_checkpoint(path, state, 3.5, contract, lineage)
+    restored, time, restored_lineage = _load_checkpoint(path, contract)
 
     np.testing.assert_array_equal(np.asarray(restored), state)
     assert time == pytest.approx(3.5)
+    assert restored_lineage == lineage
     with pytest.raises(ValueError, match="contract does not match"):
         _load_checkpoint(path, contract | {"hyperdiffusion": 0.2})

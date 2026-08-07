@@ -148,7 +148,7 @@ def _checkpoint_contract(args, fourier, state_shape) -> dict:
     }
 
 
-def _write_checkpoint(path: Path, state, time: float, contract: dict) -> None:
+def _write_checkpoint(path: Path, state, time: float, contract: dict, lineage: dict) -> None:
     path = path.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as stream:
@@ -157,25 +157,35 @@ def _write_checkpoint(path: Path, state, time: float, contract: dict) -> None:
             state=np.asarray(state),
             time=np.asarray(time, dtype=np.float64),
             contract=np.asarray(json.dumps(contract, sort_keys=True)),
+            lineage=np.asarray(json.dumps(lineage, sort_keys=True)),
         )
 
 
 def _load_checkpoint(path: Path, expected_contract: dict):
     path = path.expanduser().resolve()
     with np.load(path, allow_pickle=False) as checkpoint:
-        required = {"state", "time", "contract"}
+        required = {"state", "time", "contract", "lineage"}
         if not required.issubset(checkpoint.files):
-            raise ValueError("nonlinear checkpoint is missing state, time, or contract")
+            raise ValueError("nonlinear checkpoint is missing state, time, contract, or lineage")
         state = np.asarray(checkpoint["state"])
         time = float(np.asarray(checkpoint["time"]))
         contract = json.loads(str(np.asarray(checkpoint["contract"])))
+        lineage = json.loads(str(np.asarray(checkpoint["lineage"])))
     if contract != expected_contract:
         raise ValueError("nonlinear checkpoint contract does not match requested run")
     if state.shape != tuple(expected_contract["state_shape"]):
         raise ValueError("nonlinear checkpoint state shape does not match its contract")
     if not np.isfinite(state).all() or not np.isfinite(time) or time < 0.0:
         raise ValueError("nonlinear checkpoint state and time must be finite and nonnegative")
-    return jnp.asarray(state), time
+    if (
+        not isinstance(lineage, dict)
+        or lineage.get("schema_version") != 1
+        or not isinstance(lineage.get("segment_end_times"), list)
+        or not lineage["segment_end_times"]
+        or abs(float(lineage["segment_end_times"][-1]) - time) > 1.0e-10 * max(1.0, abs(time))
+    ):
+        raise ValueError("nonlinear checkpoint trajectory lineage is invalid")
+    return jnp.asarray(state), time, lineage
 
 
 def _parse_args(argv: list[str] | None = None):
@@ -313,8 +323,15 @@ def main(argv: list[str] | None = None) -> None:
     if args.restart_from is None:
         initial = seeded_initial
         start_time = 0.0
+        lineage = {
+            "schema_version": 1,
+            "seed": args.seed,
+            "initial_amplitude": args.initial_amplitude,
+            "initial_zonal_fraction": args.initial_zonal_fraction,
+            "segment_end_times": [],
+        }
     else:
-        initial, start_time = _load_checkpoint(args.restart_from, checkpoint_contract)
+        initial, start_time, lineage = _load_checkpoint(args.restart_from, checkpoint_contract)
     if start_time >= args.final_time:
         raise ValueError("final-time must be greater than the restart checkpoint time")
     result = integrate_nonlinear_adaptive(
@@ -380,6 +397,9 @@ def main(argv: list[str] | None = None) -> None:
         and abs(float(candidate_phi["candidate_nonzonal_phi_growth_rate"]))
         <= args.max_absolute_phi_growth_rate
     )
+    report_lineage = lineage | {
+        "segment_end_times": [*lineage["segment_end_times"], args.final_time]
+    }
     payload = {
         "schema_version": 1,
         "producer": "optimal-fusion/nonlinear-heat-flux",
@@ -401,6 +421,7 @@ def main(argv: list[str] | None = None) -> None:
         "start_time": start_time,
         "end_time": args.final_time,
         "stationary": stationary,
+        "trajectory_lineage": report_lineage,
         "state_rms_initial": float(jnp.sqrt(jnp.mean(jnp.abs(result.history[0]) ** 2))),
         "state_rms_final": float(jnp.sqrt(jnp.mean(jnp.abs(result.state) ** 2))),
         **{key: np.asarray(value).tolist() for key, value in phi_diagnostics.items()},
@@ -422,6 +443,7 @@ def main(argv: list[str] | None = None) -> None:
             result.state,
             args.final_time,
             checkpoint_contract,
+            report_lineage,
         )
     print(f"wrote {output}; stationary={stationary}; n_steps={result.n_steps}")
     if args.require_stationary and not stationary:
