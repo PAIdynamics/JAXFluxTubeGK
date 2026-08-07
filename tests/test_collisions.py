@@ -28,6 +28,7 @@ from stellarator_gk import (
     fokker_planck_reciprocal_components,
     laguerre_legendre_collision,
     laguerre_legendre_collision_components,
+    laguerre_legendre_collision_components_from_moments,
     linear_residual,
 )
 
@@ -545,7 +546,11 @@ def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():
     expected_components = jnp.einsum(
         "abcvmzxy,abczxy->abvmzxy", response, moments
     )
+    from_moments = jax.jit(laguerre_legendre_collision_components_from_moments)(
+        moments, precompute
+    )
     np.testing.assert_allclose(components, expected_components, atol=2e-13)
+    np.testing.assert_allclose(from_moments, expected_components, atol=2e-13)
     np.testing.assert_allclose(collision, jnp.sum(components, axis=1), atol=2e-13)
 
     def objective(values):

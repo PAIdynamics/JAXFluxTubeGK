@@ -15,6 +15,7 @@ from .collisions import (
     fokker_planck_reciprocal_components,
     laguerre_legendre_collision,
     laguerre_legendre_collision_components,
+    laguerre_legendre_collision_components_from_moments,
 )
 from .electromagnetic import (
     ElectromagneticFieldPrecompute,
@@ -183,6 +184,7 @@ __all__ = [
     "fokker_planck_reciprocal_components",
     "laguerre_legendre_collision",
     "laguerre_legendre_collision_components",
+    "laguerre_legendre_collision_components_from_moments",
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",

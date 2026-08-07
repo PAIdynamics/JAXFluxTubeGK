@@ -169,6 +169,18 @@ def laguerre_legendre_collision_components(
     if values.shape != expected:
         raise ValueError(f"distribution has shape {values.shape}, expected {expected}")
     moments = jnp.einsum("abcvmzxy,bvmzxy->abczxy", precompute.driver, values)
+    return laguerre_legendre_collision_components_from_moments(moments, precompute)
+
+
+def laguerre_legendre_collision_components_from_moments(
+    moments, precompute: LaguerreLegendreCollisionPrecompute
+):
+    """Map pair/component scalar moments back to directed phase-space actions."""
+
+    moments = jnp.asarray(moments)
+    expected = (*precompute.response.shape[:3], *precompute.response.shape[5:])
+    if moments.shape != expected:
+        raise ValueError(f"moments have shape {moments.shape}, expected {expected}")
     return jnp.einsum("abcvmzxy,abczxy->abvmzxy", precompute.response, moments)
 
 
@@ -1024,4 +1036,5 @@ __all__ = [
     "fokker_planck_reciprocal_components",
     "laguerre_legendre_collision",
     "laguerre_legendre_collision_components",
+    "laguerre_legendre_collision_components_from_moments",
 ]
