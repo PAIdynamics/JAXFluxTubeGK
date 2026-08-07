@@ -102,6 +102,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--gx-fprim", type=float, default=0.8)
     parser.add_argument("--gx-tprim", type=float, default=2.49)
     parser.add_argument("--hyperdiffusion", type=float, default=0.05)
+    parser.add_argument("--collision-frequency", type=float, default=0.0)
     parser.add_argument("--initial-amplitude", type=float, default=1.0e-3)
     parser.add_argument("--initial-zonal-fraction", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=17)
@@ -121,6 +122,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("initial-zonal-fraction must lie in [0, 1]")
     if min(args.rmaj_over_lref, args.gx_fprim, args.gx_tprim) <= 0.0:
         parser.error("rmaj-over-lref, gx-fprim, and gx-tprim must be positive")
+    if args.collision_frequency < 0.0:
+        parser.error("collision-frequency must be nonnegative")
     return args
 
 
@@ -165,6 +168,7 @@ def main(argv: list[str] | None = None) -> None:
         ion,
         electron_params=AdiabaticElectronParams(1.0, 1.0),
         perpendicular_damping=_hyperdiffusion(fourier, args.hyperdiffusion),
+        collision_frequency=(args.collision_frequency if args.collision_frequency > 0.0 else None),
     )
     spectral = build_exb_pseudospectral_precompute(fourier)
     initial = _initial_state(

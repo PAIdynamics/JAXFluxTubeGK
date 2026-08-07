@@ -628,6 +628,11 @@ artificial `ky=0` potential from the weak zonal polarization denominator and
 lets zonal flows arise through nonlinear mode transfer. Use
 `--initial-zonal-fraction` only for a controlled zonal-seed experiment.
 
+`--collision-frequency` enables the package's density/momentum/energy-
+conserving BGK model and includes its stiffness in adaptive CFL control. It is
+off by default because it is a numerical discriminator, not a replacement for
+matching GX's hypercollision controls or for the open Landau collision gate.
+
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`. The stationarity amplitude guard is
 applied to the heat-carrying nonzonal potential rather than the total field;

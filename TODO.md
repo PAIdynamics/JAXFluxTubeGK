@@ -467,6 +467,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   potential. The producer now defaults the zonal seed to zero, with an explicit
   opt-in fraction, so zonal flow must arise from nonlinear transfer. The
   zero-zonal `9x5` long-time run is the next saturation discriminator.
+  That run remains nonstationary at time 60 (nonzonal RMS `5822x`, flux drift
+  `-3.74`) despite strong self-generated zonal flow. The local producer now
+  exposes an opt-in conserving-BGK frequency whose stiffness participates in
+  adaptive CFL control, allowing a velocity-dissipation discriminator. It is
+  deliberately off by default and cannot satisfy external parity in place of
+  GX's documented hypercollision model.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
