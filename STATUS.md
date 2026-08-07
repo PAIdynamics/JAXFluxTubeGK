@@ -317,6 +317,13 @@ claimed.
   `kx` chains; production Cyclone acceptance requires shear-consistent `kx`
   spacing plus twist-and-shift parallel connectivity. README and TODO now
   classify the periodic-chain runs as numerical discriminators only.
+- Added a public cell-centered GKW parallel-grid builder and made the nonlinear
+  producer default to the GKW upwind twist-and-shift boundary stencil. Its
+  Fourier grid now uses the shear relation
+  `dkx=q*shat*ky_min/(eps*ikxspace)`, and multi-`ky` connectivity scales the
+  boundary jump by `ky/ky_min`. The old periodic-chain model remains an
+  explicit diagnostic option. Focused Fourier, nonlinear, and benchmark tests
+  pass; long-time stationarity on this corrected topology is the next gate.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

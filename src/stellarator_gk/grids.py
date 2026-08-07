@@ -32,9 +32,7 @@ def build_velocity_grid(spec: VelocityGridSpec) -> VelocityGrid:
         vpar, w_vpar, d_vpar, t_vpar, ti_vpar = _gkw_velocity_collocation(
             spec.n_vpar, spec.vpar_max, spec.dtype
         )
-        mu, w_mu, d_mu, t_mu, ti_mu = _gkw_mu_collocation(
-            spec.n_mu, spec.mu_max, spec.dtype
-        )
+        mu, w_mu, d_mu, t_mu, ti_mu = _gkw_mu_collocation(spec.n_mu, spec.mu_max, spec.dtype)
     else:
         raise ValueError(f"unsupported velocity backend {spec.backend!r}")
     return VelocityGrid(
@@ -195,6 +193,47 @@ def build_parallel_grid(spec: ParallelGridSpec) -> ParallelGrid:
     )
 
 
+def build_gkw_parallel_grid(
+    n_z: int,
+    *,
+    nperiod: int = 1,
+    periodic: bool = False,
+    dtype: str = "float64",
+) -> ParallelGrid:
+    """Build the cell-centered uniform grid used by GKW boundary stencils.
+
+    ``periodic=False`` leaves endpoint closure to a supplied mode-connectivity
+    map, as required by twist-and-shift flux tubes. ``periodic=True`` is useful
+    only for controlled independent-chain diagnostics.
+    """
+
+    if n_z < 2:
+        raise ValueError("n_z must be at least 2")
+    if nperiod < 1:
+        raise ValueError("nperiod must be at least 1")
+    half_length = nperiod - 0.5
+    length = 2.0 * half_length
+    spacing = length / n_z
+    lower = -half_length + 0.5 * spacing
+    operators = build_finite_difference_operators(
+        n_z,
+        spacing,
+        periodic=periodic,
+        dtype=dtype,
+    )
+    identity = jnp.eye(n_z, dtype=operators.D1.dtype)
+    z = lower + spacing * jnp.arange(n_z, dtype=operators.D1.dtype)
+    return ParallelGrid(
+        z=z,
+        w_z=jnp.full((n_z,), spacing, dtype=operators.D1.dtype),
+        D_z=operators.D1,
+        modal_transform=identity,
+        inverse_modal_transform=identity,
+        backend=DerivativeBackend.FINITE_DIFFERENCE.value,
+        topology="periodic" if periodic else "twist_shift",
+    )
+
+
 def build_fourier_grid(spec: FourierGridSpec) -> FourierGrid:
     """Build centered radial and nonnegative binormal Fourier mode grids."""
 
@@ -221,7 +260,11 @@ def build_fourier_grid(spec: FourierGridSpec) -> FourierGrid:
 
 
 def build_mode_connectivity(
-    fourier_grid: FourierGrid, ikxspace: int | None = None, max_shift: int = 4
+    fourier_grid: FourierGrid,
+    ikxspace: int | None = None,
+    max_shift: int = 4,
+    *,
+    scale_shift_by_ky: bool = False,
 ) -> ModeConnectivity:
     """Build static GKW-style mode labels and parallel-boundary kx connectivity."""
 
@@ -238,7 +281,13 @@ def build_mode_connectivity(
     ixzero = int(fourier_grid.ixzero)
     iyzero = int(fourier_grid.iyzero)
 
-    mode_label = _build_mode_label(nkx, nky, iyzero, spacing)
+    mode_label = _build_mode_label(
+        nkx,
+        nky,
+        iyzero,
+        spacing,
+        scale_shift_by_ky=scale_shift_by_ky,
+    )
     ixplus, ixminus = _build_ix_connectivity(mode_label, iyzero)
     kx_shift, valid_shift = _build_kx_shift_maps(ixplus, ixminus, iyzero, max_shift)
 
@@ -265,8 +314,12 @@ def build_finite_difference_operators(
         raise ValueError("spacing must be positive")
     d1 = np.zeros((n, n), dtype=float)
     d4 = np.zeros((n, n), dtype=float)
-    d1_stencil = {(-2): 1.0 / (12.0 * spacing), (-1): -8.0 / (12.0 * spacing),
-                  1: 8.0 / (12.0 * spacing), 2: -1.0 / (12.0 * spacing)}
+    d1_stencil = {
+        (-2): 1.0 / (12.0 * spacing),
+        (-1): -8.0 / (12.0 * spacing),
+        1: 8.0 / (12.0 * spacing),
+        2: -1.0 / (12.0 * spacing),
+    }
     d4_stencil = {
         -2: 1.0 / spacing**4,
         -1: -4.0 / spacing**4,
@@ -437,7 +490,14 @@ def _build_ky_values(spec: FourierGridSpec) -> np.ndarray:
     return np.linspace(0.0, float(spec.ky_max), spec.n_ky)
 
 
-def _build_mode_label(nkx: int, nky: int, iyzero: int, ikxspace: int) -> np.ndarray:
+def _build_mode_label(
+    nkx: int,
+    nky: int,
+    iyzero: int,
+    ikxspace: int,
+    *,
+    scale_shift_by_ky: bool = False,
+) -> np.ndarray:
     mode_label = np.zeros((nkx, nky), dtype=np.int32)
     label = 1
     for iy in range(nky):
@@ -446,8 +506,10 @@ def _build_mode_label(nkx: int, nky: int, iyzero: int, ikxspace: int) -> np.ndar
                 mode_label[ix, iy] = label
                 label += 1
             continue
-        for offset in range(ikxspace):
-            chain = np.arange(offset, nkx, ikxspace)
+        ky_multiplier = abs(iy - iyzero) if scale_shift_by_ky else 1
+        shift = ikxspace * ky_multiplier
+        for offset in range(shift):
+            chain = np.arange(offset, nkx, shift)
             if chain.size == 0:
                 continue
             mode_label[chain, iy] = label

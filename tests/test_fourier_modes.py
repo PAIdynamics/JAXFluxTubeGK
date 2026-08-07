@@ -2,7 +2,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from stellarator_gk import FourierGridSpec, build_fourier_grid, build_mode_connectivity
+from stellarator_gk import (
+    FourierGridSpec,
+    build_fourier_grid,
+    build_gkw_parallel_grid,
+    build_mode_connectivity,
+)
 
 
 def test_centered_kx_and_nonnegative_ky_grid():
@@ -34,9 +39,7 @@ def test_single_mode_uses_gkw_nonzero_ky_convention():
 
 
 def test_zonal_only_mode_uses_explicit_zero_ky():
-    grid = build_fourier_grid(
-        FourierGridSpec(n_kx=3, n_ky=1, kx_max=1.0, ky_values=(0.0,))
-    )
+    grid = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=1, kx_max=1.0, ky_values=(0.0,)))
 
     np.testing.assert_allclose(grid.ky, jnp.array([0.0]))
     np.testing.assert_allclose(grid.parseval, jnp.array([1.0]))
@@ -73,6 +76,17 @@ def test_mode_connectivity_zonal_identity_and_nonzonal_chains():
     assert not bool(conn.valid_shift[plus_two, 2, 1])
 
 
+def test_mode_connectivity_can_scale_twist_shift_with_ky_index():
+    grid = build_fourier_grid(
+        FourierGridSpec(n_kx=7, n_ky=3, kx_max=3.0, ky_values=(0.0, 0.2, 0.4))
+    )
+    conn = build_mode_connectivity(grid, ikxspace=1, scale_shift_by_ky=True)
+
+    np.testing.assert_array_equal(conn.ixplus[:, 1], np.array([1, 2, 3, 4, 5, 6, -1]))
+    np.testing.assert_array_equal(conn.ixplus[:, 2], np.array([2, 3, 4, 5, 6, -1, -1]))
+    np.testing.assert_array_equal(conn.ixminus[:, 2], np.array([-1, -1, 0, 1, 2, 3, 4]))
+
+
 def test_gkw_shear_spacing_option():
     grid = build_fourier_grid(
         FourierGridSpec(
@@ -90,3 +104,13 @@ def test_gkw_shear_spacing_option():
     expected_spacing = abs(2.0 * 0.5 * 0.5 / (0.2 * 5.0))
 
     np.testing.assert_allclose(grid.kx, expected_spacing * jnp.array([-2, -1, 0, 1, 2]))
+
+
+def test_gkw_parallel_grid_is_cell_centered_and_leaves_twist_shift_open():
+    grid = build_gkw_parallel_grid(8, nperiod=1)
+
+    np.testing.assert_allclose(grid.z, -0.5 + (jnp.arange(8) + 0.5) / 8.0)
+    np.testing.assert_allclose(grid.w_z, jnp.full((8,), 1.0 / 8.0))
+    assert grid.backend == "finite_difference"
+    assert grid.topology == "twist_shift"
+    np.testing.assert_allclose(grid.D_z[0, -1], 0.0, atol=0.0)

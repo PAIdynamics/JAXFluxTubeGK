@@ -18,6 +18,7 @@ from .types import (
 from .grids import (
     build_finite_difference_operators,
     build_fourier_grid,
+    build_gkw_parallel_grid,
     build_mode_connectivity,
     build_midpoint_gauss_laguerre_velocity_grid,
     build_parallel_grid,
@@ -699,6 +700,7 @@ __all__ = [
     "build_midpoint_gauss_laguerre_velocity_grid",
     "build_modal_damping_filter",
     "build_parallel_grid",
+    "build_gkw_parallel_grid",
     "build_s_alpha_geometry",
     "build_velocity_basis",
     "build_velocity_grid",

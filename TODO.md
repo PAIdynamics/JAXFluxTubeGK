@@ -475,9 +475,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   GX's documented hypercollision model. A `nu=0.1` BGK run changes the time-60
   result only slightly (nonzonal RMS `5664x`, drift `-3.68`), ruling out weak
   velocity damping as the dominant reduced-run blocker. The next structural
-  implementation is a shear-consistent `kx` grid with twist-and-shift parallel
-  connectivity; the current producer closes each `kx` chain independently and
-  therefore remains a discriminator rather than a Cyclone acceptance case.
+  implementation was a shear-consistent `kx` grid with twist-and-shift parallel
+  connectivity. That path is now the producer default: a public cell-centered
+  finite-difference parallel grid feeds the existing GKW upwind boundary
+  stencil, radial spacing follows `q*shat*ky_min/(eps*ikxspace)`, and the
+  boundary shift scales with `ky/ky_min`. The former periodic-chain path is an
+  explicit historical diagnostic. Long-time stationarity and GX parity on the
+  corrected topology remain open.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

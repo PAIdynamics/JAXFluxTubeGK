@@ -21,7 +21,9 @@ from stellarator_gk import (
     VelocityGridSpec,
     build_exb_pseudospectral_precompute,
     build_fourier_grid,
+    build_gkw_parallel_grid,
     build_linear_residual_precompute,
+    build_mode_connectivity,
     build_parallel_grid,
     build_s_alpha_geometry,
     build_velocity_grid,
@@ -98,6 +100,13 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--n-ky", type=int, default=5)
     parser.add_argument("--kx-max", type=float, default=0.8)
     parser.add_argument("--ky-min", type=float, default=0.1)
+    parser.add_argument("--ikxspace", type=int, default=1)
+    parser.add_argument(
+        "--parallel-boundary-model",
+        choices=("twist_shift", "periodic_chains"),
+        default="twist_shift",
+    )
+    parser.add_argument("--parallel-recurrence-rate", type=float, default=1.0)
     parser.add_argument("--rmaj-over-lref", type=float, default=2.77778)
     parser.add_argument("--gx-fprim", type=float, default=0.8)
     parser.add_argument("--gx-tprim", type=float, default=2.49)
@@ -124,6 +133,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("rmaj-over-lref, gx-fprim, and gx-tprim must be positive")
     if args.collision_frequency < 0.0:
         parser.error("collision-frequency must be nonnegative")
+    if args.ikxspace < 1 or args.parallel_recurrence_rate < 0.0:
+        parser.error("ikxspace must be positive and parallel-recurrence-rate nonnegative")
     return args
 
 
@@ -138,8 +149,13 @@ def main(argv: list[str] | None = None) -> None:
             backend="finite_difference",
         )
     )
-    parallel = build_parallel_grid(
-        ParallelGridSpec(n_z=args.n_z, z_min=-0.5, z_max=0.5, topology="periodic")
+    twist_shift = args.parallel_boundary_model == "twist_shift"
+    parallel = (
+        build_gkw_parallel_grid(args.n_z)
+        if twist_shift
+        else build_parallel_grid(
+            ParallelGridSpec(n_z=args.n_z, z_min=-0.5, z_max=0.5, topology="periodic")
+        )
     )
     fourier = build_fourier_grid(
         FourierGridSpec(
@@ -147,8 +163,14 @@ def main(argv: list[str] | None = None) -> None:
             n_ky=args.n_ky,
             kx_max=args.kx_max,
             ky_values=tuple(args.ky_min * index for index in range(args.n_ky)),
+            ikxspace=args.ikxspace,
+            q=1.4,
+            shat=0.8,
+            eps=0.18,
+            use_gkw_shear_spacing=twist_shift,
         )
     )
+    connectivity = build_mode_connectivity(fourier, scale_shift_by_ky=True) if twist_shift else None
     geometry = build_s_alpha_geometry(parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18))
     density_gradient = args.gx_fprim * args.rmaj_over_lref
     temperature_gradient = args.gx_tprim * args.rmaj_over_lref
@@ -168,6 +190,9 @@ def main(argv: list[str] | None = None) -> None:
         ion,
         electron_params=AdiabaticElectronParams(1.0, 1.0),
         perpendicular_damping=_hyperdiffusion(fourier, args.hyperdiffusion),
+        parallel_recurrence_rate=(args.parallel_recurrence_rate if twist_shift else 0.0),
+        mode_connectivity=connectivity,
+        parallel_derivative_model="gkw_upwind" if twist_shift else "matrix",
         collision_frequency=(args.collision_frequency if args.collision_frequency > 0.0 else None),
     )
     spectral = build_exb_pseudospectral_precompute(fourier)
@@ -227,6 +252,8 @@ def main(argv: list[str] | None = None) -> None:
             "output": str(args.output),
             "density_gradient_R_over_Ln": density_gradient,
             "temperature_gradient_R_over_LT": temperature_gradient,
+            "kx": np.asarray(fourier.kx).tolist(),
+            "ky": np.asarray(fourier.ky).tolist(),
         },
         "n_steps": result.n_steps,
         "stationary": stationary,

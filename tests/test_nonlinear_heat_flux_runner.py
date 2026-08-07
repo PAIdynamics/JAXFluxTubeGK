@@ -23,6 +23,8 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
     assert args.min_phi_rms_ratio == pytest.approx(0.8)
     assert args.initial_zonal_fraction == pytest.approx(0.0)
     assert args.collision_frequency == pytest.approx(0.0)
+    assert args.parallel_boundary_model == "twist_shift"
+    assert args.ikxspace == 1
     assert args.gx_fprim * args.rmaj_over_lref == pytest.approx(2.222224)
     assert args.gx_tprim * args.rmaj_over_lref == pytest.approx(6.9166722)
     assert damping.shape == (5, 3)
