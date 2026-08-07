@@ -20,6 +20,7 @@ from scripts.run_stella_collision_field_particle_discriminator import (
 
 TARGET = Path("STELLA_CODE/dissipation/collisions_fokkerplanck.f90")
 TRACE_FILENAME = "stellarator_gk_collision_field_particle_trace.dat"
+COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -45,6 +46,36 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         + "      ! stellarator_gk collision field-particle trace patch\n"
         + "      complex, dimension(:, :, :), allocatable :: stellarator_gk_fieldpart_input\n",
     )
+    text = _replace_once(
+        text,
+        "      complex, dimension(:, :), allocatable :: g0spitzer\n",
+        "      complex, dimension(:, :), allocatable :: g0spitzer\n"
+        "      complex, dimension(:, :), allocatable :: stellarator_gk_component_input\n"
+        "      complex :: stellarator_gk_component_increment\n"
+        "      integer :: stellarator_gk_component_unit\n",
+    )
+    text = _replace_once(
+        text,
+        "      integer :: ikxkyz, iky, ikx, iz, is, iv, it, ia\n",
+        "      integer :: ikxkyz, iky, ikx, iz, is, iv, imu, it, ia\n",
+    )
+    text = _replace_once(
+        text,
+        "   subroutine advance_implicit_fp(phi, apar, bpar, g)\n\n"
+        "      use mp, only: sum_allreduce\n",
+        "   subroutine advance_implicit_fp(phi, apar, bpar, g)\n\n"
+        "      use mp, only: sum_allreduce\n"
+        "      use mp, only: proc0\n",
+    )
+    text = _replace_once(
+        text,
+        "      use grids_velocity, only: nmu, nvpa\n"
+        "      use grids_velocity, only: vpa\n"
+        "      use grids_velocity, only: set_vpa_weights\n",
+        "      use grids_velocity, only: nmu, nvpa\n"
+        "      use grids_velocity, only: vpa, mu\n"
+        "      use grids_velocity, only: set_vpa_weights\n",
+    )
     snapshot = """      g = g_in
 
       ! RHS is g^{***} + Ze/T*<phi^{n+1}>*F0 + sum_jlm psi_jlm^{n+1}*delta_jl
@@ -60,6 +91,75 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
       end if
 
       ! RHS is g^{***} + Ze/T*<phi^{n+1}>*F0 + sum_jlm psi_jlm^{n+1}*delta_jl
+""",
+    )
+    component_start = """      ! add field particle contribution to RHS:
+      if (fieldpart) then
+         do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
+"""
+    text = _replace_once(
+        text,
+        component_start,
+        f"""      ! add field particle contribution to RHS:
+      if (fieldpart) then
+         allocate (stellarator_gk_component_input(nvpa, nmu))
+         if (proc0) then
+            open(newunit=stellarator_gk_component_unit, file='{COMPONENT_TRACE_FILENAME}', &
+                 status='replace', action='write')
+            write(stellarator_gk_component_unit, '(a)') &
+                 '# schema=stellarator_gk_stella_collision_fieldpart_components_v1'
+            write(stellarator_gk_component_unit, '(a)') &
+                 '# iv imu iky ikx iz tube species l m j vpa mu before_re before_im rhs_re rhs_im'
+         end if
+         do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
+""",
+    )
+    component_snapshot = """               jj1 = ij - 1
+
+               if (density_conservation_tp .and. (jj1 == 0) .and. (ll1 == 0)) then
+"""
+    text = _replace_once(
+        text,
+        component_snapshot,
+        """               jj1 = ij - 1
+               stellarator_gk_component_input = g(:, :, ikxkyz)
+
+               if (density_conservation_tp .and. (jj1 == 0) .and. (ll1 == 0)) then
+""",
+    )
+    component_end = """               end if
+
+            end do
+         end do
+
+      end if
+"""
+    text = _replace_once(
+        text,
+        component_end,
+        """               end if
+               if (proc0) then
+                  do iv = 1, nvpa
+                     do imu = 1, nmu
+                        stellarator_gk_component_increment = &
+                             (g(iv, imu, ikxkyz) - &
+                              stellarator_gk_component_input(iv, imu)) / code_dt
+                        write(stellarator_gk_component_unit, *) iv, imu, iky, ikx, &
+                             iz, it, is, ll1, mm1, jj1, vpa(iv), mu(imu), &
+                             real(stellarator_gk_component_input(iv, imu)), &
+                             aimag(stellarator_gk_component_input(iv, imu)), &
+                             real(stellarator_gk_component_increment), &
+                             aimag(stellarator_gk_component_increment)
+                     end do
+                  end do
+               end if
+
+            end do
+         end do
+         if (proc0) close(stellarator_gk_component_unit)
+         deallocate (stellarator_gk_component_input)
+
+      end if
 """,
     )
     end_fieldpart = """      end if
@@ -170,7 +270,9 @@ def prepare_trace_run(
                 "build_script": str(build_script),
                 "run_script": str(run_script),
                 "trace_output": str(run_dir / TRACE_FILENAME),
+                "component_trace_output": str(run_dir / COMPONENT_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
+                "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "serial_execution_required": True,
             },
             indent=2,
