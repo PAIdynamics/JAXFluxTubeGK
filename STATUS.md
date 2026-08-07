@@ -230,6 +230,12 @@ claimed.
   `0.5378` drift, and `-5.89e-3` nonzonal growth; the segment nonzonal RMS ratio
   is `0.750`. This is the first genuinely independent-lineage result and shows
   the historical seed-17 passing interval is not robust acceptance evidence.
+- Extended the same contract-checked seed-18 lineage from time 300 to 400 in
+  2,856 adaptive steps. The new half-window remains nonstationary: mean flux
+  `-21.367`, block relative error `9.76%`, drift `-0.888`, and nonzonal growth
+  `1.21e-2`. The checkpoint-independent time-220-to-400 merge improves the
+  drift to `-0.300` with mean `-21.031`, `6.57%` block error, and `3.26e-3`
+  field growth, but still fails the declared `0.2` drift gate.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.

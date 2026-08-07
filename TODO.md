@@ -691,13 +691,19 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   relative error `25.61%`, drift `0.5378`, and fitted nonzonal growth
   `-5.89e-3`; its full-segment nonzonal RMS ratio is `0.750`. The earlier
   seed-17 candidate is therefore not robust across initialization. Seed 18
-  must be extended, and at least one further independent lineage generated,
+  has now been extended through time 400. Its new half-window remains
+  nonstationary with mean `-21.367`, block relative error `9.76%`, drift
+  `-0.888`, and nonzonal growth `1.21e-2`. Merging time 220-to-400 gives mean
+  `-21.031`, block relative error `6.57%`, drift `-0.300`, and nonzonal growth
+  `3.26e-3`; the drift still exceeds the unchanged `0.2` gate. A longer
+  seed-18 extension and at least one further independent lineage are required
   before resolved/domain ladders are scientifically justified.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
 Acceptance status: **collision and electromagnetic implementation complete;
-nonlinear and unrestricted-design scientific gates remain open**. The suite covers the production collision operator,
+nonlinear and unrestricted-design scientific gates remain open**. The suite
+covers the production collision operator,
 nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
 be marked complete until the stationary nonlinear-flux and unrestricted
 shape-optimization claims named above pass.
