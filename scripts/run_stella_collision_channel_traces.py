@@ -11,12 +11,14 @@ import numpy as np
 
 from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
+    FACTOR_TRACE_FILENAME,
     TRACE_FILENAME,
 )
 from scripts.run_stella_collision_field_particle_discriminator import stella_collision_input
 from scripts.summarize_stella_collision_field_particle_components import (
     summarize_component_trace,
 )
+from scripts.summarize_stella_collision_field_particle_factors import summarize_factor_trace
 from scripts.summarize_stella_collision_field_particle_trace import summarize_trace
 
 
@@ -43,6 +45,7 @@ def summarize_channel_traces(
     *,
     expected_revision: str,
     component_paths: dict[str, Path] | None = None,
+    factor_paths: dict[str, Path] | None = None,
 ) -> dict[str, object]:
     """Validate common inputs and report isolated-channel closure."""
 
@@ -89,6 +92,22 @@ def summarize_channel_traces(
             "native pair-resolved Laguerre--Legendre action targets; "
             "local coefficient parity pending"
         )
+    if factor_paths is not None:
+        if set(factor_paths) != set(CHANNELS):
+            raise ValueError("channel factor trace set is incomplete")
+        report["factor_channels"] = {
+            name: summarize_factor_trace(
+                factor_paths[name],
+                trace_paths[name],
+                expected_revision=expected_revision,
+            )
+            for name in CHANNELS
+        }
+        report["metrics"]["local_jax_factor_replay_passed"] = True
+        report["scope"] = (
+            "native pair-resolved Laguerre--Legendre factors and local JAX "
+            "action replay; local coefficient construction pending"
+        )
     return report
 
 
@@ -106,6 +125,7 @@ def run_channel_traces(
     output_dir.mkdir(parents=True, exist_ok=True)
     trace_paths: dict[str, Path] = {}
     component_paths: dict[str, Path] = {}
+    factor_paths: dict[str, Path] = {}
     for name, knobs in CHANNELS.items():
         input_path = output_dir / f"collision_{name}.in"
         trace_path = output_dir / f"collision_{name}_field_particle_trace.dat"
@@ -136,11 +156,18 @@ def run_channel_traces(
         component_path = output_dir / f"collision_{name}_field_particle_components.dat"
         generated_components.replace(component_path)
         component_paths[name] = component_path
+        generated_factors = output_dir / FACTOR_TRACE_FILENAME
+        if not generated_factors.is_file():
+            raise FileNotFoundError(generated_factors)
+        factor_path = output_dir / f"collision_{name}_field_particle_factors.dat"
+        generated_factors.replace(factor_path)
+        factor_paths[name] = factor_path
 
     report = summarize_channel_traces(
         trace_paths,
         expected_revision=expected_revision,
         component_paths=component_paths,
+        factor_paths=factor_paths,
     )
     report["patched_stella_executable"] = str(executable)
     report_path = output_dir / "collision_channel_trace_summary.json"

@@ -23,6 +23,15 @@ def _write_components(path: Path, before: float, rhs: float) -> Path:
     return path
 
 
+def _write_factors(path: Path, rhs: float) -> Path:
+    path.write_text(
+        "# schema=stellarator_gk_stella_collision_fieldpart_factors_v1\n"
+        "# iv imu iky ikx iz tube target background l m j vpa mu psi_re psi_im basis rhs_re rhs_im\n"
+        f"1 1 1 1 0 1 1 1 0 0 1 -1.0 0.5 {rhs} 0.0 1.0 {rhs} 0.0\n"
+    )
+    return path
+
+
 def test_pair_resolved_summary_requires_common_input_and_reports_closure(tmp_path):
     rhs = {
         "all": 1.0,
@@ -67,12 +76,19 @@ def test_pair_resolved_summary_validates_each_component_trace(tmp_path):
         name: _write_components(tmp_path / f"{name}_components.dat", 2.0, rhs[name])
         for name in CHANNELS
     }
+    factors = {
+        name: _write_factors(tmp_path / f"{name}_factors.dat", rhs[name])
+        for name in CHANNELS
+    }
 
     report = summarize_channel_traces(
         paths,
         expected_revision="564ca09",
         component_paths=components,
+        factor_paths=factors,
     )
 
     assert report["metrics"]["component_reconstruction_passed"]
     assert set(report["component_channels"]) == set(CHANNELS)
+    assert report["metrics"]["local_jax_factor_replay_passed"]
+    assert set(report["factor_channels"]) == set(CHANNELS)

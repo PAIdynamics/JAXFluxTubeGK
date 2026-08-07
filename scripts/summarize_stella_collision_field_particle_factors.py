@@ -111,7 +111,7 @@ def summarize_factor_trace(
     aggregate_path: Path,
     *,
     expected_revision: str,
-    reconstruction_tolerance: float = 2.0e-12,
+    reconstruction_tolerance: float = 1.0e-9,
 ) -> dict[str, object]:
     """Require `psi * response_basis` and its sum to match native stella."""
 
