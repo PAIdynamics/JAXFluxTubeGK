@@ -47,8 +47,9 @@ claimed.
   coefficient-action observability. It does not yet close production collision
   parity: local stella-normalized Laguerre--Legendre coefficient construction
   and an independently generated second-state comparison remain required.
-- Repository-wide verification is green: Ruff passes and the standalone x64
-  suite reports **523 passed and 25 external tests deselected in 518.59 s**.
+- Repository-wide verification is green: Ruff passes and the expanded
+  standalone x64 suite reports **528 passed and 25 external tests deselected in
+  418.67 s**.
 - Added a provider-neutral low-rank collision coefficient contract with shapes
   `(target, background, component, vpar, mu, z, kx, ky)`. Driver contraction,
   response application, directed components, JIT, differentiation, and an
