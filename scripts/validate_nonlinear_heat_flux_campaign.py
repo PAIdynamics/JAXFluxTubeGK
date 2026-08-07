@@ -8,6 +8,8 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
+import numpy as np
+
 from stellarator_gk import (
     compare_nonlinear_heat_flux,
     compare_nonlinear_heat_flux_convergence,
@@ -33,6 +35,8 @@ def evaluate_campaign(
 
     if len(resolution_paths) < 2 or len(domain_paths) < 2:
         raise ValueError("resolution and domain ladders each require at least two reports")
+    resolution_contract = _validate_resolution_ladder(resolution_paths)
+    domain_contract = _validate_domain_ladder(domain_paths)
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
@@ -66,11 +70,129 @@ def evaluate_campaign(
         relative_standard_error_tolerance=relative_standard_error_tolerance,
     )
     return {
-        "passed": resolution.passed and domain.passed and parity.passed and ensemble.passed,
+        "passed": (
+            resolution_contract["passed"]
+            and domain_contract["passed"]
+            and resolution.passed
+            and domain.passed
+            and parity.passed
+            and ensemble.passed
+        ),
+        "resolution_ladder_contract": resolution_contract,
+        "domain_ladder_contract": domain_contract,
         "lineage_ensemble": asdict(ensemble),
         "resolution_convergence": asdict(resolution),
         "domain_convergence": asdict(domain),
         "independent_parity": asdict(parity),
+    }
+
+
+_PHASE_RESOLUTION_KEYS = ("n_z", "n_vpar", "n_mu")
+_PHYSICS_KEYS = (
+    "parallel_boundary_model",
+    "parallel_recurrence_rate",
+    "rmaj_over_lref",
+    "gx_fprim",
+    "gx_tprim",
+    "density_gradient_R_over_Ln",
+    "temperature_gradient_R_over_LT",
+    "hyperdiffusion",
+    "collision_frequency",
+    "flux_moment",
+    "ikxspace",
+)
+
+
+def _case_contract(path: Path) -> dict:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    case = payload.get("case")
+    if not isinstance(case, dict):
+        raise ValueError(f"nonlinear ladder report {path} lacks a case contract")
+    required = (*_PHASE_RESOLUTION_KEYS, "n_kx", "n_ky", "kx", "ky", *_PHYSICS_KEYS)
+    missing = [key for key in required if key not in case]
+    if missing:
+        raise ValueError(f"nonlinear ladder report {path} lacks case keys: {missing}")
+    kx = np.asarray(case["kx"], dtype=float)
+    ky = np.asarray(case["ky"], dtype=float)
+    if (
+        kx.shape != (int(case["n_kx"]),)
+        or ky.shape != (int(case["n_ky"]),)
+        or not np.all(np.isfinite(kx))
+        or not np.all(np.isfinite(ky))
+        or np.any(np.diff(kx) <= 0.0)
+        or np.any(np.diff(ky) <= 0.0)
+        or ky[0] != 0.0
+    ):
+        raise ValueError(f"nonlinear ladder report {path} has an invalid Fourier grid")
+    return case
+
+
+def _same_values(left: dict, right: dict, keys: tuple[str, ...]) -> bool:
+    return all(left[key] == right[key] for key in keys)
+
+
+def _validate_resolution_ladder(paths: tuple[Path, ...]) -> dict:
+    cases = tuple(_case_contract(path) for path in paths)
+    base = cases[0]
+    fixed_fourier = all(
+        _same_values(base, case, ("n_kx", "n_ky", "kx", "ky")) for case in cases[1:]
+    )
+    fixed_physics = all(_same_values(base, case, _PHYSICS_KEYS) for case in cases[1:])
+    resolutions = tuple(tuple(int(case[key]) for key in _PHASE_RESOLUTION_KEYS) for case in cases)
+    strictly_refined = all(
+        all(right >= left for left, right in zip(previous, current, strict=True))
+        and any(right > left for left, right in zip(previous, current, strict=True))
+        for previous, current in zip(resolutions, resolutions[1:], strict=False)
+    )
+    return {
+        "passed": fixed_fourier and fixed_physics and strictly_refined,
+        "fixed_fourier_grid": fixed_fourier,
+        "fixed_physics": fixed_physics,
+        "strictly_refined": strictly_refined,
+        "phase_space_resolutions": [list(values) for values in resolutions],
+    }
+
+
+def _fourier_extent(case: dict) -> dict:
+    kx = np.asarray(case["kx"], dtype=float)
+    ky = np.asarray(case["ky"], dtype=float)
+    positive_kx_spacing = np.diff(kx)
+    positive_ky = ky[ky > 0.0]
+    if positive_kx_spacing.size == 0 or positive_ky.size == 0:
+        raise ValueError("domain ladder needs multiple kx modes and a positive ky mode")
+    return {
+        "delta_kx": float(np.min(positive_kx_spacing)),
+        "delta_ky": float(positive_ky[0]),
+        "max_abs_kx": float(np.max(np.abs(kx))),
+        "max_ky": float(ky[-1]),
+    }
+
+
+def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
+    cases = tuple(_case_contract(path) for path in paths)
+    base = cases[0]
+    fixed_phase_resolution = all(
+        _same_values(base, case, _PHASE_RESOLUTION_KEYS) for case in cases[1:]
+    )
+    fixed_physics = all(_same_values(base, case, _PHYSICS_KEYS) for case in cases[1:])
+    extents = tuple(_fourier_extent(case) for case in cases)
+    domain_expanded = all(
+        current["delta_kx"] <= previous["delta_kx"] * (1.0 + 1.0e-12)
+        and current["delta_ky"] <= previous["delta_ky"] * (1.0 + 1.0e-12)
+        and (
+            current["delta_kx"] < previous["delta_kx"] * (1.0 - 1.0e-12)
+            or current["delta_ky"] < previous["delta_ky"] * (1.0 - 1.0e-12)
+        )
+        and current["max_abs_kx"] >= previous["max_abs_kx"] * (1.0 - 1.0e-12)
+        and current["max_ky"] >= previous["max_ky"] * (1.0 - 1.0e-12)
+        for previous, current in zip(extents, extents[1:], strict=False)
+    )
+    return {
+        "passed": fixed_phase_resolution and fixed_physics and domain_expanded,
+        "fixed_phase_space_resolution": fixed_phase_resolution,
+        "fixed_physics": fixed_physics,
+        "domain_expanded_without_lost_bandwidth": domain_expanded,
+        "fourier_extents": list(extents),
     }
 
 

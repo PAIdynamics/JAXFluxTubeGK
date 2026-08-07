@@ -6,7 +6,16 @@ from scripts.validate_nonlinear_heat_flux_campaign import evaluate_campaign
 
 
 def _write_report(
-    path, mean, *, normalization="native", stationary=True, drift=0.01, seed=1
+    path,
+    mean,
+    *,
+    normalization="native",
+    stationary=True,
+    drift=0.01,
+    seed=1,
+    resolution=(12, 12, 6),
+    kx=(-2.0, -1.0, 0.0, 1.0, 2.0),
+    ky=(0.0, 0.1, 0.2),
 ):
     path.write_text(
         json.dumps(
@@ -15,6 +24,26 @@ def _write_report(
                 "producer": "test",
                 "normalization": normalization,
                 "stationary": stationary,
+                "case": {
+                    "n_z": resolution[0],
+                    "n_vpar": resolution[1],
+                    "n_mu": resolution[2],
+                    "n_kx": len(kx),
+                    "n_ky": len(ky),
+                    "kx": list(kx),
+                    "ky": list(ky),
+                    "parallel_boundary_model": "twist_shift",
+                    "parallel_recurrence_rate": 1.0,
+                    "rmaj_over_lref": 2.77778,
+                    "gx_fprim": 0.8,
+                    "gx_tprim": 2.49,
+                    "density_gradient_R_over_Ln": 2.222224,
+                    "temperature_gradient_R_over_LT": 6.9166722,
+                    "hyperdiffusion": 0.05,
+                    "collision_frequency": 0.0,
+                    "flux_moment": "gx_total_energy",
+                    "ikxspace": 1,
+                },
                 "trajectory_lineage": {
                     "schema_version": 1,
                     "seed": seed,
@@ -37,11 +66,16 @@ def _write_report(
 def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path):
     resolution = (
         _write_report(tmp_path / "r0.json", 4.4),
-        _write_report(tmp_path / "r1.json", 4.0),
+        _write_report(tmp_path / "r1.json", 4.0, resolution=(16, 16, 8)),
     )
     domain = (
         _write_report(tmp_path / "d0.json", 3.7),
-        _write_report(tmp_path / "d1.json", 4.0),
+        _write_report(
+            tmp_path / "d1.json",
+            4.0,
+            kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+            ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+        ),
     )
     reference = _write_report(tmp_path / "gx.json", 8.0, normalization="gx")
     lineages = tuple(
@@ -61,6 +95,8 @@ def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path
     assert report["resolution_convergence"]["passed"]
     assert report["domain_convergence"]["passed"]
     assert report["independent_parity"]["passed"]
+    assert report["resolution_ladder_contract"]["passed"]
+    assert report["domain_ladder_contract"]["passed"]
 
 
 def test_campaign_fails_closed_when_a_producer_rejected_a_rung(tmp_path):
@@ -74,8 +110,16 @@ def test_campaign_fails_closed_when_a_producer_rejected_a_rung(tmp_path):
     )
 
     report = evaluate_campaign(
-        (rejected, accepted),
-        (accepted, accepted),
+        (rejected, _write_report(tmp_path / "fine.json", 4.0, resolution=(16, 16, 8))),
+        (
+            accepted,
+            _write_report(
+                tmp_path / "wide.json",
+                4.0,
+                kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+                ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+            ),
+        ),
         reference,
         lineage_paths=lineages,
         local_to_reference_factor=1.0,
@@ -111,7 +155,19 @@ def test_campaign_needs_no_factor_for_source_matched_normalization(tmp_path):
     )
 
     report = evaluate_campaign(
-        (local, local), (local, local), reference, lineage_paths=lineages
+        (local, _write_report(tmp_path / "fine.json", 4.0, normalization="gx_Q_over_Q_GB", resolution=(16, 16, 8))),
+        (
+            local,
+            _write_report(
+                tmp_path / "wide.json",
+                4.0,
+                normalization="gx_Q_over_Q_GB",
+                kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+                ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+            ),
+        ),
+        reference,
+        lineage_paths=lineages,
     )
 
     assert report["passed"]
@@ -123,9 +179,17 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
     duplicate = _write_report(tmp_path / "duplicate.json", 4.0, seed=1)
     outlier = _write_report(tmp_path / "outlier.json", 7.0, seed=3)
 
+    fine = _write_report(tmp_path / "fine.json", 4.0, seed=4, resolution=(16, 16, 8))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        seed=4,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
     duplicate_report = evaluate_campaign(
-        (local, local),
-        (local, local),
+        (local, fine),
+        (local, wide),
         local,
         lineage_paths=(local, duplicate, _write_report(tmp_path / "third.json", 4.0, seed=3)),
     )
@@ -133,8 +197,8 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
     assert not duplicate_report["passed"]
 
     spread_report = evaluate_campaign(
-        (local, local),
-        (local, local),
+        (local, fine),
+        (local, wide),
         local,
         lineage_paths=(
             local,
@@ -143,3 +207,34 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
         ),
     )
     assert not spread_report["lineage_ensemble"]["passed"]
+
+
+def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
+    coarse = _write_report(tmp_path / "coarse.json", 4.0)
+    repeated = _write_report(tmp_path / "repeated.json", 4.0)
+    changed_physics = _write_report(tmp_path / "changed.json", 4.0, resolution=(16, 16, 8))
+    payload = json.loads(changed_physics.read_text())
+    payload["case"]["hyperdiffusion"] = 0.1
+    changed_physics.write_text(json.dumps(payload))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    lineages = tuple(
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
+        for seed in (1, 2, 3)
+    )
+
+    repeated_report = evaluate_campaign(
+        (coarse, repeated), (coarse, wide), coarse, lineage_paths=lineages
+    )
+    assert not repeated_report["resolution_ladder_contract"]["passed"]
+    assert not repeated_report["passed"]
+
+    physics_report = evaluate_campaign(
+        (coarse, changed_physics), (coarse, wide), coarse, lineage_paths=lineages
+    )
+    assert not physics_report["resolution_ladder_contract"]["fixed_physics"]
+    assert not physics_report["passed"]

@@ -1041,6 +1041,16 @@ be fitted to make the means agree. The command exits nonzero unless all lineage
 roots are unique, every lineage is stationary, their means agree within 15%,
 and resolution convergence, domain convergence, and independent parity pass.
 
+The campaign also validates what each ladder changes. A resolution ladder must
+strictly refine at least one of `n_z`, `n_vpar`, or `n_mu` on every rung while
+holding the complete Fourier grid and physics contract fixed. A domain ladder
+must hold phase-space resolution and physics fixed, reduce `delta_kx` and/or
+`delta_ky`, and retain at least the previous maximum `|kx|` and `ky`. Repeated
+reports, lost spectral bandwidth, and a damping/profile change therefore fail
+before their flux means are considered. For the current coarse Fourier grid,
+the corresponding two-rung domain study is `9x5` at `ky_min=0.1` followed by
+`17x9` at `ky_min=0.05`; both retain `ky_max=0.4` and the same radial bandwidth.
+
 The current coarse three-root campaign passes its ensemble sub-gate. Seeds
 18, 19, and 20 give stationary means `-24.5555`, `-24.3764`, and `-23.7248`;
 the ensemble mean is `-24.2189` and the maximum relative deviation is `2.04%`.

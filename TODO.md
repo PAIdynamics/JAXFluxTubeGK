@@ -702,7 +702,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   stationary, with means `-24.3764` and `-23.7248`. The three-root ensemble
   passes: mean `-24.2189`, maximum relative deviation `2.04%`, and
   between-lineage standard error `0.2524`. The next required evidence is the
-  stationary resolution/domain ladders and pinned GX comparison.
+  stationary resolution/domain ladders and pinned GX comparison. The combined
+  evaluator now fails closed on fake ladders: resolution rungs must refine only
+  phase-space resolution at a fixed Fourier/physics contract, while domain
+  rungs must enlarge the physical box without losing retained spectral
+  bandwidth at fixed phase-space resolution and physics. This pins the current
+  domain ladder to `9x5, ky_min=0.1 -> 17x9, ky_min=0.05` rather than accepting
+  duplicated reports or a changed dissipation model as convergence evidence.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

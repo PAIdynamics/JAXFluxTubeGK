@@ -245,6 +245,11 @@ claimed.
   and stationary; their ensemble mean is `-24.2189`, maximum relative mean
   deviation is `2.04%` against the `15%` gate, and the between-lineage standard
   error is `0.2524`. Resolution, domain, and pinned-GX parity remain open.
+- The nonlinear campaign now validates ladder semantics before comparing flux
+  means. Resolution may change only `n_z/n_vpar/n_mu` at fixed Fourier and
+  physics contracts; domain expansion must reduce Fourier spacing without
+  losing `kx/ky` bandwidth at fixed phase-space resolution. Duplicate rungs or
+  hidden physics changes fail closed.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
