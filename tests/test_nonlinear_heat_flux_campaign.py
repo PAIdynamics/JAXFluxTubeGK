@@ -16,15 +16,17 @@ def _write_report(
     resolution=(12, 12, 6),
     kx=(-2.0, -1.0, 0.0, 1.0, 2.0),
     ky=(0.0, 0.1, 0.2),
+    producer="test",
+    reference_case=None,
 ):
     path.write_text(
         json.dumps(
             {
                 "schema_version": 1,
-                "producer": "test",
+                "producer": producer,
                 "normalization": normalization,
                 "stationary": stationary,
-                "case": {
+                "case": reference_case if reference_case is not None else {
                     "n_z": resolution[0],
                     "n_vpar": resolution[1],
                     "n_mu": resolution[2],
@@ -238,3 +240,44 @@ def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
     )
     assert not physics_report["resolution_ladder_contract"]["fixed_physics"]
     assert not physics_report["passed"]
+
+
+def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
+    coarse = _write_report(tmp_path / "coarse.json", 4.0)
+    fine = _write_report(tmp_path / "fine.json", 4.0, resolution=(16, 16, 8))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    lineages = tuple(
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
+        for seed in (1, 2, 3)
+    )
+    gx_case = {
+        "geometry": "s-alpha",
+        "q": 1.4,
+        "shat": 0.8,
+        "eps": 0.18,
+        "rmaj_over_lref": 2.77778,
+        "fprim": 0.8,
+        "tprim": 2.49,
+        "ky_min": 0.2,
+        "boundary": "linked",
+        "electrostatic": True,
+        "hyperdiffusion": 0.05,
+        "hyperdiffusion_order": 4,
+    }
+    gx = _write_report(
+        tmp_path / "gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=gx_case,
+    )
+    report = evaluate_campaign(
+        (coarse, fine), (coarse, wide), gx, lineage_paths=lineages
+    )
+    assert not report["independent_parity_contract"]["passed"]
+    assert not report["independent_parity_contract"]["checks"]["ky_min"]
+    assert not report["passed"]

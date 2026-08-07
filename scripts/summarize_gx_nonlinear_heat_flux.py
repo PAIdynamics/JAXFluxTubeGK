@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -107,6 +108,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gx-root", type=Path, required=True)
     parser.add_argument("--netcdf", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--run-manifest", type=Path)
     parser.add_argument("--expected-revision")
     parser.add_argument("--species-index", type=int, default=0)
     parser.add_argument("--start-fraction", type=float, default=0.5)
@@ -128,6 +130,24 @@ def main(argv: list[str] | None = None) -> None:
             f"GX revision mismatch: found {revision}, expected {args.expected_revision}"
         )
     netcdf = args.netcdf.expanduser().resolve()
+    case_contract = None
+    run_manifest = None
+    if args.run_manifest is not None:
+        manifest_path = args.run_manifest.expanduser().resolve()
+        run_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if run_manifest.get("schema_version") != 1:
+            raise ValueError("GX nonlinear run manifest must use schema version 1")
+        if run_manifest.get("gx_revision") != revision:
+            raise RuntimeError("GX nonlinear run manifest revision does not match source tree")
+        prepared = Path(run_manifest["prepared_input"]).expanduser().resolve()
+        digest = hashlib.sha256(prepared.read_bytes()).hexdigest()
+        if digest != run_manifest.get("prepared_input_sha256"):
+            raise RuntimeError("GX nonlinear prepared input does not match its manifest hash")
+        if netcdf != Path(run_manifest["expected_netcdf"]).expanduser().resolve():
+            raise RuntimeError("GX nonlinear NetCDF path does not match its run manifest")
+        case_contract = run_manifest.get("case_contract")
+        if not isinstance(case_contract, dict):
+            raise ValueError("GX nonlinear run manifest lacks a case contract")
     times, heat_flux = read_gx_heat_flux(netcdf, args.species_index)
     statistics = summarize_heat_flux(
         times,
@@ -141,6 +161,8 @@ def main(argv: list[str] | None = None) -> None:
         "normalization": "gx_Q_over_Q_GB",
         "revision": revision,
         "source_netcdf": str(netcdf),
+        "run_manifest": str(args.run_manifest.expanduser().resolve()) if args.run_manifest else None,
+        "case": case_contract,
         "species_index": args.species_index,
         "start_fraction": args.start_fraction,
         "stationary": gx_flux_stationary(

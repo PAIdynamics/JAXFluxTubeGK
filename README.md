@@ -895,12 +895,29 @@ external-reference contract without copying the NetCDF file into this
 repository:
 
 ```bash
+.venv/bin/python scripts/prepare_gx_nonlinear_heat_flux_run.py \
+  --gx-root /path/to/gx \
+  --output-dir /scratch/gx-cyclone-nonlinear \
+  --gx-executable /path/to/gx/bin/gx
+
+# Run the printed GX command on a CUDA-capable machine, then run its printed
+# summarization command.
+
 .venv/bin/python scripts/summarize_gx_nonlinear_heat_flux.py \
   --gx-root /path/to/gx \
   --expected-revision bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5 \
-  --netcdf /scratch/cyclone_miller_adiabatic_electrons.nc \
+  --run-manifest /scratch/gx-cyclone-nonlinear/gx_nonlinear_run.json \
+  --netcdf /scratch/gx-cyclone-nonlinear/optimal_fusion_cyclone_nonlinear.nc \
   --output /tmp/gx-cyclone-nonlinear-heat-flux.json
 ```
+
+The preparation helper starts from the pinned sibling GX input, writes the
+case-matched s-alpha, electrostatic, linked-boundary input outside this
+repository, and records its SHA-256, revision, physics/box contract, run
+command, and summarization command. The summarizer rejects a changed input,
+revision, or NetCDF path. The final campaign also compares the GX case contract
+to the finest local rung, so an unrelated stationary GX run cannot satisfy the
+independent parity gate.
 
 Generate the matching local reduced trajectory in caller-owned storage with:
 

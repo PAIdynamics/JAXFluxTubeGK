@@ -709,6 +709,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   bandwidth at fixed phase-space resolution and physics. This pins the current
   domain ladder to `9x5, ky_min=0.1 -> 17x9, ky_min=0.05` rather than accepting
   duplicated reports or a changed dissipation model as convergence evidence.
+  A pinned GX preparation helper now writes a caller-owned matched nonlinear
+  input and manifest with source revision, input hash, physical case contract,
+  and exact run/summarization commands. The summarizer verifies that manifest,
+  and campaign acceptance rejects a GX report whose geometry, profiles, box,
+  boundary, electrostatic setting, or hyperdiffusion differs from the finest
+  local rung. The CUDA run itself remains outstanding.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -40,6 +40,7 @@ def evaluate_campaign(
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
+    parity_contract = _validate_reference_case(resolution_paths[-1], reference_path)
     lineage_records = tuple(map(load_nonlinear_heat_flux_record, lineage_paths))
     lineage_ids = tuple(_lineage_id(path) for path in lineage_paths)
     ensemble = compare_nonlinear_heat_flux_ensemble(
@@ -76,6 +77,7 @@ def evaluate_campaign(
             and resolution.passed
             and domain.passed
             and parity.passed
+            and parity_contract["passed"]
             and ensemble.passed
         ),
         "resolution_ladder_contract": resolution_contract,
@@ -84,6 +86,7 @@ def evaluate_campaign(
         "resolution_convergence": asdict(resolution),
         "domain_convergence": asdict(domain),
         "independent_parity": asdict(parity),
+        "independent_parity_contract": parity_contract,
     }
 
 
@@ -194,6 +197,41 @@ def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
         "domain_expanded_without_lost_bandwidth": domain_expanded,
         "fourier_extents": list(extents),
     }
+
+
+def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
+    reference_payload = json.loads(Path(reference_path).read_text(encoding="utf-8"))
+    if reference_payload.get("producer") != "gx-nonlinear-heat-flux":
+        return {"passed": True, "required": False, "checks": {}}
+    local = _case_contract(local_path)
+    reference = reference_payload.get("case")
+    if not isinstance(reference, dict):
+        return {"passed": False, "required": True, "checks": {"case_contract_present": False}}
+    ky = np.asarray(local["ky"], dtype=float)
+    positive_ky = ky[ky > 0.0]
+    expected = {
+        "geometry": "s-alpha",
+        "q": 1.4,
+        "shat": 0.8,
+        "eps": 0.18,
+        "rmaj_over_lref": float(local["rmaj_over_lref"]),
+        "fprim": float(local["gx_fprim"]),
+        "tprim": float(local["gx_tprim"]),
+        "ky_min": float(positive_ky[0]),
+        "boundary": "linked" if local["parallel_boundary_model"] == "twist_shift" else "periodic",
+        "electrostatic": True,
+        "hyperdiffusion": float(local["hyperdiffusion"]),
+        "hyperdiffusion_order": 4,
+    }
+    checks = {
+        key: (
+            bool(np.isclose(float(reference.get(key, np.nan)), value, rtol=1.0e-12, atol=1.0e-12))
+            if isinstance(value, float)
+            else reference.get(key) == value
+        )
+        for key, value in expected.items()
+    }
+    return {"passed": all(checks.values()), "required": True, "checks": checks}
 
 
 def _lineage_id(path: Path) -> str:

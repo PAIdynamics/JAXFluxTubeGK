@@ -250,6 +250,11 @@ claimed.
   physics contracts; domain expansion must reduce Fourier spacing without
   losing `kx/ky` bandwidth at fixed phase-space resolution. Duplicate rungs or
   hidden physics changes fail closed.
+- Added a revision-pinned, artifact-free GX nonlinear run preparer. It emits a
+  matched caller-owned input and hash/provenance/case manifest; summarization
+  verifies the revision, input hash, and expected NetCDF path. Campaign parity
+  now fails unless the GX geometry, profiles, box, boundary, electrostatic
+  controls, and hyperdiffusion match the finest local rung.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
