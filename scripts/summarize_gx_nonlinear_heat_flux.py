@@ -32,12 +32,8 @@ def summarize_heat_flux(times, heat_flux, *, start_fraction: float = 0.5) -> dic
     mean = float(np.mean(window_flux))
     standard_deviation = float(np.std(window_flux, ddof=1))
     centered_time = window_time - np.mean(window_time)
-    slope = float(
-        np.sum(centered_time * (window_flux - mean)) / np.sum(centered_time**2)
-    )
-    relative_drift = float(
-        slope * (window_time[-1] - window_time[0]) / max(abs(mean), 1.0e-14)
-    )
+    slope = float(np.sum(centered_time * (window_flux - mean)) / np.sum(centered_time**2))
+    relative_drift = float(slope * (window_time[-1] - window_time[0]) / max(abs(mean), 1.0e-14))
     return {
         "mean": mean,
         "standard_deviation": standard_deviation,
@@ -47,6 +43,32 @@ def summarize_heat_flux(times, heat_flux, *, start_fraction: float = 0.5) -> dic
         "window_start_time": float(window_time[0]),
         "window_end_time": float(window_time[-1]),
     }
+
+
+def gx_flux_stationary(
+    statistics: dict,
+    *,
+    max_relative_drift: float = 0.2,
+    max_relative_standard_error: float = 0.1,
+    min_samples: int = 100,
+    min_window_duration: float = 10.0,
+) -> bool:
+    """Apply the declared flux-only stationarity gate to a GX summary."""
+
+    if min(max_relative_drift, max_relative_standard_error, min_window_duration) <= 0.0:
+        raise ValueError("GX stationarity tolerances and duration must be positive")
+    if min_samples < 2:
+        raise ValueError("GX stationarity requires at least two samples")
+    relative_error = abs(float(statistics["standard_error"])) / max(
+        abs(float(statistics["mean"])), 1.0e-14
+    )
+    duration = float(statistics["window_end_time"] - statistics["window_start_time"])
+    return bool(
+        int(statistics["n_samples"]) >= min_samples
+        and duration >= min_window_duration
+        and abs(float(statistics["relative_window_drift"])) <= max_relative_drift
+        and relative_error <= max_relative_standard_error
+    )
 
 
 def read_gx_heat_flux(path: Path, species_index: int = 0):
@@ -82,6 +104,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-revision")
     parser.add_argument("--species-index", type=int, default=0)
     parser.add_argument("--start-fraction", type=float, default=0.5)
+    parser.add_argument("--max-relative-drift", type=float, default=0.2)
+    parser.add_argument("--max-relative-standard-error", type=float, default=0.1)
+    parser.add_argument("--min-stationary-samples", type=int, default=100)
+    parser.add_argument("--min-stationary-window-duration", type=float, default=10.0)
     return parser.parse_args(argv)
 
 
@@ -95,6 +121,7 @@ def main(argv: list[str] | None = None) -> None:
         )
     netcdf = args.netcdf.expanduser().resolve()
     times, heat_flux = read_gx_heat_flux(netcdf, args.species_index)
+    statistics = summarize_heat_flux(times, heat_flux, start_fraction=args.start_fraction)
     payload = {
         "schema_version": 1,
         "producer": "gx-nonlinear-heat-flux",
@@ -103,9 +130,20 @@ def main(argv: list[str] | None = None) -> None:
         "source_netcdf": str(netcdf),
         "species_index": args.species_index,
         "start_fraction": args.start_fraction,
-        "statistics": summarize_heat_flux(
-            times, heat_flux, start_fraction=args.start_fraction
+        "stationary": gx_flux_stationary(
+            statistics,
+            max_relative_drift=args.max_relative_drift,
+            max_relative_standard_error=args.max_relative_standard_error,
+            min_samples=args.min_stationary_samples,
+            min_window_duration=args.min_stationary_window_duration,
         ),
+        "stationarity_controls": {
+            "max_relative_drift": args.max_relative_drift,
+            "max_relative_standard_error": args.max_relative_standard_error,
+            "min_stationary_samples": args.min_stationary_samples,
+            "min_stationary_window_duration": args.min_stationary_window_duration,
+        },
+        "statistics": statistics,
         "times": times.tolist(),
         "heat_flux": heat_flux.tolist(),
     }

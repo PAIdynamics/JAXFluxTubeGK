@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from scripts.summarize_gx_nonlinear_heat_flux import read_gx_heat_flux, summarize_heat_flux
+from scripts.summarize_gx_nonlinear_heat_flux import (
+    gx_flux_stationary,
+    read_gx_heat_flux,
+    summarize_heat_flux,
+)
 
 
 def test_gx_heat_flux_summary_matches_declared_stationary_window():
@@ -16,6 +20,8 @@ def test_gx_heat_flux_summary_matches_declared_stationary_window():
     assert summary["relative_window_drift"] == pytest.approx(0.0)
     assert summary["n_samples"] == 4
     assert summary["window_start_time"] == pytest.approx(4.0)
+    assert gx_flux_stationary(summary, min_samples=4, min_window_duration=3.0)
+    assert not gx_flux_stationary(summary)
 
 
 def test_gx_heat_flux_reader_uses_documented_netcdf_groups(tmp_path):

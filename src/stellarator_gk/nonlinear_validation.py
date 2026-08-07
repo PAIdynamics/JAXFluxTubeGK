@@ -15,6 +15,7 @@ class NonlinearHeatFluxRecord:
     standard_error: float
     relative_window_drift: float
     n_samples: int
+    stationary: bool = True
 
 
 @dataclass(frozen=True)
@@ -46,10 +47,13 @@ def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord
     producer = payload.get("producer")
     normalization = payload.get("normalization")
     statistics = payload.get("statistics")
+    stationary = payload.get("stationary")
     if not isinstance(producer, str) or not isinstance(normalization, str):
         raise ValueError("nonlinear heat-flux report lacks producer or normalization")
     if not isinstance(statistics, dict):
         raise ValueError("nonlinear heat-flux report lacks statistics")
+    if not isinstance(stationary, bool):
+        raise ValueError("nonlinear heat-flux report lacks an explicit stationary decision")
     try:
         record = NonlinearHeatFluxRecord(
             producer=producer,
@@ -58,6 +62,7 @@ def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord
             standard_error=float(statistics["standard_error"]),
             relative_window_drift=float(statistics["relative_window_drift"]),
             n_samples=int(statistics["n_samples"]),
+            stationary=stationary,
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("nonlinear heat-flux statistics are incomplete") from exc
@@ -81,9 +86,7 @@ def compare_nonlinear_heat_flux(
         raise ValueError("nonlinear heat-flux tolerances must be positive")
     if local_to_reference_factor is None:
         if local.normalization != reference.normalization:
-            raise ValueError(
-                "heat-flux normalizations differ; supply local_to_reference_factor"
-            )
+            raise ValueError("heat-flux normalizations differ; supply local_to_reference_factor")
         factor = 1.0
     else:
         factor = float(local_to_reference_factor)
@@ -94,11 +97,13 @@ def compare_nonlinear_heat_flux(
     local_rse = abs(local_error) / max(abs(local_mean), 1.0e-14)
     reference_rse = abs(reference.standard_error) / max(abs(reference.mean), 1.0e-14)
     local_stationary = (
-        abs(local.relative_window_drift) <= drift_tolerance
+        local.stationary
+        and abs(local.relative_window_drift) <= drift_tolerance
         and local_rse <= relative_standard_error_tolerance
     )
     reference_stationary = (
-        abs(reference.relative_window_drift) <= drift_tolerance
+        reference.stationary
+        and abs(reference.relative_window_drift) <= drift_tolerance
         and reference_rse <= relative_standard_error_tolerance
     )
     mean_error = abs(local_mean - reference.mean) / max(abs(reference.mean), 1.0e-14)
@@ -128,14 +133,13 @@ def compare_nonlinear_heat_flux_convergence(
     if len(records) < 2 or tolerance <= 0.0:
         raise ValueError("convergence requires at least two rungs and positive tolerance")
     stationary = tuple(
-        abs(record.relative_window_drift) <= drift_tolerance
+        record.stationary
+        and abs(record.relative_window_drift) <= drift_tolerance
         and abs(record.standard_error) / max(abs(record.mean), 1.0e-14)
         <= relative_standard_error_tolerance
         for record in records
     )
-    change = abs(records[-1].mean - records[-2].mean) / max(
-        abs(records[-1].mean), 1.0e-14
-    )
+    change = abs(records[-1].mean - records[-2].mean) / max(abs(records[-1].mean), 1.0e-14)
     return NonlinearHeatFluxConvergenceReport(
         passed=all(stationary) and change <= tolerance,
         finest_relative_change=change,
