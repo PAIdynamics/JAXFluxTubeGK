@@ -23,6 +23,31 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
+
+- Added an explicit differentiable `reciprocal_exchange` collision completion.
+  Unlike the earlier shared pair projection, each target species' low-rank
+  momentum and energy response is driven by its collision partner's defects.
+- Pair density plus combined physical momentum and energy close to roundoff.
+  JIT, automatic differentiation, solver integration, and public exports are
+  covered. An exact dense-matrix test confirms that the reported CFL row-sum
+  bound is conservative.
+- Extended the non-destructive pinned-stella scratch patch to trace all eight
+  `(l,m,j)` Laguerre--Legendre contributions before the final differential
+  inversion. The patched source compiles and the native component sum
+  reconstructs the aggregate signed RHS with relative L2 error `0.0`.
+- In the all-channel discriminator, `(l=0,m=0,j=1)` has L2
+  `1.712095e-3`. The only other nonzero components are
+  `(l=1,m=+/-1,j=0)`, each with L2 `4.070812e-7`.
+- Re-ran all four isolated collision channels with component tracing. Every
+  channel's eight signed contributions reconstruct its aggregate action
+  exactly, while the four aggregate channels retain their earlier `8.59e-5`
+  closure against the all-channel implicit response.
+- This closes reciprocal dataflow, conservation architecture, and native
+  coefficient-action observability. It does not yet close production collision
+  parity: local stella-normalized Laguerre--Legendre coefficient construction
+  and a common-grid action comparison remain required.
+
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
 - Added a fail-closed ensemble gate for chaotic nonlinear trajectories. The

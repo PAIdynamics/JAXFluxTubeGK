@@ -399,11 +399,16 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   target/background stencil, couples the two distributions in each unordered
   pair, and preserves each pair's species densities and combined physical
   momentum/energy to roundoff. Its pairwise induced-norm bound enters the CFL
-  estimate. This closes the reciprocal data-flow and conservation architecture,
-  but not the physics gate. A caller-owned paired run against pinned stella
-  revision `564ca09b89904c231421c17c00068a9362061278` now supplies an executable
-  native discriminator. Its field-particle-on/off inputs have identical initial
-  diagnostics, while one implicit step changes `h2_vs_vpamus` by `31.14%` in
+  estimate. A distinct experimental `conservation_model="reciprocal_exchange"`
+  path now makes each target's momentum/energy response depend on its partner's
+  defects. It preserves pair density, momentum, and energy to roundoff under
+  JIT and differentiation, and its conservative CFL bound exceeds the exact
+  dense operator row sum. This closes the reciprocal data-flow and conservation
+  architecture, but not the physics gate. A caller-owned paired run against
+  pinned stella revision `564ca09b89904c231421c17c00068a9362061278` now
+  supplies an executable native discriminator. Its field-particle-on/off inputs
+  have identical initial diagnostics, while one implicit step changes
+  `h2_vs_vpamus` by `31.14%` in
   relative L2 (`g2_vs_vpamus` changes by `0.1996%`). This proves that the compact
   case is sensitive to stella's Laguerre--Legendre field-particle path. A
   non-destructive scratch-build patch now also exports all 2,808 rows of the
@@ -418,7 +423,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `4.00831e-5` (ion-ion), `9.39860e-7` (ion-electron), `1.71045e-3`
   (electron-electron), and `1.30298e-6` (electron-ion). The isolated sum agrees
   with the all-channel implicit result to `8.59e-5` relative L2, providing
-  pair-resolved targets for the common-grid implementation.
+  pair-resolved targets for the common-grid implementation. The scratch patch
+  now also resolves all eight `(l,m,j)` contributions in every channel. Each
+  signed component sum reconstructs its aggregate action exactly. In the full
+  case, `(l=0,m=0,j=1)` dominates at `1.712095e-3`; the only other nonzero
+  terms are `(l=1,m=+/-1,j=0)` at `4.070812e-7` each. This closes native
+  coefficient-action decomposition, while local coefficient construction and
+  common-grid numerical parity remain open.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

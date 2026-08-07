@@ -591,8 +591,12 @@ For finite-difference Fokker--Planck collisions,
 GKW/Gyaradax local correction. The experimental `"pairwise_exchange"` option
 retains every ordered target/background stencil and conserves density plus
 combined momentum and energy independently for each unordered species pair.
-It establishes reciprocal software coupling, not stella/Landau coefficient
-parity; production collision claims remain blocked.
+The distinct `"reciprocal_exchange"` option makes each target's low-rank
+momentum/energy response depend explicitly on its collision partner. It is
+JIT-compatible and differentiable, conserves every pair to roundoff, and uses
+a dense-operator-checked conservative CFL bound. This establishes reciprocal
+software dataflow, not stella/Landau coefficient parity; production collision
+claims remain blocked.
 
 Run the paired native-stella field-particle discriminator in caller-owned
 scratch storage after preparing the pinned validation dependency:
@@ -625,11 +629,20 @@ bash /tmp/optimal-fusion-stella-collision-trace/run_stella_collision_trace.sh
   /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --output /tmp/optimal-fusion-stella-collision-trace/trace-summary.json
+.venv/bin/python scripts/summarize_stella_collision_field_particle_components.py \
+  --components \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_components.dat \
+  --aggregate \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/component-summary.json
 ```
 
-This traces the aggregate signed field-particle RHS before stella's final
-implicit differential inversion. A common-grid implementation/comparison is
-still required before enabling this as a production collision model.
+This traces both the aggregate signed field-particle RHS and all eight
+`(l,m,j)` contributions before stella's final implicit differential inversion.
+The component validator fails unless their signed sum reconstructs the
+aggregate action. A common-grid coefficient implementation/comparison is still
+required before enabling this as a production collision model.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
@@ -644,7 +657,8 @@ stella's four collision-frequency knobs:
 ```
 
 The report requires identical input states and retains separate ion-ion,
-ion-electron, electron-electron, and electron-ion signed traces.
+ion-electron, electron-electron, and electron-ion signed traces, including all
+eight Laguerre--Legendre contributions for every channel.
 
 `gyrokinetic_heat_response(...)` supplies the collocation-space
 `J0 T_s (E_s-3/2) f_s` velocity moment used with `radial_flux_spectrum(...)`.
