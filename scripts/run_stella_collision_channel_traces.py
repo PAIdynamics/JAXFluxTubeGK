@@ -9,8 +9,14 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.prepare_stella_collision_field_particle_trace_run import TRACE_FILENAME
+from scripts.prepare_stella_collision_field_particle_trace_run import (
+    COMPONENT_TRACE_FILENAME,
+    TRACE_FILENAME,
+)
 from scripts.run_stella_collision_field_particle_discriminator import stella_collision_input
+from scripts.summarize_stella_collision_field_particle_components import (
+    summarize_component_trace,
+)
 from scripts.summarize_stella_collision_field_particle_trace import summarize_trace
 
 
@@ -33,7 +39,10 @@ def _trace_state_and_rhs(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def summarize_channel_traces(
-    trace_paths: dict[str, Path], *, expected_revision: str
+    trace_paths: dict[str, Path],
+    *,
+    expected_revision: str,
+    component_paths: dict[str, Path] | None = None,
 ) -> dict[str, object]:
     """Validate common inputs and report isolated-channel closure."""
 
@@ -50,7 +59,7 @@ def summarize_channel_traces(
     isolated_sum = sum(arrays[name][1] for name in CHANNELS if name != "all")
     full_rhs = arrays["all"][1]
     full_norm = max(float(np.linalg.norm(full_rhs)), np.finfo(float).tiny)
-    return {
+    report = {
         "schema_version": 1,
         "benchmark": "stella_collision_pair_resolved_field_particle_trace",
         "status": "pair_resolved_native_traces_passed",
@@ -64,6 +73,23 @@ def summarize_channel_traces(
         },
         "scope": "native pair-resolved targets; local common-grid parity pending",
     }
+    if component_paths is not None:
+        if set(component_paths) != set(CHANNELS):
+            raise ValueError("channel component trace set is incomplete")
+        report["component_channels"] = {
+            name: summarize_component_trace(
+                component_paths[name],
+                trace_paths[name],
+                expected_revision=expected_revision,
+            )
+            for name in CHANNELS
+        }
+        report["metrics"]["component_reconstruction_passed"] = True
+        report["scope"] = (
+            "native pair-resolved Laguerre--Legendre action targets; "
+            "local coefficient parity pending"
+        )
+    return report
 
 
 def run_channel_traces(
@@ -79,6 +105,7 @@ def run_channel_traces(
     executable = Path(patched_stella_executable).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     trace_paths: dict[str, Path] = {}
+    component_paths: dict[str, Path] = {}
     for name, knobs in CHANNELS.items():
         input_path = output_dir / f"collision_{name}.in"
         trace_path = output_dir / f"collision_{name}_field_particle_trace.dat"
@@ -103,8 +130,18 @@ def run_channel_traces(
             raise FileNotFoundError(generated_trace)
         generated_trace.replace(trace_path)
         trace_paths[name] = trace_path
+        generated_components = output_dir / COMPONENT_TRACE_FILENAME
+        if not generated_components.is_file():
+            raise FileNotFoundError(generated_components)
+        component_path = output_dir / f"collision_{name}_field_particle_components.dat"
+        generated_components.replace(component_path)
+        component_paths[name] = component_path
 
-    report = summarize_channel_traces(trace_paths, expected_revision=expected_revision)
+    report = summarize_channel_traces(
+        trace_paths,
+        expected_revision=expected_revision,
+        component_paths=component_paths,
+    )
     report["patched_stella_executable"] = str(executable)
     report_path = output_dir / "collision_channel_trace_summary.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
