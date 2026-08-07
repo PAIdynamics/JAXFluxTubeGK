@@ -21,6 +21,8 @@ def stella_collision_input(
     collision_knobs: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     initial_amplitude: float = 0.01,
     initial_width: float = 1.0,
+    nmu: int = 2,
+    nvgrid: int = 3,
 ) -> str:
     """Return the compact collision-only stella input used by the discriminator."""
 
@@ -28,6 +30,8 @@ def stella_collision_input(
         raise ValueError("collision_knobs must contain four nonnegative values")
     if initial_amplitude <= 0.0 or initial_width <= 0.0:
         raise ValueError("initial amplitude and width must be positive")
+    if nmu < 2 or nvgrid < 1:
+        raise ValueError("nmu must be at least two and nvgrid must be positive")
     fieldpart = ".true." if field_particle else ".false."
     iiknob, ieknob, eeknob, eiknob = collision_knobs
     return f"""&geometry_options
@@ -81,8 +85,8 @@ def stella_collision_input(
   boundary_option = 'linked'
 /
 &velocity_grids
-  nmu = 2
-  nvgrid = 3
+  nmu = {nmu:d}
+  nvgrid = {nvgrid:d}
 /
 &diagnostics
   nsave = 1

@@ -844,6 +844,13 @@ reproduces the complete native block trace at `1.08e-15` relative L2 and
 `7.99e-15` maximum absolute error. General `nmu>2` interior-mu formulas remain
 the next portability requirement.
 
+`build_stella_mu_diffusion_blocks(...)` extends the dominant pure-mu branch to
+nonuniform general mu grids, including the interior three-point formulas. A
+fresh pinned `nmu=4` factorial trace exercises two interior rows and matches at
+`1.42e-15` relative L2 and `1.53e-16` maximum absolute error. The scratch
+producer accepts `--nmu` and `--nvgrid` so larger-grid parity is reproducible
+without storing native artifacts.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

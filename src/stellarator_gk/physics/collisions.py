@@ -503,6 +503,227 @@ def build_stella_two_mu_diffusion_blocks(
     return zero, diagonal, zero
 
 
+def build_stella_mu_diffusion_blocks(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+    *,
+    deflection_scale=1.0,
+    electron_parallel_scale=1.0,
+    electron_deflection_scale=1.0,
+    electron_index: int | None = 1,
+    ion_index: int | None = 0,
+    electron_ion_mass_ratio_approximation: bool = False,
+):
+    """Construct stella's pure-mu diffusion blocks on a general mu grid."""
+
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.size < 2:
+        raise ValueError("the mu diffusion constructor requires at least two nodes")
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    frequency = jnp.asarray(pair_frequency)
+    if frequency.shape != (n_species, n_species):
+        raise ValueError("pair_frequency must have (target, background) shape")
+    magnetic_field = jnp.asarray(B)
+    vpar = jnp.asarray(velocity_grid.vpar)
+    dmu = mu[1:] - mu[:-1]
+
+    parallel_scale = jnp.ones((n_species, n_species), dtype=magnetic_field.dtype)
+    deflection_pair_scale = jnp.ones_like(parallel_scale)
+    electron_ion_pair = (
+        electron_index is not None
+        and ion_index is not None
+        and electron_index != ion_index
+    )
+    if electron_ion_pair:
+        parallel_scale = parallel_scale.at[electron_index, ion_index].set(
+            electron_parallel_scale
+        )
+        deflection_pair_scale = deflection_pair_scale.at[
+            electron_index, ion_index
+        ].set(electron_deflection_scale)
+
+    half_mu = 0.5 * (mu[:-1] + mu[1:])
+    half_speed = jnp.sqrt(
+        vpar[:, None, None] ** 2
+        + 2.0 * half_mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    masses = jnp.asarray([item.mass for item in species_tuple])
+    mass_ratio = masses[:, None] / masses[None, :]
+    normalized = half_speed[None, None, ...] / jnp.sqrt(
+        mass_ratio[:, :, None, None, None]
+    )
+    erf_value = erf(normalized)
+    chandrasekhar = (
+        erf_value
+        - 2.0
+        / jnp.sqrt(jnp.asarray(pi, dtype=half_speed.dtype))
+        * normalized
+        * jnp.exp(-(normalized**2))
+    ) / (2.0 * normalized**2)
+    half_parallel = (
+        frequency[:, :, None, None, None]
+        * 2.0
+        * chandrasekhar
+        / half_speed[None, None, ...] ** 3
+    )
+    half_deflection = (
+        jnp.asarray(deflection_scale)
+        * frequency[:, :, None, None, None]
+        * (erf_value - chandrasekhar)
+        / half_speed[None, None, ...] ** 3
+    )
+    if electron_ion_pair and electron_ion_mass_ratio_approximation:
+        half_deflection = half_deflection.at[electron_index, ion_index].set(
+            jnp.asarray(deflection_scale)
+            * frequency[electron_index, ion_index]
+            / half_speed**3
+        )
+    if electron_ion_pair:
+        half_deflection = half_deflection.at[electron_index, ion_index].multiply(
+            electron_deflection_scale
+        )
+
+    maxwell = jnp.asarray(primitives.maxwellian)
+    node_parallel = jnp.asarray(primitives.parallel_diffusion)
+    node_deflection = jnp.asarray(primitives.deflection)
+    node_gamma = 2.0 * (
+        parallel_scale[:, :, None, None, None]
+        * node_parallel
+        * mu[None, None, None, :, None] ** 2
+        + deflection_pair_scale[:, :, None, None, None]
+        * jnp.asarray(deflection_scale)
+        * node_deflection
+        * vpar[None, None, :, None, None] ** 2
+        / (2.0 * magnetic_field[None, None, None, None, :])
+        * mu[None, None, None, :, None]
+    ) * maxwell[:, None, ...]
+    half_maxwell = jnp.exp(
+        -(vpar[None, :, None, None] ** 2)
+        - 2.0
+        * half_mu[None, None, :, None]
+        * magnetic_field[None, None, None, :]
+    )
+    half_gamma = 2.0 * (
+        parallel_scale[:, :, None, None, None]
+        * half_parallel
+        * half_mu[None, None, None, :, None] ** 2
+        + deflection_pair_scale[:, :, None, None, None]
+        * jnp.asarray(deflection_scale)
+        * half_deflection
+        * vpar[None, None, :, None, None] ** 2
+        / (2.0 * magnetic_field[None, None, None, None, :])
+        * half_mu[None, None, None, :, None]
+    ) * half_maxwell[:, None, ...]
+
+    shape = (
+        n_species,
+        n_species,
+        vpar.size,
+        mu.size,
+        mu.size,
+        magnetic_field.size,
+    )
+    diagonal = jnp.zeros(shape, dtype=node_gamma.dtype)
+    first_width = 0.5 * dmu[0] + mu[0]
+    diagonal = diagonal.at[:, :, :, 0, 0, :].set(
+        -jnp.asarray(dt)
+        * (
+            -node_gamma[:, :, :, 0, :] / dmu[0] * dmu[0] / (2.0 * mu[0])
+            + (-half_gamma[:, :, :, 0, :] / dmu[0] + node_gamma[:, :, :, 0, :] / dmu[0])
+            * mu[0]
+            / (0.5 * dmu[0])
+        )
+        / maxwell[:, None, :, 0, :]
+        / first_width
+    )
+    diagonal = diagonal.at[:, :, :, 0, 1, :].set(
+        -jnp.asarray(dt)
+        * (
+            node_gamma[:, :, :, 0, :] / dmu[0] * dmu[0] / (2.0 * mu[0])
+            + (half_gamma[:, :, :, 0, :] / dmu[0] - node_gamma[:, :, :, 0, :] / dmu[0])
+            * mu[0]
+            / (0.5 * dmu[0])
+        )
+        / maxwell[:, None, :, 1, :]
+        / first_width
+    )
+
+    for imu in range(1, mu.size - 1):
+        dm = dmu[imu - 1]
+        dp = dmu[imu]
+        width = dm + dp
+        asymmetry = (dp / dm - dm / dp) / width
+        gamma = node_gamma[:, :, :, imu, :]
+        gamma_m = half_gamma[:, :, :, imu - 1, :]
+        gamma_p = half_gamma[:, :, :, imu, :]
+        center = (
+            (gamma * asymmetry - gamma_m / dm) * dp / dm
+            + (-gamma * asymmetry - gamma_p / dp) * dm / dp
+        )
+        below = (
+            (-gamma * dp / dm / width + gamma_m / dm) * dp / dm
+            + gamma * dp / dm / width * dm / dp
+        )
+        above = (
+            gamma * dm / dp / width * dp / dm
+            + (gamma_p / dp - gamma * dm / dp / width) * dm / dp
+        )
+        diagonal = diagonal.at[:, :, :, imu, imu, :].set(
+            -jnp.asarray(dt)
+            * center
+            / maxwell[:, None, :, imu, :]
+            * 2.0
+            / width
+        )
+        diagonal = diagonal.at[:, :, :, imu, imu - 1, :].set(
+            -jnp.asarray(dt)
+            * below
+            / maxwell[:, None, :, imu - 1, :]
+            * 2.0
+            / width
+        )
+        diagonal = diagonal.at[:, :, :, imu, imu + 1, :].set(
+            -jnp.asarray(dt)
+            * above
+            / maxwell[:, None, :, imu + 1, :]
+            * 2.0
+            / width
+        )
+
+    last = mu.size - 1
+    edge = dmu[-1]
+    last_width = 1.5 * edge
+    diagonal = diagonal.at[:, :, :, last, last, :].set(
+        -jnp.asarray(dt)
+        * (
+            (node_gamma[:, :, :, last, :] / edge - half_gamma[:, :, :, -1, :] / edge)
+            * edge
+            / (0.5 * edge)
+            + (-node_gamma[:, :, :, last, :] / edge) * edge / 2.0 / edge
+        )
+        / maxwell[:, None, :, last, :]
+        / last_width
+    )
+    diagonal = diagonal.at[:, :, :, last, last - 1, :].set(
+        -jnp.asarray(dt)
+        * (
+            (-node_gamma[:, :, :, last, :] / edge + half_gamma[:, :, :, -1, :] / edge)
+            * edge
+            / (0.5 * edge)
+            + node_gamma[:, :, :, last, :] / edge * edge / 2.0 / edge
+        )
+        / maxwell[:, None, :, last - 1, :]
+        / last_width
+    )
+    zero = jnp.zeros_like(diagonal)
+    return zero, diagonal, zero
+
+
 def build_stella_two_mu_vpar_mixed_blocks(
     velocity_grid: VelocityGrid,
     primitives: StellaTestParticlePrimitives,
@@ -2328,6 +2549,7 @@ __all__ = [
     "StellaTestParticlePrimitives",
     "assemble_stella_test_particle_blocks",
     "build_stella_two_mu_diffusion_blocks",
+    "build_stella_mu_diffusion_blocks",
     "build_stella_two_mu_mixed_blocks",
     "build_stella_two_mu_vpar_mixed_blocks",
     "build_stella_vpar_diffusion_blocks",

@@ -118,6 +118,11 @@ claimed.
   The sum of all four local components reproduces the complete native block
   trace at `1.08e-15` relative L2 and `7.99e-15` maximum absolute error. The
   compact matrix is closed; general `nmu>2` interior-mu construction remains.
+- Parameterized the native factorial producer by velocity-grid size and added
+  general nonuniform-mu pure-diffusion assembly. A pinned `nmu=4` trace with
+  two interior rows agrees at `1.42e-15` relative L2 and `1.53e-16` maximum
+  absolute error. The remaining general-grid work is confined to the two mixed
+  branches.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

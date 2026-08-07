@@ -21,8 +21,8 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
 )
 from stellarator_gk import (
     SpeciesParams,
+    build_stella_mu_diffusion_blocks,
     build_stella_test_particle_primitives,
-    build_stella_two_mu_diffusion_blocks,
     build_stella_two_mu_mixed_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
     build_stella_vpar_diffusion_blocks,
@@ -56,8 +56,8 @@ def summarize_two_mu_diffusion(
     z_values = np.unique(primitive[:, 2].astype(int))
     target_values = np.unique(primitive[:, 3].astype(int))
     background_values = np.unique(primitive[:, 4].astype(int))
-    if mu.size != 2 or target_values.size != background_values.size:
-        raise ValueError("trace does not contain a square two-mu species grid")
+    if mu.size < 2 or target_values.size != background_values.size:
+        raise ValueError("trace does not contain a square multi-mu species grid")
     z_lookup = {value: index for index, value in enumerate(z_values)}
     species_lookup = {value: index for index, value in enumerate(target_values)}
     magnetic_field = np.full(z_values.size, np.nan)
@@ -103,7 +103,7 @@ def summarize_two_mu_diffusion(
     )
     local = tuple(
         np.asarray(item)
-        for item in build_stella_two_mu_diffusion_blocks(
+        for item in build_stella_mu_diffusion_blocks(
             grid,
             magnetic_field,
             species,
@@ -161,8 +161,8 @@ def summarize_two_mu_diffusion(
         "pure_vpar_relative_l2": vpar_relative,
         "pure_vpar_max_abs": vpar_maximum,
     }
-    status = "local_two_mu_diffusion_blocks_passed"
-    scope = "pure two-node mu-boundary parity; mixed and general-grid branches pending"
+    status = "local_mu_diffusion_blocks_passed"
+    scope = f"pure-mu parity on {mu.size} mu nodes; mixed branches pending"
     if vpar_trace is not None:
         if full_trace is None:
             raise ValueError("full_trace is required when validating mixed components")

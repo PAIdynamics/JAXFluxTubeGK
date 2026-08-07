@@ -516,6 +516,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   complete native trace at `1.08e-15` relative L2 and `7.99e-15` maximum
   absolute error. The compact matrix is closed; general `nmu>2` interior-mu
   formulas and production-residual selection remain before closing this item.
+  The dominant general-grid pure-mu branch is now closed on a fresh pinned
+  `nmu=4` trace: its nonuniform interior and boundary rows agree at `1.42e-15`
+  relative L2 and `1.53e-16` maximum absolute error. The general mixed-vpar
+  and mixed-mu rows plus production-residual selection remain.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

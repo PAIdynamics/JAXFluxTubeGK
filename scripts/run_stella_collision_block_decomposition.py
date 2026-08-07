@@ -159,6 +159,8 @@ def run_block_decomposition(
     output_dir: Path,
     *,
     expected_revision: str,
+    nmu: int = 2,
+    nvgrid: int = 3,
     overwrite: bool = False,
 ) -> Path:
     """Run the ``mu_operator`` by ``nuxfac`` native factorial cases."""
@@ -169,7 +171,11 @@ def run_block_decomposition(
         raise FileNotFoundError(executable)
     output_dir.mkdir(parents=True, exist_ok=True)
     traces = {}
-    base_input = stella_collision_input(field_particle=True)
+    base_input = stella_collision_input(
+        field_particle=True,
+        nmu=nmu,
+        nvgrid=nvgrid,
+    )
     marker = "  mu_operator = .true."
     if base_input.count(marker) != 1:
         raise ValueError("expected one mu_operator marker in stella input")
@@ -225,12 +231,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--expected-revision", required=True)
+    parser.add_argument("--nmu", type=int, default=2)
+    parser.add_argument("--nvgrid", type=int, default=3)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
     report = run_block_decomposition(
         args.executable,
         args.output_dir,
         expected_revision=args.expected_revision,
+        nmu=args.nmu,
+        nvgrid=args.nvgrid,
         overwrite=args.overwrite,
     )
     print(report)

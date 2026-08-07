@@ -19,6 +19,7 @@ from stellarator_gk import (
     build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_driver,
     build_stella_laguerre_legendre_collision_precompute,
+    build_stella_mu_diffusion_blocks,
     build_stella_test_particle_primitives,
     build_stella_test_particle_gyro_diagonal,
     assemble_stella_test_particle_blocks,
@@ -698,6 +699,45 @@ def test_stella_two_mu_diffusion_blocks_are_jittable_and_differentiable():
         jax.grad(lambda values: sum(jnp.sum(item) for item in build_vpar(values)))
     )(frequencies)
     assert bool(jnp.all(jnp.isfinite(vpar_gradient)))
+
+
+def test_stella_general_mu_diffusion_blocks_are_jittable_and_differentiable():
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=6,
+            n_mu=4,
+            vpar_max=3.0,
+            mu_max=3.0,
+            backend="finite_difference",
+        )
+    )
+    species = (
+        SpeciesParams(1.0, 1.0, 1.0, 1.0, 0.0, 0.0),
+        SpeciesParams(-1.0, 0.0005446, 1.0, 1.0, 0.0, 0.0),
+    )
+    magnetic_field = jnp.asarray((0.8, 1.2))
+    frequencies = jnp.asarray(((0.01, 0.02), (0.03, 0.04)))
+
+    def build_blocks(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_mu_diffusion_blocks(
+            velocity,
+            magnetic_field,
+            species,
+            values,
+            primitives,
+            0.01,
+        )
+
+    blocks = jax.jit(build_blocks)(frequencies)
+    assert all(block.shape == (2, 2, 6, 4, 4, 2) for block in blocks)
+    assert all(bool(jnp.all(jnp.isfinite(block))) for block in blocks)
+    gradient = jax.jit(
+        jax.grad(lambda values: sum(jnp.sum(item) for item in build_blocks(values)))
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

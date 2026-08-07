@@ -45,6 +45,13 @@ def test_input_exposes_native_collision_channel_knobs():
     assert "eiknob = 0" in text
 
 
+def test_input_exposes_velocity_grid_sizes():
+    text = stella_collision_input(field_particle=True, nmu=4, nvgrid=5)
+
+    assert "nmu = 4" in text
+    assert "nvgrid = 5" in text
+
+
 def test_summary_requires_matched_initial_state_and_records_sensitive_effect(tmp_path):
     enabled = tmp_path / "enabled.nc"
     disabled = tmp_path / "disabled.nc"
