@@ -275,6 +275,20 @@ claimed.
   implicitly; a declared positive conversion factor is mandatory. Focused
   tests cover passing parity/convergence, drift failure, and normalization
   mismatch. The conversion factor itself remains physics evidence to derive.
+- Ran the first reduced driven local discriminator at `8x8x4` phase space and
+  `5x3` Fourier modes. Final-time-20 uses 261 accepted steps and reports mean
+  native heat flux `-3.28e-8`, `1.42%` relative standard error, and drift
+  `0.335`; final-time-100 uses 1,303 steps and reports `-3.21e-8`, `1.56%`, and
+  drift `-0.523`. Both fail the 0.2 drift gate. The longer run rules out a
+  merely undersampled window; growth, damping, domain, or saturation is the
+  active nonlinear discriminator. Producer reports now include initial/final
+  state and potential RMS plus maximum absolute heat flux for that audit.
+- Adding `ky=0.3` made the old flux-only stationarity decision produce a false
+  positive: drift `0.185` and relative error `1.42%` passed even though potential
+  RMS dropped from `4.17e-4` to `2.19e-4`. The producer now requires a minimum
+  final/initial potential-RMS ratio, default `0.8`; the same 284-step run
+  correctly reports nonstationary at ratio `0.525`. This narrows the blocker to
+  decay of the nominally driven reduced setup rather than noisy diagnostics.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

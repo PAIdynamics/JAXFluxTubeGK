@@ -199,11 +199,16 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "A shared acceptance layer now enforces stationary low-uncertainty windows, "
                 "mean parity, and stationary finest-pair convergence, while rejecting the "
                 "native-local/GX-Q-over-Q_GB normalization mismatch unless an explicit "
-                "conversion factor is supplied."
+                "conversion factor is supplied. Reduced local final-time-20 and 100 "
+                "discriminators both fail the 0.2 drift gate (0.335 and -0.523), with "
+                "native mean flux near -3.2e-8; extending the window did not produce a plateau."
+                " A ky=0.3 run exposed and fixed a false stationarity positive: flux drift "
+                "passed while potential RMS decayed to 52.5% of its initial value, so local "
+                "acceptance now also requires amplitude retention."
             ),
             next_action=(
-                "Run matched local and pinned GX Cyclone trajectories, reconcile heat-flux "
-                "normalization, then apply stationarity, resolution, box-size, and parity gates."
+                "Use state/phi RMS diagnostics to discriminate initial growth, damping, "
+                "domain, and saturation before running matched GX and local ladders."
             ),
         ),
         ValidationConfidenceGap(

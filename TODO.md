@@ -437,7 +437,18 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `optimal_fusion_native` versus GX `Q/Q_GB` labels until a documented positive
   conversion factor is supplied. Deriving and independently checking that
   normalization, then running long resolution and box ladders, is the active
-  numerical blocker.
+  numerical blocker. The first driven `8x8x4`, `5x3` Fourier runs remain
+  nonstationary: at final time 20 the mean native flux is `-3.28e-8` with
+  drift `0.335`, and at final time 100 it is `-3.21e-8` with drift `-0.523`
+  despite `1.56%` relative standard error. Extending the window does not fix
+  the plateau, so initial growth, damping, domain, and saturation behavior must
+  be discriminated before launching a resolution ladder.
+  Including the validated `ky=0.3` branch (`n_ky=4`) initially exposed a false
+  stationarity positive: drift `0.185` and `1.42%` relative error passed while
+  potential RMS fell to `52.5%` of its initial value. The local acceptance gate
+  now also requires a configurable final/initial potential-RMS ratio (default
+  `0.8`), so the same 284-step run correctly fails. The active problem is a
+  decaying driven setup, not insufficient statistical precision.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

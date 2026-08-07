@@ -14,6 +14,7 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
 
     assert args.n_kx == 9
     assert args.n_ky == 5
+    assert args.min_phi_rms_ratio == pytest.approx(0.8)
     assert damping.shape == (5, 3)
     assert damping[grid.ixzero, 0] == pytest.approx(0.0)
     assert np.all(np.asarray(damping) >= 0.0)

@@ -78,12 +78,15 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--start-fraction", type=float, default=0.5)
     parser.add_argument("--max-relative-drift", type=float, default=0.2)
     parser.add_argument("--max-relative-standard-error", type=float, default=0.1)
+    parser.add_argument("--min-phi-rms-ratio", type=float, default=0.8)
     parser.add_argument("--require-stationary", action="store_true")
     args = parser.parse_args(argv)
     if args.n_kx < 3 or args.n_kx % 2 == 0 or args.n_ky < 2:
         parser.error("n-kx must be odd and at least 3; n-ky must be at least 2")
     if min(args.n_z, args.n_vpar, args.n_mu) < 2 or args.final_time <= 0.0:
         parser.error("phase-space sizes must be at least 2 and final-time positive")
+    if args.min_phi_rms_ratio <= 0.0:
+        parser.error("min-phi-rms-ratio must be positive")
     return args
 
 
@@ -160,10 +163,14 @@ def main(argv: list[str] | None = None) -> None:
     relative_standard_error = float(
         statistics.standard_error / jnp.maximum(jnp.abs(statistics.mean), 1.0e-14)
     )
+    phi_rms_initial = float(jnp.sqrt(jnp.mean(jnp.abs(phi_history[0]) ** 2)))
+    phi_rms_final = float(jnp.sqrt(jnp.mean(jnp.abs(phi_history[-1]) ** 2)))
+    phi_rms_ratio = phi_rms_final / max(phi_rms_initial, 1.0e-14)
     stationary = bool(
         np.isfinite(np.asarray(result.state)).all()
         and abs(float(statistics.relative_window_drift)) <= args.max_relative_drift
         and relative_standard_error <= args.max_relative_standard_error
+        and phi_rms_ratio >= args.min_phi_rms_ratio
     )
     payload = {
         "schema_version": 1,
@@ -172,6 +179,12 @@ def main(argv: list[str] | None = None) -> None:
         "case": vars(args) | {"output": str(args.output)},
         "n_steps": result.n_steps,
         "stationary": stationary,
+        "state_rms_initial": float(jnp.sqrt(jnp.mean(jnp.abs(result.history[0]) ** 2))),
+        "state_rms_final": float(jnp.sqrt(jnp.mean(jnp.abs(result.state) ** 2))),
+        "phi_rms_initial": phi_rms_initial,
+        "phi_rms_final": phi_rms_final,
+        "phi_rms_ratio": phi_rms_ratio,
+        "max_abs_heat_flux": float(jnp.max(jnp.abs(flux))),
         "relative_standard_error": relative_standard_error,
         "statistics": {key: float(value) for key, value in asdict(statistics).items()},
         "times": np.asarray(result.times).tolist(),
