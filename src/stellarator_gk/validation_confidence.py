@@ -195,7 +195,11 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "has been accepted. A revision-pinned GX NetCDF summarizer now provides "
                 "the external mean/uncertainty/drift data contract without storing output. "
                 "A deterministic local producer now emits the matching field, heat-response, "
-                "flux, and stationarity report; only a short nonstationary smoke has run."
+                "flux, and stationarity report; only a short nonstationary smoke has run. "
+                "A shared acceptance layer now enforces stationary low-uncertainty windows, "
+                "mean parity, and stationary finest-pair convergence, while rejecting the "
+                "native-local/GX-Q-over-Q_GB normalization mismatch unless an explicit "
+                "conversion factor is supplied."
             ),
             next_action=(
                 "Run matched local and pinned GX Cyclone trajectories, reconcile heat-flux "

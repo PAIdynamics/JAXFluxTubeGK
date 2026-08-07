@@ -621,6 +621,13 @@ JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`.
 
+Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
+evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux
+and GX `Q/Q_GB` labels deliberately fail comparison unless a documented
+`local_to_reference_factor` is supplied. Resolution and box-size ladders use
+`compare_nonlinear_heat_flux_convergence(...)` and require every rung to be
+stationary before testing the finest-pair mean.
+
 ## Current Validation Status
 
 Passing guardrails:

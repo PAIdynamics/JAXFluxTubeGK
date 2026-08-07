@@ -431,7 +431,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   acceptance into one artifact-free JSON workflow. A `4x4x3`, `3x2` Fourier,
   final-time-0.2 smoke completes with finite output in two accepted steps and
   correctly reports `stationary=false`; it is plumbing evidence, not a
-  turbulence result.
+  turbulence result. Schema-v1 local/GX loaders and a shared acceptance layer
+  now require stationary low-uncertainty windows, normalized mean-flux parity,
+  and stationary finest-pair convergence. The comparison rejects the current
+  `optimal_fusion_native` versus GX `Q/Q_GB` labels until a documented positive
+  conversion factor is supplied. Deriving and independently checking that
+  normalization, then running long resolution and box ladders, is the active
+  numerical blocker.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> None:
     payload = {
         "schema_version": 1,
         "producer": "gx-nonlinear-heat-flux",
+        "normalization": "gx_Q_over_Q_GB",
         "revision": revision,
         "source_netcdf": str(netcdf),
         "species_index": args.species_index,

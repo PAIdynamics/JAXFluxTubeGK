@@ -96,6 +96,14 @@ from .diagnostics import (
     total_radial_flux,
     velocity_space_integral,
 )
+from .nonlinear_validation import (
+    NonlinearHeatFluxConvergenceReport,
+    NonlinearHeatFluxParityReport,
+    NonlinearHeatFluxRecord,
+    compare_nonlinear_heat_flux,
+    compare_nonlinear_heat_flux_convergence,
+    load_nonlinear_heat_flux_record,
+)
 from .design_topology import (
     DESIGN_TOPOLOGY_SCHEMA_VERSION,
     OptimizationTopologyContract,
@@ -640,6 +648,9 @@ __all__ = [
     "GeometryRequest",
     "GeometryResult",
     "GeometrySignConvention",
+    "NonlinearHeatFluxConvergenceReport",
+    "NonlinearHeatFluxParityReport",
+    "NonlinearHeatFluxRecord",
     "GxEikData",
     "GxEikGeometryProvider",
     "PhysicalFluxTubeGeometry",
@@ -706,6 +717,8 @@ __all__ = [
     "compare_gkw_state_trace_to_source_term_trace",
     "compare_gx_cyclone_input_to_solver_controls",
     "compare_geometry_to_gx_eik_reference",
+    "compare_nonlinear_heat_flux",
+    "compare_nonlinear_heat_flux_convergence",
     "compare_parallel_phi_traces",
     "compare_per_ky_mode_structure_fixtures",
     "compare_selected_mode_rhs_traces",
@@ -817,6 +830,7 @@ __all__ = [
     "load_gx_eik_geometry_reference",
     "load_gx_growth_rate_reference",
     "load_gx_mode_structure_fixture",
+    "load_nonlinear_heat_flux_record",
     "load_per_ky_mode_structure_fixture_csv",
     "load_stella_mode_structure_fixture",
     "load_desc_equilibrium",

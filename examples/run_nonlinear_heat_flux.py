@@ -168,6 +168,7 @@ def main(argv: list[str] | None = None) -> None:
     payload = {
         "schema_version": 1,
         "producer": "optimal-fusion/nonlinear-heat-flux",
+        "normalization": "optimal_fusion_native",
         "case": vars(args) | {"output": str(args.output)},
         "n_steps": result.n_steps,
         "stationary": stationary,

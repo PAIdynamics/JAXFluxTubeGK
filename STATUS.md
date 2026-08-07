@@ -269,6 +269,12 @@ claimed.
   final-time-0.2 end-to-end smoke writes finite caller-owned JSON, takes two
   accepted steps, and correctly remains nonstationary. Longer resolution and
   box-size acceptance trajectories are still evidence-gated.
+- Added schema-v1 local/GX report loading plus shared stationarity, uncertainty,
+  mean-parity, and finest-pair convergence decisions. All ladder rungs must be
+  stationary. Native local and GX `Q/Q_GB` normalizations cannot be compared
+  implicitly; a declared positive conversion factor is mandatory. Focused
+  tests cover passing parity/convergence, drift failure, and normalization
+  mismatch. The conversion factor itself remains physics evidence to derive.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 
