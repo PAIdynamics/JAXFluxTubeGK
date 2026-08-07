@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import erf
+from jax.scipy.special import erf, gamma, gammainc, gammaincc
 
 from ..types import SpeciesParams, VelocityGrid, _PyTreeDataclass
 from .primitives import maxwellian, normalized_energy
@@ -143,6 +143,73 @@ def _stella_associated_legendre(degree: int, order: int, x):
             * result
         )
     return result
+
+
+def stella_laguerre_legendre_delta0(
+    speed,
+    target_mass,
+    background_mass,
+    *,
+    laguerre_degree: int,
+    legendre_degree: int,
+):
+    """Evaluate stella's analytic lowest-order Landau response ``Delta_0``.
+
+    The result is the collision-frequency-free response of target species
+    ``a`` to ``x_b^l L_n^{l+1/2}(x_b^2) exp(-x_b^2)`` from background ``b``.
+    ``speed`` is normalized to the target thermal speed.  The formula is
+    differentiable in speed and the two species masses away from zero speed.
+    """
+
+    if laguerre_degree < 0 or legendre_degree < 0:
+        raise ValueError("Laguerre and Legendre degrees must be nonnegative")
+    xa = jnp.asarray(speed)
+    mass_ratio = jnp.asarray(target_mass) / jnp.asarray(background_mass)
+    xb = xa / jnp.sqrt(mass_ratio)
+    # The native velocity quadrature has strictly positive total speed.  Keep
+    # the expression defined at an exact origin for generic collocation grids.
+    safe_xb = jnp.maximum(xb, jnp.sqrt(jnp.finfo(xb.dtype).tiny))
+    result = jnp.zeros_like(xb)
+    degree = legendre_degree
+    for index in range(laguerre_degree + 1):
+        coefficient = (
+            (-1) ** index
+            * gamma(laguerre_degree + degree + 1.5)
+            / (
+                gamma(laguerre_degree - index + 1.0)
+                * gamma(degree + index + 1.5)
+                * gamma(index + 1.0)
+            )
+        )
+        argument = xb**2
+        gamma_lower_1 = gamma(1.5 + degree + index) * gammainc(1.5 + degree + index, argument)
+        gamma_lower_2 = gamma(2.5 + degree + index) * gammainc(2.5 + degree + index, argument)
+        gamma_upper_1 = gamma(1.0 + index) * gammaincc(1.0 + index, argument)
+        gamma_upper_2 = gamma(2.0 + index) * gammaincc(2.0 + index, argument)
+        result = result + coefficient * (
+            (2 * degree + 1.0) * xb ** (degree + 2 * index) * jnp.exp(-argument)
+            - xb
+            * (1.0 - mass_ratio)
+            * (
+                -(degree + 1.0) / safe_xb ** (degree + 2) * gamma_lower_1
+                + degree * xb ** (degree - 1) * gamma_upper_1
+            )
+            - (gamma_lower_1 / safe_xb ** (degree + 1) + xb**degree * gamma_upper_1)
+            + mass_ratio
+            * xb**2
+            * (
+                (degree + 1.0)
+                * (degree + 2.0)
+                / (2 * degree + 3.0)
+                * (gamma_lower_2 / safe_xb ** (degree + 3) + xb**degree * gamma_upper_1)
+                - degree
+                * (degree - 1.0)
+                / (2 * degree - 1.0)
+                * (gamma_lower_1 / safe_xb ** (degree + 1) + xb ** (degree - 2) * gamma_upper_2)
+            )
+        )
+    prefactor = 4.0 * pi / pi**1.5 * jnp.exp(-(xa**2)) * mass_ratio / (2 * degree + 1.0)
+    return jnp.nan_to_num(result * prefactor)
 
 
 def build_stella_laguerre_legendre_response(
@@ -1099,4 +1166,5 @@ __all__ = [
     "laguerre_legendre_collision",
     "laguerre_legendre_collision_components",
     "laguerre_legendre_collision_components_from_moments",
+    "stella_laguerre_legendre_delta0",
 ]

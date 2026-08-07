@@ -433,8 +433,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   differentiation with a dense-checked CFL bound. Native `psi` and response
   factors replay through that local kernel with relative L2 errors from
   `7.36e-14` to `1.24e-10` across the full and four isolated channels. The
-  remaining collision blocker is independent local construction of stella's
-  normalized Laguerre--Legendre driver and response tensors, followed by a
+  response tensor is now constructed locally from the velocity grid, magnetic
+  field, pair frequencies, species masses, gyroaverages, and `Delta_j` values.
+  A 44,928-row primitive trace verifies the raw native factor product exactly
+  and the independent JAX response at `1.84e-14` relative L2. The analytic
+  incomplete-gamma construction of `Delta_0` also matches stella at
+  `4.25e-13`. The remaining collision blocker is local construction of the
+  higher `Delta_j` recurrence and normalized driver tensor, followed by a
   second-state coefficient/action parity test.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it

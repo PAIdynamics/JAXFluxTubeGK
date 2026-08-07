@@ -31,6 +31,7 @@ from stellarator_gk import (
     laguerre_legendre_collision_components,
     laguerre_legendre_collision_components_from_moments,
     linear_residual,
+    stella_laguerre_legendre_delta0,
 )
 
 
@@ -628,6 +629,35 @@ def test_stella_laguerre_legendre_response_validates_coefficient_axes():
             jnp.ones((1, 1, 1, 8, 6, parallel.z.size)),
             jnp.ones((1, 1, 6, parallel.z.size)),
             component_labels=((0, 0, 0),),
+        )
+
+
+def test_stella_delta0_is_jittable_and_differentiable():
+    speed = jnp.linspace(0.2, 4.0, 32)
+
+    def objective(mass_ratio):
+        values = stella_laguerre_legendre_delta0(
+            speed,
+            mass_ratio,
+            1.0,
+            laguerre_degree=1,
+            legendre_degree=1,
+        )
+        return jnp.vdot(values, values)
+
+    value, derivative = jax.jit(jax.value_and_grad(objective))(2.5)
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.isfinite(derivative))
+
+
+def test_stella_delta0_rejects_negative_polynomial_degree():
+    with pytest.raises(ValueError, match="must be nonnegative"):
+        stella_laguerre_legendre_delta0(
+            1.0,
+            1.0,
+            1.0,
+            laguerre_degree=-1,
+            legendre_degree=0,
         )
 
 

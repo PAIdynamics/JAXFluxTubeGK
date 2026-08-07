@@ -62,8 +62,14 @@ claimed.
   Full, ion-ion, ion-electron, electron-electron, and electron-ion errors are
   `1.75e-13`, `3.72e-12`, `1.24e-10`, `7.36e-14`, and `1.01e-10`.
 - Common-grid indexing and response application are therefore closed. The
-  remaining collision physics blocker is independent construction of stella's
-  normalized driver and response tensors and parity on a second state.
+  target response is now independently constructed from physical grids,
+  species masses, pair frequencies, gyroaverages, and `Delta_j`. A new native
+  primitive trace spans 44,928 rows: its seven-factor product is exact and the
+  local response agrees at `1.84e-14` relative L2. The JAX incomplete-gamma
+  implementation of analytic `Delta_0` agrees at `4.25e-13` and remains JIT-
+  compatible and differentiable. The remaining collision physics blocker is
+  the higher-`j` recurrence, normalized driver construction, and parity on a
+  second independently generated state.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

@@ -644,6 +644,12 @@ JAX_ENABLE_X64=1 .venv/bin/python \
     /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --output /tmp/optimal-fusion-stella-collision-trace/factor-summary.json
+JAX_ENABLE_X64=1 .venv/bin/python \
+  scripts/summarize_stella_collision_field_particle_primitives.py \
+  --primitives \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_primitives.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/primitive-summary.json
 ```
 
 This traces both the aggregate signed field-particle RHS and all eight
@@ -651,9 +657,12 @@ This traces both the aggregate signed field-particle RHS and all eight
 The component validator fails unless their signed sum reconstructs the
 aggregate action. It also separates every contribution into its complex scalar
 response and real target-space basis. Those factors replay through the local
-JAX low-rank kernel at roundoff. Independent construction of the normalized
-driver and response coefficients is still required before enabling this as a
-production collision model.
+JAX low-rank kernel at roundoff. The primitive validator separately checks
+collision frequency, spherical-harmonic normalization, associated Legendre
+factor, gyroaverage, mass scaling, `Delta_j`, and sign. The local response
+builder matches all 44,928 native rows at `1.84e-14` relative L2, while its
+analytic `Delta_0` matches at `4.25e-13`. Higher-`j` recurrence and normalized
+driver construction are still required before enabling a production model.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

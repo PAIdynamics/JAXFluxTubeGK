@@ -14,6 +14,7 @@ from stellarator_gk import (
     SpeciesParams,
     build_stella_laguerre_legendre_response,
     build_velocity_grid_from_nodes,
+    stella_laguerre_legendre_delta0,
 )
 
 
@@ -165,19 +166,43 @@ def summarize_primitive_trace(
             "local response builder does not match native response basis: "
             f"relative L2={local_error:.6g}"
         )
+    delta0_rows = rows[:, 10] == 0
+    selected_rows = rows[delta0_rows]
+    native_delta0 = selected_rows[:, 19]
+    local_delta0 = np.empty_like(native_delta0)
+    speed = np.sqrt(selected_rows[:, 11] ** 2 + 2.0 * selected_rows[:, 13] * selected_rows[:, 12])
+    mass_ratio = selected_rows[:, 18] ** (-2.0 / 3.0)
+    for degree in np.unique(selected_rows[:, 8]).astype(int):
+        selected = selected_rows[:, 8] == degree
+        local_delta0[selected] = np.asarray(
+            stella_laguerre_legendre_delta0(
+                speed[selected],
+                mass_ratio[selected],
+                np.ones(np.count_nonzero(selected)),
+                laguerre_degree=0,
+                legendre_degree=degree,
+            )
+        )
+    delta0_scale = max(float(np.linalg.norm(native_delta0)), 1.0)
+    delta0_error = float(np.linalg.norm(local_delta0 - native_delta0) / delta0_scale)
+    if delta0_error > reconstruction_tolerance:
+        raise ValueError(
+            f"local analytic delta0 does not match native delta_j: relative L2={delta0_error:.6g}"
+        )
     return {
         "schema_version": 1,
         "benchmark": "stella_collision_field_particle_response_primitives",
-        "status": "local_response_construction_passed",
+        "status": "local_response_and_delta0_construction_passed",
         "stella_source_revision": expected_revision,
         "primitive_trace": str(Path(primitive_path).resolve()),
         "rows": int(rows.shape[0]),
         "metrics": {
             "primitive_product_to_native_relative_l2": product_error,
             "local_builder_to_native_relative_l2": local_error,
+            "local_delta0_to_native_relative_l2": delta0_error,
             "native_basis_l2": float(np.linalg.norm(basis)),
         },
-        "scope": "response construction only; delta_j and gyroaverage are native inputs",
+        "scope": "response and analytic delta0 construction; higher delta_j and gyroaverage are native inputs",
     }
 
 

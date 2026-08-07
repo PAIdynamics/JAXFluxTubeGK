@@ -1333,8 +1333,15 @@ low-rank pair/component contraction
 where $c=(l,m,j)$, $D$ includes the discrete velocity measure and all driver
 normalizations, and $R$ is the target-space response.  The JAX implementation
 accepts these tensors without depending on stella.  Native stella traces verify
-the response application and indexing at roundoff; independent construction
-and comparison of $D$ and $R$ remains required for the production physics gate.
+the response application and indexing at roundoff.  The response $R$ is now
+constructed independently from the physical velocity and magnetic grids,
+species mass ratios, pair collision frequencies, gyroaverages, and
+$\Delta_j$.  A 44,928-row native primitive trace agrees with this construction
+to $1.84\times10^{-14}$ in relative $L_2$, and the analytic incomplete-gamma
+construction of $\Delta_0$ agrees to $4.25\times10^{-13}$.  Independent
+construction of the higher-$j$ recurrence and normalized driver $D$, followed
+by a second-state action comparison, remains required for the production
+physics gate.
 
 
 \section{Testing and Benchmark Contract}
