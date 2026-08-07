@@ -8,6 +8,7 @@ from examples.run_nonlinear_heat_flux import (
     _hyperdiffusion,
     _initial_state,
     _load_checkpoint,
+    _nonzonal_phi_rms_history,
     _parse_args,
     _phi_rms_diagnostics,
     _write_checkpoint,
@@ -69,6 +70,11 @@ def test_candidate_window_phi_growth_recovers_exponential_rate():
     assert float(diagnostics["candidate_nonzonal_phi_growth_rate"]) == pytest.approx(0.07)
     assert float(diagnostics["candidate_nonzonal_phi_rms_ratio"]) == pytest.approx(
         np.exp(0.07 * 5.0)
+    )
+    np.testing.assert_allclose(
+        _nonzonal_phi_rms_history(phi),
+        np.exp(0.07 * times),
+        rtol=2.0e-13,
     )
 
 

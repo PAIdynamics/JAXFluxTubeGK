@@ -511,6 +511,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `-24.336`; the RMS ratio is `0.879`. This establishes one coarse local rung,
   not convergence or GX parity. The next acceptance work is an independently
   initialized wider/resolved rung and the native-to-GX normalization contract.
+  A second time-300-to-400 candidate has a consistent mean `-26.256` (within
+  `1.8%` of the first) but fails drift at `-0.450`; its half means are
+  `-23.145`/`-29.363`. Across time 220-to-400 the mean is `-27.100`, while the
+  final 90-unit half has mean `-25.251`, relative error `0.658%`, and drift
+  `-0.068`. Producer reports now retain compact nonzonal-RMS histories beside
+  flux histories, enabling a checkpoint-boundary-independent merged-window
+  gate without storing phase-space trajectories.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

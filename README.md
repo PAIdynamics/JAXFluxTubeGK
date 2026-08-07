@@ -669,6 +669,9 @@ are configurable but should be declared unchanged for acceptance ladders. It
 also fits the logarithmic nonzonal-potential growth rate over exactly the same
 window and requires its magnitude below `0.02` by default, preventing a slowly
 growing or decaying field from passing on an accidentally flat flux interval.
+Reports retain compact heat-flux and nonzonal-potential RMS time traces, so
+adjacent checkpoint segments can be merged into windows independent of the
+chosen checkpoint boundaries without storing phase-space state histories.
 
 Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination

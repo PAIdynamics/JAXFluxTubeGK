@@ -89,6 +89,15 @@ def _phi_rms_diagnostics(phi_history):
     }
 
 
+def _nonzonal_phi_rms_history(phi_history):
+    """Return the compact nonzonal amplitude trace used by merged windows."""
+
+    phi_history = jnp.asarray(phi_history)
+    if phi_history.ndim != 4 or phi_history.shape[-1] < 2:
+        raise ValueError("phi history must contain at least two ky modes")
+    return jnp.sqrt(jnp.mean(jnp.abs(phi_history[..., 1:]) ** 2, axis=(1, 2, 3)))
+
+
 def _candidate_window_phi_growth(phi_history, times, start_fraction: float):
     """Fit nonzonal potential growth over the candidate stationary window."""
 
@@ -99,7 +108,7 @@ def _candidate_window_phi_growth(phi_history, times, start_fraction: float):
     if phi_history.shape[-1] < 2 or not 0.0 <= start_fraction < 1.0:
         raise ValueError("candidate growth requires nonzonal modes and valid start fraction")
     start = min(int(phi_history.shape[0] * start_fraction), phi_history.shape[0] - 2)
-    amplitude = jnp.sqrt(jnp.mean(jnp.abs(phi_history[..., 1:]) ** 2, axis=(1, 2, 3)))[start:]
+    amplitude = _nonzonal_phi_rms_history(phi_history)[start:]
     window_times = times[start:]
     log_amplitude = jnp.log(jnp.maximum(amplitude, 1.0e-14))
     centered_time = window_times - jnp.mean(window_times)
@@ -387,6 +396,7 @@ def main(argv: list[str] | None = None) -> None:
         "statistics": {key: float(value) for key, value in asdict(statistics).items()},
         "times": np.asarray(absolute_times).tolist(),
         "heat_flux": np.asarray(flux).tolist(),
+        "nonzonal_phi_rms": np.asarray(_nonzonal_phi_rms_history(phi_history)).tolist(),
     }
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

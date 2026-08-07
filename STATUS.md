@@ -358,6 +358,13 @@ claimed.
   `-27.235` and `-24.336`, and the potential RMS ratio is `0.879`. This is a
   coarse `12x12x6`, `9x5` rung only. Resolution/domain convergence and the
   independent GX normalization/parity gate remain open.
+- The following time-300-to-400 window has mean `-26.256`, only `1.8%` from
+  the first candidate, but fails its trend gate (`-0.450`; half means
+  `-23.145`/`-29.363`). Combining time 220-to-400 gives mean `-27.100`; its
+  final 90-unit half has mean `-25.251`, relative error `0.658%`, and drift
+  `-0.068`. Reports now include compact nonzonal-potential RMS histories as
+  well as flux histories so merged-window acceptance can be independent of
+  checkpoint boundaries without retaining phase-space state histories.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 
