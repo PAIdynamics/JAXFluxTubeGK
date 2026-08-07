@@ -1,5 +1,6 @@
 from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
+    FACTOR_TRACE_FILENAME,
     TRACE_FILENAME,
     patch_stella_collision_field_particle_trace,
     prepare_trace_run,
@@ -54,8 +55,10 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert "(after(iv, imu, ikxkyz) - before(iv, imu, ikxkyz)) / code_dt" in patched
     assert TRACE_FILENAME in patched
     assert COMPONENT_TRACE_FILENAME in patched
+    assert FACTOR_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
+    assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
 
 
 def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):

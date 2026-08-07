@@ -21,6 +21,7 @@ from scripts.run_stella_collision_field_particle_discriminator import (
 TARGET = Path("STELLA_CODE/dissipation/collisions_fokkerplanck.f90")
 TRACE_FILENAME = "stellarator_gk_collision_field_particle_trace.dat"
 COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.dat"
+FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -52,7 +53,9 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      complex, dimension(:, :), allocatable :: g0spitzer\n"
         "      complex, dimension(:, :), allocatable :: stellarator_gk_component_input\n"
         "      complex :: stellarator_gk_component_increment\n"
-        "      integer :: stellarator_gk_component_unit\n",
+        "      complex :: stellarator_gk_factor_increment, stellarator_gk_psi\n"
+        "      real :: stellarator_gk_response_basis\n"
+        "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n",
     )
     text = _replace_once(
         text,
@@ -110,6 +113,12 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                  '# schema=stellarator_gk_stella_collision_fieldpart_components_v1'
             write(stellarator_gk_component_unit, '(a)') &
                  '# iv imu iky ikx iz tube species l m j vpa mu before_re before_im rhs_re rhs_im'
+            open(newunit=stellarator_gk_factor_unit, file='{FACTOR_TRACE_FILENAME}', &
+                 status='replace', action='write')
+            write(stellarator_gk_factor_unit, '(a)') &
+                 '# schema=stellarator_gk_stella_collision_fieldpart_factors_v1'
+            write(stellarator_gk_factor_unit, '(a)') &
+                 '# iv imu iky ikx iz tube target background l m j vpa mu psi_re psi_im basis rhs_re rhs_im'
          end if
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
 """,
@@ -152,11 +161,39 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                              aimag(stellarator_gk_component_increment)
                      end do
                   end do
+                  if (.not. density_conservation_tp) then
+                     do isb = 1, nspec
+                        stellarator_gk_psi = flds(iky, ikx, iz, it, &
+                             2 + (is - 1) * ((jmax + 1) * (lmax + 1)**2 * nspec) &
+                             + (idx1 - 1) * nspec + (isb - 1))
+                        do iv = 1, nvpa
+                           do imu = 1, nmu
+                              stellarator_gk_response_basis = spec(is)%vnew(isb) &
+                                   * clm * legendre_vpamu(ll1, mm1, iv, imu, iz) &
+                                   * jm(imu, abs(mm1), iky, ikx, iz, is) &
+                                   * (spec(is)%mass / spec(isb)%mass)**(-1.5) &
+                                   * deltaj(ll1, jj1, is, isb, iv, imu, ia, iz)
+                              if (mm1 < 0) stellarator_gk_response_basis = &
+                                   (-1)**mm1 * stellarator_gk_response_basis
+                              stellarator_gk_factor_increment = stellarator_gk_psi &
+                                   * stellarator_gk_response_basis
+                              write(stellarator_gk_factor_unit, *) iv, imu, iky, &
+                                   ikx, iz, it, is, isb, ll1, mm1, jj1, vpa(iv), &
+                                   mu(imu), real(stellarator_gk_psi), &
+                                   aimag(stellarator_gk_psi), &
+                                   stellarator_gk_response_basis, &
+                                   real(stellarator_gk_factor_increment), &
+                                   aimag(stellarator_gk_factor_increment)
+                           end do
+                        end do
+                     end do
+                  end if
                end if
 
             end do
          end do
          if (proc0) close(stellarator_gk_component_unit)
+         if (proc0) close(stellarator_gk_factor_unit)
          deallocate (stellarator_gk_component_input)
 
       end if
@@ -271,8 +308,10 @@ def prepare_trace_run(
                 "run_script": str(run_script),
                 "trace_output": str(run_dir / TRACE_FILENAME),
                 "component_trace_output": str(run_dir / COMPONENT_TRACE_FILENAME),
+                "factor_trace_output": str(run_dir / FACTOR_TRACE_FILENAME),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
+                "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
                 "serial_execution_required": True,
             },
             indent=2,
