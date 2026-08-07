@@ -13,6 +13,7 @@ from stellarator_gk import (
     VelocityGridSpec,
     build_conserving_bgk_precompute,
     build_fokker_planck_precompute,
+    build_laguerre_legendre_collision_precompute,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -25,6 +26,8 @@ from stellarator_gk import (
     fokker_planck_conserved_moments,
     fokker_planck_pairwise_components,
     fokker_planck_reciprocal_components,
+    laguerre_legendre_collision,
+    laguerre_legendre_collision_components,
     linear_residual,
 )
 
@@ -523,6 +526,67 @@ def test_solver_accepts_reciprocal_exchange_collision_model():
 
     assert precompute.collisions.conservation_model == "reciprocal_exchange"
     assert np.isfinite(float(estimate_linear_cfl_dt(precompute)))
+
+
+def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():
+    coefficient_shape = (2, 2, 3, 2, 2, 2, 1, 1)
+    driver = jax.random.normal(jax.random.key(101), coefficient_shape) / 7.0
+    response = jax.random.normal(jax.random.key(102), coefficient_shape) / 5.0
+    precompute = build_laguerre_legendre_collision_precompute(
+        driver,
+        response,
+        component_labels=((0, 0, 1), (1, -1, 0), (1, 1, 0)),
+    )
+    state = jax.random.normal(jax.random.key(103), (2, 2, 2, 2, 1, 1))
+    components = jax.jit(laguerre_legendre_collision_components)(state, precompute)
+    collision = jax.jit(laguerre_legendre_collision)(state, precompute)
+
+    moments = jnp.einsum("abcvmzxy,bvmzxy->abczxy", driver, state)
+    expected_components = jnp.einsum(
+        "abcvmzxy,abczxy->abvmzxy", response, moments
+    )
+    np.testing.assert_allclose(components, expected_components, atol=2e-13)
+    np.testing.assert_allclose(collision, jnp.sum(components, axis=1), atol=2e-13)
+
+    def objective(values):
+        result = laguerre_legendre_collision(values, precompute)
+        return jnp.vdot(result, result)
+
+    gradient = jax.jit(jax.grad(objective))(state)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_laguerre_legendre_row_sum_bound_bounds_dense_operator():
+    coefficient_shape = (2, 2, 2, 2, 2, 1, 1, 1)
+    driver = jax.random.normal(jax.random.key(111), coefficient_shape)
+    response = jax.random.normal(jax.random.key(112), coefficient_shape)
+    precompute = build_laguerre_legendre_collision_precompute(
+        driver,
+        response,
+        component_labels=((0, 0, 1), (1, 0, 0)),
+    )
+    state_shape = (2, 2, 2, 1, 1, 1)
+
+    def flattened_operator(values):
+        return laguerre_legendre_collision(
+            values.reshape(state_shape), precompute
+        ).reshape(-1)
+
+    matrix = jax.jacfwd(flattened_operator)(jnp.zeros(np.prod(state_shape)))
+    exact_bounds = jnp.max(
+        jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1
+    )
+    assert bool(jnp.all(exact_bounds <= precompute.row_sum_bound * (1.0 + 2e-12)))
+
+
+def test_laguerre_legendre_contract_rejects_invalid_component_labels():
+    coefficients = jnp.ones((1, 1, 2, 2, 2, 1, 1, 1))
+    with pytest.raises(ValueError, match="uniquely match"):
+        build_laguerre_legendre_collision_precompute(
+            coefficients,
+            coefficients,
+            component_labels=((0, 0, 1), (0, 0, 1)),
+        )
 
 
 @pytest.mark.external

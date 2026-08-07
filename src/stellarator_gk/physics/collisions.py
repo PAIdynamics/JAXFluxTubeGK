@@ -87,6 +87,103 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
     )
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
+    """Low-rank field-particle coefficients on a collocation grid.
+
+    ``driver[a,b,c]`` contracts the distribution of background species ``b``
+    into the scalar response for target ``a`` and component ``c``.
+    ``response[a,b,c]`` maps that scalar back to the target velocity grid.
+    The component labels and coefficient normalization are supplied by a
+    separately validated builder or external parity workflow.
+    """
+
+    driver: object
+    response: object
+    row_sum_bound: object
+    n_species: int
+    component_labels: tuple[tuple[int, int, int], ...]
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "driver",
+        "response",
+        "row_sum_bound",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "component_labels")
+
+
+def build_laguerre_legendre_collision_precompute(
+    driver,
+    response,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...],
+) -> LaguerreLegendreCollisionPrecompute:
+    """Validate a low-rank field-particle coefficient contract.
+
+    Coefficients have shape
+    ``(target, background, component, vpar, mu, z, kx, ky)``.  The driver
+    includes the velocity quadrature and every normalization needed by its
+    scalar moment.  This function establishes application mechanics only; it
+    does not certify the supplied coefficients as a Landau operator.
+    """
+
+    driver = jnp.asarray(driver)
+    response = jnp.asarray(response)
+    if driver.ndim != 8 or response.ndim != 8 or driver.shape != response.shape:
+        raise ValueError(
+            "driver and response must have matching shape "
+            "(target,background,component,vpar,mu,z,kx,ky)"
+        )
+    if driver.shape[0] != driver.shape[1] or driver.shape[0] < 1:
+        raise ValueError("field-particle coefficients require a square species pair grid")
+    labels = tuple(tuple(int(value) for value in label) for label in component_labels)
+    if any(len(label) != 3 for label in labels):
+        raise ValueError("each component label must contain (l,m,j)")
+    if len(labels) != driver.shape[2] or len(set(labels)) != len(labels):
+        raise ValueError("component labels must uniquely match the coefficient axis")
+    driver_norm = jnp.sum(jnp.abs(driver), axis=(3, 4))
+    induced_rows = jnp.sum(
+        jnp.abs(response) * driver_norm[:, :, :, None, None, ...],
+        axis=(1, 2),
+    )
+    row_sum_bound = jnp.max(induced_rows, axis=(1, 2, 3, 4, 5))
+    return LaguerreLegendreCollisionPrecompute(
+        driver=driver,
+        response=response,
+        row_sum_bound=row_sum_bound,
+        n_species=driver.shape[0],
+        component_labels=labels,
+    )
+
+
+def laguerre_legendre_collision_components(
+    distribution, precompute: LaguerreLegendreCollisionPrecompute
+):
+    """Return directed target/background field-particle contributions."""
+
+    values = jnp.asarray(distribution)
+    if values.ndim == 5 and precompute.n_species == 1:
+        values = values[None, ...]
+    expected = (precompute.n_species, *precompute.driver.shape[3:])
+    if values.shape != expected:
+        raise ValueError(f"distribution has shape {values.shape}, expected {expected}")
+    moments = jnp.einsum("abcvmzxy,bvmzxy->abczxy", precompute.driver, values)
+    return jnp.einsum("abcvmzxy,abczxy->abvmzxy", precompute.response, moments)
+
+
+def laguerre_legendre_collision(
+    distribution, precompute: LaguerreLegendreCollisionPrecompute
+):
+    """Apply a supplied Laguerre--Legendre low-rank collision contract."""
+
+    values = jnp.asarray(distribution)
+    original_ndim = values.ndim
+    components = laguerre_legendre_collision_components(values, precompute)
+    result = jnp.sum(components, axis=1)
+    return result[0] if original_ndim == 5 else result
+
+
 def build_fokker_planck_precompute(
     velocity_grid: VelocityGrid,
     B,
@@ -915,12 +1012,16 @@ def _apply_fokker_planck_stencil(distribution, stencil):
 __all__ = [
     "ConservingBGKPrecompute",
     "FokkerPlanckPrecompute",
+    "LaguerreLegendreCollisionPrecompute",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
+    "build_laguerre_legendre_collision_precompute",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
     "fokker_planck_conserved_moments",
     "fokker_planck_pairwise_components",
     "fokker_planck_reciprocal_components",
+    "laguerre_legendre_collision",
+    "laguerre_legendre_collision_components",
 ]
