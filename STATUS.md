@@ -47,6 +47,8 @@ claimed.
   coefficient-action observability. It does not yet close production collision
   parity: local stella-normalized Laguerre--Legendre coefficient construction
   and a common-grid action comparison remain required.
+- Repository-wide verification is green: Ruff passes and the standalone x64
+  suite reports **523 passed and 25 external tests deselected in 518.59 s**.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
