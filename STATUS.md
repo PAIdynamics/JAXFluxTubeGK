@@ -85,6 +85,14 @@ claimed.
   Since the compact gate has `nmu=2`, both mu rows use boundary closures. The
   electron-ion and electron-electron mu-path norms (`20.7238` and `24.7037`)
   identify those boundary formulas as the next implementation slice.
+- Extended the paired runner to the exact `mu_operator` by `nuxfac` factorial
+  decomposition. All four inferred components reconstruct the full trace at
+  `1.52e-18` relative L2 and `2.78e-17` maximum absolute error.
+- Pure mu diffusion accounts for norm `32.2473` (`88.19%` of full) and is
+  confined to `bb`; the mu-path mixed term is `0.444517`. Pure vpar diffusion
+  is only `0.0846490`, while the vpar-path mixed term is `14.4028`. This fixes
+  the porting order: two-node pure-mu boundary closure first, followed by the
+  vpar-path mixed derivative.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

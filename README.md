@@ -797,6 +797,13 @@ norm) and is almost entirely diagonal-block work (`32.2473`). The remaining
 `10.0501`. Because this compact gate has only two mu nodes, every mu row uses a
 boundary formula. The first local coefficient target is therefore the mu
 boundary closure, starting with the electron-ion and electron-electron pairs.
+The runner also sets `nuxfac=0` with both `mu_operator` states, producing an
+exact four-case factorial split. Pure mu diffusion has norm `32.2473`
+(`88.19%` of the full norm) and appears exclusively in the diagonal `bb`
+blocks. The mixed term nested in the mu path is only `0.444517`. Pure vpar
+diffusion has norm `0.0846490`, while the vpar-path mixed derivative has norm
+`14.4028`. The implementation order is therefore pure two-node mu-boundary
+diffusion, vpar-path mixed derivatives, then the two small residual branches.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

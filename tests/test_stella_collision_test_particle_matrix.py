@@ -98,8 +98,12 @@ def test_block_trace_reconstructs_zero_kperp_matrix(tmp_path):
 def test_block_decomposition_isolates_mu_operator_path(tmp_path):
     full = tmp_path / "full.dat"
     vpar = tmp_path / "vpar.dat"
+    no_mixed_full = tmp_path / "no_mixed_full.dat"
+    no_mixed_vpar = tmp_path / "no_mixed_vpar.dat"
     full_rows = []
     vpar_rows = []
+    no_mixed_full_rows = []
+    no_mixed_vpar_rows = []
     for iv in range(3):
         for row_mu in range(2):
             for col_mu in range(2):
@@ -107,16 +111,38 @@ def test_block_decomposition_isolates_mu_operator_path(tmp_path):
                 prefix = [0, 1, 1, iv + 1, row_mu + 1, col_mu + 1]
                 full_rows.append(prefix + [index, 0.0, 2 * index, 0.0, -index, 0.0, 0.01])
                 vpar_rows.append(prefix + [0.25 * index, 0.0, index, 0.0, 0.0, 0.0, 0.01])
-    for path, rows in ((full, full_rows), (vpar, vpar_rows)):
+                no_mixed_full_rows.append(
+                    prefix + [0.5 * index, 0.0, 1.5 * index, 0.0, -0.5 * index, 0.0, 0.01]
+                )
+                no_mixed_vpar_rows.append(
+                    prefix + [0.1 * index, 0.0, 0.75 * index, 0.0, 0.0, 0.0, 0.01]
+                )
+    traces = (
+        (full, full_rows),
+        (vpar, vpar_rows),
+        (no_mixed_full, no_mixed_full_rows),
+        (no_mixed_vpar, no_mixed_vpar_rows),
+    )
+    for path, rows in traces:
         path.write_text(BLOCK_SCHEMA + "\n# columns\n")
         with path.open("a") as stream:
             np.savetxt(stream, np.asarray(rows))
 
-    report = summarize_block_decomposition(full, vpar, expected_revision="abc123")
+    report = summarize_block_decomposition(
+        full,
+        vpar,
+        no_mixed_full,
+        no_mixed_vpar,
+        expected_revision="abc123",
+    )
 
     assert report["status"] == "native_block_operator_split_passed"
     assert report["rows_per_trace"] == 12
     assert report["grid"] == {"nz": 1, "nspecies": 1, "nvpar": 3, "nmu": 2}
     assert report["components"]["vpar_path"]["frobenius"] > 0.0
     assert report["components"]["mu_path"]["frobenius"] > 0.0
+    assert report["components"]["pure_vpar"]["frobenius"] > 0.0
+    assert report["components"]["mixed_vpar"]["frobenius"] > 0.0
+    assert report["components"]["pure_mu"]["frobenius"] > 0.0
+    assert report["components"]["mixed_mu"]["frobenius"] > 0.0
     assert report["metrics"]["additive_closure_max_abs"] == 0.0

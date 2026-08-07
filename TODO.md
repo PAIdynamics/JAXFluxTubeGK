@@ -494,7 +494,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `nmu=2`, all mu rows exercise boundary formulas. Implement and validate the
   mu boundary closure first, prioritizing electron-ion (`20.7238`) and
   electron-electron (`24.7037`) pair norms, then port the general interior-mu
-  and vpar-boundary branches.
+  and vpar-boundary branches. A four-run `mu_operator` by `nuxfac` factorial
+  split sharpens this further: pure mu diffusion is `32.2473` (`88.19%` of
+  full) and exclusively diagonal-block work; its mixed branch is `0.444517`.
+  Pure vpar diffusion is only `0.0846490`, whereas the vpar-path mixed branch
+  is `14.4028`. Close the pure two-node mu-boundary `bb` block first, then the
+  vpar-path mixed derivative.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -1377,6 +1377,12 @@ and disabled localize that work: the mu path has Frobenius norm $32.2503$
 blocks, whereas the remaining parallel-velocity path has norm $14.4030$.
 Because the compact gate has only two mu nodes, both rows use boundary
 closures; the mu boundary is therefore the next local coefficient target.
+An additional factorial split using the mixed-coefficient knob shows that pure
+mu diffusion has norm $32.2473$ ($88.19\%$ of full) and lies entirely in the
+diagonal velocity blocks.  The mixed term nested in that path has norm
+$0.444517$; pure parallel-velocity diffusion has norm $0.0846490$, while its
+mixed path has norm $14.4028$.  This establishes the implementation order:
+two-node pure-mu boundary diffusion before the parallel-path mixed derivative.
 The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the
