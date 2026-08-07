@@ -1041,6 +1041,12 @@ be fitted to make the means agree. The command exits nonzero unless all lineage
 roots are unique, every lineage is stationary, their means agree within 15%,
 and resolution convergence, domain convergence, and independent parity pass.
 
+The current coarse three-root campaign passes its ensemble sub-gate. Seeds
+18, 19, and 20 give stationary means `-24.5555`, `-24.3764`, and `-23.7248`;
+the ensemble mean is `-24.2189` and the maximum relative deviation is `2.04%`.
+These caller-owned trajectories justify proceeding to the resolution and
+domain ladders, but do not replace those ladders or the pinned GX comparison.
+
 ## Current Validation Status
 
 Passing guardrails:

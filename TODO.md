@@ -695,9 +695,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   nonstationary with mean `-21.367`, block relative error `9.76%`, drift
   `-0.888`, and nonzonal growth `1.21e-2`. Merging time 220-to-400 gives mean
   `-21.031`, block relative error `6.57%`, drift `-0.300`, and nonzonal growth
-  `3.26e-3`; the drift still exceeds the unchanged `0.2` gate. A longer
-  seed-18 extension and at least one further independent lineage are required
-  before resolved/domain ladders are scientifically justified.
+  `3.26e-3`; the drift still exceeds the unchanged `0.2` gate. Extending seed
+  18 through time 500 produces a stationary time-220-to-500 merge with mean
+  `-24.5555`, `5.42%` block error, drift `0.1836`, and nonzonal growth
+  `-3.40e-4`. Fresh x64 seed-19 and seed-20 runs to time 500 are also
+  stationary, with means `-24.3764` and `-23.7248`. The three-root ensemble
+  passes: mean `-24.2189`, maximum relative deviation `2.04%`, and
+  between-lineage standard error `0.2524`. The next required evidence is the
+  stationary resolution/domain ladders and pinned GX comparison.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -236,6 +236,15 @@ claimed.
   `1.21e-2`. The checkpoint-independent time-220-to-400 merge improves the
   drift to `-0.300` with mean `-21.031`, `6.57%` block error, and `3.26e-3`
   field growth, but still fails the declared `0.2` drift gate.
+- Extending seed 18 to time 500 yields a stationary merged time-220-to-500
+  record: mean `-24.5555`, `5.42%` block error, drift `0.1836`, and nonzonal
+  growth `-3.40e-4`. Two fresh current-schema x64 roots also pass at time 500:
+  seed 19 has mean `-24.3764` and drift `-0.0841`; seed 20 has mean `-23.7248`
+  and drift `0.0500`.
+- The required three-root coarse ensemble now passes. All lineages are unique
+  and stationary; their ensemble mean is `-24.2189`, maximum relative mean
+  deviation is `2.04%` against the `15%` gate, and the between-lineage standard
+  error is `0.2524`. Resolution, domain, and pinned-GX parity remain open.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
