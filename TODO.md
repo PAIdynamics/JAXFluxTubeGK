@@ -510,7 +510,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   components; general `nmu>2` interior formulas remain a separate requirement.
   The general-mu pure-vpar half-grid builder now matches its native component
   at `1.35e-15` relative L2 and `1.47e-17` maximum absolute error. The only
-  unimplemented compact component is the mu-path mixed branch (`0.444517`).
+  remaining compact component was the mu-path mixed branch (`0.444517`). Its
+  local two-node builder now matches at `2.80e-15` relative L2 and `4.32e-16`
+  maximum absolute error. Summing all four local components reproduces the
+  complete native trace at `1.08e-15` relative L2 and `7.99e-15` maximum
+  absolute error. The compact matrix is closed; general `nmu>2` interior-mu
+  formulas and production-residual selection remain before closing this item.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

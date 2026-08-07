@@ -587,6 +587,155 @@ def build_stella_two_mu_vpar_mixed_blocks(
     return lower, diagonal, upper
 
 
+def build_stella_two_mu_mixed_blocks(
+    velocity_grid: VelocityGrid,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+):
+    """Construct stella's mu-path mixed blocks on a two-node mu grid."""
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.shape != (2,):
+        raise ValueError("the two-mu mixed constructor requires exactly two mu nodes")
+    nux = jnp.asarray(primitives.mixed_diffusion)
+    maxwell = jnp.asarray(primitives.maxwellian)
+    n_target, n_background, n_vpar, _, n_z = nux.shape
+    dvpar = vpar[1] - vpar[0]
+    dmu = mu[1] - mu[0]
+    shape = (n_target, n_background, n_vpar, 2, 2, n_z)
+    lower = jnp.zeros(shape, dtype=nux.dtype)
+    diagonal = jnp.zeros_like(lower)
+    upper = jnp.zeros_like(lower)
+
+    def node_flux(iv, imu):
+        return (
+            vpar[iv]
+            * mu[imu]
+            * nux[:, :, iv, imu, :]
+            * maxwell[:, None, iv, imu, :]
+        )
+
+    lower_mu_weight = (dmu / mu[0] - mu[0] / dmu) / (mu[0] + dmu)
+    upper_mu_weight = (mu[0] / dmu) / (mu[0] + dmu)
+    boundary_factor = jnp.asarray(dt) / dvpar
+
+    diagonal = diagonal.at[:, :, 0, 0, 0, :].set(
+        boundary_factor
+        * node_flux(0, 0)
+        * lower_mu_weight
+        / maxwell[:, None, 0, 0, :]
+    )
+    diagonal = diagonal.at[:, :, 0, 0, 1, :].set(
+        boundary_factor
+        * node_flux(0, 1)
+        * upper_mu_weight
+        / maxwell[:, None, 0, 1, :]
+    )
+    upper = upper.at[:, :, 0, 0, 0, :].set(
+        -boundary_factor
+        * node_flux(0, 0)
+        * lower_mu_weight
+        / maxwell[:, None, 1, 0, :]
+    )
+    upper = upper.at[:, :, 0, 0, 1, :].set(
+        -boundary_factor
+        * node_flux(0, 1)
+        * upper_mu_weight
+        / maxwell[:, None, 1, 1, :]
+    )
+    diagonal = diagonal.at[:, :, 0, 1, 0, :].set(
+        -boundary_factor
+        * node_flux(0, 0)
+        / maxwell[:, None, 0, 0, :]
+        / (2.0 * dmu)
+    )
+    upper = upper.at[:, :, 0, 1, 0, :].set(
+        boundary_factor
+        * node_flux(0, 0)
+        / maxwell[:, None, 1, 0, :]
+        / (2.0 * dmu)
+    )
+
+    interior_factor = 0.5 * boundary_factor
+    for iv in range(1, n_vpar - 1):
+        lower = lower.at[:, :, iv, 0, 0, :].set(
+            interior_factor
+            * node_flux(iv, 0)
+            * lower_mu_weight
+            / maxwell[:, None, iv - 1, 0, :]
+        )
+        lower = lower.at[:, :, iv, 0, 1, :].set(
+            interior_factor
+            * node_flux(iv, 1)
+            * upper_mu_weight
+            / maxwell[:, None, iv - 1, 1, :]
+        )
+        upper = upper.at[:, :, iv, 0, 0, :].set(
+            -interior_factor
+            * node_flux(iv, 0)
+            * lower_mu_weight
+            / maxwell[:, None, iv + 1, 0, :]
+        )
+        upper = upper.at[:, :, iv, 0, 1, :].set(
+            -interior_factor
+            * node_flux(iv, 1)
+            * upper_mu_weight
+            / maxwell[:, None, iv + 1, 1, :]
+        )
+        lower = lower.at[:, :, iv, 1, 0, :].set(
+            -interior_factor
+            * node_flux(iv, 0)
+            / maxwell[:, None, iv - 1, 0, :]
+            / (2.0 * dmu)
+        )
+        upper = upper.at[:, :, iv, 1, 0, :].set(
+            interior_factor
+            * node_flux(iv, 0)
+            / maxwell[:, None, iv + 1, 0, :]
+            / (2.0 * dmu)
+        )
+
+    last = n_vpar - 1
+    lower = lower.at[:, :, last, 0, 0, :].set(
+        boundary_factor
+        * node_flux(last, 0)
+        * lower_mu_weight
+        / maxwell[:, None, last - 1, 0, :]
+    )
+    lower = lower.at[:, :, last, 0, 1, :].set(
+        boundary_factor
+        * node_flux(last, 1)
+        * upper_mu_weight
+        / maxwell[:, None, last - 1, 1, :]
+    )
+    diagonal = diagonal.at[:, :, last, 0, 0, :].set(
+        -boundary_factor
+        * node_flux(last, 0)
+        * lower_mu_weight
+        / maxwell[:, None, last, 0, :]
+    )
+    diagonal = diagonal.at[:, :, last, 0, 1, :].set(
+        -boundary_factor
+        * node_flux(last, 1)
+        * upper_mu_weight
+        / maxwell[:, None, last, 1, :]
+    )
+    lower = lower.at[:, :, last, 1, 0, :].set(
+        -boundary_factor
+        * node_flux(last, 0)
+        / maxwell[:, None, last - 1, 0, :]
+        / (2.0 * dmu)
+    )
+    diagonal = diagonal.at[:, :, last, 1, 0, :].set(
+        boundary_factor
+        * node_flux(last, 0)
+        / maxwell[:, None, last, 0, :]
+        / (2.0 * dmu)
+    )
+    return lower, diagonal, upper
+
+
 def build_stella_vpar_diffusion_blocks(
     velocity_grid: VelocityGrid,
     B,
@@ -2179,6 +2328,7 @@ __all__ = [
     "StellaTestParticlePrimitives",
     "assemble_stella_test_particle_blocks",
     "build_stella_two_mu_diffusion_blocks",
+    "build_stella_two_mu_mixed_blocks",
     "build_stella_two_mu_vpar_mixed_blocks",
     "build_stella_vpar_diffusion_blocks",
     "build_conserving_bgk_precompute",

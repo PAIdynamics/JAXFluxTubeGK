@@ -23,6 +23,7 @@ from stellarator_gk import (
     SpeciesParams,
     build_stella_test_particle_primitives,
     build_stella_two_mu_diffusion_blocks,
+    build_stella_two_mu_mixed_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
     build_stella_vpar_diffusion_blocks,
     build_velocity_grid_from_nodes,
@@ -34,6 +35,7 @@ def summarize_two_mu_diffusion(
     no_mixed_full_trace: Path,
     no_mixed_vpar_trace: Path,
     vpar_trace: Path | None = None,
+    full_trace: Path | None = None,
     *,
     expected_revision: str,
     tolerance: float = 2.0e-11,
@@ -162,6 +164,8 @@ def summarize_two_mu_diffusion(
     status = "local_two_mu_diffusion_blocks_passed"
     scope = "pure two-node mu-boundary parity; mixed and general-grid branches pending"
     if vpar_trace is not None:
+        if full_trace is None:
+            raise ValueError("full_trace is required when validating mixed components")
         mixed_values = _read(vpar_trace, BLOCK_SCHEMA, len(BLOCK_COLUMNS))
         if not np.array_equal(mixed_values[:, :6], vpar_values[:, :6]):
             raise ValueError("native mixed-vpar traces have different index grids")
@@ -205,8 +209,90 @@ def summarize_two_mu_diffusion(
                 "mixed_vpar_max_abs": mixed_maximum,
             }
         )
-        status = "local_two_mu_collision_components_passed"
-        scope = "pure-mu and mixed-vpar two-node parity; small and general-grid branches pending"
+        full_values = _read(full_trace, BLOCK_SCHEMA, len(BLOCK_COLUMNS))
+        if not np.array_equal(full_values[:, :6], mixed_values[:, :6]):
+            raise ValueError("native full and vpar traces have different index grids")
+        full_native = _block_arrays(full_values)
+        mu_path_native = tuple(
+            left - right for left, right in zip(full_native[:3], mixed_full[:3], strict=True)
+        )
+        mixed_mu_native = tuple(
+            left - right for left, right in zip(mu_path_native, native, strict=True)
+        )
+        mixed_mu_local = tuple(
+            np.asarray(item)
+            for item in build_stella_two_mu_mixed_blocks(grid, primitives, knobs["dt"])
+        )
+        mixed_mu_error = np.concatenate(
+            [
+                (observed - expected).ravel()
+                for observed, expected in zip(
+                    mixed_mu_local, mixed_mu_native, strict=True
+                )
+            ]
+        )
+        mixed_mu_native_flat = np.concatenate(
+            [item.ravel() for item in mixed_mu_native]
+        )
+        mixed_mu_relative = float(
+            np.linalg.norm(mixed_mu_error)
+            / max(np.linalg.norm(mixed_mu_native_flat), np.finfo(float).tiny)
+        )
+        mixed_mu_maximum = float(np.max(np.abs(mixed_mu_error)))
+        if mixed_mu_maximum > tolerance:
+            block_errors = [
+                float(np.max(np.abs(observed - expected)))
+                for observed, expected in zip(
+                    mixed_mu_local, mixed_mu_native, strict=True
+                )
+            ]
+            block_indices = [
+                np.unravel_index(
+                    np.argmax(np.abs(observed - expected)), observed.shape
+                )
+                for observed, expected in zip(
+                    mixed_mu_local, mixed_mu_native, strict=True
+                )
+            ]
+            raise ValueError(
+                "local two-mu mixed-mu blocks exceed native tolerance: "
+                f"relative_l2={mixed_mu_relative:.6e}, "
+                f"max_abs={mixed_mu_maximum:.6e}, block_max={block_errors}, "
+                f"block_indices={block_indices}"
+            )
+        full_local = tuple(
+            pure_mu + pure_vpar + mixed_vpar + mixed_mu
+            for pure_mu, pure_vpar, mixed_vpar, mixed_mu in zip(
+                local, local_vpar, mixed_local, mixed_mu_local, strict=True
+            )
+        )
+        full_error = np.concatenate(
+            [
+                (observed - expected).ravel()
+                for observed, expected in zip(full_local, full_native[:3], strict=True)
+            ]
+        )
+        full_native_flat = np.concatenate([item.ravel() for item in full_native[:3]])
+        full_relative = float(
+            np.linalg.norm(full_error)
+            / max(np.linalg.norm(full_native_flat), np.finfo(float).tiny)
+        )
+        full_maximum = float(np.max(np.abs(full_error)))
+        if full_maximum > tolerance:
+            raise ValueError(
+                "complete local two-mu blocks exceed native tolerance: "
+                f"relative_l2={full_relative:.6e}, max_abs={full_maximum:.6e}"
+            )
+        metrics.update(
+            {
+                "mixed_mu_relative_l2": mixed_mu_relative,
+                "mixed_mu_max_abs": mixed_mu_maximum,
+                "full_blocks_relative_l2": full_relative,
+                "full_blocks_max_abs": full_maximum,
+            }
+        )
+        status = "local_two_mu_collision_blocks_passed"
+        scope = "complete two-node block parity; general-grid branches pending"
     return {
         "schema_version": 1,
         "benchmark": "stella_collision_two_mu_diffusion_blocks",
@@ -224,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-mixed-full", type=Path, required=True)
     parser.add_argument("--no-mixed-vpar", type=Path, required=True)
     parser.add_argument("--vpar", type=Path)
+    parser.add_argument("--full", type=Path)
     parser.add_argument("--expected-revision", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -232,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         args.no_mixed_full,
         args.no_mixed_vpar,
         vpar_trace=args.vpar,
+        full_trace=args.full,
         expected_revision=args.expected_revision,
     )
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

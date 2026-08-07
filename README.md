@@ -816,6 +816,8 @@ JAX_ENABLE_X64=1 .venv/bin/python \
   --primitives /tmp/optimal-fusion-stella-block-decomposition/stellarator_gk_collision_test_particle_primitives.dat \
   --no-mixed-full /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_full.dat \
   --no-mixed-vpar /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_vpar.dat \
+  --vpar /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_vpar.dat \
+  --full /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_full.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --output /tmp/optimal-fusion-stella-block-decomposition/two-mu.json
 ```
@@ -825,18 +827,22 @@ maximum absolute error. The remaining compact-case coefficient target is led
 by the vpar-path mixed derivative; general grids additionally require the
 interior-mu formulas.
 
-Passing `--vpar` to the same summarizer also validates
+Passing the full four-case factorial traces also validates
 `build_stella_two_mu_vpar_mixed_blocks(...)`. The constructor covers both vpar
 ghost boundaries and every interior lower/upper block. It matches the native
 mixed-vpar factorial component at `9.11e-16` relative L2 and `2.66e-15`
-maximum absolute error. The compact two-mu remainder is now limited to the
-small pure-vpar and mu-path mixed components.
+maximum absolute error.
 
 `build_stella_vpar_diffusion_blocks(...)` closes the pure-vpar half-grid flux
 for arbitrary mu-node counts. On the pinned trace it agrees at `1.35e-15`
-relative L2 and `1.47e-17` maximum absolute error. Only the small two-node
-mu-path mixed component remains before the compact block sum can be assembled
-entirely from local coefficients.
+relative L2 and `1.47e-17` maximum absolute error.
+
+`build_stella_two_mu_mixed_blocks(...)` closes the final compact component.
+Its mu-path mixed blocks agree at `2.80e-15` relative L2 and `4.32e-16`
+maximum absolute error. Summing all four independently constructed components
+reproduces the complete native block trace at `1.08e-15` relative L2 and
+`7.99e-15` maximum absolute error. General `nmu>2` interior-mu formulas remain
+the next portability requirement.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

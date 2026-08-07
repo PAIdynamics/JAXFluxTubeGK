@@ -23,6 +23,7 @@ from stellarator_gk import (
     build_stella_test_particle_gyro_diagonal,
     assemble_stella_test_particle_blocks,
     build_stella_two_mu_diffusion_blocks,
+    build_stella_two_mu_mixed_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
     build_stella_vpar_diffusion_blocks,
     build_fourier_grid,
@@ -665,6 +666,22 @@ def test_stella_two_mu_diffusion_blocks_are_jittable_and_differentiable():
         jax.grad(lambda values: sum(jnp.sum(item) for item in build_mixed(values)))
     )(frequencies)
     assert bool(jnp.all(jnp.isfinite(mixed_gradient)))
+
+    def build_mu_mixed(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_two_mu_mixed_blocks(velocity, primitives, 0.01)
+
+    mu_mixed_blocks = jax.jit(build_mu_mixed)(frequencies)
+    assert all(block.shape == diagonal.shape for block in mu_mixed_blocks)
+    assert all(bool(jnp.all(jnp.isfinite(block))) for block in mu_mixed_blocks)
+    mu_mixed_gradient = jax.jit(
+        jax.grad(
+            lambda values: sum(jnp.sum(item) for item in build_mu_mixed(values))
+        )
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(mu_mixed_gradient)))
 
     def build_vpar(values):
         primitives = build_stella_test_particle_primitives(

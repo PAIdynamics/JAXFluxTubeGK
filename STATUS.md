@@ -112,8 +112,12 @@ claimed.
   mu-path mixed terms; general grids still need interior-mu construction.
 - Added a general-mu pure-vpar diffusion builder using stella's half-vpar
   collision coefficients and boundary flux closures. Native agreement is
-  `1.35e-15` relative L2 and `1.47e-17` maximum absolute error. The compact
-  two-mu matrix now lacks only the small mu-path mixed component.
+  `1.35e-15` relative L2 and `1.47e-17` maximum absolute error.
+- Added the final two-node mu-path mixed builder. It matches its factorial
+  target at `2.80e-15` relative L2 and `4.32e-16` maximum absolute error.
+  The sum of all four local components reproduces the complete native block
+  trace at `1.08e-15` relative L2 and `7.99e-15` maximum absolute error. The
+  compact matrix is closed; general `nmu>2` interior-mu construction remains.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 
