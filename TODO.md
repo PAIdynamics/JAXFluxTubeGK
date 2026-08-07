@@ -481,7 +481,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   stencil, radial spacing follows `q*shat*ky_min/(eps*ikxspace)`, and the
   boundary shift scales with `ky/ky_min`. The former periodic-chain path is an
   explicit historical diagnostic. Long-time stationarity and GX parity on the
-  corrected topology remain open.
+  corrected topology remain open. The first corrected `12x12x6`, `9x5`,
+  hyperdiffusion-0.05 run reaches time 60 in 1,714 adaptive steps. Twist-and-
+  shift reduces peak native flux from the periodic-chain result `43.2` to
+  `0.314` and final nonzonal RMS from `1.33` to `0.102`, but drift `-4.71`
+  still rejects the growing window. A longer-time and wider-box ladder, with
+  explicit runtime budgeting, is the next numerical gate.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

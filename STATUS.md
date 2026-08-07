@@ -324,6 +324,12 @@ claimed.
   boundary jump by `ky/ky_min`. The old periodic-chain model remains an
   explicit diagnostic option. Focused Fourier, nonlinear, and benchmark tests
   pass; long-time stationarity on this corrected topology is the next gate.
+- The first corrected-topology `12x12x6`, `9x5`, hyperdiffusion-0.05 run reaches
+  time 60 in 1,714 adaptive steps. Relative to the periodic-chain run, peak
+  native flux drops from `43.2` to `0.314` and final nonzonal RMS from `1.33`
+  to `0.102`, demonstrating that boundary topology materially controls the
+  nonlinear trajectory. The window still grows with drift `-4.71`, so it does
+  not pass stationarity; longer-time and wider-box convergence remain open.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 
