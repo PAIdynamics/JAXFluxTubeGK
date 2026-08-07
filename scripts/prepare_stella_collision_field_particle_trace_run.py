@@ -26,6 +26,9 @@ FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
 PRIMITIVE_TRACE_FILENAME = "stellarator_gk_collision_field_particle_primitives.dat"
 QUADRATURE_TRACE_FILENAME = "stellarator_gk_collision_velocity_quadrature.dat"
 DRIVER_TRACE_FILENAME = "stellarator_gk_collision_field_particle_drivers.dat"
+TEST_PARTICLE_MATRIX_TRACE_FILENAME = (
+    "stellarator_gk_collision_test_particle_matrix.dat"
+)
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -302,6 +305,68 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "end module collisions_fokkerplanck\n",
         FIELD_PARTICLE_TRACE_HELPER + "\nend module collisions_fokkerplanck\n",
     )
+    text = _replace_once(
+        text,
+        "   subroutine init_fp_diffmatrix\n\n"
+        "      use grids_time, only: code_dt\n",
+        "   subroutine init_fp_diffmatrix\n\n"
+        "      use mp, only: proc0\n"
+        "      use grids_time, only: code_dt\n",
+    )
+    text = _replace_once(
+        text,
+        "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n",
+        "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n"
+        "      integer :: stellarator_gk_matrix_unit\n"
+        "      integer :: stellarator_gk_matrix_row, stellarator_gk_matrix_col\n"
+        "      integer :: stellarator_gk_matrix_band_row\n",
+    )
+    matrix_factorization = (
+        "      ! AVB: LU factorise cdiffmat, using LAPACK's zgbtrf routine for banded matrices\n"
+        "      nc = nvpa * nmu\n"
+        "      nb = nmu + 1\n"
+        "      lldab = 3 * (nmu + 1) + 1\n"
+    )
+    text = _replace_once(
+        text,
+        matrix_factorization,
+        f"""      ! stellarator_gk collision test-particle matrix trace patch
+      nc = nvpa * nmu
+      nb = nmu + 1
+      if (proc0) then
+         open(newunit=stellarator_gk_matrix_unit, &
+              file='{TEST_PARTICLE_MATRIX_TRACE_FILENAME}', &
+              status='replace', action='write')
+         write(stellarator_gk_matrix_unit, '(a)') &
+              '# schema=stellarator_gk_stella_collision_test_particle_matrix_v1'
+         write(stellarator_gk_matrix_unit, '(a)') &
+              '# iky ikx iz species row col matrix_re matrix_im kperp2 code_dt'
+         do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
+            iky = iky_idx(kxkyz_lo, ikxkyz)
+            ikx = ikx_idx(kxkyz_lo, ikxkyz)
+            iz = iz_idx(kxkyz_lo, ikxkyz)
+            is = is_idx(kxkyz_lo, ikxkyz)
+            do stellarator_gk_matrix_col = 1, nc
+               do stellarator_gk_matrix_row = &
+                    max(1, stellarator_gk_matrix_col - nb), &
+                    min(nc, stellarator_gk_matrix_col + nb)
+                  stellarator_gk_matrix_band_row = 2 * nb + 1 &
+                       + stellarator_gk_matrix_row - stellarator_gk_matrix_col
+                  write(stellarator_gk_matrix_unit, *) iky, ikx, iz, is, &
+                       stellarator_gk_matrix_row, stellarator_gk_matrix_col, &
+                       real(cdiffmat_band(stellarator_gk_matrix_band_row, &
+                            stellarator_gk_matrix_col, iky, ikx, iz, is)), &
+                       aimag(cdiffmat_band(stellarator_gk_matrix_band_row, &
+                            stellarator_gk_matrix_col, iky, ikx, iz, is)), &
+                       kperp2(iky, ikx, ia, iz), code_dt
+               end do
+            end do
+         end do
+         close(stellarator_gk_matrix_unit)
+      end if
+
+{matrix_factorization}""",
+    )
     source_path.write_text(text, encoding="utf-8")
     return True
 
@@ -398,12 +463,18 @@ def prepare_trace_run(
                 "primitive_trace_output": str(run_dir / PRIMITIVE_TRACE_FILENAME),
                 "quadrature_trace_output": str(run_dir / QUADRATURE_TRACE_FILENAME),
                 "driver_trace_output": str(run_dir / DRIVER_TRACE_FILENAME),
+                "test_particle_matrix_trace_output": str(
+                    run_dir / TEST_PARTICLE_MATRIX_TRACE_FILENAME
+                ),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
                 "primitive_trace_quantity": "independent factors of each response basis",
                 "quadrature_trace_quantity": "velocity nodes and integrate_vmu weights",
                 "driver_trace_quantity": "normalized background-space driver coefficients",
+                "test_particle_matrix_trace_quantity": (
+                    "unfactorized banded I-dt*C_test matrix in dense row/column coordinates"
+                ),
                 "serial_execution_required": True,
             },
             indent=2,
