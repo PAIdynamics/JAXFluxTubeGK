@@ -33,6 +33,7 @@ FINAL_STATE_TRACE_FILENAME = "stellarator_gk_collision_final_state.dat"
 TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME = (
     "stellarator_gk_collision_test_particle_primitives.dat"
 )
+TEST_PARTICLE_BLOCK_TRACE_FILENAME = "stellarator_gk_collision_test_particle_blocks.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -334,6 +335,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n"
         "      integer :: stellarator_gk_matrix_unit\n"
         "      integer :: stellarator_gk_tp_primitive_unit\n"
+        "      integer :: stellarator_gk_tp_block_unit\n"
         "      integer :: stellarator_gk_matrix_row, stellarator_gk_matrix_col\n"
         "      integer :: stellarator_gk_matrix_band_row\n",
     )
@@ -342,6 +344,47 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      nc = nvpa * nmu\n"
         "      nb = nmu + 1\n"
         "      lldab = 3 * (nmu + 1) + 1\n"
+    )
+    block_assembly = "      ! construct full block matrix\n"
+    text = _replace_once(
+        text,
+        block_assembly,
+        f"""      if (proc0) then
+         open(newunit=stellarator_gk_tp_block_unit, &
+              file='{TEST_PARTICLE_BLOCK_TRACE_FILENAME}', &
+              status='replace', action='write')
+         write(stellarator_gk_tp_block_unit, '(a)') &
+              '# schema=stellarator_gk_stella_collision_test_particle_blocks_v1'
+         write(stellarator_gk_tp_block_unit, '(a)') &
+              '# iz target background iv row_mu col_mu lower_re lower_im ' // &
+              'diagonal_re diagonal_im upper_re upper_im code_dt'
+         do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
+            iky = iky_idx(kxkyz_lo, ikxkyz)
+            ikx = ikx_idx(kxkyz_lo, ikxkyz)
+            iz = iz_idx(kxkyz_lo, ikxkyz)
+            is = is_idx(kxkyz_lo, ikxkyz)
+            if (iky /= 1 .or. ikx /= 1) cycle
+            do isb = 1, nspec
+               do iv = 1, nvpa
+                  do imu = 1, nmu
+                     do imu2 = 1, nmu
+                        write(stellarator_gk_tp_block_unit, *) &
+                             iz, is, isb, iv, imu, imu2, &
+                             real(aa_blcs(iv, imu, imu2, ikxkyz, isb)), &
+                             aimag(aa_blcs(iv, imu, imu2, ikxkyz, isb)), &
+                             real(bb_blcs(iv, imu, imu2, ikxkyz, isb)), &
+                             aimag(bb_blcs(iv, imu, imu2, ikxkyz, isb)), &
+                             real(cc_blcs(iv, imu, imu2, ikxkyz, isb)), &
+                             aimag(cc_blcs(iv, imu, imu2, ikxkyz, isb)), code_dt
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         close(stellarator_gk_tp_block_unit)
+      end if
+
+{block_assembly}""",
     )
     text = _replace_once(
         text,
@@ -550,6 +593,9 @@ def prepare_trace_run(
                 "test_particle_primitive_trace_output": str(
                     run_dir / TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME
                 ),
+                "test_particle_block_trace_output": str(
+                    run_dir / TEST_PARTICLE_BLOCK_TRACE_FILENAME
+                ),
                 "trace_quantity": "aggregate signed field-particle RHS before final implicit inversion",
                 "component_trace_quantity": "signed (j,l,m) field-particle RHS components",
                 "factor_trace_quantity": "pair-resolved scalar responses and velocity bases",
@@ -564,6 +610,9 @@ def prepare_trace_run(
                 ),
                 "test_particle_primitive_trace_quantity": (
                     "analytic collision frequencies, Maxwellian, and velocity-grid assembly inputs"
+                ),
+                "test_particle_block_trace_quantity": (
+                    "pair-resolved lower, diagonal, and upper velocity blocks before band packing"
                 ),
                 "serial_execution_required": True,
             },

@@ -1365,9 +1365,13 @@ $6.44\times10^{-14}$.  A mode-by-mode replay of
 $\operatorname{solve}(I-\Delta t C_{\mathrm{tp}},
 g_{\mathrm{in}}+\Delta t C_{\mathrm{fp}})$ reproduces all 2,808 final native
 values at $1.64\times10^{-16}$ relative $L_2$.  This closes storage, sign, and
-implicit-ordering ambiguity.  Independent construction of stella's
-zero-$k_\perp$ differential coefficients and diagonal gyro term, followed by
-production residual wiring, remains before claiming full stella parity.
+implicit-ordering ambiguity.  The local gyro-diagonal construction matches all
+208 matrix differences to $6.65\times10^{-14}$ maximum absolute error.  A
+differentiable block assembler also packs the native lower, diagonal, and upper
+velocity blocks: 1,248 traced pair blocks reproduce all 26 zero-$k_\perp$
+matrices exactly.  Independent local generation of the interior and boundary
+block coefficients, followed by production residual wiring, remains before
+claiming full stella parity.
 The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the

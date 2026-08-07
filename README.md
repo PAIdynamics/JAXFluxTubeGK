@@ -758,7 +758,26 @@ finite-difference interior/boundary assembly and the diagonal gyro term.
 `build_stella_test_particle_gyro_diagonal(...)` closes the latter term. The
 local result matches all 208 nonzero-`k_perp` native matrix differences with
 `6.65e-14` maximum absolute error. The remaining matrix gap is only stella's
-zero-`k_perp` finite-difference interior and boundary assembly.
+zero-`k_perp` finite-difference interior and boundary coefficient generation.
+
+The patch also exports stella's pair-resolved lower, diagonal, and upper
+velocity blocks. Validate their independent JAX packing with:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python \
+  scripts/summarize_stella_collision_test_particle_blocks.py \
+  --blocks /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_blocks.dat \
+  --matrix /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-blocks.json
+```
+
+`assemble_stella_test_particle_blocks(...)` sums background channels, packs
+the `aa`/`bb`/`cc` blocks in stella's `vpar*nmu+mu` ordering, and adds the
+identity. All 1,248 traced blocks reconstruct the 26 zero-`k_perp` matrices
+exactly (`0.0` maximum and relative-L2 error). Matrix layout and packing are
+closed; the remaining task is to construct the interior and boundary block
+coefficients locally from the validated primitives and velocity grid.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

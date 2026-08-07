@@ -21,6 +21,7 @@ from stellarator_gk import (
     build_stella_laguerre_legendre_collision_precompute,
     build_stella_test_particle_primitives,
     build_stella_test_particle_gyro_diagonal,
+    assemble_stella_test_particle_blocks,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -569,6 +570,41 @@ def test_stella_test_particle_primitives_are_jittable_and_differentiable():
     )
     assert gyro.shape == (2, 6, 2, 2)
     assert bool(jnp.all(gyro >= 0.0))
+
+
+def test_stella_test_particle_block_assembly_matches_native_layout():
+    shape = (2, 2, 3, 2, 2, 2)
+    lower = jnp.arange(np.prod(shape), dtype=jnp.float64).reshape(shape) / 101.0
+    diagonal = lower + 3.0
+    upper = lower - 5.0
+
+    observed = jax.jit(assemble_stella_test_particle_blocks)(lower, diagonal, upper)
+    expected = np.zeros((2, 2, 6, 6))
+    lower_sum = np.asarray(lower).sum(axis=1)
+    diagonal_sum = np.asarray(diagonal).sum(axis=1)
+    upper_sum = np.asarray(upper).sum(axis=1)
+    for target in range(2):
+        for iz in range(2):
+            expected[iz, target] = np.eye(6)
+            for iv in range(3):
+                rows = slice(2 * iv, 2 * (iv + 1))
+                expected[iz, target, rows, rows] += diagonal_sum[target, iv, :, :, iz]
+                if iv > 0:
+                    columns = slice(2 * (iv - 1), 2 * iv)
+                    expected[iz, target, rows, columns] += lower_sum[target, iv, :, :, iz]
+                if iv < 2:
+                    columns = slice(2 * (iv + 1), 2 * (iv + 2))
+                    expected[iz, target, rows, columns] += upper_sum[target, iv, :, :, iz]
+
+    np.testing.assert_allclose(observed, expected, rtol=0.0, atol=2e-14)
+    gradient = jax.jit(
+        jax.grad(
+            lambda values: jnp.sum(assemble_stella_test_particle_blocks(values, diagonal, upper))
+        )
+    )(lower)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+    np.testing.assert_allclose(gradient[:, :, 0], 0.0, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(gradient[:, :, 1:], 1.0, rtol=0.0, atol=0.0)
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

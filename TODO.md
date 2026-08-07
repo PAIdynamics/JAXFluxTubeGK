@@ -481,7 +481,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   The local gyro-diagonal constructor now matches all 208 nonzero-`k_perp`
   native matrix differences with `6.65e-14` maximum absolute error. The only
   remaining differential-matrix gap is the zero-`k_perp` finite-difference
-  interior and boundary assembly.
+  interior and boundary coefficient generation. A public JIT-compatible,
+  differentiable block assembler now sums ordered background channels, packs
+  native `aa`/`bb`/`cc` velocity blocks, and adds the identity. A 1,248-row
+  scratch trace reconstructs all 26 zero-`k_perp` native matrices exactly
+  (`0.0` maximum and relative-L2 error). Block layout and dense packing are
+  therefore closed; independent local construction of the interior and
+  boundary `aa`/`bb`/`cc` coefficients is the sole matrix blocker.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -287,6 +287,51 @@ def build_stella_test_particle_gyro_diagonal(
             * (velocity_squared + bmu)[None, ...]
         )
     )
+
+
+def assemble_stella_test_particle_blocks(lower, diagonal, upper):
+    """Assemble stella velocity blocks into the species-local implicit matrix.
+
+    Each input has ``(target, background, vpar, row_mu, col_mu, z)`` layout
+    and contains an already time-discretized contribution to ``-dt*C_test``.
+    Background-species blocks are summed, the identity is added, and the
+    returned dense matrices use ``(z, target, state, state)`` layout with
+    ``state = vpar * n_mu + mu``.  Following stella's convention,
+    ``lower[:, :, iv]`` couples row ``iv`` to column ``iv - 1`` and
+    ``upper[:, :, iv]`` couples row ``iv`` to column ``iv + 1``.
+    """
+
+    lower_array = jnp.asarray(lower)
+    diagonal_array = jnp.asarray(diagonal)
+    upper_array = jnp.asarray(upper)
+    if lower_array.shape != diagonal_array.shape or lower_array.shape != upper_array.shape:
+        raise ValueError("lower, diagonal, and upper blocks must have identical shapes")
+    if lower_array.ndim != 6:
+        raise ValueError(
+            "collision blocks must have (target, background, vpar, row_mu, col_mu, z) layout"
+        )
+    n_target, _, n_vpar, n_row_mu, n_col_mu, n_z = lower_array.shape
+    if n_row_mu != n_col_mu:
+        raise ValueError("collision velocity blocks must be square in mu")
+
+    lower_sum = jnp.sum(lower_array, axis=1).transpose(0, 4, 1, 2, 3)
+    diagonal_sum = jnp.sum(diagonal_array, axis=1).transpose(0, 4, 1, 2, 3)
+    upper_sum = jnp.sum(upper_array, axis=1).transpose(0, 4, 1, 2, 3)
+    matrix = jnp.zeros(
+        (n_target, n_z, n_vpar, n_row_mu, n_vpar, n_col_mu),
+        dtype=jnp.result_type(lower_array, diagonal_array, upper_array),
+    )
+    for iv in range(n_vpar):
+        matrix = matrix.at[:, :, iv, :, iv, :].set(diagonal_sum[:, :, iv])
+        if iv > 0:
+            matrix = matrix.at[:, :, iv, :, iv - 1, :].set(lower_sum[:, :, iv])
+        if iv + 1 < n_vpar:
+            matrix = matrix.at[:, :, iv, :, iv + 1, :].set(upper_sum[:, :, iv])
+    matrix = matrix.reshape(n_target, n_z, n_vpar * n_row_mu, n_vpar * n_col_mu)
+    identity = jnp.eye(n_vpar * n_row_mu, dtype=matrix.dtype)
+    return (matrix + identity[None, None, ...]).transpose(1, 0, 2, 3)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
@@ -1753,6 +1798,7 @@ __all__ = [
     "FokkerPlanckPrecompute",
     "LaguerreLegendreCollisionPrecompute",
     "StellaTestParticlePrimitives",
+    "assemble_stella_test_particle_blocks",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_fokker_planck_test_particle_matrix",

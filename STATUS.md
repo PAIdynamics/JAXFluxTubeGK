@@ -67,6 +67,15 @@ claimed.
   is `1.19e-9` because the comparison subtracts nearly unit diagonal matrices.
   The zero-`kperp` finite-difference interior/boundary stencil is now the sole
   remaining matrix-construction blocker.
+- Added a public JIT-compatible, differentiable assembler for stella's native
+  lower/diagonal/upper velocity-block convention. It sums background-species
+  channels, preserves the `vpar*nmu+mu` state ordering, and adds the implicit
+  identity without relying on stella's band-storage representation.
+- The scratch patch now traces all 1,248 complex `aa`/`bb`/`cc` pair blocks
+  with explicit real/imaginary columns. Independently packing them reproduces
+  all 26 zero-`kperp` native matrices exactly: maximum absolute and relative-L2
+  errors are both `0.0`. Only local generation of those finite-difference
+  interior and boundary coefficients remains before full matrix parity.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

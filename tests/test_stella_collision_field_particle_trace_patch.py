@@ -5,6 +5,7 @@ from scripts.prepare_stella_collision_field_particle_trace_run import (
     FINAL_STATE_TRACE_FILENAME,
     PRIMITIVE_TRACE_FILENAME,
     QUADRATURE_TRACE_FILENAME,
+    TEST_PARTICLE_BLOCK_TRACE_FILENAME,
     TEST_PARTICLE_MATRIX_TRACE_FILENAME,
     TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME,
     TRACE_FILENAME,
@@ -53,6 +54,7 @@ contains
 
       use grids_time, only: code_dt
       integer :: nc, nb, lldab, bm_colind, bm_rowind
+      ! construct full block matrix
       ! AVB: LU factorise cdiffmat, using LAPACK's zgbtrf routine for banded matrices
       nc = nvpa * nmu
       nb = nmu + 1
@@ -81,6 +83,7 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert TEST_PARTICLE_MATRIX_TRACE_FILENAME in patched
     assert FINAL_STATE_TRACE_FILENAME in patched
     assert TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME in patched
+    assert TEST_PARTICLE_BLOCK_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
     assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
@@ -93,6 +96,8 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert "stellarator_gk_trace_collision_final_state(g_in, g)" in patched
     assert "nupa(iv, imu, iz, is, isb)" in patched
     assert "dmu(min(imu, nmu - 1))" in patched
+    assert "real(aa_blcs(iv, imu, imu2, ikxkyz, isb))" in patched
+    assert "aimag(cc_blcs(iv, imu, imu2, ikxkyz, isb))" in patched
 
 
 def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
@@ -117,6 +122,7 @@ def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
     assert TEST_PARTICLE_MATRIX_TRACE_FILENAME in metadata_payload
     assert FINAL_STATE_TRACE_FILENAME in metadata_payload
     assert TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME in metadata_payload
+    assert TEST_PARTICLE_BLOCK_TRACE_FILENAME in metadata_payload
     assert (
         "stellarator_gk collision field-particle trace patch"
         in (output / "stella" / target.relative_to(source_root)).read_text()
