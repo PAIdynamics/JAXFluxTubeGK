@@ -13,6 +13,7 @@ from stellarator_gk import (
     VelocityGridSpec,
     build_conserving_bgk_precompute,
     build_fokker_planck_precompute,
+    build_fokker_planck_test_particle_matrix,
     build_laguerre_legendre_collision_precompute,
     build_stella_laguerre_legendre_response,
     build_stella_laguerre_legendre_delta,
@@ -481,6 +482,34 @@ def test_solver_accepts_reciprocal_exchange_collision_model():
 
     assert precompute.collisions.conservation_model == "reciprocal_exchange"
     assert np.isfinite(float(estimate_linear_cfl_dt(precompute)))
+
+
+def test_materialized_test_particle_matrix_matches_stencil_action():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    precompute = build_fokker_planck_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequency=(0.2, 0.7),
+    )
+    dt = 0.03
+    matrix = build_fokker_planck_test_particle_matrix(precompute, dt, n_kx=2, n_ky=1)
+    state = jax.random.normal(jax.random.key(131), (2, 8, 6, parallel.z.size, 2, 1))
+    action = fokker_planck_collision(state, precompute)
+    flattened = state.transpose(3, 4, 5, 0, 1, 2).reshape(parallel.z.size, 2, 1, -1)
+    applied = jnp.matmul(matrix, flattened[..., None])[..., 0]
+    expected = (state - dt * action).transpose(3, 4, 5, 0, 1, 2).reshape(parallel.z.size, 2, 1, -1)
+
+    np.testing.assert_allclose(applied, expected, rtol=2e-13, atol=2e-13)
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

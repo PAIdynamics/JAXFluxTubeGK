@@ -1354,6 +1354,11 @@ combines any supplied $I-\Delta t C_{\mathrm{tp}}$ with $D$ and $R$ in
 stella's implicit ordering and agrees with a directly materialized dense
 backward-Euler system at roundoff.  Native construction parity for
 $C_{\mathrm{tp}}$ remains required.
+The independently Gyaradax-matched nine-point differential stencil can now be
+materialized as $I-\Delta t C_{\mathrm{tp}}$ on each spatial/Fourier batch and
+inserted directly into this solve; its matrix application matches the original
+stencil action at roundoff.  A stricter same-executable stella matrix gate and
+production residual wiring remain before claiming full stella parity.
 
 
 \section{Testing and Benchmark Contract}

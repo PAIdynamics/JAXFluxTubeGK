@@ -84,7 +84,10 @@ claimed.
   backward-Euler test/field-particle solve and matches a direct dense solve at
   roundoff. The remaining collision physics blocker is therefore narrowed to
   construction and native parity of stella's differential test-particle
-  matrix.
+  matrix. The Gyaradax-matched local stencil can now be materialized exactly as
+  `I-dt*C_tp` on every `(z,kx,ky)` batch and feeds the implicit low-rank solve;
+  applying the matrix agrees with the original stencil action at roundoff.
+  Same-executable stella matrix parity and production-residual wiring remain.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

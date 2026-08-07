@@ -727,6 +727,49 @@ def implicit_laguerre_legendre_collision(
     return result[0] if original_ndim == 5 else result
 
 
+def build_fokker_planck_test_particle_matrix(
+    precompute: FokkerPlanckPrecompute,
+    dt,
+    *,
+    n_kx: int = 1,
+    n_ky: int = 1,
+):
+    """Materialize ``I-dt*C_tp`` from the validated differential stencil.
+
+    Species are coupled only through the field-particle completion, so this
+    matrix contains block-diagonal target-species test-particle stencils. The
+    returned layout is ``(z,kx,ky,state,state)`` for direct use by
+    :func:`implicit_laguerre_legendre_collision`.
+    """
+
+    if n_kx < 1 or n_ky < 1:
+        raise ValueError("n_kx and n_ky must be positive")
+    stencil = jnp.asarray(precompute.stencil)
+    n_species, _neighbors, n_vpar, n_mu, n_z = stencil.shape
+    state_size = n_species * n_vpar * n_mu
+
+    def collision_at_z(flat_state, z_index):
+        state = flat_state.reshape(n_species, n_vpar, n_mu)
+        actions = []
+        for species_index in range(n_species):
+            distribution = state[species_index, :, :, None, None, None]
+            species_stencil = stencil[species_index, :, :, :, z_index : z_index + 1]
+            action = _apply_fokker_planck_stencil(distribution, species_stencil)
+            actions.append(action[:, :, 0, 0, 0])
+        return jnp.stack(actions).reshape(state_size)
+
+    zero = jnp.zeros(state_size, dtype=stencil.dtype)
+    matrices = []
+    for z_index in range(n_z):
+        collision_matrix = jax.jacfwd(collision_at_z, argnums=0)(zero, z_index)
+        matrices.append(jnp.eye(state_size, dtype=stencil.dtype) - dt * collision_matrix)
+    matrix = jnp.stack(matrices)
+    return jnp.broadcast_to(
+        matrix[:, None, None, :, :],
+        (n_z, n_kx, n_ky, state_size, state_size),
+    )
+
+
 def build_fokker_planck_precompute(
     velocity_grid: VelocityGrid,
     B,
@@ -1512,6 +1555,7 @@ __all__ = [
     "LaguerreLegendreCollisionPrecompute",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
+    "build_fokker_planck_test_particle_matrix",
     "build_laguerre_legendre_collision_precompute",
     "build_stella_laguerre_legendre_response",
     "build_stella_laguerre_legendre_delta",

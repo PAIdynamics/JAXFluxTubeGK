@@ -455,7 +455,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   system at roundoff. The remaining collision blocker is construction and
   native parity of stella's exact differential test-particle matrix; once that
   matrix is supplied, the complete implicit `psi` and phase-space update are
-  locally determined.
+  locally determined. The independently Gyaradax-matched differential stencil
+  can now be materialized as `I-dt*C_tp` and passed directly to that solve,
+  providing a complete standalone implicit operator. The stricter remaining
+  gate is same-executable stella parity for this matrix and wiring the validated
+  implicit operator into the production residual selection.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

@@ -702,6 +702,13 @@ roundoff and remains differentiable. The remaining collision acceptance
 requirement is construction and native parity of stella's exact differential
 test-particle matrix.
 
+`build_fokker_planck_test_particle_matrix(...)` materializes the package's
+independently Gyaradax-matched nine-point stencil as `I-dt*C_test` with the
+batch layout expected by the implicit solve. Matrix application and the
+original stencil action agree at roundoff. This supplies a complete standalone
+implicit collision path; a stricter same-executable stella matrix comparison
+and production-residual selection remain before claiming full stella parity.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 
