@@ -24,6 +24,7 @@ from stellarator_gk import (
     assemble_stella_test_particle_blocks,
     build_stella_two_mu_diffusion_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
+    build_stella_vpar_diffusion_blocks,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -664,6 +665,22 @@ def test_stella_two_mu_diffusion_blocks_are_jittable_and_differentiable():
         jax.grad(lambda values: sum(jnp.sum(item) for item in build_mixed(values)))
     )(frequencies)
     assert bool(jnp.all(jnp.isfinite(mixed_gradient)))
+
+    def build_vpar(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_vpar_diffusion_blocks(
+            velocity, magnetic_field, species, values, primitives, 0.01
+        )
+
+    vpar_blocks = jax.jit(build_vpar)(frequencies)
+    assert all(block.shape == diagonal.shape for block in vpar_blocks)
+    assert all(bool(jnp.all(jnp.isfinite(block))) for block in vpar_blocks)
+    vpar_gradient = jax.jit(
+        jax.grad(lambda values: sum(jnp.sum(item) for item in build_vpar(values)))
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(vpar_gradient)))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

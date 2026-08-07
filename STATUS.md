@@ -110,6 +110,10 @@ claimed.
   `2.66e-15` maximum absolute error. The two dominant compact-grid components
   are now local. Remaining compact work is the much smaller pure-vpar and
   mu-path mixed terms; general grids still need interior-mu construction.
+- Added a general-mu pure-vpar diffusion builder using stella's half-vpar
+  collision coefficients and boundary flux closures. Native agreement is
+  `1.35e-15` relative L2 and `1.47e-17` maximum absolute error. The compact
+  two-mu matrix now lacks only the small mu-path mixed component.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

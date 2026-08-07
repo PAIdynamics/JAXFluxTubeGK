@@ -508,6 +508,9 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   is `9.11e-16` relative L2 and `2.66e-15` maximum absolute error. The compact
   remainder is the pure-vpar (`0.0846490`) and mu-path mixed (`0.444517`)
   components; general `nmu>2` interior formulas remain a separate requirement.
+  The general-mu pure-vpar half-grid builder now matches its native component
+  at `1.35e-15` relative L2 and `1.47e-17` maximum absolute error. The only
+  unimplemented compact component is the mu-path mixed branch (`0.444517`).
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

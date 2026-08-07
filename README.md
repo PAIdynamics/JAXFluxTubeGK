@@ -832,6 +832,12 @@ mixed-vpar factorial component at `9.11e-16` relative L2 and `2.66e-15`
 maximum absolute error. The compact two-mu remainder is now limited to the
 small pure-vpar and mu-path mixed components.
 
+`build_stella_vpar_diffusion_blocks(...)` closes the pure-vpar half-grid flux
+for arbitrary mu-node counts. On the pinned trace it agrees at `1.35e-15`
+relative L2 and `1.47e-17` maximum absolute error. Only the small two-node
+mu-path mixed component remains before the compact block sum can be assembled
+entirely from local coefficients.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

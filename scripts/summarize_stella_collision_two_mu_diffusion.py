@@ -24,6 +24,7 @@ from stellarator_gk import (
     build_stella_test_particle_primitives,
     build_stella_two_mu_diffusion_blocks,
     build_stella_two_mu_vpar_mixed_blocks,
+    build_stella_vpar_diffusion_blocks,
     build_velocity_grid_from_nodes,
 )
 
@@ -122,7 +123,42 @@ def summarize_two_mu_diffusion(
     maximum = float(np.max(np.abs(error)))
     if maximum > tolerance:
         raise ValueError("local two-mu diffusion blocks exceed native tolerance")
-    metrics = {"pure_mu_relative_l2": relative_l2, "pure_mu_max_abs": maximum}
+    local_vpar = tuple(
+        np.asarray(item)
+        for item in build_stella_vpar_diffusion_blocks(
+            grid,
+            magnetic_field,
+            species,
+            frequencies,
+            primitives,
+            knobs["dt"],
+            deflection_scale=knobs["deflection"],
+            electron_parallel_scale=knobs["electron_parallel"],
+            electron_deflection_scale=knobs["electron_deflection"],
+        )
+    )
+    vpar_error = np.concatenate(
+        [
+            (observed - expected).ravel()
+            for observed, expected in zip(local_vpar, vpar_only[:3], strict=True)
+        ]
+    )
+    vpar_native = np.concatenate([item.ravel() for item in vpar_only[:3]])
+    vpar_relative = float(
+        np.linalg.norm(vpar_error) / max(np.linalg.norm(vpar_native), np.finfo(float).tiny)
+    )
+    vpar_maximum = float(np.max(np.abs(vpar_error)))
+    if vpar_maximum > tolerance:
+        raise ValueError(
+            "local vpar diffusion blocks exceed native tolerance: "
+            f"relative_l2={vpar_relative:.6e}, max_abs={vpar_maximum:.6e}"
+        )
+    metrics = {
+        "pure_mu_relative_l2": relative_l2,
+        "pure_mu_max_abs": maximum,
+        "pure_vpar_relative_l2": vpar_relative,
+        "pure_vpar_max_abs": vpar_maximum,
+    }
     status = "local_two_mu_diffusion_blocks_passed"
     scope = "pure two-node mu-boundary parity; mixed and general-grid branches pending"
     if vpar_trace is not None:
