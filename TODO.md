@@ -503,6 +503,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   both default ghost-cell closures, matching all 1,248 native rows at
   `1.10e-15` relative L2 and `7.99e-15` maximum absolute error. Next implement
   the vpar-path mixed branch, followed by general interior-mu grids.
+  The public two-mu mixed-vpar constructor now closes that next branch as well,
+  including both vpar ghost boundaries and all interior blocks. Native parity
+  is `9.11e-16` relative L2 and `2.66e-15` maximum absolute error. The compact
+  remainder is the pure-vpar (`0.0846490`) and mu-path mixed (`0.444517`)
+  components; general `nmu>2` interior formulas remain a separate requirement.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

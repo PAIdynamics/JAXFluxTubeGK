@@ -23,6 +23,7 @@ from stellarator_gk import (
     SpeciesParams,
     build_stella_test_particle_primitives,
     build_stella_two_mu_diffusion_blocks,
+    build_stella_two_mu_vpar_mixed_blocks,
     build_velocity_grid_from_nodes,
 )
 
@@ -31,6 +32,7 @@ def summarize_two_mu_diffusion(
     primitive_trace: Path,
     no_mixed_full_trace: Path,
     no_mixed_vpar_trace: Path,
+    vpar_trace: Path | None = None,
     *,
     expected_revision: str,
     tolerance: float = 2.0e-11,
@@ -120,14 +122,63 @@ def summarize_two_mu_diffusion(
     maximum = float(np.max(np.abs(error)))
     if maximum > tolerance:
         raise ValueError("local two-mu diffusion blocks exceed native tolerance")
+    metrics = {"pure_mu_relative_l2": relative_l2, "pure_mu_max_abs": maximum}
+    status = "local_two_mu_diffusion_blocks_passed"
+    scope = "pure two-node mu-boundary parity; mixed and general-grid branches pending"
+    if vpar_trace is not None:
+        mixed_values = _read(vpar_trace, BLOCK_SCHEMA, len(BLOCK_COLUMNS))
+        if not np.array_equal(mixed_values[:, :6], vpar_values[:, :6]):
+            raise ValueError("native mixed-vpar traces have different index grids")
+        mixed_full = _block_arrays(mixed_values)
+        mixed_native = tuple(
+            left - right for left, right in zip(mixed_full[:3], vpar_only[:3], strict=True)
+        )
+        mixed_local = tuple(
+            np.asarray(item)
+            for item in build_stella_two_mu_vpar_mixed_blocks(grid, primitives, knobs["dt"])
+        )
+        mixed_error = np.concatenate(
+            [
+                (observed - expected).ravel()
+                for observed, expected in zip(mixed_local, mixed_native, strict=True)
+            ]
+        )
+        mixed_native_flat = np.concatenate([item.ravel() for item in mixed_native])
+        mixed_relative = float(
+            np.linalg.norm(mixed_error)
+            / max(np.linalg.norm(mixed_native_flat), np.finfo(float).tiny)
+        )
+        mixed_maximum = float(np.max(np.abs(mixed_error)))
+        if mixed_maximum > tolerance:
+            block_errors = [
+                float(np.max(np.abs(observed - expected)))
+                for observed, expected in zip(mixed_local, mixed_native, strict=True)
+            ]
+            block_indices = [
+                np.unravel_index(np.argmax(np.abs(observed - expected)), observed.shape)
+                for observed, expected in zip(mixed_local, mixed_native, strict=True)
+            ]
+            raise ValueError(
+                "local two-mu mixed-vpar blocks exceed native tolerance: "
+                f"relative_l2={mixed_relative:.6e}, max_abs={mixed_maximum:.6e}, "
+                f"block_max={block_errors}, block_indices={block_indices}"
+            )
+        metrics.update(
+            {
+                "mixed_vpar_relative_l2": mixed_relative,
+                "mixed_vpar_max_abs": mixed_maximum,
+            }
+        )
+        status = "local_two_mu_collision_components_passed"
+        scope = "pure-mu and mixed-vpar two-node parity; small and general-grid branches pending"
     return {
         "schema_version": 1,
         "benchmark": "stella_collision_two_mu_diffusion_blocks",
-        "status": "local_two_mu_diffusion_blocks_passed",
+        "status": status,
         "stella_source_revision": expected_revision,
         "rows": int(full_values.shape[0]),
-        "metrics": {"relative_l2": relative_l2, "max_abs": maximum},
-        "scope": "pure two-node mu-boundary parity; mixed and general-grid branches pending",
+        "metrics": metrics,
+        "scope": scope,
     }
 
 
@@ -136,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--primitives", type=Path, required=True)
     parser.add_argument("--no-mixed-full", type=Path, required=True)
     parser.add_argument("--no-mixed-vpar", type=Path, required=True)
+    parser.add_argument("--vpar", type=Path)
     parser.add_argument("--expected-revision", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -143,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         args.primitives,
         args.no_mixed_full,
         args.no_mixed_vpar,
+        vpar_trace=args.vpar,
         expected_revision=args.expected_revision,
     )
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

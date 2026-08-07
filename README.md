@@ -825,6 +825,13 @@ maximum absolute error. The remaining compact-case coefficient target is led
 by the vpar-path mixed derivative; general grids additionally require the
 interior-mu formulas.
 
+Passing `--vpar` to the same summarizer also validates
+`build_stella_two_mu_vpar_mixed_blocks(...)`. The constructor covers both vpar
+ghost boundaries and every interior lower/upper block. It matches the native
+mixed-vpar factorial component at `9.11e-16` relative L2 and `2.66e-15`
+maximum absolute error. The compact two-mu remainder is now limited to the
+small pure-vpar and mu-path mixed components.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

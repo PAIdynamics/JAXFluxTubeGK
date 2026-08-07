@@ -503,6 +503,90 @@ def build_stella_two_mu_diffusion_blocks(
     return zero, diagonal, zero
 
 
+def build_stella_two_mu_vpar_mixed_blocks(
+    velocity_grid: VelocityGrid,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+):
+    """Construct stella's vpar-path mixed blocks on a two-node mu grid."""
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.shape != (2,):
+        raise ValueError("the two-mu mixed constructor requires exactly two mu nodes")
+    nux = jnp.asarray(primitives.mixed_diffusion)
+    maxwell = jnp.asarray(primitives.maxwellian)
+    n_target, n_background, n_vpar, _, n_z = nux.shape
+    dvpar = vpar[1] - vpar[0]
+    dmu = mu[1] - mu[0]
+    lower = jnp.zeros((n_target, n_background, n_vpar, 2, 2, n_z), dtype=nux.dtype)
+    diagonal = jnp.zeros_like(lower)
+    upper = jnp.zeros_like(lower)
+
+    def node_flux(iv, imu):
+        return vpar[iv] * mu[imu] * nux[:, :, iv, imu, :] * maxwell[:, None, iv, imu, :]
+
+    # Lower-vpar boundary: second-order ghost flux for the lower-mu row.
+    averaged = 0.5 * (node_flux(0, 0) + node_flux(0, 1))
+    next_averaged = 0.5 * (node_flux(1, 0) + node_flux(1, 1))
+    factor = 0.5 * jnp.asarray(dt) / (dvpar * dmu)
+    diagonal = diagonal.at[:, :, 0, 0, 0, :].set(factor * averaged / maxwell[:, None, 0, 0, :])
+    diagonal = diagonal.at[:, :, 0, 0, 1, :].set(-factor * averaged / maxwell[:, None, 0, 1, :])
+    upper = upper.at[:, :, 0, 0, 0, :].set(factor * next_averaged / maxwell[:, None, 1, 0, :])
+    upper = upper.at[:, :, 0, 0, 1, :].set(-factor * next_averaged / maxwell[:, None, 1, 1, :])
+    upper = upper.at[:, :, 0, 1, 0, :].set(
+        jnp.asarray(dt) * node_flux(1, 1) / maxwell[:, None, 1, 0, :] / (2.0 * dvpar * dmu)
+    )
+    upper = upper.at[:, :, 0, 1, 1, :].set(
+        -jnp.asarray(dt) * node_flux(1, 1) / maxwell[:, None, 1, 1, :] / (2.0 * dvpar * dmu)
+    )
+
+    for iv in range(1, n_vpar - 1):
+        lower_flux = node_flux(iv - 1, 0)
+        upper_flux = node_flux(iv + 1, 0)
+        lower = lower.at[:, :, iv, 0, 0, :].set(
+            -jnp.asarray(dt) * lower_flux / maxwell[:, None, iv - 1, 0, :] / (2.0 * dvpar * dmu)
+        )
+        lower = lower.at[:, :, iv, 0, 1, :].set(
+            jnp.asarray(dt) * lower_flux / maxwell[:, None, iv - 1, 1, :] / (2.0 * dvpar * dmu)
+        )
+        upper = upper.at[:, :, iv, 0, 0, :].set(
+            jnp.asarray(dt) * upper_flux / maxwell[:, None, iv + 1, 0, :] / (2.0 * dvpar * dmu)
+        )
+        upper = upper.at[:, :, iv, 0, 1, :].set(
+            -jnp.asarray(dt) * upper_flux / maxwell[:, None, iv + 1, 1, :] / (2.0 * dvpar * dmu)
+        )
+        lower_flux = node_flux(iv - 1, 1)
+        upper_flux = node_flux(iv + 1, 1)
+        lower = lower.at[:, :, iv, 1, 0, :].set(
+            -jnp.asarray(dt) * lower_flux / maxwell[:, None, iv - 1, 0, :] / (2.0 * dvpar * dmu)
+        )
+        lower = lower.at[:, :, iv, 1, 1, :].set(
+            jnp.asarray(dt) * lower_flux / maxwell[:, None, iv - 1, 1, :] / (2.0 * dvpar * dmu)
+        )
+        upper = upper.at[:, :, iv, 1, 0, :].set(
+            jnp.asarray(dt) * upper_flux / maxwell[:, None, iv + 1, 0, :] / (2.0 * dvpar * dmu)
+        )
+        upper = upper.at[:, :, iv, 1, 1, :].set(
+            -jnp.asarray(dt) * upper_flux / maxwell[:, None, iv + 1, 1, :] / (2.0 * dvpar * dmu)
+        )
+
+    last = n_vpar - 1
+    averaged = 0.5 * (node_flux(last, 0) + node_flux(last, 1))
+    previous_averaged = 0.5 * (node_flux(last - 1, 0) + node_flux(last - 1, 1))
+    diagonal = diagonal.at[:, :, last, 0, 0, :].set(-factor * averaged / maxwell[:, None, last, 0, :])
+    diagonal = diagonal.at[:, :, last, 0, 1, :].set(factor * averaged / maxwell[:, None, last, 1, :])
+    lower = lower.at[:, :, last, 0, 0, :].set(-factor * previous_averaged / maxwell[:, None, last - 1, 0, :])
+    lower = lower.at[:, :, last, 0, 1, :].set(factor * previous_averaged / maxwell[:, None, last - 1, 1, :])
+    lower = lower.at[:, :, last, 1, 0, :].set(
+        -jnp.asarray(dt) * node_flux(last - 1, 1) / maxwell[:, None, last - 1, 0, :] / (2.0 * dvpar * dmu)
+    )
+    lower = lower.at[:, :, last, 1, 1, :].set(
+        jnp.asarray(dt) * node_flux(last - 1, 1) / maxwell[:, None, last - 1, 1, :] / (2.0 * dvpar * dmu)
+    )
+    return lower, diagonal, upper
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
@@ -1971,6 +2055,7 @@ __all__ = [
     "StellaTestParticlePrimitives",
     "assemble_stella_test_particle_blocks",
     "build_stella_two_mu_diffusion_blocks",
+    "build_stella_two_mu_vpar_mixed_blocks",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_fokker_planck_test_particle_matrix",

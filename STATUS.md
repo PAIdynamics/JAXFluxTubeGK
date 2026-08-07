@@ -103,6 +103,13 @@ claimed.
   `88.19%` of the full-block Frobenius norm. The vpar-path mixed derivative is
   now the dominant compact-case coefficient blocker; general `nmu>2` support
   still requires the interior-mu branch.
+- Added `build_stella_two_mu_vpar_mixed_blocks(...)`, covering the native
+  lower-vpar ghost flux, interior block signs, and upper-vpar ghost flux. The
+  implementation is JIT-compatible and differentiable.
+- Its full native factorial target agrees at `9.11e-16` relative L2 and
+  `2.66e-15` maximum absolute error. The two dominant compact-grid components
+  are now local. Remaining compact work is the much smaller pure-vpar and
+  mu-path mixed terms; general grids still need interior-mu construction.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

@@ -23,6 +23,7 @@ from stellarator_gk import (
     build_stella_test_particle_gyro_diagonal,
     assemble_stella_test_particle_blocks,
     build_stella_two_mu_diffusion_blocks,
+    build_stella_two_mu_vpar_mixed_blocks,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -431,7 +432,6 @@ def test_reciprocal_exchange_conserves_pairs_and_uses_partner_response():
     gradient = jax.jit(jax.grad(objective))(state)
     assert bool(jnp.all(jnp.isfinite(gradient)))
 
-
 def test_reciprocal_exchange_row_sum_bound_bounds_dense_operator():
     _velocity, _parallel, geometry, species = _collision_setup(n_species=2)
     velocity = build_velocity_grid(
@@ -560,6 +560,7 @@ def test_stella_test_particle_primitives_are_jittable_and_differentiable():
     )
     gradient = jax.jit(jax.grad(coefficient_sum))(frequencies)
     assert bool(jnp.all(jnp.isfinite(gradient)))
+
     assert bool(jnp.all(gradient > 0.0))
 
     gyro = build_stella_test_particle_gyro_diagonal(
@@ -647,6 +648,22 @@ def test_stella_two_mu_diffusion_blocks_are_jittable_and_differentiable():
         frequencies
     )
     assert bool(jnp.all(jnp.isfinite(gradient)))
+
+    def build_mixed(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_two_mu_vpar_mixed_blocks(velocity, primitives, 0.01)
+
+    mixed_lower, mixed_diagonal, mixed_upper = jax.jit(build_mixed)(frequencies)
+    assert mixed_lower.shape == diagonal.shape
+    assert bool(jnp.all(jnp.isfinite(mixed_lower)))
+    assert bool(jnp.all(jnp.isfinite(mixed_diagonal)))
+    assert bool(jnp.all(jnp.isfinite(mixed_upper)))
+    mixed_gradient = jax.jit(
+        jax.grad(lambda values: sum(jnp.sum(item) for item in build_mixed(values)))
+    )(frequencies)
+    assert bool(jnp.all(jnp.isfinite(mixed_gradient)))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():
