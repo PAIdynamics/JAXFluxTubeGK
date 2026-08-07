@@ -32,6 +32,15 @@ def _write_factors(path: Path, rhs: float) -> Path:
     return path
 
 
+def _write_matrix(path: Path, value: float) -> Path:
+    path.write_text(
+        "# schema=stellarator_gk_stella_collision_test_particle_matrix_v1\n"
+        "# iky ikx iz species row col matrix_re matrix_im kperp2 code_dt\n"
+        f"1 1 0 1 1 1 {value} 0.0 0.0 0.01\n"
+    )
+    return path
+
+
 def test_pair_resolved_summary_requires_common_input_and_reports_closure(tmp_path):
     rhs = {
         "all": 1.0,
@@ -92,3 +101,42 @@ def test_pair_resolved_summary_validates_each_component_trace(tmp_path):
     assert set(report["component_channels"]) == set(CHANNELS)
     assert report["metrics"]["local_jax_factor_replay_passed"]
     assert set(report["factor_channels"]) == set(CHANNELS)
+
+
+def test_pair_resolved_summary_validates_test_particle_matrix_closure(tmp_path):
+    effects = {
+        "ion_ion": 0.1,
+        "ion_electron": 0.2,
+        "electron_electron": 0.3,
+        "electron_ion": 0.4,
+    }
+    paths = {
+        name: _write_trace(tmp_path / f"{name}.dat", 2.0, 0.25) for name in CHANNELS
+    }
+    matrices = {
+        "all": _write_matrix(tmp_path / "all_matrix.dat", 1.0 + sum(effects.values())),
+        **{
+            name: _write_matrix(tmp_path / f"{name}_matrix.dat", 1.0 + effect)
+            for name, effect in effects.items()
+        },
+    }
+
+    report = summarize_channel_traces(
+        paths,
+        expected_revision="564ca09",
+        matrix_paths=matrices,
+    )
+
+    assert report["metrics"]["test_particle_matrix_channel_decomposition_passed"]
+    assert report["metrics"]["test_particle_matrix_isolated_sum_relative_l2"] == pytest.approx(
+        0.0
+    )
+    assert set(report["test_particle_matrix_channels"]) == set(effects)
+
+    _write_matrix(matrices["electron_ion"], 1.5)
+    with pytest.raises(ValueError, match="do not reconstruct"):
+        summarize_channel_traces(
+            paths,
+            expected_revision="564ca09",
+            matrix_paths=matrices,
+        )

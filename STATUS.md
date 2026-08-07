@@ -43,6 +43,13 @@ claimed.
   construction of the zero-`kperp` differential coefficients and the diagonal
   gyro term, followed by production residual selection, remains the collision
   blocker.
+- Extended the existing four-channel runner to retain test-particle matrices.
+  Identity plus the four isolated departures reconstructs the all-channel
+  matrix at `3.77e-17` relative L2. Departure-from-identity Frobenius norms are
+  `1.864` (ion-ion), `0.1213` (ion-electron), `79.86`
+  (electron-electron), and `75.18` (electron-ion). The remaining coefficient
+  work is therefore localized and quantitatively dominated by the electron
+  target blocks.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

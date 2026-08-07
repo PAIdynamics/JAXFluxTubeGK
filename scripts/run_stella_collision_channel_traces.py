@@ -12,6 +12,7 @@ import numpy as np
 from scripts.prepare_stella_collision_field_particle_trace_run import (
     COMPONENT_TRACE_FILENAME,
     FACTOR_TRACE_FILENAME,
+    TEST_PARTICLE_MATRIX_TRACE_FILENAME,
     TRACE_FILENAME,
 )
 from scripts.run_stella_collision_field_particle_discriminator import stella_collision_input
@@ -20,6 +21,11 @@ from scripts.summarize_stella_collision_field_particle_components import (
 )
 from scripts.summarize_stella_collision_field_particle_factors import summarize_factor_trace
 from scripts.summarize_stella_collision_field_particle_trace import summarize_trace
+from scripts.summarize_stella_collision_test_particle_matrix import (
+    COLUMNS as MATRIX_COLUMNS,
+    SCHEMA as MATRIX_SCHEMA,
+    _dense_matrices,
+)
 
 
 CHANNELS = {
@@ -46,6 +52,7 @@ def summarize_channel_traces(
     expected_revision: str,
     component_paths: dict[str, Path] | None = None,
     factor_paths: dict[str, Path] | None = None,
+    matrix_paths: dict[str, Path] | None = None,
 ) -> dict[str, object]:
     """Validate common inputs and report isolated-channel closure."""
 
@@ -108,6 +115,60 @@ def summarize_channel_traces(
             "native pair-resolved Laguerre--Legendre factors and local JAX "
             "action replay; local coefficient construction pending"
         )
+    if matrix_paths is not None:
+        if set(matrix_paths) != set(CHANNELS):
+            raise ValueError("channel test-particle matrix trace set is incomplete")
+        matrix_sets = {}
+        for name, path in matrix_paths.items():
+            header = Path(path).read_text(encoding="utf-8").splitlines()[:1]
+            if not header or header[0].strip() != MATRIX_SCHEMA:
+                raise ValueError(f"invalid collision matrix schema for channel {name}")
+            values = np.atleast_2d(np.loadtxt(path))
+            if values.shape[1] != len(MATRIX_COLUMNS) or not np.isfinite(values).all():
+                raise ValueError(f"invalid collision matrix trace for channel {name}")
+            matrix_sets[name] = _dense_matrices(values)
+        keys = set(matrix_sets["all"])
+        if any(set(matrices) != keys for matrices in matrix_sets.values()):
+            raise ValueError("collision channel matrix traces have different mode sets")
+        full_parts = []
+        closure_parts = []
+        channel_effects = {name: [] for name in CHANNELS if name != "all"}
+        for key in sorted(keys):
+            full = matrix_sets["all"][key]
+            identity = np.eye(full.shape[0], dtype=full.dtype)
+            reconstructed = identity.copy()
+            for name in CHANNELS:
+                if name == "all":
+                    continue
+                effect = matrix_sets[name][key] - identity
+                reconstructed += effect
+                channel_effects[name].append(effect.reshape(-1))
+            full_parts.append(full.reshape(-1))
+            closure_parts.append((reconstructed - full).reshape(-1))
+        full_values = np.concatenate(full_parts)
+        closure = np.concatenate(closure_parts)
+        full_scale = max(float(np.linalg.norm(full_values)), np.finfo(float).tiny)
+        report["test_particle_matrix_channels"] = {
+            name: {
+                "effect_frobenius": float(
+                    np.linalg.norm(np.concatenate(channel_effects[name]))
+                )
+            }
+            for name in channel_effects
+        }
+        matrix_closure_error = float(np.linalg.norm(closure) / full_scale)
+        if matrix_closure_error > 1.0e-12:
+            raise ValueError(
+                "isolated test-particle matrices do not reconstruct the all-channel matrix"
+            )
+        report["metrics"]["test_particle_matrix_isolated_sum_relative_l2"] = (
+            matrix_closure_error
+        )
+        report["metrics"]["test_particle_matrix_channel_decomposition_passed"] = True
+        report["scope"] = (
+            "native pair-resolved field-particle and test-particle targets; "
+            "local coefficient construction pending"
+        )
     return report
 
 
@@ -126,6 +187,7 @@ def run_channel_traces(
     trace_paths: dict[str, Path] = {}
     component_paths: dict[str, Path] = {}
     factor_paths: dict[str, Path] = {}
+    matrix_paths: dict[str, Path] = {}
     for name, knobs in CHANNELS.items():
         input_path = output_dir / f"collision_{name}.in"
         trace_path = output_dir / f"collision_{name}_field_particle_trace.dat"
@@ -162,12 +224,19 @@ def run_channel_traces(
         factor_path = output_dir / f"collision_{name}_field_particle_factors.dat"
         generated_factors.replace(factor_path)
         factor_paths[name] = factor_path
+        generated_matrix = output_dir / TEST_PARTICLE_MATRIX_TRACE_FILENAME
+        if not generated_matrix.is_file():
+            raise FileNotFoundError(generated_matrix)
+        matrix_path = output_dir / f"collision_{name}_test_particle_matrix.dat"
+        generated_matrix.replace(matrix_path)
+        matrix_paths[name] = matrix_path
 
     report = summarize_channel_traces(
         trace_paths,
         expected_revision=expected_revision,
         component_paths=component_paths,
         factor_paths=factor_paths,
+        matrix_paths=matrix_paths,
     )
     report["patched_stella_executable"] = str(executable)
     report_path = output_dir / "collision_channel_trace_summary.json"

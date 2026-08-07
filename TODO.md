@@ -467,7 +467,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   final state at `1.64e-16` relative L2 (`9.20e-19` maximum absolute error).
   The stricter remaining gate is independent local construction and coefficient
   parity of stella's zero-`k_perp` differential matrix and gyro-diffusion
-  diagonal, followed by production-residual selection.
+  diagonal, followed by production-residual selection. The four native ordered
+  species-channel matrices reconstruct the all-channel matrix at `3.77e-17`
+  relative L2. Their departure-from-identity Frobenius norms are `1.864`
+  (ion-ion), `0.1213` (ion-electron), `79.86` (electron-electron), and `75.18`
+  (electron-ion), so the next coefficient comparison should start with the two
+  electron target blocks.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

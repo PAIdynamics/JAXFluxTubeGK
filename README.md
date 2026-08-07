@@ -734,6 +734,11 @@ bandwidth 3. The nonzero-`k_perp` correction is purely diagonal and linear in
 independent local construction of stella's differential coefficients remains
 required.
 
+The pair-resolved runner also retains each channel's test-particle matrix. It
+fails unless identity plus the four isolated departures reconstructs the full
+matrix. The pinned case closes at `3.77e-17` relative L2; the electron-electron
+and electron-ion blocks dominate the remaining coefficient target.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 
