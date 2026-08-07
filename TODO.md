@@ -719,6 +719,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   initial/final phase-space states. This removes the roughly 20 GiB full-state
   history that a `16x16x8`, `9x5`, 14k-step rung would otherwise allocate,
   without changing the default every-accepted-step statistics.
+  The first bounded-memory `16x16x8`, `9x5`, seed-19 rung is now complete
+  through time 500. Its merged time-200-to-500 window is stationary with mean
+  `-29.6930`, `4.40%` block error, `0.1041` drift, and `-1.15e-4` nonzonal
+  growth. It remains fail-closed on resolution: the change from the stationary
+  `12x12x6` seed-19 mean is `17.91%`, above the unchanged `15%` gate. The next
+  fixed-Fourier rung must therefore refine to `20x20x10`; the `16x16x8` result
+  cannot be promoted as converged.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

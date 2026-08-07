@@ -1080,6 +1080,10 @@ The current coarse three-root campaign passes its ensemble sub-gate. Seeds
 the ensemble mean is `-24.2189` and the maximum relative deviation is `2.04%`.
 These caller-owned trajectories justify proceeding to the resolution and
 domain ladders, but do not replace those ladders or the pinned GX comparison.
+The first fine phase-space rung (`16x16x8`, with the same `9x5` Fourier grid)
+is stationary over time 200--500 with mean `-29.6930`, but changes the matched
+seed-19 coarse mean by `17.91%`. Because this exceeds the fixed 15% tolerance,
+the resolution ladder is not yet converged and requires a `20x20x10` rung.
 
 ## Current Validation Status
 

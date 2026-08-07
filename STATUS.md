@@ -259,6 +259,11 @@ claimed.
   amplitudes online while retaining only endpoint phase-space states. Focused
   tests and a real short producer run pass; production memory therefore scales
   with one state plus compact scalar histories rather than all accepted states.
+- Completed a caller-owned `16x16x8`, `9x5`, seed-19 resolution rung through
+  time 500. Its time-200-to-500 merged window is stationary (mean `-29.6930`,
+  `4.40%` block error, drift `0.1041`, field growth `-1.15e-4`), but differs
+  from the stationary `12x12x6` seed-19 mean by `17.91%`. The 15% resolution
+  gate therefore fails honestly and requires a `20x20x10` fixed-Fourier rung.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
