@@ -7,6 +7,7 @@ from scripts.run_stella_collision_field_particle_discriminator import (
     stella_collision_input,
     summarize_outputs,
 )
+from scripts.run_stella_collision_trace_state import run_trace_state
 
 
 def _write_output(path: Path, final_scale: float) -> None:
@@ -58,12 +59,8 @@ def test_summary_requires_matched_initial_state_and_records_sensitive_effect(tmp
 
     assert report["status"] == "native_discriminator_passed"
     assert report["source_provenance"]["revision"] == "abc"
-    assert report["native_netcdf_software_version_informational"] == (
-        "misleading-parent-revision"
-    )
-    assert report["metrics"]["h2_vs_vpamus"]["final_relative_l2_difference"] == pytest.approx(
-        0.3
-    )
+    assert report["native_netcdf_software_version_informational"] == ("misleading-parent-revision")
+    assert report["metrics"]["h2_vs_vpamus"]["final_relative_l2_difference"] == pytest.approx(0.3)
 
 
 def test_summary_rejects_different_initial_states(tmp_path):
@@ -80,3 +77,37 @@ def test_summary_rejects_different_initial_states(tmp_path):
             disabled,
             provenance={"revision": "abc", "dirty": False},
         )
+
+
+def test_collision_input_parameterizes_distinct_initial_state():
+    text = stella_collision_input(
+        field_particle=True,
+        initial_amplitude=0.017,
+        initial_width=0.7,
+    )
+
+    assert "phiinit = 0.017000000000000001" in text
+    assert "width0 = 0.69999999999999996" in text
+
+
+def test_parameterized_trace_runner_writes_distinct_state(tmp_path, monkeypatch):
+    executable = tmp_path / "stella"
+    executable.write_text("fixture")
+    calls = []
+    monkeypatch.setattr(
+        "scripts.run_stella_collision_trace_state.subprocess.run",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    metadata = run_trace_state(
+        executable,
+        tmp_path / "run",
+        initial_amplitude=0.017,
+        initial_width=0.7,
+    )
+
+    assert metadata.is_file()
+    assert (
+        "phiinit = 0.017000000000000001" in (tmp_path / "run/collision_trace_state.in").read_text()
+    )
+    assert len(calls) == 1

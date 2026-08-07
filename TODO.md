@@ -446,9 +446,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and pairwise `psijnorm`; it matches 44,928 traced coefficients at `3.07e-11`
   scaled L2. A public builder assembles the independently constructed driver
   and response into the JIT/differentiable low-rank precompute. The remaining
-  collision blocker is a second-state coefficient/action parity test that also
-  distinguishes the direct low-rank operator from stella's implicit response-
-  system solve.
+  second trace state (`phiinit=0.017`, `width0=0.7`) changes the initial field
+  norm and aggregate collision RHS (`L2=2.46052e-3`), retains byte-identical
+  state-independent coefficient traces, and replays the native solved-`psi`
+  action in JAX at `1.39e-13` relative L2. The remaining collision blocker is
+  independent construction of stella's implicit test-particle/response-system
+  solve for `psi`; the direct normalized low-rank operator must remain clearly
+  distinguished until that algorithmic layer passes parity.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

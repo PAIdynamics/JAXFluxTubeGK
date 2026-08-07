@@ -61,8 +61,7 @@ def replay_factor_trace_with_local_kernel(factors: np.ndarray) -> tuple[np.ndarr
     if axes["target"][0].size != axes["background"][0].size:
         raise ValueError("factor trace target/background species grids differ")
     labels = tuple(
-        tuple(int(value) for value in row)
-        for row in np.unique(factors[:, 8:11], axis=0)
+        tuple(int(value) for value in row) for row in np.unique(factors[:, 8:11], axis=0)
     )
     label_lookup = {label: index for index, label in enumerate(labels)}
     shape = (
@@ -100,9 +99,7 @@ def replay_factor_trace_with_local_kernel(factors: np.ndarray) -> tuple[np.ndarr
         response,
         component_labels=labels,
     )
-    components = laguerre_legendre_collision_components_from_moments(
-        moments, precompute
-    )
+    components = laguerre_legendre_collision_components_from_moments(moments, precompute)
     return np.asarray(components).sum(axis=1), axes
 
 
@@ -208,7 +205,7 @@ def summarize_factor_trace(
             "aggregate_rhs_l2": float(np.linalg.norm(aggregate_rhs)),
         },
         "pair_metrics": pair_metrics,
-        "scope": "native low-rank factor contract; local coefficient construction pending",
+        "scope": "native solved-psi low-rank action replay; implicit psi construction is separate",
     }
 
 

@@ -19,11 +19,15 @@ def stella_collision_input(
     *,
     field_particle: bool,
     collision_knobs: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    initial_amplitude: float = 0.01,
+    initial_width: float = 1.0,
 ) -> str:
     """Return the compact collision-only stella input used by the discriminator."""
 
     if len(collision_knobs) != 4 or any(value < 0.0 for value in collision_knobs):
         raise ValueError("collision_knobs must contain four nonnegative values")
+    if initial_amplitude <= 0.0 or initial_width <= 0.0:
+        raise ValueError("initial amplitude and width must be positive")
     fieldpart = ".true." if field_particle else ".false."
     iiknob, ieknob, eeknob, eiknob = collision_knobs
     return f"""&geometry_options
@@ -87,10 +91,10 @@ def stella_collision_input(
 /
 &initialise_distribution
   initialise_distribution_option = 'default'
-  phiinit = 0.01
+  phiinit = {initial_amplitude:.17g}
 /
 &initialise_distribution_maxwellian
-  width0 = 1.0
+  width0 = {initial_width:.17g}
 /
 &time_trace_options
   nstep = 1
@@ -167,9 +171,10 @@ def summarize_outputs(
 
     variable_names = ("phi2", "g2_vs_vpamus", "h2_vs_vpamus", "f2_vs_vpamus")
     metrics: dict[str, dict[str, float]] = {}
-    with netCDF4.Dataset(field_particle_output) as enabled, netCDF4.Dataset(
-        test_particle_output
-    ) as disabled:
+    with (
+        netCDF4.Dataset(field_particle_output) as enabled,
+        netCDF4.Dataset(test_particle_output) as disabled,
+    ):
         if enabled.dimensions["t"].size != 2 or disabled.dimensions["t"].size != 2:
             raise ValueError("collision discriminator requires exactly two output times")
         for name in variable_names:

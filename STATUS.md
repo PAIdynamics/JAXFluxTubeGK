@@ -75,9 +75,13 @@ claimed.
   velocity measure, and locally evaluated `psijnorm`; all 44,928 native
   coefficients agree at `3.07e-11` scaled L2. A single public constructor now
   assembles local driver and response tensors into the differentiable low-rank
-  precompute. The remaining collision physics blocker is parity on a second
-  independently generated state and an explicit accounting of stella's
-  implicit response-system solve.
+  precompute. A parameterized runner generated a second state with
+  `phiinit=0.017` and `width0=0.7`: its initial `phi2` differs from the first
+  state, its aggregate collision RHS has L2 `2.46052e-3`, and local solved-psi
+  factor replay agrees at `1.39e-13`. Driver and primitive traces are byte-
+  identical across states, confirming coefficient state independence. The
+  remaining collision physics blocker is independent parity for stella's
+  implicit test-particle/response-system construction of `psi`.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

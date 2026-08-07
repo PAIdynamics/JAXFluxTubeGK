@@ -681,7 +681,22 @@ reversed-pair recurrence, Maxwellian, background gyroaverage, velocity measure,
 and pairwise normalization; it matches 44,928 native coefficients at
 `3.07e-11` scaled L2. The public assembly builder combines these local driver
 and response tensors into the differentiable low-rank precompute. A second
-state and stella implicit-response accounting remain acceptance requirements.
+state can be generated without rebuilding the instrumented executable:
+
+```bash
+.venv/bin/python scripts/run_stella_collision_trace_state.py \
+  --executable \
+    /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/stella \
+  --output-dir /tmp/optimal-fusion-stella-collision-second-state \
+  --initial-amplitude 0.017 --initial-width 0.7
+```
+
+That state changes the native aggregate collision RHS to L2 `2.46052e-3` and
+replays through the local solved-psi factor kernel at `1.39e-13` relative L2;
+its driver and primitive coefficients are byte-identical to the first state.
+The remaining acceptance requirement is independent construction of stella's
+implicit test-particle/response-system solve for `psi`, which is distinct from
+the direct normalized low-rank operator assembled above.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
