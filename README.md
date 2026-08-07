@@ -631,6 +631,21 @@ This traces the aggregate signed field-particle RHS before stella's final
 implicit differential inversion. A common-grid implementation/comparison is
 still required before enabling this as a production collision model.
 
+The same patched executable can generate pair-resolved native targets using
+stella's four collision-frequency knobs:
+
+```bash
+.venv/bin/python scripts/run_stella_collision_channel_traces.py \
+  --output-dir /tmp/optimal-fusion-stella-collision-channels \
+  --patched-stella-executable \
+    /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --overwrite
+```
+
+The report requires identical input states and retains separate ion-ion,
+ion-electron, electron-electron, and electron-ion signed traces.
+
 `gyrokinetic_heat_response(...)` supplies the collocation-space
 `J0 T_s (E_s-3/2) f_s` velocity moment used with `radial_flux_spectrum(...)`.
 This makes nonlinear heat-flux histories measurable from evolved states; it

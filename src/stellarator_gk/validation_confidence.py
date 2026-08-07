@@ -164,7 +164,10 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "field-particle RHS before its final implicit differential inversion. "
                 "The RHS L2 norm is 1.71214e-3 (9.9778% of the input norm), with "
                 "ion/electron norms 4.08757e-5/1.71165e-3. Native signed observability "
-                "is therefore closed, but common-grid coefficient/action parity is absent. "
+                "is therefore closed. Native knob-isolated ii/ie/ee/ei norms are "
+                "4.00831e-5/9.39860e-7/1.71045e-3/1.30298e-6, and their summed action "
+                "agrees with the all-channel trace to 8.59e-5 relative L2. Pair-resolved "
+                "targets now exist, but common-grid coefficient/action parity is absent. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "
@@ -194,6 +197,7 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 ConfidenceMetric("stella_fieldpart_g2_relative_l2_effect", 0.0019958403448710844),
                 ConfidenceMetric("stella_fieldpart_signed_rhs_l2", 0.0017121379931919567),
                 ConfidenceMetric("stella_fieldpart_signed_rhs_input_ratio", 0.09977835395991519),
+                ConfidenceMetric("stella_fieldpart_channel_sum_error", 8.590087610577925e-5),
             ),
         ),
         ValidationConfidenceGap(

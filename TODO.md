@@ -413,7 +413,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   This closes native signed-action observability, not parity. The remaining
   collision implementation is a common-grid Laguerre--Legendre coefficient and
   action comparison; the existing GKW finite-difference projection must not be
-  treated as that model.
+  treated as that model. The signed producer now isolates all four native
+  collision channels with identical input states. Their RHS L2 norms are
+  `4.00831e-5` (ion-ion), `9.39860e-7` (ion-electron), `1.71045e-3`
+  (electron-electron), and `1.30298e-6` (electron-ion). The isolated sum agrees
+  with the all-channel implicit result to `8.59e-5` relative L2, providing
+  pair-resolved targets for the common-grid implementation.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

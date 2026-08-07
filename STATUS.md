@@ -61,6 +61,12 @@ claimed.
   a common-grid Laguerre--Legendre coefficient/action implementation and parity
   comparison; the current GKW finite-difference pairwise projection is a
   different model and remains experimental.
+- Added pair-resolved signed runs using stella's native `iiknob`, `ieknob`,
+  `eeknob`, and `eiknob` controls. All five runs share an exactly identical
+  input state. Ion-ion, ion-electron, electron-electron, and electron-ion RHS
+  norms are `4.00831e-5`, `9.39860e-7`, `1.71045e-3`, and `1.30298e-6`.
+  Their sum agrees with the all-channel result to `8.59e-5` relative L2.
+  These are now the pair-specific external targets for implementing parity.
 
 ### 2026-08-07: Priority 5 Reproducibility and Correlated Statistics
 

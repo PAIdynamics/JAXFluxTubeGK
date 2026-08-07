@@ -32,6 +32,18 @@ def test_input_switches_only_requested_field_particle_setting():
     assert "collisions_implicit = .true." in enabled
 
 
+def test_input_exposes_native_collision_channel_knobs():
+    text = stella_collision_input(
+        field_particle=True,
+        collision_knobs=(0.0, 1.0, 0.0, 0.0),
+    )
+
+    assert "iiknob = 0" in text
+    assert "ieknob = 1" in text
+    assert "eeknob = 0" in text
+    assert "eiknob = 0" in text
+
+
 def test_summary_requires_matched_initial_state_and_records_sensitive_effect(tmp_path):
     enabled = tmp_path / "enabled.nc"
     disabled = tmp_path / "disabled.nc"

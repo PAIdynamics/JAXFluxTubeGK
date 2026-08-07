@@ -15,10 +15,17 @@ from pathlib import Path
 import numpy as np
 
 
-def stella_collision_input(*, field_particle: bool) -> str:
+def stella_collision_input(
+    *,
+    field_particle: bool,
+    collision_knobs: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+) -> str:
     """Return the compact collision-only stella input used by the discriminator."""
 
+    if len(collision_knobs) != 4 or any(value < 0.0 for value in collision_knobs):
+        raise ValueError("collision_knobs must contain four nonnegative values")
     fieldpart = ".true." if field_particle else ".false."
+    iiknob, ieknob, eeknob, eiknob = collision_knobs
     return f"""&geometry_options
   geometry_option = 'miller'
 /
@@ -106,6 +113,10 @@ def stella_collision_input(*, field_particle: bool) -> str:
 &collisions_fokker_planck
   testpart = .true.
   fieldpart = {fieldpart}
+  iiknob = {iiknob:.17g}
+  ieknob = {ieknob:.17g}
+  eeknob = {eeknob:.17g}
+  eiknob = {eiknob:.17g}
   lmax = 1
   jmax = 1
   nvel_local = 64
