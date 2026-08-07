@@ -48,6 +48,9 @@ claimed.
   `0.5378` drift, and `-5.89e-3` nonzonal growth; the segment nonzonal RMS ratio
   is `0.750`. This is the first genuinely independent-lineage result and shows
   the historical seed-17 passing interval is not robust acceptance evidence.
+- Repository-wide verification after the lineage, precision, and pair-resolved
+  collision changes passes: Ruff is clean and the standalone x64 suite reports
+  **517 passed and 25 external tests deselected in 563.49 s**.
 
 ### 2026-08-07: Native stella Collision Discriminator
 
