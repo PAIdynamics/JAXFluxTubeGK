@@ -22,6 +22,7 @@ from stellarator_gk import (
     build_stella_test_particle_primitives,
     build_stella_test_particle_gyro_diagonal,
     assemble_stella_test_particle_blocks,
+    build_stella_two_mu_diffusion_blocks,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -605,6 +606,47 @@ def test_stella_test_particle_block_assembly_matches_native_layout():
     assert bool(jnp.all(jnp.isfinite(gradient)))
     np.testing.assert_allclose(gradient[:, :, 0], 0.0, rtol=0.0, atol=0.0)
     np.testing.assert_allclose(gradient[:, :, 1:], 1.0, rtol=0.0, atol=0.0)
+
+
+def test_stella_two_mu_diffusion_blocks_are_jittable_and_differentiable():
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=6,
+            n_mu=2,
+            vpar_max=3.0,
+            mu_max=2.0,
+            backend="finite_difference",
+        )
+    )
+    species = (
+        SpeciesParams(1.0, 1.0, 1.0, 1.0, 0.0, 0.0),
+        SpeciesParams(-1.0, 0.0005446, 1.0, 1.0, 0.0, 0.0),
+    )
+    magnetic_field = jnp.asarray((0.8, 1.2))
+    frequencies = jnp.asarray(((0.01, 0.02), (0.03, 0.04)))
+
+    def build_blocks(values):
+        primitives = build_stella_test_particle_primitives(
+            velocity, magnetic_field, species, values
+        )
+        return build_stella_two_mu_diffusion_blocks(
+            velocity,
+            magnetic_field,
+            species,
+            values,
+            primitives,
+            0.01,
+        )
+
+    lower, diagonal, upper = jax.jit(build_blocks)(frequencies)
+    assert diagonal.shape == (2, 2, 6, 2, 2, 2)
+    np.testing.assert_allclose(lower, 0.0, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(upper, 0.0, rtol=0.0, atol=0.0)
+    assert bool(jnp.all(jnp.isfinite(diagonal)))
+    gradient = jax.jit(jax.grad(lambda values: jnp.sum(build_blocks(values)[1])))(
+        frequencies
+    )
+    assert bool(jnp.all(jnp.isfinite(gradient)))
 
 
 def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():

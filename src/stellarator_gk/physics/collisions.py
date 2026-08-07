@@ -332,6 +332,177 @@ def assemble_stella_test_particle_blocks(lower, diagonal, upper):
     return (matrix + identity[None, None, ...]).transpose(1, 0, 2, 3)
 
 
+def build_stella_two_mu_diffusion_blocks(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    primitives: StellaTestParticlePrimitives,
+    dt,
+    *,
+    deflection_scale=1.0,
+    electron_parallel_scale=1.0,
+    electron_deflection_scale=1.0,
+    electron_index: int | None = 1,
+    ion_index: int | None = 0,
+    electron_ion_mass_ratio_approximation: bool = False,
+):
+    """Construct stella's pure-mu boundary blocks for a two-node mu grid.
+
+    This implements the default non-density-conserving ghost-cell formulas at
+    both mu boundaries. The returned ``(lower, diagonal, upper)`` arrays use
+    the block layout accepted by :func:`assemble_stella_test_particle_blocks`.
+    Only ``diagonal`` is nonzero because the pure-mu operator is local in
+    parallel velocity.
+    """
+
+    mu = jnp.asarray(velocity_grid.mu)
+    if mu.shape != (2,):
+        raise ValueError("the two-mu boundary constructor requires exactly two mu nodes")
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    frequency = jnp.asarray(pair_frequency)
+    if frequency.shape != (n_species, n_species):
+        raise ValueError("pair_frequency must have (target, background) shape")
+    magnetic_field = jnp.asarray(B)
+    vpar = jnp.asarray(velocity_grid.vpar)
+    dmu = mu[1] - mu[0]
+
+    pair_parallel_scale = jnp.ones((n_species, n_species), dtype=magnetic_field.dtype)
+    pair_deflection_scale = jnp.ones_like(pair_parallel_scale)
+    electron_ion_pair = (
+        electron_index is not None
+        and ion_index is not None
+        and electron_index != ion_index
+    )
+    if electron_ion_pair:
+        pair_parallel_scale = pair_parallel_scale.at[electron_index, ion_index].set(
+            electron_parallel_scale
+        )
+        pair_deflection_scale = pair_deflection_scale.at[
+            electron_index, ion_index
+        ].set(electron_deflection_scale)
+
+    half_mu = 0.5 * (mu[0] + mu[1])
+    half_speed = jnp.sqrt(
+        vpar[:, None] ** 2 + 2.0 * half_mu * magnetic_field[None, :]
+    )
+    masses = jnp.asarray([item.mass for item in species_tuple])
+    mass_ratio = masses[:, None] / masses[None, :]
+    normalized = half_speed[None, None, ...] / jnp.sqrt(
+        mass_ratio[:, :, None, None]
+    )
+    erf_value = erf(normalized)
+    chandrasekhar = (
+        erf_value
+        - 2.0 / jnp.sqrt(jnp.asarray(pi, dtype=half_speed.dtype))
+        * normalized
+        * jnp.exp(-(normalized**2))
+    ) / (2.0 * normalized**2)
+    half_parallel = (
+        frequency[:, :, None, None]
+        * 2.0
+        * chandrasekhar
+        / half_speed[None, None, ...] ** 3
+    )
+    half_deflection = (
+        jnp.asarray(deflection_scale)
+        * frequency[:, :, None, None]
+        * (erf_value - chandrasekhar)
+        / half_speed[None, None, ...] ** 3
+    )
+    if electron_ion_pair and electron_ion_mass_ratio_approximation:
+        half_deflection = half_deflection.at[electron_index, ion_index].set(
+            jnp.asarray(deflection_scale)
+            * frequency[electron_index, ion_index]
+            / half_speed**3
+        )
+    if electron_ion_pair:
+        half_deflection = half_deflection.at[electron_index, ion_index].multiply(
+            electron_deflection_scale
+        )
+
+    node_maxwell = jnp.asarray(primitives.maxwellian)[:, None, ...]
+    node_parallel = jnp.asarray(primitives.parallel_diffusion)
+    node_deflection = jnp.asarray(primitives.deflection)
+    node_velocity_squared = vpar[None, None, :, None, None] ** 2
+    node_field = magnetic_field[None, None, None, None, :]
+    node_mu = mu[None, None, None, :, None]
+    node_gamma = 2.0 * (
+        pair_parallel_scale[:, :, None, None, None]
+        * node_parallel
+        * node_mu**2
+        + pair_deflection_scale[:, :, None, None, None]
+        * jnp.asarray(deflection_scale)
+        * node_deflection
+        * node_velocity_squared
+        / (2.0 * node_field)
+        * node_mu
+    ) * node_maxwell
+    half_maxwell = jnp.exp(
+        -(vpar[None, :, None] ** 2)
+        - 2.0 * half_mu * magnetic_field[None, None, :]
+    )
+    half_gamma = 2.0 * (
+        pair_parallel_scale[:, :, None, None] * half_parallel * half_mu**2
+        + pair_deflection_scale[:, :, None, None]
+        * jnp.asarray(deflection_scale)
+        * half_deflection
+        * vpar[None, None, :, None] ** 2
+        / (2.0 * magnetic_field[None, None, None, :])
+        * half_mu
+    ) * half_maxwell[:, None, ...]
+
+    gamma_lower = node_gamma[:, :, :, 0, :]
+    gamma_upper = node_gamma[:, :, :, 1, :]
+    maxwell_lower = node_maxwell[:, 0, :, 0, :]
+    maxwell_upper = node_maxwell[:, 0, :, 1, :]
+    lower_width = 0.5 * dmu + mu[0]
+    upper_width = 1.5 * dmu
+    diagonal = jnp.zeros(
+        (n_species, n_species, vpar.size, 2, 2, magnetic_field.size),
+        dtype=node_parallel.dtype,
+    )
+    diagonal = diagonal.at[:, :, :, 0, 0, :].set(
+        -jnp.asarray(dt)
+        * (
+            -gamma_lower / dmu * dmu / (2.0 * mu[0])
+            + (-half_gamma / dmu + gamma_lower / dmu) * mu[0] / (0.5 * dmu)
+        )
+        / maxwell_lower[:, None, ...]
+        / lower_width
+    )
+    diagonal = diagonal.at[:, :, :, 0, 1, :].set(
+        -jnp.asarray(dt)
+        * (
+            gamma_lower / dmu * dmu / (2.0 * mu[0])
+            + (half_gamma / dmu - gamma_lower / dmu) * mu[0] / (0.5 * dmu)
+        )
+        / maxwell_upper[:, None, ...]
+        / lower_width
+    )
+    diagonal = diagonal.at[:, :, :, 1, 1, :].set(
+        -jnp.asarray(dt)
+        * (
+            (gamma_upper / dmu - half_gamma / dmu) * dmu / (0.5 * dmu)
+            + (-gamma_upper / dmu) * dmu / 2.0 / dmu
+        )
+        / maxwell_upper[:, None, ...]
+        / upper_width
+    )
+    diagonal = diagonal.at[:, :, :, 1, 0, :].set(
+        -jnp.asarray(dt)
+        * (
+            (-gamma_upper / dmu + half_gamma / dmu) * dmu / (0.5 * dmu)
+            + gamma_upper / dmu * dmu / 2.0 / dmu
+        )
+        / maxwell_lower[:, None, ...]
+        / upper_width
+    )
+    zero = jnp.zeros_like(diagonal)
+    return zero, diagonal, zero
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
@@ -1799,6 +1970,7 @@ __all__ = [
     "LaguerreLegendreCollisionPrecompute",
     "StellaTestParticlePrimitives",
     "assemble_stella_test_particle_blocks",
+    "build_stella_two_mu_diffusion_blocks",
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_fokker_planck_test_particle_matrix",

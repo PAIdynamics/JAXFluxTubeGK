@@ -498,8 +498,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   split sharpens this further: pure mu diffusion is `32.2473` (`88.19%` of
   full) and exclusively diagonal-block work; its mixed branch is `0.444517`.
   Pure vpar diffusion is only `0.0846490`, whereas the vpar-path mixed branch
-  is `14.4028`. Close the pure two-node mu-boundary `bb` block first, then the
-  vpar-path mixed derivative.
+  is `14.4028`. The first slice is now closed: the public, differentiable
+  two-node constructor evaluates half-mu ordered collision frequencies and
+  both default ghost-cell closures, matching all 1,248 native rows at
+  `1.10e-15` relative L2 and `7.99e-15` maximum absolute error. Next implement
+  the vpar-path mixed branch, followed by general interior-mu grids.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

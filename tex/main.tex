@@ -1383,6 +1383,13 @@ diagonal velocity blocks.  The mixed term nested in that path has norm
 $0.444517$; pure parallel-velocity diffusion has norm $0.0846490$, while its
 mixed path has norm $14.4028$.  This establishes the implementation order:
 two-node pure-mu boundary diffusion before the parallel-path mixed derivative.
+A differentiable JAX constructor now implements that two-node boundary slice,
+including half-mu ordered collision frequencies and both default ghost-cell
+closures.  It matches all 1,248 native block rows at
+$1.10\times10^{-15}$ relative $L_2$ and $7.99\times10^{-15}$ maximum absolute
+error.  The parallel-path mixed derivative is therefore the dominant remaining
+compact-case coefficient target; general mu grids also require interior
+formulas.
 The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the

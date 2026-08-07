@@ -805,6 +805,26 @@ diffusion has norm `0.0846490`, while the vpar-path mixed derivative has norm
 `14.4028`. The implementation order is therefore pure two-node mu-boundary
 diffusion, vpar-path mixed derivatives, then the two small residual branches.
 
+`build_stella_two_mu_diffusion_blocks(...)` now implements that first slice as
+a JIT-compatible, differentiable JAX kernel. It evaluates the ordered half-mu
+collision frequencies and stella's default two ghost-cell closures, returning
+the pair-resolved `bb` blocks. Validate it with:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python \
+  scripts/summarize_stella_collision_two_mu_diffusion.py \
+  --primitives /tmp/optimal-fusion-stella-block-decomposition/stellarator_gk_collision_test_particle_primitives.dat \
+  --no-mixed-full /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_full.dat \
+  --no-mixed-vpar /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_vpar.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-block-decomposition/two-mu.json
+```
+
+All 1,248 native block rows agree at `1.10e-15` relative L2 and `7.99e-15`
+maximum absolute error. The remaining compact-case coefficient target is led
+by the vpar-path mixed derivative; general grids additionally require the
+interior-mu formulas.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

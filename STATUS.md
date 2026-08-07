@@ -93,6 +93,16 @@ claimed.
   is only `0.0846490`, while the vpar-path mixed term is `14.4028`. This fixes
   the porting order: two-node pure-mu boundary closure first, followed by the
   vpar-path mixed derivative.
+- Implemented the dominant pure-mu slice in
+  `build_stella_two_mu_diffusion_blocks(...)`. The JAX kernel independently
+  evaluates half-mu collision frequencies, ordered electron-ion factors, and
+  stella's two default non-density-conserving ghost-cell formulas. It is JIT-
+  compatible and differentiable in all pair frequencies.
+- Against the factorial native target, all 1,248 block rows agree at
+  `1.10e-15` relative L2 and `7.99e-15` maximum absolute error. This closes
+  `88.19%` of the full-block Frobenius norm. The vpar-path mixed derivative is
+  now the dominant compact-case coefficient blocker; general `nmu>2` support
+  still requires the interior-mu branch.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 
