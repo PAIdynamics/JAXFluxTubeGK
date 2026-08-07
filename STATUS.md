@@ -76,6 +76,15 @@ claimed.
   all 26 zero-`kperp` native matrices exactly: maximum absolute and relative-L2
   errors are both `0.0`. Only local generation of those finite-difference
   interior and boundary coefficients remains before full matrix parity.
+- Added a scratch-only paired runner that toggles native `mu_operator` while
+  holding the state, grid, and collision frequencies fixed. The vpar-only plus
+  inferred mu-path blocks reconstruct all 1,248 full rows exactly.
+- The mu path is the dominant next target: Frobenius norm `32.2503`, or
+  `88.20%` of the full-block norm, with `32.2473` in the diagonal blocks. The
+  vpar path norm is `14.4030`, with symmetric lower/upper norms `10.0501`.
+  Since the compact gate has `nmu=2`, both mu rows use boundary closures. The
+  electron-ion and electron-electron mu-path norms (`20.7238` and `24.7037`)
+  identify those boundary formulas as the next implementation slice.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

@@ -779,6 +779,25 @@ exactly (`0.0` maximum and relative-L2 error). Matrix layout and packing are
 closed; the remaining task is to construct the interior and boundary block
 coefficients locally from the validated primitives and velocity grid.
 
+The native coefficient target can be split without modifying the pinned source
+by running identical cases with stella's `mu_operator` enabled and disabled:
+
+```bash
+.venv/bin/python scripts/run_stella_collision_block_decomposition.py \
+  --executable /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
+  --output-dir /tmp/optimal-fusion-stella-block-decomposition \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --overwrite
+```
+
+The two operator paths reconstruct the full 1,248-row block trace exactly. The
+`mu_operator` path has Frobenius norm `32.2503` (`88.20%` of the full-block
+norm) and is almost entirely diagonal-block work (`32.2473`). The remaining
+`vpar` path has norm `14.4030`; its lower and upper blocks each have norm
+`10.0501`. Because this compact gate has only two mu nodes, every mu row uses a
+boundary formula. The first local coefficient target is therefore the mu
+boundary closure, starting with the electron-ion and electron-electron pairs.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

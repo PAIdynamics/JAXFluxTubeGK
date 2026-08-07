@@ -1371,7 +1371,12 @@ differentiable block assembler also packs the native lower, diagonal, and upper
 velocity blocks: 1,248 traced pair blocks reproduce all 26 zero-$k_\perp$
 matrices exactly.  Independent local generation of the interior and boundary
 block coefficients, followed by production residual wiring, remains before
-claiming full stella parity.
+claiming full stella parity.  Paired native runs with the mu operator enabled
+and disabled localize that work: the mu path has Frobenius norm $32.2503$
+($88.20\%$ of the full-block norm) and is almost entirely in the diagonal
+blocks, whereas the remaining parallel-velocity path has norm $14.4030$.
+Because the compact gate has only two mu nodes, both rows use boundary
+closures; the mu boundary is therefore the next local coefficient target.
 The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the

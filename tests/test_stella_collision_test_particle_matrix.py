@@ -4,6 +4,9 @@ from scripts.summarize_stella_collision_test_particle_blocks import (
     SCHEMA as BLOCK_SCHEMA,
     summarize_block_trace,
 )
+from scripts.run_stella_collision_block_decomposition import (
+    summarize_block_decomposition,
+)
 from scripts.summarize_stella_collision_test_particle_matrix import (
     SCHEMA,
     summarize_matrix_trace,
@@ -90,3 +93,30 @@ def test_block_trace_reconstructs_zero_kperp_matrix(tmp_path):
     assert report["rows"] == 2
     assert report["matrices_compared"] == 1
     assert report["metrics"] == {"relative_l2": 0.0, "max_abs": 0.0}
+
+
+def test_block_decomposition_isolates_mu_operator_path(tmp_path):
+    full = tmp_path / "full.dat"
+    vpar = tmp_path / "vpar.dat"
+    full_rows = []
+    vpar_rows = []
+    for iv in range(3):
+        for row_mu in range(2):
+            for col_mu in range(2):
+                index = 1.0 + iv + 2 * row_mu + 3 * col_mu
+                prefix = [0, 1, 1, iv + 1, row_mu + 1, col_mu + 1]
+                full_rows.append(prefix + [index, 0.0, 2 * index, 0.0, -index, 0.0, 0.01])
+                vpar_rows.append(prefix + [0.25 * index, 0.0, index, 0.0, 0.0, 0.0, 0.01])
+    for path, rows in ((full, full_rows), (vpar, vpar_rows)):
+        path.write_text(BLOCK_SCHEMA + "\n# columns\n")
+        with path.open("a") as stream:
+            np.savetxt(stream, np.asarray(rows))
+
+    report = summarize_block_decomposition(full, vpar, expected_revision="abc123")
+
+    assert report["status"] == "native_block_operator_split_passed"
+    assert report["rows_per_trace"] == 12
+    assert report["grid"] == {"nz": 1, "nspecies": 1, "nvpar": 3, "nmu": 2}
+    assert report["components"]["vpar_path"]["frobenius"] > 0.0
+    assert report["components"]["mu_path"]["frobenius"] > 0.0
+    assert report["metrics"]["additive_closure_max_abs"] == 0.0

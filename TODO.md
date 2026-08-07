@@ -487,7 +487,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   scratch trace reconstructs all 26 zero-`k_perp` native matrices exactly
   (`0.0` maximum and relative-L2 error). Block layout and dense packing are
   therefore closed; independent local construction of the interior and
-  boundary `aa`/`bb`/`cc` coefficients is the sole matrix blocker.
+  boundary `aa`/`bb`/`cc` coefficients is the sole matrix blocker. Paired
+  native runs with `mu_operator` enabled/disabled split this target exactly.
+  The mu path has Frobenius norm `32.2503` (`88.20%` of the full-block norm)
+  and diagonal-block norm `32.2473`; the vpar path has norm `14.4030`. With
+  `nmu=2`, all mu rows exercise boundary formulas. Implement and validate the
+  mu boundary closure first, prioritizing electron-ion (`20.7238`) and
+  electron-electron (`24.7037`) pair norms, then port the general interior-mu
+  and vpar-boundary branches.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
