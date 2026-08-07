@@ -54,6 +54,7 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
     pair_conservation_invariants: object
     pair_conservation_basis: object
     pair_conservation_inverse: object
+    pair_reciprocal_inverse: object
     pair_conservation_measure: object
     n_species: int
     conserve_exchange: bool = False
@@ -75,6 +76,7 @@ class FokkerPlanckPrecompute(_PyTreeDataclass):
         "pair_conservation_invariants",
         "pair_conservation_basis",
         "pair_conservation_inverse",
+        "pair_reciprocal_inverse",
         "pair_conservation_measure",
     )
     _static_fields: ClassVar[tuple[str, ...]] = (
@@ -105,8 +107,10 @@ def build_fokker_planck_precompute(
     ``xu_species_local`` reproduces GKW's local defect correction,
     ``global_exchange`` applies one algebraic multispecies projection, and
     ``pairwise_exchange`` retains ordered target/background stencils and
-    projects each unordered collision pair independently.  None is an
-    independently validated reciprocal Landau field-particle term.
+    projects each unordered collision pair independently.
+    ``reciprocal_exchange`` instead uses partner-driven momentum and energy
+    responses, matching the dataflow of a reciprocal field-particle term.  It
+    remains a low-rank model rather than a coefficient-level Landau operator.
     """
 
     if conservation_model is None:
@@ -118,10 +122,11 @@ def build_fokker_planck_precompute(
         "global_exchange",
         "xu_species_local",
         "pairwise_exchange",
+        "reciprocal_exchange",
     ):
         raise ValueError(
             "conservation_model must be 'none', 'global_exchange', "
-            "'xu_species_local', or 'pairwise_exchange'"
+            "'xu_species_local', 'pairwise_exchange', or 'reciprocal_exchange'"
         )
     if velocity_grid.backend != "finite_difference":
         raise ValueError("Fokker-Planck collisions require the finite-difference velocity grid")
@@ -179,6 +184,8 @@ def build_fokker_planck_precompute(
     xu_momentum = xu_energy = xu_vpar_weight = xu_energy_weight = None
     pair_indices = ()
     pair_invariants = pair_basis = pair_inverse = pair_measure = None
+    pair_reciprocal_inverse = None
+    reciprocal_response_gains = None
     conservation_gain = jnp.asarray(1.0)
     if conservation_model == "global_exchange":
         invariants, basis, inverse, measure, conservation_gain = (
@@ -196,7 +203,7 @@ def build_fokker_planck_precompute(
             xu_energy_weight,
             conservation_gain,
         ) = _build_xu_conservation(velocity_grid, B, species_tuple)
-    elif conservation_model == "pairwise_exchange":
+    elif conservation_model in ("pairwise_exchange", "reciprocal_exchange"):
         invariants, basis, inverse, measure, _ = _build_fokker_planck_conservation(
             velocity_grid,
             B,
@@ -221,16 +228,86 @@ def build_fokker_planck_precompute(
         pair_basis = tuple(item[1] for item in pair_data)
         pair_inverse = tuple(item[2] for item in pair_data)
         pair_measure = tuple(item[3] for item in pair_data)
-        pair_gains = jnp.ones((n_species, n_species), dtype=vpar.dtype)
-        for (first, second), item in zip(pair_indices, pair_data, strict=True):
-            pair_gains = pair_gains.at[first, second].set(item[4])
-            pair_gains = pair_gains.at[second, first].set(item[4])
+        if conservation_model == "reciprocal_exchange":
+            reciprocal_inverses = []
+            reciprocal_gains = []
+            for item in pair_data:
+                local_species = item[0].shape[1]
+                target_inverses = []
+                target_gains = []
+                for target in range(local_species):
+                    rows = jnp.asarray((target, local_species, local_species + 1))
+                    local_invariants = item[0][rows, target]
+                    local_basis = item[1][rows, target]
+                    matrix = jnp.einsum(
+                        "cvmz,dvmz,vmz->zcd",
+                        local_invariants,
+                        local_basis,
+                        item[3],
+                    )
+                    target_inverse = jnp.linalg.inv(matrix)
+                    target_inverses.append(target_inverse)
+                    partner = target if local_species == 1 else 1 - target
+                    driver_invariants = jnp.stack(
+                        (
+                            item[0][target, target],
+                            item[0][local_species, partner],
+                            item[0][local_species + 1, partner],
+                        )
+                    )
+                    response = jnp.einsum(
+                        "dvmz,zdc->cvmz", local_basis, target_inverse
+                    )
+                    driver_norm = jnp.sum(
+                        jnp.abs(driver_invariants) * item[3][None, ...],
+                        axis=(1, 2),
+                    )
+                    density_gain = jnp.max(
+                        jnp.abs(response[0]) * driver_norm[0][None, None, :]
+                    )
+                    exchange_gain = jnp.max(
+                        jnp.sum(
+                            jnp.abs(response[1:])
+                            * driver_norm[1:, None, None, :],
+                            axis=0,
+                        )
+                    )
+                    target_gains.append(jnp.stack((density_gain, exchange_gain)))
+                reciprocal_inverses.append(jnp.stack(target_inverses))
+                reciprocal_gains.append(jnp.stack(target_gains))
+            pair_reciprocal_inverse = tuple(reciprocal_inverses)
+            reciprocal_response_gains = tuple(reciprocal_gains)
 
     if conservation_model == "pairwise_exchange":
         pair_row_bounds = jnp.max(
             jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4)
         )
+        pair_gains = jnp.ones((n_species, n_species), dtype=vpar.dtype)
+        for (first, second), item in zip(pair_indices, pair_data, strict=True):
+            pair_gains = pair_gains.at[first, second].set(item[4])
+            pair_gains = pair_gains.at[second, first].set(item[4])
         row_sum_bound = jnp.sum(pair_row_bounds * pair_gains, axis=1)
+    elif conservation_model == "reciprocal_exchange":
+        pair_row_bounds = jnp.max(
+            jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4)
+        )
+        row_sum_bound = jnp.zeros((n_species,), dtype=vpar.dtype)
+        for (first, second), gains in zip(
+            pair_indices, reciprocal_response_gains, strict=True
+        ):
+            if first == second:
+                row_sum_bound = row_sum_bound.at[first].add(
+                    pair_row_bounds[first, first] * (1.0 + jnp.sum(gains[0]))
+                )
+            else:
+                row_sum_bound = row_sum_bound.at[first].add(
+                    pair_row_bounds[first, second] * (1.0 + gains[0, 0])
+                    + pair_row_bounds[second, first] * gains[0, 1]
+                )
+                row_sum_bound = row_sum_bound.at[second].add(
+                    pair_row_bounds[second, first] * (1.0 + gains[1, 0])
+                    + pair_row_bounds[first, second] * gains[1, 1]
+                )
     else:
         row_sum_bound = (
             jnp.max(jnp.sum(jnp.abs(stencil), axis=1), axis=(1, 2, 3))
@@ -251,9 +328,11 @@ def build_fokker_planck_precompute(
         pair_conservation_invariants=pair_invariants,
         pair_conservation_basis=pair_basis,
         pair_conservation_inverse=pair_inverse,
+        pair_reciprocal_inverse=pair_reciprocal_inverse,
         pair_conservation_measure=pair_measure,
         n_species=n_species,
-        conserve_exchange=conservation_model in ("global_exchange", "pairwise_exchange"),
+        conserve_exchange=conservation_model
+        in ("global_exchange", "pairwise_exchange", "reciprocal_exchange"),
         conservation_model=conservation_model,
         pair_indices=pair_indices,
     )
@@ -270,6 +349,8 @@ def fokker_planck_collision(distribution, precompute: FokkerPlanckPrecompute):
         raise ValueError("distribution has incompatible species or phase-space shape")
     if precompute.conservation_model == "pairwise_exchange":
         result = jnp.sum(fokker_planck_pairwise_components(values, precompute), axis=1)
+    elif precompute.conservation_model == "reciprocal_exchange":
+        result = jnp.sum(fokker_planck_reciprocal_components(values, precompute), axis=1)
     else:
         result = jax.vmap(_apply_fokker_planck_stencil)(values, precompute.stencil)
     if precompute.conservation_model == "global_exchange":
@@ -345,6 +426,84 @@ def fokker_planck_pairwise_components(distribution, precompute: FokkerPlanckPrec
         components = components.at[first, second].set(corrected[0])
         if first != second:
             components = components.at[second, first].set(corrected[1])
+    return components
+
+
+def fokker_planck_reciprocal_components(distribution, precompute: FokkerPlanckPrecompute):
+    """Return pair actions whose field terms are driven by the collision partner.
+
+    For an off-diagonal pair, each target keeps its own test-particle momentum
+    and energy defect while receiving the equal-and-opposite low-rank response
+    driven by the other species.  This mirrors stella's reciprocal dataflow but
+    does not yet claim parity with its Laguerre--Legendre coefficients.
+    """
+
+    if precompute.conservation_model != "reciprocal_exchange":
+        raise ValueError("reciprocal components require conservation_model='reciprocal_exchange'")
+    values = jnp.asarray(distribution)
+    if values.ndim == 5 and precompute.n_species == 1:
+        values = values[None, ...]
+    if values.ndim != 6 or values.shape[0] != precompute.n_species:
+        raise ValueError("distribution has incompatible species or phase-space shape")
+    components = jnp.zeros(
+        (precompute.n_species, precompute.n_species, *values.shape[1:]),
+        dtype=values.dtype,
+    )
+    pair_data = zip(
+        precompute.pair_indices,
+        precompute.pair_conservation_invariants,
+        precompute.pair_conservation_basis,
+        precompute.pair_conservation_measure,
+        precompute.pair_reciprocal_inverse,
+        strict=True,
+    )
+    for (first, second), invariants, basis, measure, inverses in pair_data:
+        indices = (first,) if first == second else (first, second)
+        raw = jnp.stack(
+            tuple(
+                _apply_fokker_planck_stencil(
+                    values[target], precompute.pair_stencil[target, background]
+                )
+                for target, background in (
+                    ((first, first),)
+                    if first == second
+                    else ((first, second), (second, first))
+                )
+            )
+        )
+        local_species = len(indices)
+        local_moments = []
+        local_bases = []
+        for local_target in range(local_species):
+            rows = jnp.asarray((local_target, local_species, local_species + 1))
+            local_invariants = invariants[rows, local_target]
+            local_basis = basis[rows, local_target]
+            local_moments.append(
+                jnp.einsum(
+                    "cvmz,vmz,vmzxy->czxy",
+                    local_invariants,
+                    measure,
+                    raw[local_target],
+                )
+            )
+            local_bases.append(local_basis)
+        for local_target, target in enumerate(indices):
+            partner = local_target if local_species == 1 else 1 - local_target
+            desired = jnp.stack(
+                (
+                    -local_moments[local_target][0],
+                    -local_moments[partner][1],
+                    -local_moments[partner][2],
+                )
+            )
+            coefficients = jnp.einsum("zdc,czxy->zdxy", inverses[local_target], desired)
+            correction = jnp.einsum(
+                "dvmz,zdxy->vmzxy", local_bases[local_target], coefficients
+            )
+            background = second if target == first else first
+            components = components.at[target, background].set(
+                raw[local_target] + correction
+            )
     return components
 
 
@@ -763,4 +922,5 @@ __all__ = [
     "fokker_planck_collision",
     "fokker_planck_conserved_moments",
     "fokker_planck_pairwise_components",
+    "fokker_planck_reciprocal_components",
 ]

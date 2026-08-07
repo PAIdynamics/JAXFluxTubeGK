@@ -24,6 +24,7 @@ from stellarator_gk import (
     fokker_planck_collision,
     fokker_planck_conserved_moments,
     fokker_planck_pairwise_components,
+    fokker_planck_reciprocal_components,
     linear_residual,
 )
 
@@ -397,6 +398,131 @@ def test_pairwise_exchange_conserves_each_pair_and_couples_species():
     changed_components = fokker_planck_pairwise_components(changed_state, precompute)
     assert float(jnp.max(jnp.abs(changed_components[0, 1] - components[0, 1]))) > 1e-8
     assert np.isfinite(float(jnp.max(precompute.row_sum_bound)))
+
+
+def test_reciprocal_exchange_conserves_pairs_and_uses_partner_response():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    state = (
+        jax.random.normal(
+            jax.random.key(91), (2, 8, 6, parallel.z.size, 1, 1)
+        )
+        + 1j
+        * jax.random.normal(
+            jax.random.key(92), (2, 8, 6, parallel.z.size, 1, 1)
+        )
+    )
+    precompute = build_fokker_planck_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequency=(0.2, 0.7),
+        conservation_model="reciprocal_exchange",
+    )
+    components = jax.jit(fokker_planck_reciprocal_components)(state, precompute)
+    collision = jax.jit(fokker_planck_collision)(state, precompute)
+
+    np.testing.assert_allclose(collision, jnp.sum(components, axis=1), atol=2e-12)
+    np.testing.assert_allclose(
+        fokker_planck_conserved_moments(collision, precompute),
+        0.0,
+        atol=4e-10,
+        rtol=0.0,
+    )
+    for pair_index, (first, second) in enumerate(precompute.pair_indices):
+        pair_values = (
+            components[first, second][None, ...]
+            if first == second
+            else jnp.stack((components[first, second], components[second, first]))
+        )
+        pair_moments = jnp.einsum(
+            "csvmz,vmz,svmzxy->czxy",
+            precompute.pair_conservation_invariants[pair_index],
+            precompute.pair_conservation_measure[pair_index],
+            pair_values,
+        )
+        np.testing.assert_allclose(pair_moments, 0.0, atol=4e-10, rtol=0.0)
+
+    electron_changed = state.at[1].multiply(1.1)
+    changed_components = fokker_planck_reciprocal_components(
+        electron_changed, precompute
+    )
+    assert float(jnp.max(jnp.abs(changed_components[0, 1] - components[0, 1]))) > 1e-8
+
+    def objective(values):
+        result = fokker_planck_collision(values, precompute)
+        return jnp.real(jnp.vdot(result, result))
+
+    gradient = jax.jit(jax.grad(objective))(state)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_reciprocal_exchange_row_sum_bound_bounds_dense_operator():
+    _velocity, _parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    precompute = build_fokker_planck_precompute(
+        velocity,
+        geometry.B[:1],
+        species,
+        frequency=(0.2, 0.7),
+        conservation_model="reciprocal_exchange",
+    )
+    shape = (2, 8, 6, 1, 1, 1)
+
+    def flattened_operator(values):
+        return fokker_planck_collision(values.reshape(shape), precompute).reshape(-1)
+
+    matrix = jax.jacfwd(flattened_operator)(jnp.zeros(np.prod(shape)))
+    exact_bounds = jnp.max(
+        jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1
+    )
+    assert bool(jnp.all(exact_bounds <= precompute.row_sum_bound * (1.0 + 2e-12)))
+
+
+def test_solver_accepts_reciprocal_exchange_collision_model():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=8,
+            n_mu=6,
+            vpar_max=3.5,
+            mu_max=5.0,
+            backend="finite_difference",
+        )
+    )
+    fourier = build_fourier_grid(
+        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
+    )
+    precompute = build_linear_residual_precompute(
+        velocity,
+        parallel,
+        fourier,
+        geometry,
+        species,
+        field_model="kinetic",
+        collision_frequency=(0.2, 0.7),
+        collision_model="fokker_planck",
+        collision_conservation_model="reciprocal_exchange",
+    )
+
+    assert precompute.collisions.conservation_model == "reciprocal_exchange"
+    assert np.isfinite(float(estimate_linear_cfl_dt(precompute)))
 
 
 @pytest.mark.external

@@ -10,6 +10,7 @@ from .collisions import (
     fokker_planck_collision,
     fokker_planck_conserved_moments,
     fokker_planck_pairwise_components,
+    fokker_planck_reciprocal_components,
 )
 from .electromagnetic import (
     ElectromagneticFieldPrecompute,
@@ -173,6 +174,7 @@ __all__ = [
     "fokker_planck_collision",
     "fokker_planck_conserved_moments",
     "fokker_planck_pairwise_components",
+    "fokker_planck_reciprocal_components",
     "dissipation",
     "drift_field_drive",
     "equilibrium_drive",
