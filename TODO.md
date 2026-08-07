@@ -420,7 +420,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   response `J0 T_s (E_s-3/2) f_s` directly from each evolved species and has a
   JIT/direct-quadrature contract. A reproducible driven nonlinear trajectory,
   stationarity window, resolution/box ladder, and independent GX or stella
-  heat-flux comparison are still required.
+  heat-flux comparison are still required. A revision-pinned GX producer
+  contract now reads `Diagnostics/HeatFlux_st` from a caller-owned NetCDF file,
+  validates its time trace, and emits schema-v1 mean, uncertainty, drift, and
+  provenance JSON without storing GX output here. The local trajectory and
+  cross-code normalization/parity comparison remain the next implementation.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

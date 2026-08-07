@@ -192,11 +192,12 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "statistics pass unit tests. The per-species collocation heat response "
                 "J0*T_s*(E_s-3/2)*f_s now matches direct velocity quadrature, but no "
                 "stationary resolution/domain ladder or independent heat-flux comparison "
-                "has been accepted."
+                "has been accepted. A revision-pinned GX NetCDF summarizer now provides "
+                "the external mean/uncertainty/drift data contract without storing output."
             ),
             next_action=(
-                "Run a revision-pinned nonlinear benchmark through transient, "
-                "stationarity, resolution, box-size, and independent parity gates."
+                "Run matched local and pinned GX Cyclone trajectories, reconcile heat-flux "
+                "normalization, then apply stationarity, resolution, box-size, and parity gates."
             ),
         ),
         ValidationConfidenceGap(

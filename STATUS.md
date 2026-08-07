@@ -255,6 +255,13 @@ claimed.
   `J0 T_s (E_s-3/2) f_s`. It is JIT-compatible and agrees with a direct weighted
   velocity integral, closing the missing evolved-state-to-heat-flux diagnostic
   connection.
+- Added an artifact-free, revision-pinned GX nonlinear heat-flux summarizer for
+  the independently maintained Cyclone benchmark. It reads GX's
+  `Diagnostics/HeatFlux_st`, validates finite strictly increasing traces, and
+  writes a schema-v1 caller-selected JSON report with mean, sample deviation,
+  standard error, relative drift, window bounds, species index, and source
+  revision. Synthetic stationary and invalid-trace contracts pass. No GX
+  NetCDF output is tracked by this repository.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

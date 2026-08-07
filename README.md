@@ -599,6 +599,18 @@ parity; production collision claims remain blocked.
 This makes nonlinear heat-flux histories measurable from evolved states; it
 does not by itself establish stationarity or external turbulence parity.
 
+GX nonlinear heat-flux output can be converted into the package's compact
+external-reference contract without copying the NetCDF file into this
+repository:
+
+```bash
+.venv/bin/python scripts/summarize_gx_nonlinear_heat_flux.py \
+  --gx-root /path/to/gx \
+  --expected-revision bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5 \
+  --netcdf /scratch/cyclone_miller_adiabatic_electrons.nc \
+  --output /tmp/gx-cyclone-nonlinear-heat-flux.json
+```
+
 ## Current Validation Status
 
 Passing guardrails:
