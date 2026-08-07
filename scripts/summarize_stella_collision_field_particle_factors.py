@@ -9,6 +9,10 @@ from pathlib import Path
 import numpy as np
 
 from scripts.summarize_stella_collision_field_particle_components import _read_values
+from stellarator_gk import (
+    build_laguerre_legendre_collision_precompute,
+    laguerre_legendre_collision_components_from_moments,
+)
 
 
 FACTOR_COLUMNS = (
@@ -31,6 +35,75 @@ FACTOR_COLUMNS = (
     "rhs_re",
     "rhs_im",
 )
+
+
+def _axis_lookup(values: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
+    labels = np.unique(values.astype(int))
+    return labels, {int(value): index for index, value in enumerate(labels)}
+
+
+def replay_factor_trace_with_local_kernel(factors: np.ndarray) -> tuple[np.ndarray, tuple]:
+    """Replay native scalar responses and bases through the JAX low-rank kernel."""
+
+    import jax
+
+    if not jax.config.x64_enabled:
+        raise RuntimeError("factor replay requires JAX_ENABLE_X64=1")
+    axes = {
+        "iv": _axis_lookup(factors[:, 0]),
+        "imu": _axis_lookup(factors[:, 1]),
+        "iky": _axis_lookup(factors[:, 2]),
+        "ikx": _axis_lookup(factors[:, 3]),
+        "iz": _axis_lookup(factors[:, 4]),
+        "target": _axis_lookup(factors[:, 6]),
+        "background": _axis_lookup(factors[:, 7]),
+    }
+    if axes["target"][0].size != axes["background"][0].size:
+        raise ValueError("factor trace target/background species grids differ")
+    labels = tuple(
+        tuple(int(value) for value in row)
+        for row in np.unique(factors[:, 8:11], axis=0)
+    )
+    label_lookup = {label: index for index, label in enumerate(labels)}
+    shape = (
+        axes["target"][0].size,
+        axes["background"][0].size,
+        len(labels),
+        axes["iv"][0].size,
+        axes["imu"][0].size,
+        axes["iz"][0].size,
+        axes["ikx"][0].size,
+        axes["iky"][0].size,
+    )
+    response = np.full(shape, np.nan)
+    moments = np.full((shape[0], shape[1], shape[2], *shape[5:]), np.nan + 0j)
+    for row in factors:
+        target = axes["target"][1][int(row[6])]
+        background = axes["background"][1][int(row[7])]
+        component = label_lookup[tuple(int(value) for value in row[8:11])]
+        iv = axes["iv"][1][int(row[0])]
+        imu = axes["imu"][1][int(row[1])]
+        iz = axes["iz"][1][int(row[4])]
+        ikx = axes["ikx"][1][int(row[3])]
+        iky = axes["iky"][1][int(row[2])]
+        response[target, background, component, iv, imu, iz, ikx, iky] = row[15]
+        moment_index = (target, background, component, iz, ikx, iky)
+        psi = row[13] + 1j * row[14]
+        previous = moments[moment_index]
+        if np.isfinite(previous) and previous != psi:
+            raise ValueError("factor trace psi varies across a velocity-space response")
+        moments[moment_index] = psi
+    if not np.isfinite(response).all() or not np.isfinite(moments).all():
+        raise ValueError("factor trace does not span a dense pair/component grid")
+    precompute = build_laguerre_legendre_collision_precompute(
+        np.zeros_like(response),
+        response,
+        component_labels=labels,
+    )
+    components = laguerre_legendre_collision_components_from_moments(
+        moments, precompute
+    )
+    return np.asarray(components).sum(axis=1), axes
 
 
 def summarize_factor_trace(
@@ -91,6 +164,24 @@ def summarize_factor_trace(
             f"relative L2={aggregate_error:.6g}"
         )
 
+    local_action, axes = replay_factor_trace_with_local_kernel(factors)
+    local_rows = np.empty(aggregate.shape[0], dtype=complex)
+    for row_index, row in enumerate(aggregate):
+        target = axes["target"][1][int(row[6])]
+        iv = axes["iv"][1][int(row[0])]
+        imu = axes["imu"][1][int(row[1])]
+        iz = axes["iz"][1][int(row[4])]
+        ikx = axes["ikx"][1][int(row[3])]
+        iky = axes["iky"][1][int(row[2])]
+        local_rows[row_index] = local_action[target, iv, imu, iz, ikx, iky]
+    native_rows = aggregate[:, 11] + 1j * aggregate[:, 12]
+    local_error = float(np.linalg.norm(local_rows - native_rows) / aggregate_scale)
+    if local_error > reconstruction_tolerance:
+        raise ValueError(
+            "local JAX factor replay does not match native aggregate RHS: "
+            f"relative L2={local_error:.6g}"
+        )
+
     pair_metrics = {}
     for target, background in np.unique(indices[:, 6:8], axis=0).astype(int):
         selected = (indices[:, 6] == target) & (indices[:, 7] == background)
@@ -113,6 +204,7 @@ def summarize_factor_trace(
         "metrics": {
             "psi_basis_to_factor_relative_l2": factorization_error,
             "factor_sum_to_aggregate_relative_l2": aggregate_error,
+            "local_jax_replay_to_native_relative_l2": local_error,
             "aggregate_rhs_l2": float(np.linalg.norm(aggregate_rhs)),
         },
         "pair_metrics": pair_metrics,

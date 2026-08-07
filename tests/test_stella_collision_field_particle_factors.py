@@ -36,6 +36,7 @@ def test_factor_summary_reconstructs_product_and_aggregate(tmp_path):
     assert report["factors_per_row"] == 1
     assert report["metrics"]["psi_basis_to_factor_relative_l2"] == 0.0
     assert report["metrics"]["factor_sum_to_aggregate_relative_l2"] == 0.0
+    assert report["metrics"]["local_jax_replay_to_native_relative_l2"] == 0.0
 
 
 def test_factor_summary_rejects_invalid_product(tmp_path):
