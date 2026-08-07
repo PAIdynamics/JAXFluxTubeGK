@@ -89,6 +89,31 @@ def _phi_rms_diagnostics(phi_history):
     }
 
 
+def _candidate_window_phi_growth(phi_history, times, start_fraction: float):
+    """Fit nonzonal potential growth over the candidate stationary window."""
+
+    phi_history = jnp.asarray(phi_history)
+    times = jnp.asarray(times)
+    if phi_history.ndim != 4 or times.shape != (phi_history.shape[0],):
+        raise ValueError("phi history and times must share a time dimension")
+    if phi_history.shape[-1] < 2 or not 0.0 <= start_fraction < 1.0:
+        raise ValueError("candidate growth requires nonzonal modes and valid start fraction")
+    start = min(int(phi_history.shape[0] * start_fraction), phi_history.shape[0] - 2)
+    amplitude = jnp.sqrt(jnp.mean(jnp.abs(phi_history[..., 1:]) ** 2, axis=(1, 2, 3)))[start:]
+    window_times = times[start:]
+    log_amplitude = jnp.log(jnp.maximum(amplitude, 1.0e-14))
+    centered_time = window_times - jnp.mean(window_times)
+    growth_rate = jnp.sum(centered_time * (log_amplitude - jnp.mean(log_amplitude))) / jnp.sum(
+        centered_time**2
+    )
+    return {
+        "candidate_nonzonal_phi_rms_initial": amplitude[0],
+        "candidate_nonzonal_phi_rms_final": amplitude[-1],
+        "candidate_nonzonal_phi_rms_ratio": amplitude[-1] / jnp.maximum(amplitude[0], 1.0e-14),
+        "candidate_nonzonal_phi_growth_rate": growth_rate,
+    }
+
+
 def _checkpoint_contract(args, fourier, state_shape) -> dict:
     """Return the immutable numerical contract required for a safe restart."""
 
@@ -177,6 +202,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--min-phi-rms-ratio", type=float, default=0.8)
     parser.add_argument("--min-stationary-samples", type=int, default=100)
     parser.add_argument("--min-stationary-window-duration", type=float, default=10.0)
+    parser.add_argument("--max-absolute-phi-growth-rate", type=float, default=0.02)
     parser.add_argument("--require-stationary", action="store_true")
     args = parser.parse_args(argv)
     if args.n_kx < 3 or args.n_kx % 2 == 0 or args.n_ky < 2:
@@ -195,6 +221,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("ikxspace must be positive and parallel-recurrence-rate nonnegative")
     if args.min_stationary_samples < 2 or args.min_stationary_window_duration <= 0.0:
         parser.error("stationarity requires at least two samples and positive window duration")
+    if args.max_absolute_phi_growth_rate <= 0.0:
+        parser.error("max-absolute-phi-growth-rate must be positive")
     return args
 
 
@@ -315,6 +343,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     window_duration = float(absolute_times[-1] - absolute_times[window_start])
     phi_diagnostics = _phi_rms_diagnostics(phi_history)
+    candidate_phi = _candidate_window_phi_growth(
+        phi_history,
+        absolute_times,
+        args.start_fraction,
+    )
     stationary = bool(
         np.isfinite(np.asarray(result.state)).all()
         and statistics.n_samples >= args.min_stationary_samples
@@ -322,6 +355,8 @@ def main(argv: list[str] | None = None) -> None:
         and abs(float(statistics.relative_window_drift)) <= args.max_relative_drift
         and relative_standard_error <= args.max_relative_standard_error
         and float(phi_diagnostics["nonzonal_phi_rms_ratio"]) >= args.min_phi_rms_ratio
+        and abs(float(candidate_phi["candidate_nonzonal_phi_growth_rate"]))
+        <= args.max_absolute_phi_growth_rate
     )
     payload = {
         "schema_version": 1,
@@ -345,6 +380,7 @@ def main(argv: list[str] | None = None) -> None:
         "state_rms_initial": float(jnp.sqrt(jnp.mean(jnp.abs(result.history[0]) ** 2))),
         "state_rms_final": float(jnp.sqrt(jnp.mean(jnp.abs(result.state) ** 2))),
         **{key: np.asarray(value).tolist() for key, value in phi_diagnostics.items()},
+        **{key: np.asarray(value).tolist() for key, value in candidate_phi.items()},
         "max_abs_heat_flux": float(jnp.max(jnp.abs(flux))),
         "relative_standard_error": relative_standard_error,
         "stationary_window_duration": window_duration,

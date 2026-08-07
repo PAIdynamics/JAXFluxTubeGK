@@ -665,7 +665,10 @@ grid/physics contract. Restarts reject changed topology, gradients, damping,
 or collision controls. The resumed JSON statistics cover only the new segment,
 which lets an initial transient be excluded deliberately. Stationarity also
 requires at least 100 window samples and duration 10 by default; both controls
-are configurable but should be declared unchanged for acceptance ladders.
+are configurable but should be declared unchanged for acceptance ladders. It
+also fits the logarithmic nonzonal-potential growth rate over exactly the same
+window and requires its magnitude below `0.02` by default, preventing a slowly
+growing or decaying field from passing on an accidentally flat flux interval.
 
 Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination

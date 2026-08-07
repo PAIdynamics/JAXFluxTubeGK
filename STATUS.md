@@ -344,6 +344,13 @@ claimed.
   topology segment reaches time 20 in 572 steps and `49.36 s` wall time while
   writing a contract-checked checkpoint. Statistical gates, not bitwise trace
   identity, remain the nonlinear acceptance contract.
+- Contract-checked checkpoints extended the corrected run through time 220.
+  It develops repeatable nonlinear bursts rather than continued exponential
+  growth, but the final 40-unit window remains nonstationary: mean flux
+  `-30.80`, relative error `0.895%`, drift `0.633`, and half-window means
+  `-35.46`/`-26.16`. Added a candidate-window nonzonal-potential log-growth
+  fit with default magnitude limit `0.02`, closing the possibility that a
+  slowly growing/decaying field passes during a coincidentally flat flux span.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

@@ -3,6 +3,7 @@ import pytest
 from types import SimpleNamespace
 
 from examples.run_nonlinear_heat_flux import (
+    _candidate_window_phi_growth,
     _checkpoint_contract,
     _hyperdiffusion,
     _initial_state,
@@ -30,6 +31,7 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
     assert args.ikxspace == 1
     assert args.min_stationary_samples == 100
     assert args.min_stationary_window_duration == pytest.approx(10.0)
+    assert args.max_absolute_phi_growth_rate == pytest.approx(0.02)
     assert args.gx_fprim * args.rmaj_over_lref == pytest.approx(2.222224)
     assert args.gx_tprim * args.rmaj_over_lref == pytest.approx(6.9166722)
     assert damping.shape == (5, 3)
@@ -54,6 +56,20 @@ def test_phi_rms_diagnostics_separates_zonal_and_nonzonal_amplitudes():
         [10.0, 0.5, 0.5]
     )
     assert float(diagnostics["phi_rms_ratio"]) > 1.0
+
+
+def test_candidate_window_phi_growth_recovers_exponential_rate():
+    times = np.linspace(0.0, 10.0, 21)
+    phi = np.ones((21, 2, 3, 2), dtype=np.complex128)
+    phi[..., 0] = 20.0
+    phi[..., 1] *= np.exp(0.07 * times)[:, None, None]
+
+    diagnostics = _candidate_window_phi_growth(phi, times, 0.5)
+
+    assert float(diagnostics["candidate_nonzonal_phi_growth_rate"]) == pytest.approx(0.07)
+    assert float(diagnostics["candidate_nonzonal_phi_rms_ratio"]) == pytest.approx(
+        np.exp(0.07 * 5.0)
+    )
 
 
 def test_initial_state_does_not_seed_zonal_potential_by_default():

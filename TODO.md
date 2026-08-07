@@ -497,6 +497,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   while keeping adaptive acceptance host-controlled. A production-shape
   `12x12x6`, `9x5` time-20 segment completes in `49.36 s` and 572 steps with a
   valid checkpoint, making staged long-time runs practical.
+  Staged extension through time 220 shows intermittent nonlinear bursts rather
+  than a plateau. The time-140-to-220 segment's final 40-unit window has mean
+  flux `-30.80`, relative error `0.895%`, and drift `0.633`; its two halves
+  average `-35.46` and `-26.16`. The gate now also fits nonzonal-potential
+  logarithmic growth over the candidate window and requires magnitude below
+  `0.02`, preventing a slowly evolving field from passing a coincidentally
+  flat flux interval.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
