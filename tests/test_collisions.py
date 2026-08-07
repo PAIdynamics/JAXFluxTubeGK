@@ -14,6 +14,7 @@ from stellarator_gk import (
     build_conserving_bgk_precompute,
     build_fokker_planck_precompute,
     build_laguerre_legendre_collision_precompute,
+    build_stella_laguerre_legendre_response,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_parallel_grid,
@@ -34,15 +35,11 @@ from stellarator_gk import (
 
 
 def _collision_setup(n_species=1):
-    velocity = build_velocity_grid(
-        VelocityGridSpec(n_vpar=8, n_mu=6, vpar_max=3.5, mu_max=5.0)
-    )
+    velocity = build_velocity_grid(VelocityGridSpec(n_vpar=8, n_mu=6, vpar_max=3.5, mu_max=5.0))
     parallel = build_parallel_grid(
         ParallelGridSpec(n_z=7, z_min=-0.5, z_max=0.5, topology="periodic")
     )
-    geometry = build_s_alpha_geometry(
-        parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18)
-    )
+    geometry = build_s_alpha_geometry(parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18))
     ion = SpeciesParams(1.0, 1.0, 1.0, 1.0, 2.2, 0.0)
     electron = SpeciesParams(-1.0, 0.01, 1.0, 1.0, 2.2, 6.9)
     species = ion if n_species == 1 else (ion, electron)
@@ -69,9 +66,7 @@ def test_conserving_bgk_null_space_and_frequency_scaling():
     velocity, parallel, geometry, species = _collision_setup()
     precompute = build_conserving_bgk_precompute(velocity, geometry.B, species, frequency=0.4)
     coefficients = jnp.ones((1, parallel.z.shape[0], 2, 1, 3))
-    state = jnp.einsum(
-        "sbvmz,szxyb->svmzxy", precompute.equilibrium_basis, coefficients
-    )[0]
+    state = jnp.einsum("sbvmz,szxyb->svmzxy", precompute.equilibrium_basis, coefficients)[0]
 
     np.testing.assert_allclose(conserving_bgk_collision(state, precompute), 0.0, atol=2.0e-12)
 
@@ -87,12 +82,8 @@ def test_conserving_bgk_null_space_and_frequency_scaling():
 
 def test_collision_operator_is_integrated_in_residual_and_cfl():
     velocity, parallel, geometry, species = _collision_setup()
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
-    collisionless = build_linear_residual_precompute(
-        velocity, parallel, fourier, geometry, species
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
+    collisionless = build_linear_residual_precompute(velocity, parallel, fourier, geometry, species)
     collisional = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -110,9 +101,7 @@ def test_collision_operator_is_integrated_in_residual_and_cfl():
     expected = conserving_bgk_collision(state, collisional.collisions)
 
     np.testing.assert_allclose(difference, expected, atol=2.0e-11, rtol=2.0e-11)
-    assert float(estimate_linear_cfl_dt(collisional)) < float(
-        estimate_linear_cfl_dt(collisionless)
-    )
+    assert float(estimate_linear_cfl_dt(collisional)) < float(estimate_linear_cfl_dt(collisionless))
 
 
 def test_collision_frequency_remains_differentiable():
@@ -150,9 +139,7 @@ def test_fokker_planck_foundation_is_finite_jittable_and_differentiable():
     ).astype(jnp.complex128)
 
     def objective(frequency):
-        precompute = build_fokker_planck_precompute(
-            velocity, geometry.B, species, frequency
-        )
+        precompute = build_fokker_planck_precompute(velocity, geometry.B, species, frequency)
         collision = jax.jit(fokker_planck_collision)(state, precompute)
         return jnp.real(jnp.vdot(collision, collision))
 
@@ -179,12 +166,8 @@ def test_fokker_planck_operator_is_integrated_in_residual_and_cfl():
             backend="finite_difference",
         )
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
-    collisionless = build_linear_residual_precompute(
-        velocity, parallel, fourier, geometry, species
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
+    collisionless = build_linear_residual_precompute(velocity, parallel, fourier, geometry, species)
     collisional = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -208,16 +191,12 @@ def test_fokker_planck_operator_is_integrated_in_residual_and_cfl():
         rtol=2.0e-11,
         atol=2.0e-11,
     )
-    assert float(estimate_linear_cfl_dt(collisional)) < float(
-        estimate_linear_cfl_dt(collisionless)
-    )
+    assert float(estimate_linear_cfl_dt(collisional)) < float(estimate_linear_cfl_dt(collisionless))
 
 
 def test_linear_precompute_rejects_unknown_collision_model():
     velocity, parallel, geometry, species = _collision_setup()
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
     with np.testing.assert_raises_regex(ValueError, "collision_model"):
         build_linear_residual_precompute(
             velocity,
@@ -241,20 +220,14 @@ def test_fokker_planck_field_particle_completion_conserves_exchange_moments():
             backend="finite_difference",
         )
     )
-    state = (
-        jax.random.normal(
-            jax.random.key(61),
-            (2, 8, 6, parallel.z.shape[0], 1, 1),
-        )
-        + 1j
-        * jax.random.normal(
-            jax.random.key(62),
-            (2, 8, 6, parallel.z.shape[0], 1, 1),
-        )
+    state = jax.random.normal(
+        jax.random.key(61),
+        (2, 8, 6, parallel.z.shape[0], 1, 1),
+    ) + 1j * jax.random.normal(
+        jax.random.key(62),
+        (2, 8, 6, parallel.z.shape[0], 1, 1),
     )
-    raw = build_fokker_planck_precompute(
-        velocity, geometry.B, species, frequency=(0.2, 0.7)
-    )
+    raw = build_fokker_planck_precompute(velocity, geometry.B, species, frequency=(0.2, 0.7))
     conserving = build_fokker_planck_precompute(
         velocity,
         geometry.B,
@@ -282,9 +255,7 @@ def test_solver_builds_exchange_conserving_fokker_planck_precompute():
             backend="finite_difference",
         )
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
     precompute = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -312,9 +283,7 @@ def test_xu_species_local_completion_removes_each_species_defect():
             backend="finite_difference",
         )
     )
-    state = jax.random.normal(
-        jax.random.key(71), (2, 8, 6, parallel.z.size, 1, 1)
-    )
+    state = jax.random.normal(jax.random.key(71), (2, 8, 6, parallel.z.size, 1, 1))
     precompute = build_fokker_planck_precompute(
         velocity,
         geometry.B,
@@ -330,9 +299,7 @@ def test_xu_species_local_completion_removes_each_species_defect():
     np.testing.assert_allclose(energy, 0.0, atol=2.0e-10, rtol=0.0)
     assert np.isfinite(float(jnp.max(precompute.row_sum_bound)))
 
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
     solver_precompute = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -358,15 +325,9 @@ def test_pairwise_exchange_conserves_each_pair_and_couples_species():
             backend="finite_difference",
         )
     )
-    state = (
-        jax.random.normal(
-            jax.random.key(81), (2, 8, 6, parallel.z.size, 1, 1)
-        )
-        + 1j
-        * jax.random.normal(
-            jax.random.key(82), (2, 8, 6, parallel.z.size, 1, 1)
-        )
-    )
+    state = jax.random.normal(
+        jax.random.key(81), (2, 8, 6, parallel.z.size, 1, 1)
+    ) + 1j * jax.random.normal(jax.random.key(82), (2, 8, 6, parallel.z.size, 1, 1))
     precompute = build_fokker_planck_precompute(
         velocity,
         geometry.B,
@@ -415,15 +376,9 @@ def test_reciprocal_exchange_conserves_pairs_and_uses_partner_response():
             backend="finite_difference",
         )
     )
-    state = (
-        jax.random.normal(
-            jax.random.key(91), (2, 8, 6, parallel.z.size, 1, 1)
-        )
-        + 1j
-        * jax.random.normal(
-            jax.random.key(92), (2, 8, 6, parallel.z.size, 1, 1)
-        )
-    )
+    state = jax.random.normal(
+        jax.random.key(91), (2, 8, 6, parallel.z.size, 1, 1)
+    ) + 1j * jax.random.normal(jax.random.key(92), (2, 8, 6, parallel.z.size, 1, 1))
     precompute = build_fokker_planck_precompute(
         velocity,
         geometry.B,
@@ -456,9 +411,7 @@ def test_reciprocal_exchange_conserves_pairs_and_uses_partner_response():
         np.testing.assert_allclose(pair_moments, 0.0, atol=4e-10, rtol=0.0)
 
     electron_changed = state.at[1].multiply(1.1)
-    changed_components = fokker_planck_reciprocal_components(
-        electron_changed, precompute
-    )
+    changed_components = fokker_planck_reciprocal_components(electron_changed, precompute)
     assert float(jnp.max(jnp.abs(changed_components[0, 1] - components[0, 1]))) > 1e-8
 
     def objective(values):
@@ -493,9 +446,7 @@ def test_reciprocal_exchange_row_sum_bound_bounds_dense_operator():
         return fokker_planck_collision(values.reshape(shape), precompute).reshape(-1)
 
     matrix = jax.jacfwd(flattened_operator)(jnp.zeros(np.prod(shape)))
-    exact_bounds = jnp.max(
-        jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1
-    )
+    exact_bounds = jnp.max(jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1)
     assert bool(jnp.all(exact_bounds <= precompute.row_sum_bound * (1.0 + 2e-12)))
 
 
@@ -510,9 +461,7 @@ def test_solver_accepts_reciprocal_exchange_collision_model():
             backend="finite_difference",
         )
     )
-    fourier = build_fourier_grid(
-        FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,))
-    )
+    fourier = build_fourier_grid(FourierGridSpec(n_kx=1, n_ky=1, kx_max=0.0, ky_values=(0.3,)))
     precompute = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -543,12 +492,8 @@ def test_laguerre_legendre_low_rank_contract_is_jittable_and_differentiable():
     collision = jax.jit(laguerre_legendre_collision)(state, precompute)
 
     moments = jnp.einsum("abcvmzxy,bvmzxy->abczxy", driver, state)
-    expected_components = jnp.einsum(
-        "abcvmzxy,abczxy->abvmzxy", response, moments
-    )
-    from_moments = jax.jit(laguerre_legendre_collision_components_from_moments)(
-        moments, precompute
-    )
+    expected_components = jnp.einsum("abcvmzxy,abczxy->abvmzxy", response, moments)
+    from_moments = jax.jit(laguerre_legendre_collision_components_from_moments)(moments, precompute)
     np.testing.assert_allclose(components, expected_components, atol=2e-13)
     np.testing.assert_allclose(from_moments, expected_components, atol=2e-13)
     np.testing.assert_allclose(collision, jnp.sum(components, axis=1), atol=2e-13)
@@ -573,14 +518,10 @@ def test_laguerre_legendre_row_sum_bound_bounds_dense_operator():
     state_shape = (2, 2, 2, 1, 1, 1)
 
     def flattened_operator(values):
-        return laguerre_legendre_collision(
-            values.reshape(state_shape), precompute
-        ).reshape(-1)
+        return laguerre_legendre_collision(values.reshape(state_shape), precompute).reshape(-1)
 
     matrix = jax.jacfwd(flattened_operator)(jnp.zeros(np.prod(state_shape)))
-    exact_bounds = jnp.max(
-        jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1
-    )
+    exact_bounds = jnp.max(jnp.sum(jnp.abs(matrix), axis=1).reshape(2, -1), axis=1)
     assert bool(jnp.all(exact_bounds <= precompute.row_sum_bound * (1.0 + 2e-12)))
 
 
@@ -591,6 +532,102 @@ def test_laguerre_legendre_contract_rejects_invalid_component_labels():
             coefficients,
             coefficients,
             component_labels=((0, 0, 1), (0, 0, 1)),
+        )
+
+
+def test_stella_laguerre_legendre_response_matches_normalized_basis_formula():
+    velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    labels = ((0, 0, 0), (1, -1, 0), (1, 0, 0), (1, 1, 0))
+    pair_frequency = jnp.asarray(((0.2, 0.3), (0.4, 0.5)))
+    delta = jnp.linspace(
+        0.5,
+        1.5,
+        2 * 2 * len(labels) * 8 * 6 * parallel.z.size,
+    ).reshape(2, 2, len(labels), 8, 6, parallel.z.size)
+    gyroaverage = jnp.linspace(
+        0.7,
+        1.1,
+        2 * 2 * 6 * parallel.z.size * 2 * 3,
+    ).reshape(2, 2, 6, parallel.z.size, 2, 3)
+
+    response = build_stella_laguerre_legendre_response(
+        velocity,
+        geometry.B,
+        species,
+        pair_frequency,
+        delta,
+        gyroaverage,
+        component_labels=labels,
+    )
+
+    vpar = np.asarray(velocity.vpar)[:, None, None]
+    mu = np.asarray(velocity.mu)[None, :, None]
+    magnetic_field = np.asarray(geometry.B)[None, None, :]
+    speed = np.sqrt(vpar**2 + 2.0 * mu * magnetic_field)
+    xi = np.divide(vpar, speed, out=np.zeros_like(speed), where=speed > 0.0)
+    perpendicular = np.sqrt(np.maximum(1.0 - xi**2, 0.0))
+    polynomials = (np.ones_like(xi), 0.5 * perpendicular, xi, -perpendicular)
+    normalizations = (
+        np.sqrt(1.0 / (4.0 * np.pi)),
+        np.sqrt(3.0 / (2.0 * np.pi)),
+        np.sqrt(3.0 / (4.0 * np.pi)),
+        np.sqrt(3.0 / (8.0 * np.pi)),
+    )
+    masses = np.asarray([item.mass for item in species])
+    mass_factor = (masses[:, None] / masses[None, :]) ** -1.5
+    expected_components = []
+    for component, (_l, m, _j) in enumerate(labels):
+        negative_m_sign = -1.0 if m < 0 else 1.0
+        expected_components.append(
+            np.asarray(pair_frequency)[:, :, None, None, None, None, None]
+            * mass_factor[:, :, None, None, None, None, None]
+            * np.asarray(delta)[:, :, component, :, :, :, None, None]
+            * negative_m_sign
+            * normalizations[component]
+            * polynomials[component][None, None, :, :, :, None, None]
+            * np.asarray(gyroaverage)[:, None, abs(m), None, :, :, :, :]
+        )
+    expected = np.stack(expected_components, axis=2)
+
+    assert response.shape == (2, 2, 4, 8, 6, parallel.z.size, 2, 3)
+    np.testing.assert_allclose(response, expected, rtol=2e-13, atol=2e-13)
+
+
+def test_stella_laguerre_legendre_response_is_jittable_and_differentiable():
+    velocity, parallel, geometry, species = _collision_setup()
+    labels = ((0, 0, 0), (1, 0, 0))
+    frequency = jnp.asarray(((0.3,),))
+    delta = jnp.ones((1, 1, 2, 8, 6, parallel.z.size))
+    gyroaverage = jnp.ones((1, 1, 6, parallel.z.size, 1, 1))
+
+    def objective(magnetic_field):
+        response = build_stella_laguerre_legendre_response(
+            velocity,
+            magnetic_field,
+            species,
+            frequency,
+            delta,
+            gyroaverage,
+            component_labels=labels,
+        )
+        return jnp.sum(response**2)
+
+    value, gradient = jax.jit(jax.value_and_grad(objective))(geometry.B)
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_stella_laguerre_legendre_response_validates_coefficient_axes():
+    velocity, parallel, geometry, species = _collision_setup()
+    with pytest.raises(ValueError, match="gyroaverage"):
+        build_stella_laguerre_legendre_response(
+            velocity,
+            geometry.B,
+            species,
+            jnp.ones((1, 1)),
+            jnp.ones((1, 1, 1, 8, 6, parallel.z.size)),
+            jnp.ones((1, 1, 6, parallel.z.size)),
+            component_labels=((0, 0, 0),),
         )
 
 
@@ -633,9 +670,7 @@ def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
         dvp=float(reference_geometry["dvp"]),
         sgr_dist=float(reference_geometry["sgr_dist"]),
     )
-    reference_stencil = precompute_collisions(reference_geometry, reference_params)[
-        "coll_stencil"
-    ]
+    reference_stencil = precompute_collisions(reference_geometry, reference_params)["coll_stencil"]
     reference_mu = np.asarray(reference_geometry["mugr"])
     dvperp = 2.0 * np.sqrt(2.0 * reference_mu[0])
     velocity = build_velocity_grid(
@@ -656,9 +691,8 @@ def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
     )
     np.testing.assert_allclose(observed.stencil[0], reference_stencil, rtol=2e-12, atol=2e-12)
 
-    state = (
-        jax.random.normal(jax.random.key(44), (8, 4, 6, 1, 1))
-        + 1j * jax.random.normal(jax.random.key(45), (8, 4, 6, 1, 1))
+    state = jax.random.normal(jax.random.key(44), (8, 4, 6, 1, 1)) + 1j * jax.random.normal(
+        jax.random.key(45), (8, 4, 6, 1, 1)
     )
     np.testing.assert_allclose(
         fokker_planck_collision(state, observed),
@@ -672,9 +706,7 @@ def test_fokker_planck_stencil_and_action_match_pinned_gyaradax(gyaradax_root):
         coll_mom_conservation=True,
         coll_ene_conservation=True,
     )
-    conserving_reference = precompute_collisions(
-        reference_geometry, conserving_reference_params
-    )
+    conserving_reference = precompute_collisions(reference_geometry, conserving_reference_params)
     conserving_observed = build_fokker_planck_precompute(
         velocity,
         reference_geometry["bn"],

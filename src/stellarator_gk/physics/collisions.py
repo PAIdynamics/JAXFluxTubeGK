@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import factorial, pi
 from typing import ClassVar
 
 import jax
@@ -113,6 +114,114 @@ class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "component_labels")
 
 
+def _stella_associated_legendre(degree: int, order: int, x):
+    """Return stella's Condon--Shortley associated Legendre polynomial."""
+
+    absolute_order = abs(order)
+    if absolute_order > degree:
+        return jnp.zeros_like(x)
+    diagonal = jnp.ones_like(x)
+    for diagonal_degree in range(1, absolute_order + 1):
+        diagonal = diagonal * (-(2 * diagonal_degree - 1)) * jnp.sqrt(jnp.maximum(1.0 - x * x, 0.0))
+    if degree == absolute_order:
+        result = diagonal
+    else:
+        previous = jnp.zeros_like(x)
+        current = diagonal
+        for recurrence_degree in range(absolute_order + 1, degree + 1):
+            following = (
+                (2 * recurrence_degree - 1) * x * current
+                - (recurrence_degree - 1 + absolute_order) * previous
+            ) / (recurrence_degree - absolute_order)
+            previous, current = current, following
+        result = current
+    if order < 0:
+        result = (
+            (-1) ** absolute_order
+            * factorial(degree - absolute_order)
+            / factorial(degree + absolute_order)
+            * result
+        )
+    return result
+
+
+def build_stella_laguerre_legendre_response(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    delta_j,
+    gyroaverage,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...],
+):
+    """Construct stella-normalized field-particle response coefficients.
+
+    ``delta_j`` has shape ``(target, background, component, vpar, mu, z)``.
+    ``gyroaverage`` has shape ``(target, |m|, mu, z, kx, ky)`` and contains
+    stella's ``J_|m|`` factors.  The returned response has the low-rank
+    coefficient shape ``(target, background, component, vpar, mu, z, kx, ky)``.
+
+    This builder implements the independently testable response side of
+    stella's Laguerre--Legendre field-particle operator.  Construction of
+    ``delta_j`` from incomplete-gamma velocity integrals is a separate step.
+    """
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    n_species = len(species_tuple)
+    labels = tuple(tuple(int(value) for value in label) for label in component_labels)
+    if any(len(label) != 3 for label in labels) or len(set(labels)) != len(labels):
+        raise ValueError("component labels must be unique (l,m,j) triples")
+    if any(degree < 0 or abs(order) > degree or laguerre < 0 for degree, order, laguerre in labels):
+        raise ValueError("component labels require l >= |m| and j >= 0")
+
+    vpar = jnp.asarray(velocity_grid.vpar)
+    mu = jnp.asarray(velocity_grid.mu)
+    magnetic_field = jnp.asarray(B)
+    frequencies = jnp.asarray(pair_frequency)
+    deltas = jnp.asarray(delta_j)
+    gyroaverages = jnp.asarray(gyroaverage)
+    expected_delta = (n_species, n_species, len(labels), vpar.size, mu.size, magnetic_field.size)
+    if deltas.shape != expected_delta:
+        raise ValueError(f"delta_j has shape {deltas.shape}, expected {expected_delta}")
+    if frequencies.shape != (n_species, n_species):
+        raise ValueError(
+            f"pair_frequency has shape {frequencies.shape}, expected {(n_species, n_species)}"
+        )
+    if gyroaverages.ndim != 6 or gyroaverages.shape[:1] != (n_species,):
+        raise ValueError("gyroaverage must have shape (target,|m|,mu,z,kx,ky)")
+    if gyroaverages.shape[2:4] != (mu.size, magnetic_field.size):
+        raise ValueError("gyroaverage mu/z axes do not match the velocity and field grids")
+    maximum_order = max((abs(m) for _, m, _ in labels), default=0)
+    if gyroaverages.shape[1] <= maximum_order:
+        raise ValueError("gyroaverage does not contain every required |m| order")
+
+    speed = jnp.sqrt(
+        vpar[:, None, None] ** 2 + 2.0 * mu[None, :, None] * magnetic_field[None, None, :]
+    )
+    xi = jnp.where(speed > 0.0, vpar[:, None, None] / speed, 0.0)
+    masses = jnp.asarray([item.mass for item in species_tuple])
+    mass_factor = (masses[:, None] / masses[None, :]) ** -1.5
+    responses = []
+    for component, (degree, order, _laguerre) in enumerate(labels):
+        clm = (
+            (2 * degree + 1) * factorial(degree - order) / (4.0 * pi * factorial(degree + order))
+        ) ** 0.5
+        legendre = _stella_associated_legendre(degree, order, xi)
+        sign = -1.0 if order < 0 and abs(order) % 2 else 1.0
+        velocity_basis = sign * clm * legendre
+        bessel = gyroaverages[:, abs(order), ...]
+        response = (
+            frequencies[:, :, None, None, None, None, None]
+            * mass_factor[:, :, None, None, None, None, None]
+            * deltas[:, :, component, :, :, :, None, None]
+            * velocity_basis[None, None, :, :, :, None, None]
+            * bessel[:, None, None, :, :, :, :]
+        )
+        responses.append(response)
+    return jnp.stack(responses, axis=2)
+
+
 def build_laguerre_legendre_collision_precompute(
     driver,
     response,
@@ -184,9 +293,7 @@ def laguerre_legendre_collision_components_from_moments(
     return jnp.einsum("abcvmzxy,abczxy->abvmzxy", precompute.response, moments)
 
 
-def laguerre_legendre_collision(
-    distribution, precompute: LaguerreLegendreCollisionPrecompute
-):
+def laguerre_legendre_collision(distribution, precompute: LaguerreLegendreCollisionPrecompute):
     """Apply a supplied Laguerre--Legendre low-rank collision contract."""
 
     values = jnp.asarray(distribution)
@@ -297,12 +404,10 @@ def build_fokker_planck_precompute(
     reciprocal_response_gains = None
     conservation_gain = jnp.asarray(1.0)
     if conservation_model == "global_exchange":
-        invariants, basis, inverse, measure, conservation_gain = (
-            _build_fokker_planck_conservation(
-                velocity_grid,
-                B,
-                species_tuple,
-            )
+        invariants, basis, inverse, measure, conservation_gain = _build_fokker_planck_conservation(
+            velocity_grid,
+            B,
+            species_tuple,
         )
     elif conservation_model == "xu_species_local":
         (
@@ -319,9 +424,7 @@ def build_fokker_planck_precompute(
             species_tuple,
         )
         pair_indices = tuple(
-            (first, second)
-            for first in range(n_species)
-            for second in range(first, n_species)
+            (first, second) for first in range(n_species) for second in range(first, n_species)
         )
         pair_data = [
             _build_fokker_planck_conservation(
@@ -364,20 +467,15 @@ def build_fokker_planck_precompute(
                             item[0][local_species + 1, partner],
                         )
                     )
-                    response = jnp.einsum(
-                        "dvmz,zdc->cvmz", local_basis, target_inverse
-                    )
+                    response = jnp.einsum("dvmz,zdc->cvmz", local_basis, target_inverse)
                     driver_norm = jnp.sum(
                         jnp.abs(driver_invariants) * item[3][None, ...],
                         axis=(1, 2),
                     )
-                    density_gain = jnp.max(
-                        jnp.abs(response[0]) * driver_norm[0][None, None, :]
-                    )
+                    density_gain = jnp.max(jnp.abs(response[0]) * driver_norm[0][None, None, :])
                     exchange_gain = jnp.max(
                         jnp.sum(
-                            jnp.abs(response[1:])
-                            * driver_norm[1:, None, None, :],
+                            jnp.abs(response[1:]) * driver_norm[1:, None, None, :],
                             axis=0,
                         )
                     )
@@ -388,22 +486,16 @@ def build_fokker_planck_precompute(
             reciprocal_response_gains = tuple(reciprocal_gains)
 
     if conservation_model == "pairwise_exchange":
-        pair_row_bounds = jnp.max(
-            jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4)
-        )
+        pair_row_bounds = jnp.max(jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4))
         pair_gains = jnp.ones((n_species, n_species), dtype=vpar.dtype)
         for (first, second), item in zip(pair_indices, pair_data, strict=True):
             pair_gains = pair_gains.at[first, second].set(item[4])
             pair_gains = pair_gains.at[second, first].set(item[4])
         row_sum_bound = jnp.sum(pair_row_bounds * pair_gains, axis=1)
     elif conservation_model == "reciprocal_exchange":
-        pair_row_bounds = jnp.max(
-            jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4)
-        )
+        pair_row_bounds = jnp.max(jnp.sum(jnp.abs(pair_stencil), axis=2), axis=(2, 3, 4))
         row_sum_bound = jnp.zeros((n_species,), dtype=vpar.dtype)
-        for (first, second), gains in zip(
-            pair_indices, reciprocal_response_gains, strict=True
-        ):
+        for (first, second), gains in zip(pair_indices, reciprocal_response_gains, strict=True):
             if first == second:
                 row_sum_bound = row_sum_bound.at[first].add(
                     pair_row_bounds[first, first] * (1.0 + jnp.sum(gains[0]))
@@ -419,8 +511,7 @@ def build_fokker_planck_precompute(
                 )
     else:
         row_sum_bound = (
-            jnp.max(jnp.sum(jnp.abs(stencil), axis=1), axis=(1, 2, 3))
-            * conservation_gain
+            jnp.max(jnp.sum(jnp.abs(stencil), axis=1), axis=(1, 2, 3)) * conservation_gain
         )
     return FokkerPlanckPrecompute(
         stencil=stencil,
@@ -471,17 +562,11 @@ def fokker_planck_collision(distribution, precompute: FokkerPlanckPrecompute):
             precompute.measure,
         )
     elif precompute.conservation_model == "xu_species_local":
-        momentum_defect = jnp.einsum(
-            "svmz,svmzxy->szxy", precompute.xu_vpar_weight, result
-        )
-        energy_defect = jnp.einsum(
-            "svmz,svmzxy->szxy", precompute.xu_energy_weight, result
-        )
+        momentum_defect = jnp.einsum("svmz,svmzxy->szxy", precompute.xu_vpar_weight, result)
+        energy_defect = jnp.einsum("svmz,svmzxy->szxy", precompute.xu_energy_weight, result)
         result = result - (
-            momentum_defect[:, None, None, :, :, :]
-            * precompute.xu_momentum_factor[..., None, None]
-            + energy_defect[:, None, None, :, :, :]
-            * precompute.xu_energy_factor[..., None, None]
+            momentum_defect[:, None, None, :, :, :] * precompute.xu_momentum_factor[..., None, None]
+            + energy_defect[:, None, None, :, :, :] * precompute.xu_energy_factor[..., None, None]
         )
     return result[0] if original_ndim == 5 else result
 
@@ -529,9 +614,7 @@ def fokker_planck_pairwise_components(distribution, precompute: FokkerPlanckPrec
                     ),
                 )
             )
-        corrected = _project_collision_constraints(
-            raw, invariants, basis, inverse, measure
-        )
+        corrected = _project_collision_constraints(raw, invariants, basis, inverse, measure)
         components = components.at[first, second].set(corrected[0])
         if first != second:
             components = components.at[second, first].set(corrected[1])
@@ -574,9 +657,7 @@ def fokker_planck_reciprocal_components(distribution, precompute: FokkerPlanckPr
                     values[target], precompute.pair_stencil[target, background]
                 )
                 for target, background in (
-                    ((first, first),)
-                    if first == second
-                    else ((first, second), (second, first))
+                    ((first, first),) if first == second else ((first, second), (second, first))
                 )
             )
         )
@@ -606,13 +687,9 @@ def fokker_planck_reciprocal_components(distribution, precompute: FokkerPlanckPr
                 )
             )
             coefficients = jnp.einsum("zdc,czxy->zdxy", inverses[local_target], desired)
-            correction = jnp.einsum(
-                "dvmz,zdxy->vmzxy", local_bases[local_target], coefficients
-            )
+            correction = jnp.einsum("dvmz,zdxy->vmzxy", local_bases[local_target], coefficients)
             background = second if target == first else first
-            components = components.at[target, background].set(
-                raw[local_target] + correction
-            )
+            components = components.at[target, background].set(raw[local_target] + correction)
     return components
 
 
@@ -664,9 +741,7 @@ def build_conserving_bgk_precompute(
 
     B = jnp.asarray(B)
     energy = jnp.asarray(normalized_energy(velocity_grid.vpar, velocity_grid.mu, B, species_tuple))
-    vpar = jnp.broadcast_to(
-        jnp.asarray(velocity_grid.vpar)[None, :, None, None], energy.shape
-    )
+    vpar = jnp.broadcast_to(jnp.asarray(velocity_grid.vpar)[None, :, None, None], energy.shape)
     invariants = jnp.stack((jnp.ones_like(energy), vpar, energy), axis=1)
     equilibrium = jnp.asarray(maxwellian(velocity_grid.vpar, velocity_grid.mu, B, species_tuple))
     equilibrium_basis = invariants * equilibrium[:, None, ...]
@@ -710,12 +785,8 @@ def conserving_bgk_collision(distribution, precompute: ConservingBGKPrecompute):
         distribution,
     )
     coefficients = jnp.einsum("szba,szxya->szxyb", precompute.moment_inverse, moments)
-    projection = jnp.einsum(
-        "sbvmz,szxyb->svmzxy", precompute.equilibrium_basis, coefficients
-    )
-    result = -precompute.frequency[:, None, None, None, None, None] * (
-        distribution - projection
-    )
+    projection = jnp.einsum("sbvmz,szxyb->svmzxy", precompute.equilibrium_basis, coefficients)
+    result = -precompute.frequency[:, None, None, None, None, None] * (distribution - projection)
     return result[0] if original_ndim == 5 else result
 
 
@@ -740,22 +811,21 @@ def _build_fokker_planck_conservation(velocity_grid, B, species):
     maxwellians = jnp.asarray(maxwellian(velocity_grid.vpar, velocity_grid.mu, B, species))
     energy = jnp.asarray(normalized_energy(velocity_grid.vpar, velocity_grid.mu, B, species))
     vpar = jnp.asarray(velocity_grid.vpar)[None, :, None, None]
-    momentum_scale = jnp.sqrt(
-        jnp.asarray([item.mass * item.temperature for item in species])
-    )[:, None, None, None]
+    momentum_scale = jnp.sqrt(jnp.asarray([item.mass * item.temperature for item in species]))[
+        :, None, None, None
+    ]
     physical_momentum = momentum_scale * vpar * jnp.ones_like(energy)
     physical_energy = (
-        jnp.asarray([item.temperature for item in species])[:, None, None, None]
-        * energy
+        jnp.asarray([item.temperature for item in species])[:, None, None, None] * energy
     )
     measure = (
         jnp.asarray(velocity_grid.w_vpar)[:, None, None]
         * jnp.asarray(velocity_grid.w_mu)[None, :, None]
         * B[None, None, :]
     )
-    density_invariants = jnp.eye(n_species)[:, :, None, None, None] * jnp.ones_like(
-        energy
-    )[None, ...]
+    density_invariants = (
+        jnp.eye(n_species)[:, :, None, None, None] * jnp.ones_like(energy)[None, ...]
+    )
     invariants = jnp.concatenate(
         (
             density_invariants,
@@ -859,10 +929,9 @@ def _erf_derivative(value):
 def _pitch_diffusion(speed, prefactor, background_scale):
     safe_speed = jnp.maximum(speed, 1.0e-14)
     background_speed = jnp.maximum(safe_speed * background_scale, 1.0e-14)
-    numerator = (
-        (2.0 - 1.0 / background_speed**2) * erf(background_speed)
-        + _erf_derivative(background_speed) / background_speed
-    )
+    numerator = (2.0 - 1.0 / background_speed**2) * erf(background_speed) + _erf_derivative(
+        background_speed
+    ) / background_speed
     return prefactor * numerator / (4.0 * safe_speed)
 
 
@@ -951,9 +1020,7 @@ def _build_fokker_planck_stencil(
     c_pitch = perp_plus * vp**2 * pitch_c / (sq_c * safe_vperp * dvrp**2)
     c_energy = perp_plus**3 * energy_c / (sq_c * safe_vperp * dvrp**2)
     c_drag = perp_plus**2 * drag_c / (jnp.sqrt(sq_c) * safe_vperp * dvrp)
-    mu_top = (jnp.arange(nmu).reshape(1, nmu, 1) < nmu - 1) | (
-        not mass_conserving_boundary
-    )
+    mu_top = (jnp.arange(nmu).reshape(1, nmu, 1) < nmu - 1) | (not mass_conserving_boundary)
     c_pitch, c_energy, c_drag = (
         jnp.where(mu_top, value, 0.0) for value in (c_pitch, c_energy, c_drag)
     )
@@ -964,14 +1031,10 @@ def _build_fokker_planck_stencil(
     d_energy = perp_minus**3 * energy_d / (sq_d * safe_vperp * dvrp**2)
     d_drag = perp_minus**2 * drag_d / (jnp.sqrt(sq_d) * safe_vperp * dvrp)
 
-    cross_e = (-perp_plus**2 * vp * pitch_c + perp_plus**2 * vp * energy_c) / (
-        safe_vperp * sq_c
-    )
+    cross_e = (-(perp_plus**2) * vp * pitch_c + perp_plus**2 * vp * energy_c) / (safe_vperp * sq_c)
     cross_e = jnp.where(mu_top, cross_e, 0.0)
-    mu_bottom = (jnp.arange(nmu).reshape(1, nmu, 1) > 0) | (
-        not mass_conserving_boundary
-    )
-    cross_f = (-perp_minus**2 * vp * pitch_d + perp_minus**2 * vp * energy_d) / (
+    mu_bottom = (jnp.arange(nmu).reshape(1, nmu, 1) > 0) | (not mass_conserving_boundary)
+    cross_f = (-(perp_minus**2) * vp * pitch_d + perp_minus**2 * vp * energy_d) / (
         safe_vperp * sq_d
     )
     cross_f = jnp.where(mu_bottom, cross_f, 0.0)
@@ -988,8 +1051,7 @@ def _build_fokker_planck_stencil(
     delta = 0.5
     return target_vth * jnp.stack(
         (
-            -(sum_a + sum_b + sum_c + sum_d)
-            + delta * (a_drag - b_drag + c_drag - d_drag),
+            -(sum_a + sum_b + sum_c + sum_d) + delta * (a_drag - b_drag + c_drag - d_drag),
             sum_a + (1.0 - delta) * a_drag + e - f,
             sum_b - (1.0 - delta) * b_drag - e + f,
             sum_c + (1.0 - delta) * c_drag + g - h,
@@ -1010,10 +1072,9 @@ def _apply_fokker_planck_stencil(distribution, stencil):
     for index, (v_shift, mu_shift) in enumerate(shifts):
         v_index = jnp.clip(iv + v_shift, 0, nv - 1)
         mu_index = jnp.clip(imu + mu_shift, 0, nmu - 1)
-        valid = (
-            ((iv + v_shift >= 0) & (iv + v_shift < nv))[:, None]
-            & ((imu + mu_shift >= 0) & (imu + mu_shift < nmu))[None, :]
-        )
+        valid = ((iv + v_shift >= 0) & (iv + v_shift < nv))[:, None] & (
+            (imu + mu_shift >= 0) & (imu + mu_shift < nmu)
+        )[None, :]
         shifted = jnp.take(distribution, v_index, axis=0)
         shifted = jnp.take(shifted, mu_index, axis=1)
         shifted = jnp.where(valid[:, :, None, None, None], shifted, 0.0)
@@ -1028,6 +1089,7 @@ __all__ = [
     "build_conserving_bgk_precompute",
     "build_fokker_planck_precompute",
     "build_laguerre_legendre_collision_precompute",
+    "build_stella_laguerre_legendre_response",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
