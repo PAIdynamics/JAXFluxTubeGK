@@ -159,7 +159,12 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "initial diagnostics and a 31.14% relative-L2 field-particle effect "
                 "in h2_vs_vpamus (0.1996% in g2_vs_vpamus). This establishes a "
                 "sensitive native discriminator, but the squared reduced diagnostic "
-                "does not expose signed coefficients/action, so parity is still absent. "
+                "does not expose signed coefficients/action. A non-destructive scratch "
+                "patch now traces all 2,808 rows of stella's aggregate signed "
+                "field-particle RHS before its final implicit differential inversion. "
+                "The RHS L2 norm is 1.71214e-3 (9.9778% of the input norm), with "
+                "ion/electron norms 4.08757e-5/1.71165e-3. Native signed observability "
+                "is therefore closed, but common-grid coefficient/action parity is absent. "
                 "A_parallel/B_parallel fields, the mixed-state transform, and the "
                 "complete one-state electromagnetic RHS, one RK4 step, and a five-step "
                 "trajectory match pinned Gyaradax when both codes use its separable "
@@ -174,9 +179,9 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "row sum, closing the production-grid electromagnetic sub-gap."
             ),
             next_action=(
-                "Add a scratch-build stella trace of the signed Laguerre--Legendre "
-                "field-particle increment on a controlled distribution, then compare "
-                "reciprocal inter-species coefficients and action on a common grid."
+                "Implement stella's Laguerre--Legendre reciprocal field-particle "
+                "coefficients on a common velocity grid and compare the signed action "
+                "against the revision-pinned scratch trace."
             ),
             metrics=(
                 ConfidenceMetric("em_local_growth_finest_change", 2.1962696972943164e-2),
@@ -187,6 +192,8 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 ConfidenceMetric("em_finest_mode_parity_error", 7.576553792617767e-10),
                 ConfidenceMetric("stella_fieldpart_h2_relative_l2_effect", 0.3113869790194909),
                 ConfidenceMetric("stella_fieldpart_g2_relative_l2_effect", 0.0019958403448710844),
+                ConfidenceMetric("stella_fieldpart_signed_rhs_l2", 0.0017121379931919567),
+                ConfidenceMetric("stella_fieldpart_signed_rhs_input_ratio", 0.09977835395991519),
             ),
         ),
         ValidationConfidenceGap(

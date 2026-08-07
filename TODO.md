@@ -405,9 +405,15 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   native discriminator. Its field-particle-on/off inputs have identical initial
   diagnostics, while one implicit step changes `h2_vs_vpamus` by `31.14%` in
   relative L2 (`g2_vs_vpamus` changes by `0.1996%`). This proves that the compact
-  case is sensitive to stella's Laguerre--Legendre field-particle path. It does
-  not expose the signed collision action, so coefficient/action parity still
-  requires a stella trace or diagnostic extension before this item can close.
+  case is sensitive to stella's Laguerre--Legendre field-particle path. A
+  non-destructive scratch-build patch now also exports all 2,808 rows of the
+  aggregate signed field-particle RHS before the final implicit differential
+  inversion. The trace is finite and nonzero (`L2=1.71214e-3`, `9.9778%` of the
+  traced input norm); its ion/electron norms are `4.08757e-5`/`1.71165e-3`.
+  This closes native signed-action observability, not parity. The remaining
+  collision implementation is a common-grid Laguerre--Legendre coefficient and
+  action comparison; the existing GKW finite-difference projection must not be
+  treated as that model.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear

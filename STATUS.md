@@ -38,8 +38,15 @@ claimed.
   from the actual stella checkout and treats the embedded tag as informational.
 - This advances but does not close the collision gate: squared, reduced NetCDF
   diagnostics cannot establish signed collision-action or coefficient parity.
-  The next implementation is a scratch-build stella trace of the field-particle
-  increment on a controlled distribution, followed by a common-grid comparison.
+- Added a non-destructive scratch-build patch at stella's stable implicit
+  field-particle boundary. The compiled pinned source exports all 2,808 signed
+  phase-space rows before the final differential inversion. The RHS is finite,
+  nonzero in `88.89%` of rows, has aggregate `L2=1.71214e-3` (`9.9778%` of the
+  input norm), and ion/electron norms `4.08757e-5`/`1.71165e-3`.
+- Signed native-action observability is now closed. The next collision step is
+  a common-grid Laguerre--Legendre coefficient/action implementation and parity
+  comparison; the current GKW finite-difference pairwise projection is a
+  different model and remains experimental.
 
 ### 2026-08-07: Priority 5 Reproducibility and Correlated Statistics
 

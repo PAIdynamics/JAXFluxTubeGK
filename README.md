@@ -612,6 +612,25 @@ the executable's embedded NetCDF version is informational because some
 out-of-tree builds resolve the enclosing repository instead. This discriminator
 does not replace the remaining signed coefficient/action parity test.
 
+For the signed native action, prepare and build an instrumented copy in scratch
+storage; the dependency checkout is never edited:
+
+```bash
+.venv/bin/python scripts/prepare_stella_collision_field_particle_trace_run.py \
+  --stella-source ../stella \
+  --output-root /tmp/optimal-fusion-stella-collision-trace --overwrite
+bash /tmp/optimal-fusion-stella-collision-trace/build_stella_collision_trace.sh
+bash /tmp/optimal-fusion-stella-collision-trace/run_stella_collision_trace.sh
+.venv/bin/python scripts/summarize_stella_collision_field_particle_trace.py \
+  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/trace-summary.json
+```
+
+This traces the aggregate signed field-particle RHS before stella's final
+implicit differential inversion. A common-grid implementation/comparison is
+still required before enabling this as a production collision model.
+
 `gyrokinetic_heat_response(...)` supplies the collocation-space
 `J0 T_s (E_s-3/2) f_s` velocity moment used with `radial_flux_spectrum(...)`.
 This makes nonlinear heat-flux histories measurable from evolved states; it
