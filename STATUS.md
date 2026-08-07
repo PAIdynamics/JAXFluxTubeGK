@@ -262,6 +262,13 @@ claimed.
   standard error, relative drift, window bounds, species index, and source
   revision. Synthetic stationary and invalid-trace contracts pass. No GX
   NetCDF output is tracked by this repository.
+- Added a deterministic local nonlinear heat-flux producer joining the driven
+  s-alpha ITG case, fourth-order Fourier hyperdiffusion, adaptive CFL evolution,
+  self-consistent potential history, gyrokinetic heat response, radial-flux
+  trace, and explicit drift/uncertainty stationarity decision. A tiny
+  final-time-0.2 end-to-end smoke writes finite caller-owned JSON, takes two
+  accepted steps, and correctly remains nonstationary. Longer resolution and
+  box-size acceptance trajectories are still evidence-gated.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

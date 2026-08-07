@@ -611,6 +611,16 @@ repository:
   --output /tmp/gx-cyclone-nonlinear-heat-flux.json
 ```
 
+Generate the matching local reduced trajectory in caller-owned storage with:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
+  --output /tmp/optimal-fusion-cyclone-nonlinear.json
+```
+
+Add `--require-stationary` only for acceptance runs; short smoke trajectories
+are expected to report `stationary=false`.
+
 ## Current Validation Status
 
 Passing guardrails:

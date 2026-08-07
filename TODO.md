@@ -425,6 +425,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   validates its time trace, and emits schema-v1 mean, uncertainty, drift, and
   provenance JSON without storing GX output here. The local trajectory and
   cross-code normalization/parity comparison remain the next implementation.
+  A deterministic local reduced producer now connects the driven s-alpha ITG
+  setup, fourth-order Fourier hyperdiffusion, adaptive nonlinear integration,
+  self-consistent field history, heat response, flux trace, and stationarity
+  acceptance into one artifact-free JSON workflow. A `4x4x3`, `3x2` Fourier,
+  final-time-0.2 smoke completes with finite output in two accepted steps and
+  correctly reports `stationary=false`; it is plumbing evidence, not a
+  turbulence result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

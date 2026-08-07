@@ -193,7 +193,9 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "J0*T_s*(E_s-3/2)*f_s now matches direct velocity quadrature, but no "
                 "stationary resolution/domain ladder or independent heat-flux comparison "
                 "has been accepted. A revision-pinned GX NetCDF summarizer now provides "
-                "the external mean/uncertainty/drift data contract without storing output."
+                "the external mean/uncertainty/drift data contract without storing output. "
+                "A deterministic local producer now emits the matching field, heat-response, "
+                "flux, and stationarity report; only a short nonstationary smoke has run."
             ),
             next_action=(
                 "Run matched local and pinned GX Cyclone trajectories, reconcile heat-flux "
