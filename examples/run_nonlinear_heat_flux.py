@@ -97,6 +97,9 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--n-ky", type=int, default=5)
     parser.add_argument("--kx-max", type=float, default=0.8)
     parser.add_argument("--ky-min", type=float, default=0.1)
+    parser.add_argument("--rmaj-over-lref", type=float, default=2.77778)
+    parser.add_argument("--gx-fprim", type=float, default=0.8)
+    parser.add_argument("--gx-tprim", type=float, default=2.49)
     parser.add_argument("--hyperdiffusion", type=float, default=0.05)
     parser.add_argument("--initial-amplitude", type=float, default=1.0e-3)
     parser.add_argument("--seed", type=int, default=17)
@@ -112,6 +115,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("phase-space sizes must be at least 2 and final-time positive")
     if args.min_phi_rms_ratio <= 0.0:
         parser.error("min-phi-rms-ratio must be positive")
+    if min(args.rmaj_over_lref, args.gx_fprim, args.gx_tprim) <= 0.0:
+        parser.error("rmaj-over-lref, gx-fprim, and gx-tprim must be positive")
     return args
 
 
@@ -138,7 +143,16 @@ def main(argv: list[str] | None = None) -> None:
         )
     )
     geometry = build_s_alpha_geometry(parallel, GeometryScalarParams(q=1.4, shat=0.8, eps=0.18))
-    ion = SpeciesParams(1.0, 1.0, 1.0, 1.0, 0.8, 2.49)
+    density_gradient = args.gx_fprim * args.rmaj_over_lref
+    temperature_gradient = args.gx_tprim * args.rmaj_over_lref
+    ion = SpeciesParams(
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        density_gradient,
+        temperature_gradient,
+    )
     precompute = build_linear_residual_precompute(
         velocity,
         parallel,
@@ -195,7 +209,12 @@ def main(argv: list[str] | None = None) -> None:
         "schema_version": 1,
         "producer": "optimal-fusion/nonlinear-heat-flux",
         "normalization": "optimal_fusion_native",
-        "case": vars(args) | {"output": str(args.output)},
+        "case": vars(args)
+        | {
+            "output": str(args.output),
+            "density_gradient_R_over_Ln": density_gradient,
+            "temperature_gradient_R_over_LT": temperature_gradient,
+        },
         "n_steps": result.n_steps,
         "stationary": stationary,
         "state_rms_initial": float(jnp.sqrt(jnp.mean(jnp.abs(result.history[0]) ** 2))),

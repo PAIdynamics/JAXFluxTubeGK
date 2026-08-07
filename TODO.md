@@ -449,13 +449,18 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   now also requires a configurable final/initial potential-RMS ratio (default
   `0.8`), so the same 284-step run correctly fails. The active problem is a
   decaying driven setup, not insufficient statistical precision. A follow-up
-  `12x12x6`, `5x4`, hyperdiffusion-0.005 run also decays at final time 20:
-  total potential RMS ratio `0.776`, flux drift `0.396`, and mean native flux
-  `-4.43e-8`; phase-space refinement alone does not restore the drive. The
-  amplitude gate now acts on nonzonal potential RMS and reports per-`ky`
-  ratios, preventing zonal energy from masking decay in heat-carrying modes.
-  A mode-resolved linear-seed audit against the validated Cyclone branch is
-  the next discriminator before spending on a long nonlinear ladder.
+  `12x12x6`, `5x4`, hyperdiffusion-0.005 discriminator initially also decayed,
+  exposing a setup normalization bug: GX's `fprim=0.8` and `tprim=2.49` had
+  been passed directly where the local residual requires `R/Ln` and `R/LT`.
+  The producer now applies the documented `Rmaj/Lref=2.77778`, yielding
+  `R/Ln=2.222224` and `R/LT=6.9166722`, and records both input and derived
+  controls. With that fix, the same final-time-20 run grows: nonzonal
+  potential RMS increases `12.59x`, with `ky=0.2`/`0.3` ratios
+  `13.40x`/`18.59x`. Flux drift `-3.23` correctly rejects this unsaturated
+  growth. The amplitude gate acts on nonzonal potential RMS and reports
+  per-`ky` ratios, preventing zonal energy from masking heat-carrying modes.
+  Long-time saturation is now the active discriminator before a resolution
+  and box ladder.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

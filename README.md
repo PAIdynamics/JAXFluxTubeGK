@@ -618,6 +618,11 @@ JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
   --output /tmp/optimal-fusion-cyclone-nonlinear.json
 ```
 
+The local producer makes the GX profile conversion explicit: its default
+`fprim=0.8` and `tprim=2.49` are multiplied by `Rmaj/Lref=2.77778` before they
+enter the local residual as `R/Ln` and `R/LT`. All three inputs and both derived
+gradients are recorded in the JSON report.
+
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`. The stationarity amplitude guard is
 applied to the heat-carrying nonzonal potential rather than the total field;

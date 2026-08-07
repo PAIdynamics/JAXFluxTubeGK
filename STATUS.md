@@ -289,13 +289,15 @@ claimed.
   final/initial potential-RMS ratio, default `0.8`; the same 284-step run
   correctly reports nonstationary at ratio `0.525`. This narrows the blocker to
   decay of the nominally driven reduced setup rather than noisy diagnostics.
-- Increasing phase-space resolution to `12x12x6` at `5x4` Fourier modes and
-  hyperdiffusion `0.005` does not cure the decay by final time 20: total
-  potential RMS ratio is `0.776`, flux drift is `0.396`, and mean native flux
-  is `-4.43e-8`. The stationarity guard now uses nonzonal potential RMS and the
-  report records total, nonzonal, and per-`ky` amplitudes, so a growing zonal
-  component cannot hide decay of heat-carrying modes. Mode-resolved linear
-  seed growth is the next discriminator before a long nonlinear ladder.
+- The apparent decay was a GX-to-local profile-normalization bug. The producer
+  had used GX `fprim=0.8` and `tprim=2.49` directly as `R/L` gradients; it now
+  applies `Rmaj/Lref=2.77778`, giving `R/Ln=2.222224` and `R/LT=6.9166722`, and
+  records the source and derived controls. Repeating the `12x12x6`, `5x4`,
+  hyperdiffusion-0.005 run to final time 20 gives nonzonal potential growth
+  `12.59x`; `ky=0.2`/`0.3` grow `13.40x`/`18.59x`. Flux drift `-3.23` rejects
+  the still-unsaturated trajectory. The stationarity guard uses nonzonal RMS
+  and reports total, nonzonal, and per-`ky` amplitudes. Long-time saturation is
+  now the next discriminator before a resolution and box ladder.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 
