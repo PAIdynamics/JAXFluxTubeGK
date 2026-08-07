@@ -486,7 +486,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   shift reduces peak native flux from the periodic-chain result `43.2` to
   `0.314` and final nonzonal RMS from `1.33` to `0.102`, but drift `-4.71`
   still rejects the growing window. A longer-time and wider-box ladder, with
-  explicit runtime budgeting, is the next numerical gate.
+  explicit runtime budgeting, is the next numerical gate. The producer now
+  supports caller-owned schema-v1 checkpoints with absolute time and an exact
+  topology/physics contract, so extensions do not recompute the transient and
+  incompatible restarts fail closed. Resumed reports summarize only the new
+  segment. The stationarity gate now also requires at least 100 samples and
+  duration 10 by default, closing a false positive found in a two-step restart
+  smoke. Extending the corrected time-60 state is the next numerical run.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

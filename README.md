@@ -646,6 +646,27 @@ applied to the heat-carrying nonzonal potential rather than the total field;
 the report also includes total, nonzonal, and per-`ky` initial/final RMS values
 so zonal growth cannot conceal decay of the turbulent spectrum.
 
+Long adaptive runs can write and resume caller-owned state without committing
+large artifacts:
+
+```bash
+JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
+  --output /tmp/nonlinear-t60.json --final-time 60 \
+  --checkpoint-output /scratch/nonlinear-t60.npz
+
+JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
+  --output /tmp/nonlinear-t60-t120.json --final-time 120 \
+  --restart-from /scratch/nonlinear-t60.npz \
+  --checkpoint-output /scratch/nonlinear-t120.npz
+```
+
+The checkpoint records complex state, absolute time, and a schema-versioned
+grid/physics contract. Restarts reject changed topology, gradients, damping,
+or collision controls. The resumed JSON statistics cover only the new segment,
+which lets an initial transient be excluded deliberately. Stationarity also
+requires at least 100 window samples and duration 10 by default; both controls
+are configurable but should be declared unchanged for acceptance ladders.
+
 Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
 evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux
 and GX `Q/Q_GB` labels deliberately fail comparison unless a documented

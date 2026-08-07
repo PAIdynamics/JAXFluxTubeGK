@@ -330,6 +330,14 @@ claimed.
   to `0.102`, demonstrating that boundary topology materially controls the
   nonlinear trajectory. The window still grows with drift `-4.71`, so it does
   not pass stationarity; longer-time and wider-box convergence remain open.
+- Added caller-owned nonlinear restart checkpoints containing complex state,
+  absolute time, and a schema-versioned topology/physics contract. Changed
+  grids, profiles, damping, collision settings, or boundaries are rejected.
+  Resumed statistics cover the new segment, allowing the transient to be
+  excluded without storing it in the repository. A restart smoke advances
+  time `0.2 -> 0.4` exactly. It exposed and fixed a short-window false positive:
+  stationarity now additionally requires 100 samples and duration 10 by
+  default, so the two-step segment correctly fails.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

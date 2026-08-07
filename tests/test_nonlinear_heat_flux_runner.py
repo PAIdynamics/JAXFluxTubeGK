@@ -3,10 +3,13 @@ import pytest
 from types import SimpleNamespace
 
 from examples.run_nonlinear_heat_flux import (
+    _checkpoint_contract,
     _hyperdiffusion,
     _initial_state,
+    _load_checkpoint,
     _parse_args,
     _phi_rms_diagnostics,
+    _write_checkpoint,
 )
 from stellarator_gk import FourierGridSpec, build_fourier_grid
 
@@ -25,6 +28,8 @@ def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):
     assert args.collision_frequency == pytest.approx(0.0)
     assert args.parallel_boundary_model == "twist_shift"
     assert args.ikxspace == 1
+    assert args.min_stationary_samples == 100
+    assert args.min_stationary_window_duration == pytest.approx(10.0)
     assert args.gx_fprim * args.rmaj_over_lref == pytest.approx(2.222224)
     assert args.gx_tprim * args.rmaj_over_lref == pytest.approx(6.9166722)
     assert damping.shape == (5, 3)
@@ -64,3 +69,19 @@ def test_initial_state_does_not_seed_zonal_potential_by_default():
 
     np.testing.assert_allclose(np.asarray(state[..., 0]), 0.0, atol=0.0)
     assert np.max(np.abs(np.asarray(state[..., 1]))) > 0.0
+
+
+def test_nonlinear_checkpoint_roundtrip_and_contract_guard(tmp_path):
+    args = _parse_args(["--output", str(tmp_path / "report.json")])
+    grid = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.6, ky_values=(0.0, 0.1)))
+    state = np.arange(12).reshape(2, 3, 2).astype(np.complex128) * (1.0 + 0.5j)
+    contract = _checkpoint_contract(args, grid, state.shape)
+    path = tmp_path / "restart.npz"
+
+    _write_checkpoint(path, state, 3.5, contract)
+    restored, time = _load_checkpoint(path, contract)
+
+    np.testing.assert_array_equal(np.asarray(restored), state)
+    assert time == pytest.approx(3.5)
+    with pytest.raises(ValueError, match="contract does not match"):
+        _load_checkpoint(path, contract | {"hyperdiffusion": 0.2})
