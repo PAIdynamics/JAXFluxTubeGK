@@ -45,6 +45,9 @@ claimed.
   heat moment remains available under a distinct normalization label. A tiny
   source-matched smoke produces a finite `gx_Q_over_Q_GB` report and correctly
   remains nonstationary.
+- Complete x64 standalone verification after these changes passes with
+  **502 passed and 25 external tests deselected in 561.28 s**. Ruff and focused
+  nonlinear validation checks also pass.
 
 ### 2026-08-07: Production Electromagnetic Resolution Gate
 
