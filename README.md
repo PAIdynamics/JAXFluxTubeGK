@@ -673,6 +673,18 @@ Reports retain compact heat-flux and nonzonal-potential RMS time traces, so
 adjacent checkpoint segments can be merged into windows independent of the
 chosen checkpoint boundaries without storing phase-space state histories.
 
+Merge new-format contiguous segments and recompute one candidate window with:
+
+```bash
+.venv/bin/python scripts/merge_nonlinear_heat_flux_segments.py \
+  /tmp/nonlinear-t220-t300.json /tmp/nonlinear-t300-t400.json \
+  --output /tmp/nonlinear-t220-t400-merged.json
+```
+
+The merger fails on gaps, reordered segments, normalization differences, or
+changes to any grid/physics contract field. Its output is schema-v1 and can be
+passed directly to the convergence and parity comparison functions.
+
 Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination
 decisions. This reduces repeated dispatch overhead without moving nonsmooth

@@ -365,6 +365,12 @@ claimed.
   `-0.068`. Reports now include compact nonzonal-potential RMS histories as
   well as flux histories so merged-window acceptance can be independent of
   checkpoint boundaries without retaining phase-space state histories.
+- Added a schema-v1 nonlinear segment merger. It validates matching
+  normalization and every grid/physics contract field, requires contiguous
+  absolute times, drops duplicate checkpoint-boundary samples, and recomputes
+  flux uncertainty/drift plus nonzonal amplitude ratio/growth over one merged
+  window. Passing and contract-change/gap rejection tests bring the focused
+  nonlinear reporting suite to **12 passed**.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

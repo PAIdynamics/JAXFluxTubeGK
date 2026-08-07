@@ -518,6 +518,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `-0.068`. Producer reports now retain compact nonzonal-RMS histories beside
   flux histories, enabling a checkpoint-boundary-independent merged-window
   gate without storing phase-space trajectories.
+  A schema-v1 segment merger now implements that contract: it requires
+  contiguous absolute time, removes only duplicate boundary samples, rejects
+  normalization or grid/physics changes, and recomputes uncertainty, drift,
+  amplitude ratio, and fitted field growth over one merged window. New-format
+  segments can therefore feed the existing convergence/parity layer directly.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
