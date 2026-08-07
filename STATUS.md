@@ -351,6 +351,13 @@ claimed.
   `-35.46`/`-26.16`. Added a candidate-window nonzonal-potential log-growth
   fit with default magnitude limit `0.02`, closing the possibility that a
   slowly growing/decaying field passes during a coincidentally flat flux span.
+- The time-220-to-300 checkpoint segment is the first local stationary
+  candidate to pass every declared gate. Over its final 40 time units, mean
+  native flux is `-25.7841`, relative standard error `0.462%`, drift `0.0572`,
+  and fitted nonzonal-potential growth `-1.93e-3`; half-window means are
+  `-27.235` and `-24.336`, and the potential RMS ratio is `0.879`. This is a
+  coarse `12x12x6`, `9x5` rung only. Resolution/domain convergence and the
+  independent GX normalization/parity gate remain open.
 - Converged stationary heat flux and external nonlinear parity remain open
   before claiming nonlinear turbulence readiness.
 

@@ -504,6 +504,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   logarithmic growth over the candidate window and requires magnitude below
   `0.02`, preventing a slowly evolving field from passing a coincidentally
   flat flux interval.
+  The next checkpoint segment, time 220-to-300, is the first passing local
+  stationary candidate: its final 40-unit window has mean native flux
+  `-25.7841`, relative standard error `0.462%`, drift `0.0572`, and nonzonal
+  potential growth `-1.93e-3`. Candidate half means are `-27.235` and
+  `-24.336`; the RMS ratio is `0.879`. This establishes one coarse local rung,
+  not convergence or GX parity. The next acceptance work is an independently
+  initialized wider/resolved rung and the native-to-GX normalization contract.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
