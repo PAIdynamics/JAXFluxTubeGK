@@ -859,6 +859,16 @@ On the 4,992-row `nmu=4` trace their isolated errors are `1.30e-15` and
 the complete native blocks at `9.62e-16` relative L2 and `1.80e-16` maximum
 absolute error.
 
+`build_stella_test_particle_matrix(...)` now packages those pair-resolved
+blocks, the implicit identity, and the validated mode-dependent gyro diagonal
+into the global species/velocity matrix used by the Woodbury field-particle
+solve. Its zero-`kperp` production layout matches the pinned `nmu=4` native
+matrix at `6.39e-17` relative L2 and `3.33e-16` maximum absolute error.
+`build_stella_implicit_collision_precompute(...)` constructs the complete
+test/field-particle backend, and `stella_implicit_collision_step(...)` selects
+it as a backward-Euler collision substep through the fixed-step split driver’s
+`collision_step_fn` hook.
+
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:
 

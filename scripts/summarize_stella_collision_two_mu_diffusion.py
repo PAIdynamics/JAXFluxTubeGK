@@ -21,9 +21,11 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
 )
 from stellarator_gk import (
     SpeciesParams,
+    assemble_stella_test_particle_blocks,
     build_stella_mu_diffusion_blocks,
     build_stella_mu_mixed_blocks,
     build_stella_test_particle_primitives,
+    build_stella_test_particle_matrix,
     build_stella_vpar_diffusion_blocks,
     build_stella_vpar_mixed_blocks,
     build_velocity_grid_from_nodes,
@@ -290,12 +292,53 @@ def summarize_two_mu_diffusion(
                 "complete local two-mu blocks exceed native tolerance: "
                 f"relative_l2={full_relative:.6e}, max_abs={full_maximum:.6e}"
             )
+        native_matrix = np.asarray(
+            assemble_stella_test_particle_blocks(*full_native[:3])
+        )
+        local_matrix = np.asarray(
+            build_stella_test_particle_matrix(
+                grid,
+                magnetic_field,
+                species,
+                frequencies,
+                np.zeros((magnetic_field.size, 1, 1)),
+                knobs["dt"],
+                deflection_scale=knobs["deflection"],
+                electron_parallel_scale=knobs["electron_parallel"],
+                electron_deflection_scale=knobs["electron_deflection"],
+            )
+        )[:, 0, 0]
+        velocity_size = vpar.size * mu.size
+        local_species_matrix = np.stack(
+            [
+                local_matrix[
+                    :,
+                    target * velocity_size : (target + 1) * velocity_size,
+                    target * velocity_size : (target + 1) * velocity_size,
+                ]
+                for target in range(target_values.size)
+            ],
+            axis=1,
+        )
+        matrix_error = local_species_matrix - native_matrix
+        matrix_relative = float(
+            np.linalg.norm(matrix_error)
+            / max(np.linalg.norm(native_matrix), np.finfo(float).tiny)
+        )
+        matrix_maximum = float(np.max(np.abs(matrix_error)))
+        if matrix_maximum > tolerance:
+            raise ValueError(
+                "production test-particle matrix exceeds native tolerance: "
+                f"relative_l2={matrix_relative:.6e}, max_abs={matrix_maximum:.6e}"
+            )
         metrics.update(
             {
                 "mixed_mu_relative_l2": mixed_mu_relative,
                 "mixed_mu_max_abs": mixed_mu_maximum,
                 "full_blocks_relative_l2": full_relative,
                 "full_blocks_max_abs": full_maximum,
+                "production_matrix_relative_l2": matrix_relative,
+                "production_matrix_max_abs": matrix_maximum,
             }
         )
         status = "local_stella_collision_blocks_passed"

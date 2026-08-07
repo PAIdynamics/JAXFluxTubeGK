@@ -183,10 +183,15 @@ def test_split_integrator_can_apply_parallel_response_once_after_explicit_stage(
 def test_stella_split_uses_ssp_rk3_then_full_mirror_then_response():
     state = jnp.ones((5, 1, 1, 1, 1), dtype=jnp.complex128)
     calls = []
+    collision_calls = []
 
     def response(value):
         calls.append(value)
         return 2.0 * value
+
+    def collision(value):
+        collision_calls.append(value)
+        return 3.0 * value
 
     result = integrate_fixed_step_split_mirror(
         state,
@@ -197,14 +202,16 @@ def test_stella_split_uses_ssp_rk3_then_full_mirror_then_response():
         jnp.zeros((1, 1)),
         mirror_interpolation="stella_cubic",
         parallel_response_step_fn=response,
+        collision_step_fn=collision,
         parallel_response_splitting="stella_after",
         explicit_scheme="rk3",
         store_history=False,
     )
 
     expected_rk3 = 1.0 + 0.1 + 0.1**2 / 2.0 + 0.1**3 / 6.0
-    np.testing.assert_allclose(result.state, 2.0 * expected_rk3)
+    np.testing.assert_allclose(result.state, 6.0 * expected_rk3)
     assert len(calls) == 1
+    assert len(collision_calls) == 1
 
 
 def test_implicit_parallel_streaming_matches_midpoint_amplification():

@@ -1406,6 +1406,11 @@ $1.42\times10^{-15}$ relative $L_2$, leaving only the general mixed branches
 at the coefficient layer.  Those branches now agree at $1.30\times10^{-15}$
 and $6.48\times10^{-16}$ relative $L_2$; all four components reproduce the
 complete 4,992-row native trace at $9.62\times10^{-16}$ relative $L_2$.
+The production builder packages these blocks with the implicit identity and
+mode-dependent gyro diagonal, matching the pinned zero-$k_\perp$ matrix at
+$6.39\times10^{-17}$ relative $L_2$.  A complete precompute combines this
+matrix with the local Laguerre--Legendre factors and exposes the resulting
+backward-Euler collision solve as a selectable split step.
 The four ordered species-channel matrices reconstruct the all-channel matrix at
 $3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
 norms show that the remaining coefficient comparison is dominated by the

@@ -307,6 +307,7 @@ def integrate_fixed_step_split_mirror(
     mirror_interpolation: str = "linear",
     parallel_streaming_propagator=None,
     parallel_response_step_fn=None,
+    collision_step_fn=None,
     parallel_response_splitting: str = "strang",
     explicit_scheme: str = "rk4",
     filter_fn=None,
@@ -332,6 +333,9 @@ def integrate_fixed_step_split_mirror(
             return implicit_parallel_streaming_step(value, parallel_streaming_propagator)
         return value
 
+    def collision_step(value):
+        return value if collision_step_fn is None else collision_step_fn(value)
+
     def step(value):
         if parallel_response_splitting == "stella_after":
             value = _ssp_rk3_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
@@ -342,7 +346,7 @@ def integrate_fixed_step_split_mirror(
                 mirror_coefficient,
                 interpolation=mirror_interpolation,
             )
-            return parallel_step(value)
+            return collision_step(parallel_step(value))
         value = semi_lagrangian_mirror_step(
             value,
             0.5 * dt,
@@ -358,6 +362,7 @@ def integrate_fixed_step_split_mirror(
             else rk4_step(value, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
         )
         value = parallel_step(value)
+        value = collision_step(value)
         return semi_lagrangian_mirror_step(
             value,
             0.5 * dt,

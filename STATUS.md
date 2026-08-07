@@ -130,6 +130,14 @@ claimed.
   blocks at `9.62e-16` relative L2 and `1.80e-16` maximum absolute error.
   Differential coefficient construction is now closed; production residual
   selection is the remaining collision integration step.
+- Added the production implicit collision backend. The matrix builder combines
+  all four differential components, ordered species blocks, the identity, and
+  mode-dependent gyro diffusion; its pinned `nmu=4` zero-`kperp` matrix agrees
+  at `6.39e-17` relative L2 and `3.33e-16` maximum absolute error. A complete
+  precompute joins this matrix to the locally constructed Laguerre--Legendre
+  field-particle factors, and the split integrator exposes an explicit
+  `collision_step_fn` selection hook. JIT, differentiation, direct-solve, and
+  split-order tests pass. The collision/EM Priority 5 item is closed.
 
 ### 2026-08-07: Reciprocal Collision Model and Native Basis Decomposition
 

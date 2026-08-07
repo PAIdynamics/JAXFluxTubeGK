@@ -1424,6 +1424,116 @@ def build_stella_vpar_diffusion_blocks(
     return lower, diagonal, upper
 
 
+def build_stella_test_particle_matrix(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    kperp2,
+    dt,
+    *,
+    deflection_scale=1.0,
+    electron_parallel_scale=1.0,
+    electron_deflection_scale=1.0,
+    mixed_scale=1.0,
+    gyro_scale=1.0,
+    electron_index: int | None = 1,
+    ion_index: int | None = 0,
+    electron_ion_mass_ratio_approximation: bool = False,
+):
+    """Build stella's local ``I-dt*C_test`` matrix for every Fourier mode."""
+
+    species_tuple = species if isinstance(species, tuple) else (species,)
+    primitives = build_stella_test_particle_primitives(
+        velocity_grid,
+        B,
+        species_tuple,
+        pair_frequency,
+        deflection_scale=deflection_scale,
+        electron_parallel_scale=electron_parallel_scale,
+        electron_deflection_scale=electron_deflection_scale,
+        mixed_scale=mixed_scale,
+        electron_index=electron_index,
+        ion_index=ion_index,
+        electron_ion_mass_ratio_approximation=electron_ion_mass_ratio_approximation,
+    )
+    pure_mu = build_stella_mu_diffusion_blocks(
+        velocity_grid,
+        B,
+        species_tuple,
+        pair_frequency,
+        primitives,
+        dt,
+        deflection_scale=deflection_scale,
+        electron_parallel_scale=electron_parallel_scale,
+        electron_deflection_scale=electron_deflection_scale,
+        electron_index=electron_index,
+        ion_index=ion_index,
+        electron_ion_mass_ratio_approximation=electron_ion_mass_ratio_approximation,
+    )
+    pure_vpar = build_stella_vpar_diffusion_blocks(
+        velocity_grid,
+        B,
+        species_tuple,
+        pair_frequency,
+        primitives,
+        dt,
+        deflection_scale=deflection_scale,
+        electron_parallel_scale=electron_parallel_scale,
+        electron_deflection_scale=electron_deflection_scale,
+        electron_index=electron_index,
+        ion_index=ion_index,
+        electron_ion_mass_ratio_approximation=electron_ion_mass_ratio_approximation,
+    )
+    mixed_vpar = build_stella_vpar_mixed_blocks(velocity_grid, primitives, dt)
+    mixed_mu = build_stella_mu_mixed_blocks(velocity_grid, primitives, dt)
+    blocks = tuple(
+        sum(components)
+        for components in zip(pure_mu, pure_vpar, mixed_vpar, mixed_mu, strict=True)
+    )
+    local_matrix = assemble_stella_test_particle_blocks(*blocks)
+    mode_kperp2 = jnp.asarray(kperp2)
+    n_z = jnp.asarray(B).size
+    if mode_kperp2.ndim != 3 or mode_kperp2.shape[0] != n_z:
+        raise ValueError("kperp2 must have shape (z,kx,ky)")
+    gyro = build_stella_test_particle_gyro_diagonal(
+        velocity_grid,
+        B,
+        species_tuple,
+        primitives,
+        dt,
+        gyro_scale=gyro_scale,
+        deflection_scale=deflection_scale,
+        electron_parallel_scale=electron_parallel_scale,
+        electron_deflection_scale=electron_deflection_scale,
+        electron_index=electron_index,
+        ion_index=ion_index,
+    )
+    n_species = len(species_tuple)
+    velocity_size = velocity_grid.vpar.size * velocity_grid.mu.size
+    state_size = n_species * velocity_size
+    matrix = jnp.zeros(
+        (*mode_kperp2.shape, state_size, state_size),
+        dtype=jnp.result_type(local_matrix, gyro, mode_kperp2),
+    )
+    for target in range(n_species):
+        start = target * velocity_size
+        stop = start + velocity_size
+        target_matrix = jnp.broadcast_to(
+            local_matrix[:, target, None, None, :, :],
+            (*mode_kperp2.shape, velocity_size, velocity_size),
+        )
+        gyro_diagonal = (
+            gyro[target].transpose(2, 0, 1).reshape(n_z, velocity_size)[:, None, None, :]
+            * mode_kperp2[..., None]
+        )
+        target_matrix = target_matrix + jnp.eye(
+            velocity_size, dtype=matrix.dtype
+        ) * gyro_diagonal[..., None, :]
+        matrix = matrix.at[..., start:stop, start:stop].set(target_matrix)
+    return matrix
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
@@ -1448,6 +1558,23 @@ class LaguerreLegendreCollisionPrecompute(_PyTreeDataclass):
         "row_sum_bound",
     )
     _static_fields: ClassVar[tuple[str, ...]] = ("n_species", "component_labels")
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class StellaImplicitCollisionPrecompute(_PyTreeDataclass):
+    """Complete local stella test/field-particle implicit collision data."""
+
+    test_particle_matrix: object
+    field_particle: LaguerreLegendreCollisionPrecompute
+    dt: object
+
+    _dynamic_fields: ClassVar[tuple[str, ...]] = (
+        "test_particle_matrix",
+        "field_particle",
+        "dt",
+    )
+    _static_fields: ClassVar[tuple[str, ...]] = ()
 
 
 def _stella_associated_legendre(degree: int, order: int, x):
@@ -1924,6 +2051,50 @@ def build_stella_laguerre_legendre_collision_precompute(
     )
 
 
+def build_stella_implicit_collision_precompute(
+    velocity_grid: VelocityGrid,
+    B,
+    species: SpeciesParams | tuple[SpeciesParams, ...],
+    pair_frequency,
+    velocity_measure,
+    gyroaverage,
+    kperp2,
+    dt,
+    *,
+    component_labels: tuple[tuple[int, int, int], ...] = (
+        (0, 0, 1),
+        (1, -1, 0),
+        (1, 1, 0),
+    ),
+    **test_particle_options,
+) -> StellaImplicitCollisionPrecompute:
+    """Build the selectable complete stella implicit collision backend."""
+
+    test_particle = build_stella_test_particle_matrix(
+        velocity_grid,
+        B,
+        species,
+        pair_frequency,
+        kperp2,
+        dt,
+        **test_particle_options,
+    )
+    field_particle = build_stella_laguerre_legendre_collision_precompute(
+        velocity_grid,
+        B,
+        species,
+        pair_frequency,
+        velocity_measure,
+        gyroaverage,
+        component_labels=component_labels,
+    )
+    return StellaImplicitCollisionPrecompute(
+        test_particle_matrix=test_particle,
+        field_particle=field_particle,
+        dt=jnp.asarray(dt),
+    )
+
+
 def build_laguerre_legendre_collision_precompute(
     driver,
     response,
@@ -2061,6 +2232,21 @@ def implicit_laguerre_legendre_collision(
     collision = (advanced - state) / jnp.asarray(dt)
     result = collision.reshape(*batch_shape, n_species, n_vpar, n_mu).transpose(3, 4, 5, 0, 1, 2)
     return result[0] if original_ndim == 5 else result
+
+
+def stella_implicit_collision_step(
+    distribution,
+    precompute: StellaImplicitCollisionPrecompute,
+):
+    """Advance one backward-Euler stella collision substep."""
+
+    collision = implicit_laguerre_legendre_collision(
+        distribution,
+        precompute.test_particle_matrix,
+        precompute.field_particle,
+        precompute.dt,
+    )
+    return jnp.asarray(distribution) + precompute.dt * collision
 
 
 def build_fokker_planck_test_particle_matrix(
@@ -2888,6 +3074,7 @@ def _apply_fokker_planck_stencil(distribution, stencil):
 __all__ = [
     "ConservingBGKPrecompute",
     "FokkerPlanckPrecompute",
+    "StellaImplicitCollisionPrecompute",
     "LaguerreLegendreCollisionPrecompute",
     "StellaTestParticlePrimitives",
     "assemble_stella_test_particle_blocks",
@@ -2908,6 +3095,8 @@ __all__ = [
     "build_stella_laguerre_legendre_collision_precompute",
     "build_stella_test_particle_primitives",
     "build_stella_test_particle_gyro_diagonal",
+    "build_stella_test_particle_matrix",
+    "build_stella_implicit_collision_precompute",
     "collision_moments",
     "conserving_bgk_collision",
     "fokker_planck_collision",
@@ -2919,4 +3108,5 @@ __all__ = [
     "laguerre_legendre_collision_components_from_moments",
     "implicit_laguerre_legendre_collision",
     "stella_laguerre_legendre_delta0",
+    "stella_implicit_collision_step",
 ]

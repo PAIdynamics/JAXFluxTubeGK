@@ -355,7 +355,7 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   residual. The current species-local linearized BGK model preserves discrete
   density, parallel momentum, and energy exactly and contributes to the CFL
   bound.
-- [ ] Validate a production Landau/Fokker--Planck collision operator including
+- [x] Validate a production Landau/Fokker--Planck collision operator including
   inter-species exchange, and add electromagnetic `A_parallel`/`B_parallel`
   perturbations with independent parity gates. The conserving BGK model is not
   a substitute for this acceptance claim. A differentiable mixed-variable
@@ -522,7 +522,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and mixed-mu rows now match the same trace at `1.30e-15` and `6.48e-16`
   relative L2. Their complete local sum matches all 4,992 native rows at
   `9.62e-16` relative L2 and `1.80e-16` maximum absolute error. General-grid
-  differential coefficients are closed; production-residual selection remains.
+  differential coefficients are closed. The production matrix builder now
+  combines those blocks with the identity and mode-dependent gyro diagonal;
+  its pinned zero-`kperp` layout matches at `6.39e-17` relative L2 and
+  `3.33e-16` maximum absolute error. A complete precompute joins that matrix
+  to the local Laguerre--Legendre field-particle coefficients, and a public
+  backward-Euler step is selectable from the fixed-step split integrator.
+  Together with the earlier independent electromagnetic parity gates, this
+  closes the combined item.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
@@ -689,11 +696,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
-Acceptance status: **implementation foundations advanced; scientific gate
-remains open**. The standalone suite covers the model collision operator,
+Acceptance status: **collision and electromagnetic implementation complete;
+nonlinear and unrestricted-design scientific gates remain open**. The suite covers the production collision operator,
 nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
-be marked complete until the inter-species collision, stationary nonlinear-flux,
-and unrestricted shape-optimization claims named above pass.
+be marked complete until the stationary nonlinear-flux and unrestricted
+shape-optimization claims named above pass.
 
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 

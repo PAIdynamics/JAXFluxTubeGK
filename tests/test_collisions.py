@@ -23,6 +23,8 @@ from stellarator_gk import (
     build_stella_mu_mixed_blocks,
     build_stella_test_particle_primitives,
     build_stella_test_particle_gyro_diagonal,
+    build_stella_test_particle_matrix,
+    build_stella_implicit_collision_precompute,
     assemble_stella_test_particle_blocks,
     build_stella_two_mu_diffusion_blocks,
     build_stella_two_mu_mixed_blocks,
@@ -47,6 +49,7 @@ from stellarator_gk import (
     implicit_laguerre_legendre_collision,
     linear_residual,
     stella_laguerre_legendre_delta0,
+    stella_implicit_collision_step,
 )
 
 
@@ -1091,6 +1094,85 @@ def test_stella_collision_precompute_assembles_local_driver_and_response():
     assert result.shape == state.shape
     assert bool(jnp.all(jnp.isfinite(result)))
     assert bool(jnp.all(jnp.isfinite(precompute.row_sum_bound)))
+
+
+def test_stella_test_particle_matrix_is_jittable_and_pair_differentiable():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=6,
+            n_mu=4,
+            vpar_max=3.0,
+            mu_max=3.0,
+            backend="finite_difference",
+        )
+    )
+    frequencies = jnp.asarray(((0.2, 0.3), (0.4, 0.5)))
+    kperp2 = jnp.ones((parallel.z.size, 2, 1)) * jnp.asarray((0.0, 0.3))[None, :, None]
+
+    def build(values):
+        return build_stella_test_particle_matrix(
+            velocity,
+            geometry.B,
+            species,
+            values,
+            kperp2,
+            0.01,
+        )
+
+    matrix = jax.jit(build)(frequencies)
+    velocity_size = velocity.vpar.size * velocity.mu.size
+    assert matrix.shape == (parallel.z.size, 2, 1, 2 * velocity_size, 2 * velocity_size)
+    np.testing.assert_allclose(
+        matrix[..., :velocity_size, velocity_size:], 0.0, rtol=0.0, atol=0.0
+    )
+    assert bool(jnp.any(matrix[:, 0] != matrix[:, 1]))
+    gradient = jax.jit(jax.grad(lambda values: jnp.sum(build(values))))(frequencies)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+
+
+def test_complete_stella_implicit_collision_backend_matches_direct_solve():
+    _velocity, parallel, geometry, species = _collision_setup(n_species=2)
+    velocity = build_velocity_grid(
+        VelocityGridSpec(
+            n_vpar=6,
+            n_mu=4,
+            vpar_max=3.0,
+            mu_max=3.0,
+            backend="finite_difference",
+        )
+    )
+    frequencies = jnp.asarray(((0.2, 0.3), (0.4, 0.5)))
+    measure = jnp.ones((6, 4, parallel.z.size)) / (6 * 4)
+    gyroaverage = jnp.ones((2, 1, 4, parallel.z.size, 1, 1))
+    dt = 0.01
+    precompute = build_stella_implicit_collision_precompute(
+        velocity,
+        geometry.B,
+        species,
+        frequencies,
+        measure,
+        gyroaverage,
+        jnp.zeros((parallel.z.size, 1, 1)),
+        dt,
+        component_labels=((0, 0, 0),),
+    )
+    state = jax.random.normal(
+        jax.random.key(142), (2, 6, 4, parallel.z.size, 1, 1)
+    )
+    observed = jax.jit(stella_implicit_collision_step)(state, precompute)
+    collision = implicit_laguerre_legendre_collision(
+        state,
+        precompute.test_particle_matrix,
+        precompute.field_particle,
+        dt,
+    )
+
+    np.testing.assert_allclose(observed, state + dt * collision, rtol=2e-13, atol=2e-13)
+    gradient = jax.jit(
+        jax.grad(lambda values: jnp.vdot(stella_implicit_collision_step(values, precompute), values))
+    )(state)
+    assert bool(jnp.all(jnp.isfinite(gradient)))
 
 
 @pytest.mark.external
