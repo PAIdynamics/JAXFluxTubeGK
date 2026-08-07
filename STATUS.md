@@ -46,9 +46,23 @@ claimed.
 - This closes reciprocal dataflow, conservation architecture, and native
   coefficient-action observability. It does not yet close production collision
   parity: local stella-normalized Laguerre--Legendre coefficient construction
-  and a common-grid action comparison remain required.
+  and an independently generated second-state comparison remain required.
 - Repository-wide verification is green: Ruff passes and the standalone x64
   suite reports **523 passed and 25 external tests deselected in 518.59 s**.
+- Added a provider-neutral low-rank collision coefficient contract with shapes
+  `(target, background, component, vpar, mu, z, kx, ky)`. Driver contraction,
+  response application, directed components, JIT, differentiation, and an
+  exact-dense-checked row-sum bound are covered.
+- Extended the native trace again to separate each action into its complex
+  scalar `psi` and real target-space response basis. Their product reconstructs
+  every factor exactly, and all 16 pair/component factors per row reconstruct
+  the aggregate action to `1.75e-13` relative L2.
+- Replayed the native factors through the local JAX kernel on the same grid.
+  Full, ion-ion, ion-electron, electron-electron, and electron-ion errors are
+  `1.75e-13`, `3.72e-12`, `1.24e-10`, `7.36e-14`, and `1.01e-10`.
+- Common-grid indexing and response application are therefore closed. The
+  remaining collision physics blocker is independent construction of stella's
+  normalized driver and response tensors and parity on a second state.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

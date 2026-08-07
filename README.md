@@ -636,13 +636,24 @@ bash /tmp/optimal-fusion-stella-collision-trace/run_stella_collision_trace.sh
     /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --output /tmp/optimal-fusion-stella-collision-trace/component-summary.json
+JAX_ENABLE_X64=1 .venv/bin/python \
+  scripts/summarize_stella_collision_field_particle_factors.py \
+  --factors \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_factors.dat \
+  --aggregate \
+    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+  --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
+  --output /tmp/optimal-fusion-stella-collision-trace/factor-summary.json
 ```
 
 This traces both the aggregate signed field-particle RHS and all eight
 `(l,m,j)` contributions before stella's final implicit differential inversion.
 The component validator fails unless their signed sum reconstructs the
-aggregate action. A common-grid coefficient implementation/comparison is still
-required before enabling this as a production collision model.
+aggregate action. It also separates every contribution into its complex scalar
+response and real target-space basis. Those factors replay through the local
+JAX low-rank kernel at roundoff. Independent construction of the normalized
+driver and response coefficients is still required before enabling this as a
+production collision model.
 
 The same patched executable can generate pair-resolved native targets using
 stella's four collision-frequency knobs:

@@ -1320,6 +1320,22 @@ contract.  It is not the Laguerre--Legendre field-particle response used by
 stella and must not be described as a validated Landau operator until its
 coefficients and action pass an independent executable parity gate.
 
+The validated software form for a future Laguerre--Legendre completion is the
+low-rank pair/component contraction
+\begin{equation}
+  \Psi_{ab,c}(z,\mathbf{k})
+  = \sum_{v_\parallel,\mu}
+    D_{ab,c}(v_\parallel,\mu,z,\mathbf{k}) f_b,
+  \qquad
+  C^{\mathrm{fp}}_a
+  = \sum_{b,c} R_{ab,c}\Psi_{ab,c},
+\end{equation}
+where $c=(l,m,j)$, $D$ includes the discrete velocity measure and all driver
+normalizations, and $R$ is the target-space response.  The JAX implementation
+accepts these tensors without depending on stella.  Native stella traces verify
+the response application and indexing at roundoff; independent construction
+and comparison of $D$ and $R$ remains required for the production physics gate.
+
 
 \section{Testing and Benchmark Contract}
 

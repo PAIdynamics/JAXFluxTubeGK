@@ -428,8 +428,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   signed component sum reconstructs its aggregate action exactly. In the full
   case, `(l=0,m=0,j=1)` dominates at `1.712095e-3`; the only other nonzero
   terms are `(l=1,m=+/-1,j=0)` at `4.070812e-7` each. This closes native
-  coefficient-action decomposition, while local coefficient construction and
-  common-grid numerical parity remain open.
+  coefficient-action decomposition. A provider-neutral JAX low-rank contract
+  now applies pair/component driver and response tensors under JIT and
+  differentiation with a dense-checked CFL bound. Native `psi` and response
+  factors replay through that local kernel with relative L2 errors from
+  `7.36e-14` to `1.24e-10` across the full and four isolated channels. The
+  remaining collision blocker is independent local construction of stella's
+  normalized Laguerre--Legendre driver and response tensors, followed by a
+  second-state coefficient/action parity test.
 - [x] Add the nonlinear ExB pseudo-spectral bracket and 3/2 dealiasing for the
   centered-`kx`, nonnegative-`ky` Hermitian storage convention, integrate it
   with the electrostatic residual, and provide an amplitude-aware nonlinear
