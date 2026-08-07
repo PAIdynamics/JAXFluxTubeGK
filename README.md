@@ -1024,6 +1024,12 @@ Nonlinear adaptive evolution compiles the state-dependent CFL evaluation and
 one complete RK4 step while retaining host-controlled accept/termination
 decisions. This reduces repeated dispatch overhead without moving nonsmooth
 adaptive decisions onto the differentiable trajectory path.
+Acceptance runs retain only their initial/final phase-space states and compute
+heat flux plus total/nonzonal/per-`ky` potential amplitudes online. This avoids
+an `O(n_steps * phase_space_size)` state-history allocation; the compact
+diagnostics still default to every accepted step. `--diagnostic-stride` can
+reduce diagnostic cadence for exceptionally long runs, while the final sample
+is always retained.
 Acceptance trajectories fail immediately unless JAX x64 is enabled. Checkpoint
 contracts also record the complex state dtype, preventing a float32 state from
 being resumed into an x64 campaign.

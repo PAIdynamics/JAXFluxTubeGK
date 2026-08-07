@@ -40,6 +40,8 @@ class AdaptiveTimeAdvanceResult:
     times: object
     dt_history: object
     n_steps: int
+    observations: object | None = None
+    observation_times: object | None = None
 
 
 @jax.tree_util.register_pytree_node_class
@@ -140,6 +142,8 @@ def integrate_adaptive(
     filter_fn=None,
     store_history: bool = True,
     compile_step: bool = False,
+    observation_fn=None,
+    observation_stride: int = 1,
 ):
     """Advance with RK4 using a state-dependent accepted timestep.
 
@@ -153,12 +157,16 @@ def integrate_adaptive(
         raise ValueError("final_time must be positive")
     if max_steps < 1:
         raise ValueError("max_steps must be positive")
+    if observation_stride < 1:
+        raise ValueError("observation_stride must be positive")
     state = jnp.asarray(state)
     initial_state = state
     time = 0.0
     states = [state] if store_history else []
     times = [time]
     steps = []
+    observations = []
+    observation_times = []
     if compile_step:
         evaluate_timestep = jax.jit(lambda value, *args: timestep_fn(value, *args))
         advance = jax.jit(
@@ -170,6 +178,7 @@ def integrate_adaptive(
                 filter_fn=filter_fn,
             )
         )
+        observe = jax.jit(observation_fn) if observation_fn is not None else None
     else:
 
         def evaluate_timestep(value, *args):
@@ -184,6 +193,12 @@ def integrate_adaptive(
                 filter_fn=filter_fn,
             )
 
+        observe = observation_fn
+
+    if observe is not None:
+        observations.append(observe(state))
+        observation_times.append(time)
+
     while time < final_time and len(steps) < max_steps:
         proposed = float(evaluate_timestep(state, *rhs_args))
         if not np.isfinite(proposed) or proposed <= 0.0:
@@ -195,6 +210,11 @@ def integrate_adaptive(
         times.append(time)
         if store_history:
             states.append(state)
+        if observe is not None and (
+            len(steps) % observation_stride == 0 or time >= final_time
+        ):
+            observations.append(observe(state))
+            observation_times.append(time)
     if time < final_time:
         raise RuntimeError(f"adaptive integration exceeded max_steps={max_steps}")
     history = jnp.stack(states) if store_history else jnp.stack((initial_state, state))
@@ -204,6 +224,8 @@ def integrate_adaptive(
         times=jnp.asarray(times),
         dt_history=jnp.asarray(steps),
         n_steps=len(steps),
+        observations=(jnp.stack(observations) if observations else None),
+        observation_times=(jnp.asarray(observation_times) if observations else None),
     )
 
 

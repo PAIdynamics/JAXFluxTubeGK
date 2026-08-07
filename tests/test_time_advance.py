@@ -76,6 +76,36 @@ def test_compiled_adaptive_step_matches_uncompiled_path():
     np.testing.assert_allclose(compiled.dt_history, direct.dt_history, rtol=0.0, atol=0.0)
 
 
+def test_adaptive_observer_retains_compact_strided_diagnostics_without_state_history():
+    result = integrate_adaptive(
+        jnp.asarray([1.0, 2.0]),
+        0.2,
+        lambda state: state,
+        lambda _state: jnp.asarray(0.05),
+        store_history=False,
+        compile_step=True,
+        observation_fn=lambda state: jnp.asarray([jnp.sum(state), jnp.linalg.norm(state)]),
+        observation_stride=3,
+    )
+
+    assert result.history.shape == (2, 2)
+    assert result.observations.shape == (3, 2)
+    np.testing.assert_allclose(result.observation_times, [0.0, 0.15, 0.2], atol=2.0e-15)
+    np.testing.assert_allclose(result.observations[0], [3.0, np.sqrt(5.0)])
+    np.testing.assert_allclose(result.observations[-1, 0], 3.0 * np.exp(0.2), rtol=3e-7)
+
+
+def test_adaptive_observer_rejects_invalid_stride():
+    with np.testing.assert_raises_regex(ValueError, "observation_stride"):
+        integrate_adaptive(
+            jnp.asarray(1.0),
+            0.1,
+            lambda state: state,
+            lambda _state: 0.1,
+            observation_stride=0,
+        )
+
+
 def test_semi_lagrangian_mirror_step_translates_linear_profile():
     vpar = jnp.linspace(-2.0, 2.0, 9)
     state = vpar[:, None, None, None, None].astype(jnp.complex128)

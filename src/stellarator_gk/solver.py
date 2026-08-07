@@ -482,6 +482,8 @@ def integrate_nonlinear_adaptive(
     nonlinear_safety: float = 0.8,
     max_steps: int = 100_000,
     store_history: bool = True,
+    observation_fn=None,
+    observation_stride: int = 1,
 ):
     """Advance the nonlinear electrostatic system with combined CFL control."""
 
@@ -504,6 +506,8 @@ def integrate_nonlinear_adaptive(
         max_steps=max_steps,
         store_history=store_history,
         compile_step=True,
+        observation_fn=observation_fn,
+        observation_stride=observation_stride,
     )
 
 

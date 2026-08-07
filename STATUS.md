@@ -255,6 +255,10 @@ claimed.
   verifies the revision, input hash, and expected NetCDF path. Campaign parity
   now fails unless the GX geometry, profiles, box, boundary, electrostatic
   controls, and hyperdiffusion match the finest local rung.
+- Nonlinear acceptance evolution now observes heat flux and potential
+  amplitudes online while retaining only endpoint phase-space states. Focused
+  tests and a real short producer run pass; production memory therefore scales
+  with one state plus compact scalar histories rather than all accepted states.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.

@@ -117,7 +117,18 @@ def _candidate_window_phi_growth(phi_history, times, start_fraction: float):
         raise ValueError("candidate growth requires nonzonal modes and valid start fraction")
     start = min(int(phi_history.shape[0] * start_fraction), phi_history.shape[0] - 2)
     amplitude = _nonzonal_phi_rms_history(phi_history)[start:]
-    window_times = times[start:]
+    return _candidate_window_amplitude_growth(amplitude, times[start:])
+
+
+def _candidate_window_amplitude_growth(amplitude, times):
+    """Fit logarithmic growth for an already reduced positive amplitude trace."""
+
+    amplitude = jnp.asarray(amplitude)
+    window_times = jnp.asarray(times)
+    if amplitude.ndim != 1 or window_times.shape != amplitude.shape or amplitude.size < 2:
+        raise ValueError("amplitude and time traces must contain at least two matching samples")
+    if bool(jnp.any(amplitude <= 0.0)):
+        raise ValueError("amplitude trace must be positive")
     log_amplitude = jnp.log(jnp.maximum(amplitude, 1.0e-14))
     centered_time = window_times - jnp.mean(window_times)
     growth_rate = jnp.sum(centered_time * (log_amplitude - jnp.mean(log_amplitude))) / jnp.sum(
@@ -240,6 +251,7 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--stationary-block-duration", type=float, default=5.0)
     parser.add_argument("--min-stationary-blocks", type=int, default=6)
     parser.add_argument("--max-absolute-phi-growth-rate", type=float, default=0.02)
+    parser.add_argument("--diagnostic-stride", type=int, default=1)
     parser.add_argument("--require-stationary", action="store_true")
     args = parser.parse_args(argv)
     if args.n_kx < 3 or args.n_kx % 2 == 0 or args.n_ky < 2:
@@ -262,6 +274,8 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("stationarity requires positive blocks and at least two block means")
     if args.max_absolute_phi_growth_rate <= 0.0:
         parser.error("max-absolute-phi-growth-rate must be positive")
+    if args.diagnostic_stride < 1:
+        parser.error("diagnostic-stride must be positive")
     return args
 
 
@@ -347,38 +361,52 @@ def main(argv: list[str] | None = None) -> None:
         initial, start_time, lineage = _load_checkpoint(args.restart_from, checkpoint_contract)
     if start_time >= args.final_time:
         raise ValueError("final-time must be greater than the restart checkpoint time")
-    result = integrate_nonlinear_adaptive(
-        initial,
-        args.final_time - start_time,
-        precompute,
-        spectral,
-        store_history=True,
-    )
-    if result.history.shape[0] < 3:
-        raise RuntimeError(
-            "nonlinear trajectory produced fewer than three samples; increase final-time"
-        )
-    phi_history = jax.vmap(solve_adiabatic_electron_phi, in_axes=(0, None))(
-        result.history, precompute.field
-    )
     response_function = (
         gyrokinetic_energy_response
         if args.flux_moment == "gx_total_energy"
         else gyrokinetic_heat_response
     )
-    heat_history = jax.vmap(response_function, in_axes=(0, None, None, None, None))(
-        result.history,
-        velocity,
-        geometry.B,
-        ion,
-        precompute.rhs.flr_factors.bessel_j0,
-    )
-    absolute_times = result.times + start_time
-    flux = jax.vmap(
-        lambda phi, heat: jnp.sum(
-            radial_flux_spectrum(phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval)
+
+    def observe(state):
+        phi = solve_adiabatic_electron_phi(state, precompute.field)
+        heat = response_function(
+            state,
+            velocity,
+            geometry.B,
+            ion,
+            precompute.rhs.flr_factors.bessel_j0,
         )
-    )(phi_history, heat_history)
+        flux = jnp.sum(
+            radial_flux_spectrum(
+                phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval
+            )
+        )
+        total_rms = jnp.sqrt(jnp.mean(jnp.abs(phi) ** 2))
+        nonzonal_rms = jnp.sqrt(jnp.mean(jnp.abs(phi[..., 1:]) ** 2))
+        by_ky = jnp.sqrt(jnp.mean(jnp.abs(phi) ** 2, axis=(0, 1)))
+        return jnp.concatenate((jnp.asarray([flux, total_rms, nonzonal_rms]), by_ky))
+
+    result = integrate_nonlinear_adaptive(
+        initial,
+        args.final_time - start_time,
+        precompute,
+        spectral,
+        store_history=False,
+        observation_fn=observe,
+        observation_stride=args.diagnostic_stride,
+    )
+    if result.observations is None or result.observation_times is None:
+        raise RuntimeError("nonlinear trajectory produced no diagnostics")
+    observations = jnp.asarray(result.observations)
+    if observations.shape[0] < 3:
+        raise RuntimeError(
+            "nonlinear trajectory produced fewer than three samples; increase final-time"
+        )
+    absolute_times = result.observation_times + start_time
+    flux = observations[:, 0]
+    total_rms = observations[:, 1]
+    nonzonal_rms = observations[:, 2]
+    by_ky = observations[:, 3:]
     statistics = correlated_flux_statistics(
         absolute_times,
         flux,
@@ -393,11 +421,24 @@ def main(argv: list[str] | None = None) -> None:
         absolute_times.shape[0] - 1,
     )
     window_duration = float(absolute_times[-1] - absolute_times[window_start])
-    phi_diagnostics = _phi_rms_diagnostics(phi_history)
-    candidate_phi = _candidate_window_phi_growth(
-        phi_history,
-        absolute_times,
-        args.start_fraction,
+    floor = jnp.asarray(1.0e-14, dtype=total_rms.dtype)
+    phi_diagnostics = {
+        "phi_rms_initial": total_rms[0],
+        "phi_rms_final": total_rms[-1],
+        "phi_rms_ratio": total_rms[-1] / jnp.maximum(total_rms[0], floor),
+        "nonzonal_phi_rms_initial": nonzonal_rms[0],
+        "nonzonal_phi_rms_final": nonzonal_rms[-1],
+        "nonzonal_phi_rms_ratio": nonzonal_rms[-1] / jnp.maximum(nonzonal_rms[0], floor),
+        "phi_rms_by_ky_initial": by_ky[0],
+        "phi_rms_by_ky_final": by_ky[-1],
+        "phi_rms_ratio_by_ky": by_ky[-1] / jnp.maximum(by_ky[0], floor),
+    }
+    candidate_start = min(
+        int(absolute_times.shape[0] * args.start_fraction), absolute_times.shape[0] - 2
+    )
+    candidate_phi = _candidate_window_amplitude_growth(
+        nonzonal_rms[candidate_start:],
+        absolute_times[candidate_start:],
     )
     stationary = bool(
         np.isfinite(np.asarray(result.state)).all()
@@ -446,7 +487,7 @@ def main(argv: list[str] | None = None) -> None:
         "statistics": {key: float(value) for key, value in asdict(statistics).items()},
         "times": np.asarray(absolute_times).tolist(),
         "heat_flux": np.asarray(flux).tolist(),
-        "nonzonal_phi_rms": np.asarray(_nonzonal_phi_rms_history(phi_history)).tolist(),
+        "nonzonal_phi_rms": np.asarray(nonzonal_rms).tolist(),
     }
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

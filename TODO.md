@@ -714,7 +714,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   and exact run/summarization commands. The summarizer verifies that manifest,
   and campaign acceptance rejects a GX report whose geometry, profiles, box,
   boundary, electrostatic setting, or hyperdiffusion differs from the finest
-  local rung. The CUDA run itself remains outstanding.
+  local rung. The CUDA run itself remains outstanding. The adaptive producer
+  now computes compact flux and potential diagnostics online and retains only
+  initial/final phase-space states. This removes the roughly 20 GiB full-state
+  history that a `16x16x8`, `9x5`, 14k-step rung would otherwise allocate,
+  without changing the default every-accepted-step statistics.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
