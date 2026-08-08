@@ -724,8 +724,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `-29.6930`, `4.40%` block error, `0.1041` drift, and `-1.15e-4` nonzonal
   growth. It remains fail-closed on resolution: the change from the stationary
   `12x12x6` seed-19 mean is `17.91%`, above the unchanged `15%` gate. The next
-  fixed-Fourier rung must therefore refine to `20x20x10`; the `16x16x8` result
-  cannot be promoted as converged.
+  fixed-Fourier rung therefore refined to `20x20x10`. Its time-400-to-500
+  segment is stationary with mean `-30.8928`, `3.51%` block error, `0.0428`
+  drift, and `-7.69e-4` nonzonal growth. The stationary `16x16x8 -> 20x20x10`
+  finest pair changes by `3.88%`, so the resolution sub-gate now passes. Domain
+  expansion and pinned GX parity remain open.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

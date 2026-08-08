@@ -263,7 +263,12 @@ claimed.
   time 500. Its time-200-to-500 merged window is stationary (mean `-29.6930`,
   `4.40%` block error, drift `0.1041`, field growth `-1.15e-4`), but differs
   from the stationary `12x12x6` seed-19 mean by `17.91%`. The 15% resolution
-  gate therefore fails honestly and requires a `20x20x10` fixed-Fourier rung.
+  gate therefore failed honestly and required a `20x20x10` fixed-Fourier rung.
+- Completed that `20x20x10` rung through time 500. Its final time-400-to-500
+  segment is stationary (mean `-30.8928`, `3.51%` block error, drift `0.0428`,
+  field growth `-7.69e-4`). The fixed-Fourier `16x16x8 -> 20x20x10` finest-pair
+  change is `3.88%`, passing the unchanged 15% resolution gate. Domain and GX
+  parity gates remain open.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.

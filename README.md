@@ -1083,7 +1083,9 @@ domain ladders, but do not replace those ladders or the pinned GX comparison.
 The first fine phase-space rung (`16x16x8`, with the same `9x5` Fourier grid)
 is stationary over time 200--500 with mean `-29.6930`, but changes the matched
 seed-19 coarse mean by `17.91%`. Because this exceeds the fixed 15% tolerance,
-the resolution ladder is not yet converged and requires a `20x20x10` rung.
+the ladder was extended to `20x20x10`. Its stationary time-400--500 mean is
+`-30.8928`; the finest-pair change is `3.88%`, so phase-space resolution now
+passes. The separate domain and pinned-GX gates remain required.
 
 ## Current Validation Status
 
