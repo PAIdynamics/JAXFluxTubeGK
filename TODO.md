@@ -736,6 +736,11 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   gate fails decisively. A `33x17, ky_min=0.025` rung preserving the same
   `kx/ky` bandwidth is now required; the wide result must not be promoted as
   domain-converged.
+  That second expansion has reached its first caller-owned time-100 checkpoint
+  in 2,867 steps. It remains transient (mean `-10.2580`, `39.0%` block error,
+  drift `-0.0729`, field growth `0.0308`) and costs about 31 CPU minutes per
+  100-unit segment. It must be extended to a stationary late window before the
+  `17x9 -> 33x17` finest-pair domain decision.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

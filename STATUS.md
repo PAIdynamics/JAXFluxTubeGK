@@ -275,6 +275,10 @@ claimed.
   `-2.70e-4`) but differs from the stationary narrow mean by `244%` relative to
   the wide result. Domain convergence therefore fails and requires a
   bandwidth-preserving `33x17, ky_min=0.025` rung.
+- The required `33x17, ky_min=0.025` second expansion now has a valid time-100
+  checkpoint after 2,867 steps. Its first window is transient (mean `-10.2580`,
+  `39.0%` block error, drift `-0.0729`, field growth `0.0308`). Measured CPU
+  cost is about 31 minutes per 100 time units; late-window extensions remain.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
