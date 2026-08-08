@@ -269,6 +269,12 @@ claimed.
   field growth `-7.69e-4`). The fixed-Fourier `16x16x8 -> 20x20x10` finest-pair
   change is `3.88%`, passing the unchanged 15% resolution gate. Domain and GX
   parity gates remain open.
+- Completed the first physical-box expansion, `9x5, ky_min=0.1 -> 17x9,
+  ky_min=0.05`, through time 500. The wide time-200-to-500 merge is stationary
+  (mean `-7.0770`, `8.46%` block error, drift `0.1754`, field growth
+  `-2.70e-4`) but differs from the stationary narrow mean by `244%` relative to
+  the wide result. Domain convergence therefore fails and requires a
+  bandwidth-preserving `33x17, ky_min=0.025` rung.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.

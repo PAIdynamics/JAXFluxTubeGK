@@ -728,7 +728,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   segment is stationary with mean `-30.8928`, `3.51%` block error, `0.0428`
   drift, and `-7.69e-4` nonzonal growth. The stationary `16x16x8 -> 20x20x10`
   finest pair changes by `3.88%`, so the resolution sub-gate now passes. Domain
-  expansion and pinned GX parity remain open.
+  expansion and pinned GX parity remain open. The first `17x9, ky_min=0.05`
+  wide-box rung is complete through time 500. Its merged time-200-to-500
+  window is stationary with mean `-7.0770`, `8.46%` block error, `0.1754`
+  drift, and `-2.70e-4` nonzonal growth. It differs from the stationary `9x5,
+  ky_min=0.1` mean by `244%` when normalized to the wide result, so the domain
+  gate fails decisively. A `33x17, ky_min=0.025` rung preserving the same
+  `kx/ky` bandwidth is now required; the wide result must not be promoted as
+  domain-converged.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

@@ -1087,6 +1087,12 @@ the ladder was extended to `20x20x10`. Its stationary time-400--500 mean is
 `-30.8928`; the finest-pair change is `3.88%`, so phase-space resolution now
 passes. The separate domain and pinned-GX gates remain required.
 
+The first box expansion (`17x9`, `ky_min=0.05`) is stationary over time
+200--500 with mean `-7.0770`, but it does not agree with the narrow `9x5` mean:
+the relative change is `244%` when normalized to the wide result. The domain
+ladder therefore remains open and must extend to `33x17`, `ky_min=0.025` while
+retaining the same maximum `kx/ky` bandwidth.
+
 ## Current Validation Status
 
 Passing guardrails:
