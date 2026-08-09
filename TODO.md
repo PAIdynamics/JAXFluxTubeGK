@@ -781,6 +781,46 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
+### Priority 5 future-work handoff
+
+The remaining Priority 5 work is scientific validation, not a missing local
+operator or API. Keep both checkboxes above open until the following evidence
+exists:
+
+1. **Finish the CPU-local domain ladder.** The latest validated caller-owned
+   checkpoint is `/private/tmp/p5-domain-finest-seed19-t140.npz`: seed 19,
+   complex128, `12x12x6` phase space, `65x33` Fourier modes, and
+   `ky_min=0.0125`. Time 120-to-140 remains bounded but intermittent (mean
+   `-3.3663`, block error `1.65%`, drift `0.3385`, RMS ratio `0.899`, field
+   growth `-0.0119`). The merged time-100-to-140 candidate has only 73 samples
+   and drift `0.3349`. Resume with one uninterrupted time-140-to-200 segment at
+   `diagnostic_stride=8`; its final half should provide more than 100 samples
+   over more than 10 time units without weakening the acceptance gate:
+
+   ```console
+   JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+     --output /tmp/p5-domain-finest-seed19-t140-t200.json \
+     --restart-from /private/tmp/p5-domain-finest-seed19-t140.npz \
+     --checkpoint-output /tmp/p5-domain-finest-seed19-t200.npz \
+     --final-time 200 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 65 --n-ky 33 --ky-min 0.0125 \
+     --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+   ```
+
+   Require producer stationarity with at least 100 samples, duration 10,
+   relative block error at most `0.10`, absolute drift at most `0.20`, RMS
+   ratio at least `0.8`, and absolute field growth at most `0.02`. Only then
+   compare its mean with the stationary `33x17` mean `-5.4858`; the relative
+   finest-pair change must be at most `15%`. A failure requires another
+   bandwidth-preserving domain rung rather than a tolerance change.
+2. **Run independent nonlinear parity when CUDA/native capacity is available.**
+   Use the revision-pinned GX preparation and schema-v1 summarization workflow;
+   do not treat the current deferral as a pass or commit solver output.
+3. **Attempt unrestricted equilibrium-shape optimization only after** the
+   nonlinear domain/parity gates and the existing geometry, W7-X parity,
+   convergence, timing, and gradient gates all pass. Preserve the fixed
+   topology/remeshing contract and add a checkpointed end-to-end design run.
+
 Acceptance status: **collision and electromagnetic implementation complete;
 nonlinear and unrestricted-design scientific gates remain open**. The suite
 covers the production collision operator,

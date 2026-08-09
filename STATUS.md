@@ -205,6 +205,24 @@ claimed.
   applying the matrix agrees with the original stencil action at roundoff.
   Same-executable stella matrix parity and production-residual wiring remain.
 
+### 2026-08-09: Priority 5 Future-Work Boundary
+
+- Collision, electromagnetic, nonlinear-operator, adaptive-integration,
+  diagnostics, resolution, and multi-lineage implementation gates are closed.
+  The remaining Priority 5 work is external/long-running scientific evidence:
+  the final CPU domain rung, independent CUDA/GX parity, and unrestricted shape
+  optimization after all prerequisite gates pass.
+- The latest validated local checkpoint is the caller-owned complex128
+  `/private/tmp/p5-domain-finest-seed19-t140.npz` (`12x12x6`, `65x33`,
+  `ky_min=0.0125`, seed 19). Time 120-to-140 is bounded but intermittent:
+  mean `-3.3663`, `1.65%` block error, drift `0.3385`, RMS ratio `0.899`, and
+  field growth `-0.0119`. The time-100-to-140 merge has 73 candidate samples
+  and drift `0.3349`.
+- `TODO.md` now records an exact time-140-to-200 continuation command and the
+  unchanged acceptance criteria. CUDA/GX remains deferred, not passed. This
+  explicit handoff permits Priority 6 maintainability work without erasing or
+  overstating the remaining scientific blockers.
+
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
 - Added a fail-closed ensemble gate for chaotic nonlinear trajectories. The
