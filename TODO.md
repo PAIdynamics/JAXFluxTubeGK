@@ -1,6 +1,6 @@
 # TODO: JAXFluxTubeGK
 
-Last reviewed: 2026-08-06
+Last reviewed: 2026-08-10
 
 ## Goal
 
@@ -11,10 +11,13 @@ tests. MHD and reference gyrokinetic codes must remain separately installable
 providers or validation tools, not copied source trees or implicit runtime
 dependencies.
 
-The current scientific milestone remains a trusted, externally validated
-linear electrostatic W7-X run.  Nonlinear turbulence, collisions,
-electromagnetic effects, and production equilibrium-shape optimization remain
-later milestones.
+The trusted, externally validated linear electrostatic W7-X milestone and the
+reduced fixed-topology design loop are complete. Production collisions and
+linear electromagnetic fields are implemented and independently exercised.
+The active scientific milestone is electrostatic nonlinear-turbulence
+acceptance: stationary resolution/domain ladders and a revision-pinned GX
+comparison. Nonlinear electromagnetic evolution and unrestricted production
+equilibrium-shape optimization remain later milestones.
 
 Keep the workflow simple:
 
@@ -784,9 +787,13 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 
 ### Priority 5 future-work handoff
 
-The remaining Priority 5 work is scientific validation, not a missing local
-operator or API. Keep both checkboxes above open until the following evidence
-exists:
+The remaining Priority 5 electrostatic acceptance work is scientific
+validation, not a missing local operator or API. A 2026-08-10 fail-closed audit
+now independently verifies report statistics and stationarity controls,
+candidate-window field behavior, restart/segment lineage, shared ladder cases,
+local/reference producer identities, finite CLI controls, and pinned GX source,
+artifact, numerical-resolution, and physics provenance. Keep both checkboxes
+above open until the following evidence exists:
 
 1. **Finish the CPU-local domain ladder.** The latest validated caller-owned
    checkpoint is `/private/tmp/p5-domain-finest-seed19-t140.npz`: seed 19,
@@ -822,12 +829,18 @@ exists:
    convergence, timing, and gradient gates all pass. Preserve the fixed
    topology/remeshing contract and add a checkpointed end-to-end design run.
 
-Acceptance status: **collision and electromagnetic implementation complete;
-nonlinear and unrestricted-design scientific gates remain open**. The suite
-covers the production collision operator,
+Acceptance status: **collision and linear-electromagnetic implementation
+complete; nonlinear electrostatic and unrestricted-design scientific gates
+remain open**. The suite covers the production collision operator,
 nonlinear discretization, adaptive control, and diagnostics. Priority 5 cannot
 be marked complete until the stationary nonlinear-flux and unrestricted
 shape-optimization claims named above pass.
+
+Known capabilities outside this acceptance claim remain explicitly
+unsupported rather than silently approximated: the nonlinear residual rejects
+electromagnetic field models, and the implicit parallel-response shortcut is
+single-species only. These are later physics extensions, not blockers for the
+current electrostatic nonlinear campaign.
 
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 
