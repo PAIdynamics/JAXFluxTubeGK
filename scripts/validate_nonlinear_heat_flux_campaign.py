@@ -31,6 +31,13 @@ _MIN_STATIONARY_DURATION = 10.0
 _MIN_STATIONARY_BLOCKS = 6
 _MIN_NONZONAL_RMS_RATIO = 0.8
 _MAX_ABSOLUTE_FIELD_GROWTH = 0.02
+_REFERENCE_MINIMUM_RESOLUTION = {
+    "ntheta": 24,
+    "nx": 32,
+    "ny": 16,
+    "nhermite": 8,
+    "nlaguerre": 4,
+}
 
 
 def evaluate_campaign(
@@ -318,6 +325,12 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
         and bool(reference_payload["run_manifest"].strip()),
         "source_netcdf": isinstance(reference_payload.get("source_netcdf"), str)
         and bool(reference_payload["source_netcdf"].strip()),
+        "resolution_contract": all(
+            _finite_at_least(reference.get(key), value)
+            for key, value in _REFERENCE_MINIMUM_RESOLUTION.items()
+        ),
+        "run_duration": _finite_at_least(reference.get("final_time"), 10.0),
+        "diagnostic_cadence": _finite_at_least(reference.get("nwrite"), 1.0),
     } | {
         key: (
             bool(np.isclose(float(reference.get(key, np.nan)), value, rtol=1.0e-12, atol=1.0e-12))

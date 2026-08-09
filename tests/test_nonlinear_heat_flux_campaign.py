@@ -7,6 +7,14 @@ from scripts.validate_nonlinear_heat_flux_campaign import _parse_args, evaluate_
 
 def _gx_case(ky_min=0.05):
     return {
+        "ntheta": 24,
+        "nx": 32,
+        "ny": 16,
+        "nhermite": 8,
+        "nlaguerre": 4,
+        "final_time": 500.0,
+        "random_seed": 19,
+        "nwrite": 20,
         "geometry": "s-alpha",
         "q": 1.4,
         "shat": 0.8,
@@ -419,21 +427,7 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     lineages = tuple(
         _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
-    gx_case = {
-        "geometry": "s-alpha",
-        "q": 1.4,
-        "shat": 0.8,
-        "eps": 0.18,
-        "rmaj_over_lref": 2.77778,
-        "fprim": 0.8,
-        "tprim": 2.49,
-        "ky_min": 0.2,
-        "boundary": "linked",
-        "electrostatic": True,
-        "hyperdiffusion": 0.05,
-        "hyperdiffusion_order": 4,
-        "collision_frequency": 0.0,
-    }
+    gx_case = _gx_case(0.2)
     gx = _write_report(
         tmp_path / "gx.json",
         4.0,
@@ -457,6 +451,17 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     gx.write_text(json.dumps(payload))
     report = evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
     assert not report["independent_parity_contract"]["checks"]["revision"]
+    assert not report["passed"]
+
+    gx_case["nx"] = 16
+    gx = _write_report(
+        tmp_path / "underresolved-gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=gx_case,
+    )
+    report = evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
+    assert not report["independent_parity_contract"]["checks"]["resolution_contract"]
     assert not report["passed"]
 
 

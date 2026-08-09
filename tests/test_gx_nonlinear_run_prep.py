@@ -113,6 +113,17 @@ def test_prepare_gx_nonlinear_run_is_revision_pinned_and_external(tmp_path) -> N
     )
     assert manifest["gx_revision"] == revision
     assert manifest["case_contract"]["ky_min"] == pytest.approx(0.1)
+    expected_numerics = {
+        "ntheta": 24,
+        "nx": 32,
+        "ny": 16,
+        "nhermite": 8,
+        "nlaguerre": 4,
+        "final_time": 500.0,
+        "random_seed": 19,
+        "nwrite": 20,
+    }
+    assert {key: manifest["case_contract"][key] for key in expected_numerics} == expected_numerics
     assert "--expected-revision" in manifest["summary_command"]
     assert (output / "jax_fluxtube_gk_cyclone_nonlinear.in").exists()
 
