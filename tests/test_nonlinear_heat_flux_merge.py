@@ -108,3 +108,16 @@ def test_merge_nonlinear_segments_rejects_restart_diagnostic_discontinuity(tmp_p
 
     with pytest.raises(ValueError, match="heat flux is discontinuous"):
         merge_nonlinear_heat_flux_segments((first, second))
+
+
+def test_merge_rejects_untrusted_producers_and_nonfinite_controls(tmp_path):
+    segment = _segment(tmp_path / "segment.json", 20.0, 40.0)
+    payload = json.loads(segment.read_text())
+    payload["producer"] = "external-or-forged"
+    segment.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="local producer"):
+        merge_nonlinear_heat_flux_segments((segment,))
+
+    local = _segment(tmp_path / "local.json", 20.0, 40.0)
+    with pytest.raises(ValueError, match="finite and positive"):
+        merge_nonlinear_heat_flux_segments((local,), max_relative_drift=float("nan"))

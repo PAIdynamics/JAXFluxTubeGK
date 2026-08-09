@@ -32,6 +32,12 @@ _CONTRACT_KEYS = (
     "collision_frequency",
     "flux_moment",
 )
+_INPUT_PRODUCERS = frozenset(
+    {
+        "jax-fluxtube-gk/nonlinear-heat-flux",
+        "jax-fluxtube-gk/nonlinear-heat-flux-merged",
+    }
+)
 
 
 def _contract(payload: dict) -> dict:
@@ -116,6 +122,16 @@ def merge_nonlinear_heat_flux_segments(
         raise ValueError("at least one nonlinear segment is required")
     if not 0.0 <= start_fraction < 1.0:
         raise ValueError("start_fraction must lie in [0, 1)")
+    stationarity_limits = (
+        max_relative_drift,
+        max_relative_standard_error,
+        min_phi_rms_ratio,
+        max_absolute_phi_growth_rate,
+        min_window_duration,
+        block_duration,
+    )
+    if not all(np.isfinite(value) and value > 0.0 for value in stationarity_limits):
+        raise ValueError("stationarity controls must be finite and positive")
     if min_samples < 2 or min_window_duration <= 0.0 or block_duration <= 0.0:
         raise ValueError("stationarity requires at least two samples and positive duration")
     if min_blocks < 2:
@@ -123,6 +139,11 @@ def merge_nonlinear_heat_flux_segments(
     payloads = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     if any(payload.get("schema_version") != 1 for payload in payloads):
         raise ValueError("nonlinear segments must use schema version 1")
+    if any(payload.get("producer") not in _INPUT_PRODUCERS for payload in payloads):
+        raise ValueError("nonlinear segments must come from a local producer")
+    normalization = payloads[0].get("normalization")
+    if not isinstance(normalization, str) or not normalization.strip():
+        raise ValueError("nonlinear segments require a normalization")
     if any(
         payload.get("normalization") != payloads[0].get("normalization") for payload in payloads
     ):
