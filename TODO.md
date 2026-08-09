@@ -748,9 +748,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   `0.0922`, and field growth `1.41e-3`. It differs from the stationary `17x9`
   mean `-7.0770` by `29.0%` when normalized to the finer result, above the
   unchanged `15%` gate. Domain convergence therefore still fails and requires
-  a bandwidth-preserving `65x33, ky_min=0.0125` rung. CUDA/GX execution is
-  explicitly deferred for now and is not counted as a passing independent
-  parity result.
+  a bandwidth-preserving `65x33, ky_min=0.0125` rung. That rung now has a valid
+  complex128 time-20 bootstrap checkpoint after 572 steps. Its short startup
+  window is intentionally nonstationary (mean `-3.70e-5`, `10.17%` block
+  error, drift `-2.10`, field growth `0.103`) and is restart/feasibility
+  evidence only; long-time extensions remain. CUDA/GX execution is explicitly
+  deferred for now and is not counted as a passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

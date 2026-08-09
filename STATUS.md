@@ -288,6 +288,11 @@ claimed.
   Its `29.0%` change from the stationary `17x9` mean `-7.0770`, normalized to
   the finer result, still fails the unchanged `15%` domain gate. A
   bandwidth-preserving `65x33, ky_min=0.0125` rung is therefore required.
+- Bootstrapped that `65x33` rung through time 20 in 572 adaptive steps. The
+  caller-owned complex128 checkpoint is finite and has the exact
+  `(12, 6, 12, 65, 33)` state shape. The short startup report is correctly
+  nonstationary (mean `-3.70e-5`, `10.17%` block error, drift `-2.10`, field
+  growth `0.103`); it establishes a recoverable feasible rung, not convergence.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.
