@@ -264,6 +264,14 @@ def _parse_args(argv: list[str] | None = None):
         parser.error("n-kx must be odd and at least 3; n-ky must be at least 2")
     if min(args.n_z, args.n_vpar, args.n_mu) < 2 or args.final_time <= 0.0:
         parser.error("phase-space sizes must be at least 2 and final-time positive")
+    if args.kx_max <= 0.0 or args.ky_min <= 0.0:
+        parser.error("kx-max and ky-min must be positive")
+    if args.hyperdiffusion < 0.0 or args.initial_amplitude <= 0.0:
+        parser.error("hyperdiffusion must be nonnegative and initial-amplitude positive")
+    if not 0.0 <= args.start_fraction < 1.0:
+        parser.error("start-fraction must lie in [0, 1)")
+    if args.max_relative_drift <= 0.0 or args.max_relative_standard_error <= 0.0:
+        parser.error("stationarity drift and uncertainty limits must be positive")
     if args.min_phi_rms_ratio <= 0.0:
         parser.error("min-phi-rms-ratio must be positive")
     if not 0.0 <= args.initial_zonal_fraction <= 1.0:

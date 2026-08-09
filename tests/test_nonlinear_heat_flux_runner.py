@@ -50,6 +50,25 @@ def test_nonlinear_heat_flux_runner_rejects_even_kx(tmp_path):
         _parse_args(["--output", str(tmp_path / "result.json"), "--n-kx", "4"])
 
 
+@pytest.mark.parametrize(
+    ("option", "value"),
+    (
+        ("--kx-max", "0"),
+        ("--ky-min", "0"),
+        ("--hyperdiffusion", "-0.1"),
+        ("--initial-amplitude", "0"),
+        ("--start-fraction", "1"),
+        ("--max-relative-drift", "0"),
+        ("--max-relative-standard-error", "-0.1"),
+    ),
+)
+def test_nonlinear_heat_flux_runner_rejects_invalid_physical_controls(
+    tmp_path, option, value
+):
+    with pytest.raises(SystemExit):
+        _parse_args(["--output", str(tmp_path / "result.json"), option, value])
+
+
 def test_nonlinear_heat_flux_runner_requires_x64():
     with pytest.raises(RuntimeError, match="JAX_ENABLE_X64=1"):
         _require_x64(False)
