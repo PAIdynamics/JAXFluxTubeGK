@@ -23,18 +23,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             type=Path,
             help=(
                 f"path to the revision-pinned {name} checkout; alternatively set "
-                f"OPTIMAL_FUSION_{name.upper()}_ROOT"
+                f"JAX_FLUXTUBE_GK_{name.upper()}_ROOT"
             ),
         )
 
 
 def _dependency_root(request: pytest.FixtureRequest, name: str) -> Path:
     option = request.config.getoption(f"--{name}-root")
-    configured = option or os.environ.get(f"OPTIMAL_FUSION_{name.upper()}_ROOT")
+    configured = option or os.environ.get(f"JAX_FLUXTUBE_GK_{name.upper()}_ROOT")
     if configured is None:
         pytest.fail(
             f"external {name} test requires --{name}-root or "
-            f"OPTIMAL_FUSION_{name.upper()}_ROOT"
+            f"JAX_FLUXTUBE_GK_{name.upper()}_ROOT"
         )
     root = Path(configured).expanduser().resolve()
     if not (root / ".git").exists():

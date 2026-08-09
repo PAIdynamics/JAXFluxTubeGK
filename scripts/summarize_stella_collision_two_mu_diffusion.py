@@ -19,7 +19,7 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
     SCHEMA as PRIMITIVE_SCHEMA,
     _consistent_scalar,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     assemble_stella_test_particle_blocks,
     build_stella_mu_diffusion_blocks,

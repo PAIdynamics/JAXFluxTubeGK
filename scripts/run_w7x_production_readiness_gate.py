@@ -217,7 +217,7 @@ def _load_mode_structure_gate_main():
     """Load the repository example without relying on the current working directory."""
 
     module_path = ROOT / "examples/run_w7x_mode_structure_gate.py"
-    module_name = "_optimal_fusion_run_w7x_mode_structure_gate"
+    module_name = "_jax_fluxtube_gk_run_w7x_mode_structure_gate"
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load W7-X mode-structure gate from {module_path}")

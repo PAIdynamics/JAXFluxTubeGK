@@ -9,7 +9,7 @@ single-surface experiments and real-provider geometry arrays.
 in an opaque objective string:
 
 ```python
-from stellarator_gk import DesignObjectiveSpec, design_objective
+from jax_fluxtube_gk import DesignObjectiveSpec, design_objective
 
 spec = DesignObjectiveSpec(
     selected_ky=3,
@@ -60,7 +60,7 @@ all samples with a weighted mean, hard worst case, or smooth worst-case
 (`softmax`) policy:
 
 ```python
-from stellarator_gk import RobustAggregationSpec, robust_scan_objective
+from jax_fluxtube_gk import RobustAggregationSpec, robust_scan_objective
 
 robust = robust_scan_objective(
     scan,
@@ -120,7 +120,7 @@ current optimization knobs before applying the next gradient step.
 
 ```python
 import jax
-from stellarator_gk import single_surface_objective, toy_gradient_descent_step
+from jax_fluxtube_gk import single_surface_objective, toy_gradient_descent_step
 
 def loss(knobs):
     return single_surface_objective(
@@ -151,7 +151,7 @@ the installed VMEC++ `w7x-standard` configuration:
 JAX_ENABLE_X64=1 uv run --no-sync \
   python examples/vmecpp_w7x_design_loop.py \
   --iterations 1 --n-z 16 --n-vpar 2 --n-mu 2 --n-steps 1 \
-  --output /tmp/optimal-fusion-vmecpp-w7x-design/smoke.json
+  --output /tmp/jax-fluxtube-gk-vmecpp-w7x-design/smoke.json
 ```
 
 The example loads W7-X from VMEC++ rather than a repository artifact, perturbs

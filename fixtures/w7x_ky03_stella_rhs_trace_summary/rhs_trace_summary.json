@@ -13,7 +13,7 @@
   ],
   "missing_record_terms": [],
   "provenance": {
-    "stella_executable": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/stella/COMPILATION/build_cmake/COMPILATION/stella",
+    "stella_executable": "/private/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v5/stella/COMPILATION/build_cmake/COMPILATION/stella",
     "stella_revision": "564ca09b89904c231421c17c00068a9362061278",
     "stella_source": "/Users/mohsensadr/Codes/GitHub/fusion/stella"
   },
@@ -965,8 +965,8 @@
     }
   ],
   "total_rows": 1778700,
-  "trace_format": "stellarator_gk_stella_rhs_trace_v5",
-  "trace_path": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "trace_format": "jax_fluxtube_gk_stella_rhs_trace_v5",
+  "trace_path": "/private/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v5/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat",
   "v3_missing_record_terms": [],
   "v3_required_record_terms_present": true,
   "v4_missing_record_terms": [],

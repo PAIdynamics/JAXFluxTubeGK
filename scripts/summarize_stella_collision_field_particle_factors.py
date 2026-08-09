@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from scripts.summarize_stella_collision_field_particle_components import _read_values
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     build_laguerre_legendre_collision_precompute,
     laguerre_legendre_collision_components_from_moments,
 )
@@ -115,12 +115,12 @@ def summarize_factor_trace(
     factors = _read_values(
         factor_path,
         columns=len(FACTOR_COLUMNS),
-        schema="stellarator_gk_stella_collision_fieldpart_factors_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_factors_v1",
     )
     aggregate = _read_values(
         aggregate_path,
         columns=13,
-        schema="stellarator_gk_stella_collision_fieldpart_trace_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_trace_v1",
     )
     indices = factors[:, :11]
     if not np.array_equal(indices, np.rint(indices)):

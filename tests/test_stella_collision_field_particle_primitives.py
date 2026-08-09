@@ -6,7 +6,7 @@ import pytest
 from scripts.summarize_stella_collision_field_particle_primitives import (
     summarize_primitive_trace,
 )
-from stellarator_gk import stella_laguerre_legendre_delta0
+from jax_fluxtube_gk import stella_laguerre_legendre_delta0
 
 
 def _write_primitive(path: Path, *, basis_scale: float = 1.0) -> Path:
@@ -29,7 +29,7 @@ def _write_primitive(path: Path, *, basis_scale: float = 1.0) -> Path:
         )
     )
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_primitives_v1\n"
         "# iv imu iky ikx iz tube target background l m j vpa mu bmag "
         "frequency clm legendre gyroaverage mass_factor delta_j sign basis\n" + rows
     )
@@ -43,7 +43,7 @@ def _write_quadrature(path: Path) -> Path:
         for imu, mu in ((1, 0.5), (2, 1.0))
     )
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_velocity_quadrature_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_velocity_quadrature_v1\n"
         "# iv imu iz vpa mu bmag w_vpa w_mu\n" + rows
     )
     return path

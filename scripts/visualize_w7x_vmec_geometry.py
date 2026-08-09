@@ -12,7 +12,7 @@ import numpy as np
 from scipy.io import netcdf_file
 
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +26,7 @@ DEFAULT_PDF_OUTPUT = ROOT / "figures/w7x_vmec_geometry.pdf"
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("VMEC equilibrium", args.vmec)
     metadata = _read_json(args.metadata) if args.metadata.is_file() else {}

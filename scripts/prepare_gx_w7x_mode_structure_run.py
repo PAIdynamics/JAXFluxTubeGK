@@ -4,7 +4,7 @@ The repository contains the GX W7-X input deck and VMEC file, but not a
 matching retained ``.big.nc`` field diagnostic.  This helper writes a patched
 GX input plus metadata that tells the user how to run GX, export the resulting
 mode-structure fixture, and compare it against the committed reduced W7-X
-``stellarator_gk`` fixture.
+``jax_fluxtube_gk`` fixture.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ DEFAULT_COMPARISON_OUTPUT = ROOT / "figures/w7x_itg_external_mode_structure_comp
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("GX input", args.input)
     announce_external_path("VMEC equilibrium", args.vmec_file)

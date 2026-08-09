@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import shutil
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     GVEC_GEOMETRY_COMPUTE_KEYS,
     GeometryRequest,
     GvecGeometryProvider,

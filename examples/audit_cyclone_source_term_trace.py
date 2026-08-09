@@ -13,13 +13,13 @@ import argparse
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 
 jax.config.update("jax_enable_x64", True)
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     run_cyclone_base_case_source_term_trace,
     write_cyclone_source_term_trace_csv,
 )

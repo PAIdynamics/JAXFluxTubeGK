@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import pytest
 
-from stellarator_gk.tem_validation import (
+from jax_fluxtube_gk.tem_validation import (
     TemCaseSpec,
     TemExternalReference,
     TemLinearSmokeResult,

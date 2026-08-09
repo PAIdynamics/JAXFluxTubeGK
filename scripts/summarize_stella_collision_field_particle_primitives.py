@@ -10,7 +10,7 @@ import numpy as np
 
 from scripts.summarize_stella_collision_field_particle_components import _read_values
 from scripts.summarize_stella_collision_field_particle_factors import _axis_lookup
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_response,
@@ -213,7 +213,7 @@ def summarize_primitive_trace(
     rows = _read_values(
         primitive_path,
         columns=len(PRIMITIVE_COLUMNS),
-        schema="stellarator_gk_stella_collision_fieldpart_primitives_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_primitives_v1",
     )
     if not np.array_equal(rows[:, :11], np.rint(rows[:, :11])):
         raise ValueError("primitive trace indices must be integers")
@@ -263,7 +263,7 @@ def summarize_primitive_trace(
         quadrature_rows = _read_values(
             quadrature_path,
             columns=len(QUADRATURE_COLUMNS),
-            schema="stellarator_gk_stella_collision_velocity_quadrature_v1",
+            schema="jax_fluxtube_gk_stella_collision_velocity_quadrature_v1",
         )
         local_delta = reconstruct_delta_with_local_builder(rows, quadrature_rows)
         native_delta = rows[:, 19]

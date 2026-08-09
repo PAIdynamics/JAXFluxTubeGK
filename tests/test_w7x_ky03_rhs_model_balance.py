@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import FourierGridSpec, build_fourier_grid
-from stellarator_gk.physics import FLRFactors
+from jax_fluxtube_gk import FourierGridSpec, build_fourier_grid
+from jax_fluxtube_gk.physics import FLRFactors
 
 
 ROOT = Path(__file__).resolve().parents[1]

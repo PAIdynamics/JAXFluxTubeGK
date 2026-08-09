@@ -43,7 +43,7 @@ def test_implicit_trace_patch_instruments_all_response_stages(tmp_path: Path):
     ):
         assert stage in patched
     assert TRACE_FILENAME in patched
-    assert "stellarator_gk_implicit_call /= 1" in patched
+    assert "jax_fluxtube_gk_implicit_call /= 1" in patched
 
 
 def test_implicit_stage_metrics_report_fixed_and_phase_aligned_errors():

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 
-SCHEMA = "# schema=stellarator_gk_stella_collision_test_particle_matrix_v1"
+SCHEMA = "# schema=jax_fluxtube_gk_stella_collision_test_particle_matrix_v1"
 COLUMNS = (
     "iky",
     "ikx",

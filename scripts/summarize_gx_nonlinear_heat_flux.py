@@ -12,7 +12,7 @@ import subprocess
 
 import numpy as np
 
-from stellarator_gk import correlated_flux_statistics
+from jax_fluxtube_gk import correlated_flux_statistics
 
 
 def summarize_heat_flux(

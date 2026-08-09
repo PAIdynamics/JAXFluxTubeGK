@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     SpeciesParams,
@@ -37,7 +37,7 @@ from stellarator_gk import (
     normalize_by_ky_amplitude,
     solve_field_from_state,
 )
-from stellarator_gk.physics import (
+from jax_fluxtube_gk.physics import (
     adiabatic_density_numerator,
     adiabatic_quasineutrality_residual,
     dissipation,
@@ -219,7 +219,7 @@ def run_w7x_ky03_rhs_model_balance(
                 quasineutrality_denominator=np.asarray(field.denominator)[:, ix, 0],
                 log_normalization=evolved["log_normalization"][0],
                 metadata={
-                    "schema": "stellarator_gk_selected_mode_array_trace_v1",
+                    "schema": "jax_fluxtube_gk_selected_mode_array_trace_v1",
                     "case": case.name,
                     "ky": FOCUS_KY,
                     "kx": 0.0,

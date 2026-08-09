@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     CycloneSourceTermTrace,
     CycloneOneWindowReplayReport,
     GkwIghInputTrace,
@@ -270,7 +270,7 @@ def test_prepare_gkw_cosine2_run_patches_only_the_copy(tmp_path: Path) -> None:
     assert "finit = 'cosin2'" in prepared.patched_input.read_text(encoding="utf-8")
     assert prepared.patched_diagnostic is None
     assert not prepared.multi_time_distr
-    assert (prepared.output_root / "README_stellarator_gk_cosin2.md").is_file()
+    assert (prepared.output_root / "README_jax_fluxtube_gk_cosin2.md").is_file()
 
 
 def test_prepare_gkw_cosine2_run_can_patch_multitime_distr(tmp_path: Path) -> None:
@@ -293,7 +293,7 @@ def test_prepare_gkw_cosine2_run_can_patch_multitime_distr(tmp_path: Path) -> No
     assert prepared.multi_time_distr
     assert prepared.patched_diagnostic is not None
     diagnostic_text = prepared.patched_diagnostic.read_text(encoding="utf-8")
-    assert "stellarator_gk multi-time distr patch" in diagnostic_text
+    assert "jax_fluxtube_gk multi-time distr patch" in diagnostic_text
     assert "use control,      only : output3d, lphi_diagnostics, ntotstep" in diagnostic_text
     assert "call velocity_space_output(ntotstep)" in diagnostic_text
     assert "subroutine velocity_space_output(snapshot_index)" in diagnostic_text
@@ -301,7 +301,7 @@ def test_prepare_gkw_cosine2_run_can_patch_multitime_distr(tmp_path: Path) -> No
     assert "distr1.dat" in diagnostic_text
     assert "distr1_" not in source_diagnostic.read_text(encoding="utf-8")
     assert "velocity-space\nsnapshots" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -325,12 +325,12 @@ def test_prepare_gkw_cosine2_run_can_patch_state_trace(tmp_path: Path) -> None:
     assert prepared.state_trace
     assert prepared.patched_diagnostic is not None
     diagnostic_text = prepared.patched_diagnostic.read_text(encoding="utf-8")
-    assert "stellarator_gk compact state trace patch" in diagnostic_text
-    assert "call stellarator_gk_state_trace_output" in diagnostic_text
-    assert "stellarator_gk_state_trace.dat" in diagnostic_text
-    assert "stellarator_gk_state_trace.dat" not in source_diagnostic.read_text(encoding="utf-8")
+    assert "jax_fluxtube_gk compact state trace patch" in diagnostic_text
+    assert "call jax_fluxtube_gk_state_trace_output" in diagnostic_text
+    assert "jax_fluxtube_gk_state_trace.dat" in diagnostic_text
+    assert "jax_fluxtube_gk_state_trace.dat" not in source_diagnostic.read_text(encoding="utf-8")
     assert "compact state trace" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -354,14 +354,14 @@ def test_prepare_gkw_cosine2_run_can_patch_selected_state_dump(tmp_path: Path) -
     assert prepared.selected_state_dump
     assert prepared.patched_diagnostic is not None
     diagnostic_text = prepared.patched_diagnostic.read_text(encoding="utf-8")
-    assert "stellarator_gk selected-state dump patch" in diagnostic_text
-    assert "call stellarator_gk_selected_state_dump_output" in diagnostic_text
-    assert "stellarator_gk_selected_state_" in diagnostic_text
-    assert "stellarator_gk_selected_state_" not in source_diagnostic.read_text(
+    assert "jax_fluxtube_gk selected-state dump patch" in diagnostic_text
+    assert "call jax_fluxtube_gk_selected_state_dump_output" in diagnostic_text
+    assert "jax_fluxtube_gk_selected_state_" in diagnostic_text
+    assert "jax_fluxtube_gk_selected_state_" not in source_diagnostic.read_text(
         encoding="utf-8"
     )
     assert "full selected\nsingle-mode state" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -387,16 +387,16 @@ def test_prepare_gkw_cosine2_run_can_patch_initial_state_dump(tmp_path: Path) ->
     patched_text = (prepared.output_root / "src" / "exp_integration.F90").read_text(
         encoding="utf-8"
     )
-    assert "stellarator_gk initial selected-state dump patch" in patched_text
-    assert "call stellarator_gk_initial_state_output('pre_normalize')" in patched_text
-    assert "call stellarator_gk_initial_state_output('post_normalize')" in patched_text
-    assert "subroutine stellarator_gk_initial_state_output" in patched_text
-    assert '("stellarator_gk_initial_state_",A,".dat")' in patched_text
-    assert "stellarator_gk_initial_state_post_normalize.dat" not in (
+    assert "jax_fluxtube_gk initial selected-state dump patch" in patched_text
+    assert "call jax_fluxtube_gk_initial_state_output('pre_normalize')" in patched_text
+    assert "call jax_fluxtube_gk_initial_state_output('post_normalize')" in patched_text
+    assert "subroutine jax_fluxtube_gk_initial_state_output" in patched_text
+    assert '("jax_fluxtube_gk_initial_state_",A,".dat")' in patched_text
+    assert "jax_fluxtube_gk_initial_state_post_normalize.dat" not in (
         source_exp_integration.read_text(encoding="utf-8")
     )
     assert "first `normalize(2)` call" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -436,22 +436,22 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace(tmp_path: Path) -> None:
     linear_terms_text = (
         prepared.output_root / "src" / "linear_terms.F90"
     ).read_text(encoding="utf-8")
-    assert "stellarator_gk rhs trace exp_integration patch" in exp_integration_text
-    assert "call stellarator_gk_rhs_trace_output" in exp_integration_text
+    assert "jax_fluxtube_gk rhs trace exp_integration patch" in exp_integration_text
+    assert "call jax_fluxtube_gk_rhs_trace_output" in exp_integration_text
     assert "ntotstep .eq. 40" in exp_integration_text
     assert "use matdat,       only : mat, ii, jj, n2, source" in exp_integration_text
     assert "do elem = 1, n2" in exp_integration_text
     assert "do elem = 1, n4" not in exp_integration_text
-    assert "stellarator_gk rhs trace matdat patch" in matdat_text
-    assert "stellarator_gk_mat_term" in matdat_text
-    assert ".and.(stellarator_gk_mat_term(i).eq.stellarator_gk_mat_term(ireduced))" in matdat_text
-    assert "stellarator_gk_mat_term(ireduced) = stellarator_gk_mat_term(i)" in matdat_text
-    assert "stellarator_gk_set_trace_term(7)" in linear_terms_text
-    assert "stellarator_gk_rhs_trace_" not in source_exp_integration.read_text(
+    assert "jax_fluxtube_gk rhs trace matdat patch" in matdat_text
+    assert "jax_fluxtube_gk_mat_term" in matdat_text
+    assert ".and.(jax_fluxtube_gk_mat_term(i).eq.jax_fluxtube_gk_mat_term(ireduced))" in matdat_text
+    assert "jax_fluxtube_gk_mat_term(ireduced) = jax_fluxtube_gk_mat_term(i)" in matdat_text
+    assert "jax_fluxtube_gk_set_trace_term(7)" in linear_terms_text
+    assert "jax_fluxtube_gk_rhs_trace_" not in source_exp_integration.read_text(
         encoding="utf-8"
     )
     assert "RHS/source actions" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -484,14 +484,14 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_state_dump(tmp_path: Path) 
     exp_integration_text = (
         prepared.output_root / "src" / "exp_integration.F90"
     ).read_text(encoding="utf-8")
-    assert "call stellarator_gk_rhs_trace_state_output" in exp_integration_text
-    assert "subroutine stellarator_gk_rhs_trace_state_output" in exp_integration_text
-    assert "stellarator_gk_rhs_state_" in exp_integration_text
-    assert "stellarator_gk_rhs_state_" not in source_exp_integration.read_text(
+    assert "call jax_fluxtube_gk_rhs_trace_state_output" in exp_integration_text
+    assert "subroutine jax_fluxtube_gk_rhs_trace_state_output" in exp_integration_text
+    assert "jax_fluxtube_gk_rhs_state_" in exp_integration_text
+    assert "jax_fluxtube_gk_rhs_state_" not in source_exp_integration.read_text(
         encoding="utf-8"
     )
     assert "trace-timing discriminator" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -526,15 +526,15 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_internal_apply(
     exp_integration_text = (
         prepared.output_root / "src" / "exp_integration.F90"
     ).read_text(encoding="utf-8")
-    assert "call stellarator_gk_rhs_apply_output" in exp_integration_text
-    assert "subroutine stellarator_gk_rhs_apply_output" in exp_integration_text
+    assert "call jax_fluxtube_gk_rhs_apply_output" in exp_integration_text
+    assert "subroutine jax_fluxtube_gk_rhs_apply_output" in exp_integration_text
     assert "call calculate_rhs(fdisi, rhs_internal)" in exp_integration_text
-    assert "stellarator_gk_rhs_apply_" in exp_integration_text
-    assert "stellarator_gk_rhs_apply_" not in source_exp_integration.read_text(
+    assert "jax_fluxtube_gk_rhs_apply_" in exp_integration_text
+    assert "jax_fluxtube_gk_rhs_apply_" not in source_exp_integration.read_text(
         encoding="utf-8"
     )
     assert "calculate_rhs(fdisi, rhs_internal)" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -569,14 +569,14 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_igh_matrix_dump(
     exp_integration_text = (
         prepared.output_root / "src" / "exp_integration.F90"
     ).read_text(encoding="utf-8")
-    assert "call stellarator_gk_igh_matrix_output" in exp_integration_text
-    assert "subroutine stellarator_gk_igh_matrix_output" in exp_integration_text
-    assert "stellarator_gk_igh_matrix_" in exp_integration_text
-    assert "stellarator_gk_igh_matrix_" not in source_exp_integration.read_text(
+    assert "call jax_fluxtube_gk_igh_matrix_output" in exp_integration_text
+    assert "subroutine jax_fluxtube_gk_igh_matrix_output" in exp_integration_text
+    assert "jax_fluxtube_gk_igh_matrix_" in exp_integration_text
+    assert "jax_fluxtube_gk_igh_matrix_" not in source_exp_integration.read_text(
         encoding="utf-8"
     )
     assert "compressed selected-row `igh_or_term_i` matrix" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -614,14 +614,14 @@ def test_prepare_gkw_cosine2_run_can_patch_rhs_trace_igh_input_dump(
     patched_text = (prepared.output_root / "src" / "linear_terms.F90").read_text(
         encoding="utf-8"
     )
-    assert "call stellarator_gk_igh_input_output" in patched_text
-    assert "subroutine stellarator_gk_igh_input_output" in patched_text
-    assert "stellarator_gk_igh_inputs.dat" in patched_text
-    assert "stellarator_gk_igh_inputs.dat" not in source_linear_terms.read_text(
+    assert "call jax_fluxtube_gk_igh_input_output" in patched_text
+    assert "subroutine jax_fluxtube_gk_igh_input_output" in patched_text
+    assert "jax_fluxtube_gk_igh_inputs.dat" in patched_text
+    assert "jax_fluxtube_gk_igh_inputs.dat" not in source_linear_terms.read_text(
         encoding="utf-8"
     )
     assert "row-level\n`igh` coefficient inputs" in (
-        prepared.output_root / "README_stellarator_gk_cosin2.md"
+        prepared.output_root / "README_jax_fluxtube_gk_cosin2.md"
     ).read_text(encoding="utf-8")
 
 
@@ -787,7 +787,7 @@ def test_patched_cosin2_gkw_fixtures_load() -> None:
 
 
 def test_gkw_state_trace_loader_and_solver_comparison(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_state_trace.dat"
+    path = tmp_path / "jax_fluxtube_gk_state_trace.dat"
     path.write_text(
         "# step time state_norm phi_norm\n"
         "20 6.00000000000000e-02 1.2e-01 2.3e-01\n"
@@ -816,7 +816,7 @@ def test_gkw_state_trace_loader_and_solver_comparison(tmp_path: Path) -> None:
 
 
 def test_gkw_selected_mode_state_loader_and_comparison(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_selected_state_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_selected_state_00000020.dat"
     rows = ["# step time iz imu ivpar real_f imag_f real_phi imag_phi"]
     for iz in (1, 2):
         phi = 0.1 * iz + 1j * 0.01 * iz
@@ -852,7 +852,7 @@ def test_gkw_selected_mode_state_loader_and_comparison(tmp_path: Path) -> None:
 def test_gkw_selected_mode_state_loader_accepts_rhs_state_directory(
     tmp_path: Path,
 ) -> None:
-    path = tmp_path / "stellarator_gk_rhs_state_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_rhs_state_00000020.dat"
     rows = ["# step time iz imu ivpar real_f imag_f real_phi imag_phi"]
     for iz in (1, 2):
         phi = 0.2 * iz + 1j * 0.02 * iz
@@ -875,7 +875,7 @@ def test_gkw_selected_mode_state_loader_accepts_rhs_state_directory(
 
 
 def test_selected_mode_state_comparison_allows_global_phase(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_selected_state_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_selected_state_00000020.dat"
     path.write_text(
         "# step time iz imu ivpar real_f imag_f real_phi imag_phi\n"
         "20 6.0e-2 1 1 1 1.0 2.0 3.0 4.0\n",
@@ -899,7 +899,7 @@ def test_selected_mode_state_comparison_allows_global_phase(tmp_path: Path) -> N
 
 
 def test_gkw_selected_mode_rhs_trace_loader(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_rhs_trace_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_rhs_trace_00000020.dat"
     rows = [
         "# step time iz imu ivpar real_total imag_total "
         "real_untagged imag_untagged real_igh imag_igh real_trapdf imag_trapdf "
@@ -948,7 +948,7 @@ def test_gkw_selected_mode_rhs_trace_loader(tmp_path: Path) -> None:
 
 
 def test_gkw_selected_mode_rhs_apply_trace_loader(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_rhs_apply_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_rhs_apply_00000020.dat"
     rows = ["# step time iz imu ivpar real_calculate_rhs imag_calculate_rhs"]
     for iz in (1, 2):
         for imu in (1, 2):
@@ -971,7 +971,7 @@ def test_gkw_selected_mode_rhs_apply_trace_loader(tmp_path: Path) -> None:
 
 
 def test_gkw_igh_matrix_trace_loader(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_igh_matrix_00000020.dat"
+    path = tmp_path / "jax_fluxtube_gk_igh_matrix_00000020.dat"
     path.write_text(
         "# step time elem row_index col_index row_iz row_imu row_ivpar "
         "col_iz col_imu col_ivpar term real_mat imag_mat\n"
@@ -991,7 +991,7 @@ def test_gkw_igh_matrix_trace_loader(tmp_path: Path) -> None:
 
 
 def test_gkw_igh_input_trace_loader(tmp_path: Path) -> None:
-    path = tmp_path / "stellarator_gk_igh_inputs.dat"
+    path = tmp_path / "jax_fluxtube_gk_igh_inputs.dat"
     values = [1, 1, 1, 1, 1, 1, 0]
     values += [float(index) for index in range(1, 16)]
     values += [100.0 + index for index in range(25)]

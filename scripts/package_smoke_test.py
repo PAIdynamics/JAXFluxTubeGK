@@ -1,4 +1,4 @@
-"""Build and import the optimal-fusion wheel outside the source checkout."""
+"""Build and import the jax-fluxtube-gk wheel outside the source checkout."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def main() -> int:
     parser.add_argument("--python", default="3.13", help="Python version for the smoke venv")
     args = parser.parse_args()
 
-    with tempfile.TemporaryDirectory(prefix="optimal-fusion-package-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="jax-fluxtube-gk-package-") as temporary:
         workspace = Path(temporary)
         dist = workspace / "dist"
         environment = workspace / "venv"
@@ -35,9 +35,9 @@ def main() -> int:
             (
                 str(python),
                 "-c",
-                "import stellarator_gk; "
-                "assert 'site-packages' in stellarator_gk.__file__; "
-                "print(stellarator_gk.__file__)",
+                "import jax_fluxtube_gk; "
+                "assert 'site-packages' in jax_fluxtube_gk.__file__; "
+                "print(jax_fluxtube_gk.__file__)",
             ),
             cwd=workspace,
             check=True,

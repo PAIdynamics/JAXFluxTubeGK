@@ -6,7 +6,7 @@ import pytest
 from scripts.summarize_stella_collision_field_particle_drivers import (
     summarize_driver_trace,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_driver,
@@ -71,18 +71,18 @@ def _write_driver_fixture(root: Path, *, driver_scale: float = 1.0):
             )
     driver_path = root / "drivers.dat"
     driver_path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_drivers_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_drivers_v1\n"
         "# iv imu iky ikx iz tube target background l m j vpa mu measure clm "
         "legendre gyroaverage delta_j maxwellian psijnorm sign driver\n" + "".join(driver_rows)
     )
     primitive_path = root / "primitives.dat"
     primitive_path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_primitives_v1\n"
         "# columns\n" + "".join(primitive_rows)
     )
     quadrature_path = root / "quadrature.dat"
     quadrature_path.write_text(
-        "# schema=stellarator_gk_stella_collision_velocity_quadrature_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_velocity_quadrature_v1\n"
         "# columns\n" + "".join(quadrature_rows)
     )
     return driver_path, primitive_path, quadrature_path

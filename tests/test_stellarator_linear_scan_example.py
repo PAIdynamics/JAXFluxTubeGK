@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stellarator_gk import SyntheticGeometryProvider
+from jax_fluxtube_gk import SyntheticGeometryProvider
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,7 +192,7 @@ def test_late_window_frequency_uses_unaliased_short_phase_increments():
 
 def test_stella_initial_condition_matches_default_maxwellian_perturbation():
     module = _load_scan_module()
-    from stellarator_gk import (
+    from jax_fluxtube_gk import (
         FourierGridSpec,
         ParallelGridSpec,
         VelocityGridSpec,

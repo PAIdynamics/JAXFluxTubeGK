@@ -8,4 +8,4 @@ solver_final_state_norm,0.016826748946865613
 gkw_final_phi_norm,0.144337567297406
 solver_final_phi_norm,0.14433756729740638
 passed,True
-notes,gkw=fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat; solver=stellarator_gk; physicalize_solver=False; compact state/source trace comparison
+notes,gkw=fixtures/gkw_cyclone_selected_ky_cosin2_state_trace.dat; solver=jax_fluxtube_gk; physicalize_solver=False; compact state/source trace comparison

@@ -10,7 +10,7 @@
   "max_scale_free_fraction_delta": 0.701555501242664,
   "next_action": "resolve the distribution/mode-structure convention mismatch, then rerun this complete weighted array gate",
   "passed": false,
-  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "raw_trace_path": "/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v3/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
   "rhs_units_after_conversion": "continuous_time_rhs_l2_for_stella_rhs_records",
   "solver_balance_status": "solver_side_rhs_balance_ready",

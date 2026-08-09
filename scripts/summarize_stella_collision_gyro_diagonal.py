@@ -17,7 +17,7 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
     COLUMNS as PRIMITIVE_COLUMNS,
     SCHEMA as PRIMITIVE_SCHEMA,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_test_particle_gyro_diagonal,
     build_stella_test_particle_primitives,

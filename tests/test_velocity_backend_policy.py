@@ -1,6 +1,6 @@
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     PRODUCTION_VELOCITY_REPRESENTATION,
     VelocityBackendNotReadyError,
     require_velocity_backend_for_claim,

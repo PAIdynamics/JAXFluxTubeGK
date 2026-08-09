@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract a DESC example equilibrium onto the stellarator_gk flux-tube grid."""
+"""Extract a DESC example equilibrium onto the jax_fluxtube_gk flux-tube grid."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import jax
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     build_boozer_parallel_grid,
     desc_geometry_arrays_from_equilibrium,
     desc_geometry_arrays_from_path,

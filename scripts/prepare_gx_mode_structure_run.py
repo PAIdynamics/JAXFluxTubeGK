@@ -222,7 +222,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("GX input", args.input)
     metadata = prepare_gx_mode_structure_run(

@@ -4,7 +4,7 @@ Last updated: 2026-08-07
 
 ## Executive Summary
 
-`optimal-fusion` is now a standalone JAX package at its core boundary. An exact
+`jax-fluxtube-gk` is now a standalone JAX package at its core boundary. An exact
 development sync contains no MHD or reference-code provider, and the complete
 default suite, package build, fresh wheel install, and import all pass without
 sibling repositories. External validators are opt-in, revision checked, and
@@ -229,7 +229,7 @@ claimed.
   geometry parity, and W7-X contracts. The default solver import no longer
   loads the 16k-line benchmark implementation or advertises benchmark-only
   names in `__all__`; legacy top-level imports remain lazy-compatible.
-- Importing `stellarator_gk.validation` is itself now lazy; the 16k-line
+- Importing `jax_fluxtube_gk.validation` is itself now lazy; the 16k-line
   implementation loads only when a concrete validation symbol is requested.
   The remaining physical split has an ordered handoff and a measurable target:
   a schema-preserving compatibility facade below 500 lines with no cycles.
@@ -399,7 +399,7 @@ claimed.
   exactly. Enabling the field-particle path changes final `h2_vs_vpamus` by
   `31.14%` in relative L2, `g2_vs_vpamus` by `0.1996%`, and `phi2` by `108.18%`.
   The compact case is therefore a sensitive native discriminator.
-- The stella NetCDF incorrectly embeds the enclosing optimal-fusion revision
+- The stella NetCDF incorrectly embeds the enclosing jax-fluxtube-gk revision
   (`db79a4d-dirty`) for this out-of-tree build. The producer records provenance
   from the actual stella checkout and treats the embedded tag as informational.
 - This advances but does not close the collision gate: squared, reduced NetCDF
@@ -481,7 +481,7 @@ claimed.
   growth, frequency, and complex mode errors are `1.72e-5`, `1.08e-9`, and
   `7.58e-10`, with late growth drift `4.90e-7`.
 - Generated references and the schema-v1 summary were written only to
-  `/tmp/optimal-fusion-em-production-20260807`; no equilibrium, state, or
+  `/tmp/jax-fluxtube-gk-em-production-20260807`; no equilibrium, state, or
   reference artifact was added to the repository. The production
   electromagnetic resolution sub-gap is closed; inter-species Landau
   field-particle parity remains open.
@@ -590,7 +590,7 @@ claimed.
   the solve.
 - An opt-in test matches source weights, diagonal, and `k_perp^2` against the
   pinned Gyaradax checkout. The source/diagonal tolerance accounts for the
-  documented difference between optimal-fusion's differentiable Cephes `J0`
+  documented difference between jax-fluxtube-gk's differentiable Cephes `J0`
   approximation and Gyaradax's `jax.scipy` implementation.
 - Added the coupled kinetic `phi`/`B_parallel` field solve, gyrokinetic
   `B_parallel` response factor, beta-zero limit, and differentiation tests.
@@ -932,7 +932,7 @@ claimed.
 
 The target architecture is:
 
-- `optimal-fusion` owns the gyrokinetic solver and a code-neutral physical
+- `jax-fluxtube-gk` owns the gyrokinetic solver and a code-neutral physical
   flux-tube geometry contract;
 - installed MHD providers construct named equilibria such as W7-X and return
   geometry in memory;
@@ -968,7 +968,7 @@ tracked VMEC-initialized W7-X equilibrium. Priority 2 is complete.
 
 ### Core numerics
 
-Implemented in `src/stellarator_gk/`:
+Implemented in `src/jax_fluxtube_gk/`:
 
 - frozen JAX PyTree parameter/grid/geometry data models;
 - Chebyshev velocity and open-parallel grids, Fourier periodic-parallel grids,
@@ -1025,7 +1025,7 @@ Not present today:
 
 The pinned VMEC++ fork now installs the W7-X standard input as package data and
 exports `named_configuration("w7x-standard")` and `named_configurations()`.
-The optimal-fusion manifest pins that fork commit. DESC resolves named examples
+The jax-fluxtube-gk manifest pins that fork commit. DESC resolves named examples
 through its installed API; GVEC presently requires a state or parameter file.
 
 ### Optimization maturity

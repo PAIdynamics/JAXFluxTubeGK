@@ -16,7 +16,7 @@ from scripts.replay_w7x_stella_state_in_solver import (
     build_native_stella_setup,
     replay_cases,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     build_implicit_parallel_response_precompute,
     implicit_parallel_response_step,
     linear_residual,
@@ -35,7 +35,7 @@ DEFAULT_GEOMETRY = (
 DEFAULT_EXPLICIT_SUMMARY = (
     ROOT / "fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json"
 )
-DEFAULT_OUTPUT = Path("/private/tmp/stellarator_gk_w7x_implicit_stage_replay.json")
+DEFAULT_OUTPUT = Path("/private/tmp/jax_fluxtube_gk_w7x_implicit_stage_replay.json")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -142,7 +142,7 @@ def replay_implicit_stage(*, trace: Path, explicit_summary: Path, geometry: Path
         + (explicit_states["explicit_state2_pdf"] + explicit_rhs["rhs3"]) / 6.0
     )
     return {
-        "schema": "stellarator_gk_w7x_implicit_stage_replay_v1",
+        "schema": "jax_fluxtube_gk_w7x_implicit_stage_replay_v1",
         "trace": str(Path(trace).resolve()),
         "distribution": _metrics(stages["final_pdf"][:, :, :-1], final_state[..., 0, 0]),
         "potential": _metrics(stages["final_phi"][:-1], final_phi[:, 0, 0]),

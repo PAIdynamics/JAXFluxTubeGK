@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     ParallelGridSpec,
     VelocityGridSpec,
     build_finite_difference_operators,

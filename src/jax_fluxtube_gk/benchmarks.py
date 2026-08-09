@@ -4968,7 +4968,7 @@ def run_cyclone_base_case_mode_structure_fixture(
         phi=jnp.stack(phi_rows),
         growth_rate=jnp.asarray(growth_rows, dtype=jnp.float64),
         frequency=jnp.asarray(frequency_rows, dtype=jnp.float64),
-        source=f"stellarator_gk mode-structure scan against {source}",
+        source=f"jax_fluxtube_gk mode-structure scan against {source}",
         normalization=f"complex_phi_{normalization_model}",
         metadata=(
             ("ky_input_convention", ky_input_convention),
@@ -5116,7 +5116,7 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
         phi=phi,
         growth_rate=jnp.asarray(growth, dtype=jnp.float64),
         frequency=jnp.asarray(frequency, dtype=jnp.float64),
-        source="stellarator_gk reduced GX-style Hermite-Laguerre moment RHS",
+        source="jax_fluxtube_gk reduced GX-style Hermite-Laguerre moment RHS",
         normalization="complex_phi_gx_moment_rhs",
         metadata=(
             ("model", "reduced_gx_salpha_moment_rhs"),
@@ -6260,7 +6260,7 @@ def run_cyclone_base_case_ky_scan_gate(
         ky_tolerance=ky_tolerance,
         require_frequency=require_frequency,
         require_profile=require_profile,
-        source=f"stellarator_gk scan against {reference.source}",
+        source=f"jax_fluxtube_gk scan against {reference.source}",
         notes=(
             "multi-ky Cyclone/ITG scan gate using GKW-compatible single-mode "
             f"runs; growth_diagnostic={growth_diagnostic}, "
@@ -6755,7 +6755,7 @@ def run_cyclone_base_case_trace(
         state_norm=jnp.asarray(state_norms, dtype=jnp.float64),
         rhs_norm=jnp.asarray(rhs_norms, dtype=jnp.float64),
         log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "windowed CBC trace with selected ky, raw/physical amplitudes, "
             "window growth, fitted growth, phi norm, state norm, and RHS norm; "
@@ -6953,7 +6953,7 @@ def run_cyclone_base_case_source_term_trace(
         reconstruction_error=jnp.asarray(reconstruction_errors, dtype=jnp.float64),
         log_normalization=jnp.asarray(log_normalizations, dtype=jnp.float64),
         term_names=term_names or (),
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "selected-mode CBC source-term trace; norms are raw post-window values "
             "and can be physicalized with exp(log_normalization); "
@@ -7107,8 +7107,8 @@ def load_gkw_selected_mode_state_trace(
     """Load patched GKW selected-mode state dump files.
 
     ``paths`` may be a directory containing
-    ``stellarator_gk_selected_state_<step>.dat`` files, a directory containing
-    same-timing ``stellarator_gk_rhs_state_<step>.dat`` files, a single file,
+    ``jax_fluxtube_gk_selected_state_<step>.dat`` files, a directory containing
+    same-timing ``jax_fluxtube_gk_rhs_state_<step>.dat`` files, a single file,
     or an iterable of files.  Rows are expected to contain ``step``, ``time``,
     one-based ``z``, ``mu``, ``vpar`` indices, complex distribution value, and
     complex selected-mode field value.
@@ -7432,7 +7432,7 @@ def run_cyclone_base_case_selected_state_trace(
         times=jnp.asarray(times, dtype=jnp.float64),
         state=jnp.asarray(states, dtype=jnp.complex128),
         phi=jnp.asarray(phis, dtype=jnp.complex128),
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "solver selected-mode state trace; "
             f"parallel_derivative_model={parallel_derivative_model}, "
@@ -7576,7 +7576,7 @@ def run_cyclone_base_case_selected_rhs_trace(
         total_action=jnp.asarray(total_actions, dtype=jnp.complex128),
         term_actions=jnp.asarray(term_actions, dtype=jnp.complex128),
         term_names=GKW_SELECTED_MODE_RHS_TERM_NAMES,
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "solver selected-mode dt-scaled RHS/action trace in GKW term buckets; "
             f"parallel_derivative_model={parallel_derivative_model}, "
@@ -7678,7 +7678,7 @@ def run_cyclone_base_case_same_state_rhs_replay(
         total_action=jnp.asarray(total_actions, dtype=jnp.complex128),
         term_actions=jnp.asarray(term_actions, dtype=jnp.complex128),
         term_names=GKW_SELECTED_MODE_RHS_TERM_NAMES,
-        source="stellarator_gk:same_state_rhs_replay",
+        source="jax_fluxtube_gk:same_state_rhs_replay",
         notes=(
             "solver selected-mode dt-scaled RHS/action replay on imported GKW "
             f"states; field_source={field_source}, "
@@ -8046,7 +8046,7 @@ def run_cyclone_base_case_one_window_replay(
         max_abs_error=max_abs_error,
         passed=max_abs_error <= tolerance,
         metric_names=metric_names,
-        source="stellarator_gk:one_window_replay",
+        source="jax_fluxtube_gk:one_window_replay",
         notes=(
             "one-window replay from imported post-normalization GKW selected "
             "state snapshots; gate uses phase-aligned field/state errors, "
@@ -9127,7 +9127,7 @@ def run_cyclone_base_case_parallel_phi_trace(
         times=jnp.asarray(times_out, dtype=jnp.float64),
         z=setup["parallel"].z,
         phi_power=jnp.stack(profiles),
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "selected-ky CBC parallel |phi|^2 profile trace; "
             f"initial_profile={initial_profile}, "
@@ -9338,7 +9338,7 @@ def run_cyclone_base_case_velocity_space_slice(
         selected_ky_index=selected,
         ixzero=ixzero,
         time=final_time,
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "selected-ky CBC velocity-space slice with GKW distr*.dat normalization; "
             f"initial_profile={initial_profile}, "
@@ -9494,7 +9494,7 @@ def run_cyclone_base_case_velocity_space_slice_series(
                     selected_ky_index=selected,
                     ixzero=ixzero,
                     time=current_step * dt,
-                    source="stellarator_gk",
+                    source="jax_fluxtube_gk",
                     notes=(
                         "selected-ky CBC velocity-space slice series with "
                         "GKW distr*_<ntotstep>.dat normalization; "
@@ -9517,7 +9517,7 @@ def run_cyclone_base_case_velocity_space_slice_series(
         vperp=jnp.stack([snapshot.vperp for snapshot in snapshots]),
         real_part=jnp.stack([snapshot.real_part for snapshot in snapshots]),
         imag_part=jnp.stack([snapshot.imag_part for snapshot in snapshots]),
-        source="stellarator_gk",
+        source="jax_fluxtube_gk",
         notes=(
             "selected-ky CBC velocity-space slice series with "
             "GKW distr*_<ntotstep>.dat normalization"
@@ -10046,7 +10046,7 @@ def _run_cyclone_base_case_velocity_space_slice_with_odd_signs(
         peak_z=setup["parallel"].z[peak_z_index],
         peak_z_index=peak_z_index,
         source=(
-            f"stellarator_gk:{source_label or 'vpar_odd_sign_audit'}:"
+            f"jax_fluxtube_gk:{source_label or 'vpar_odd_sign_audit'}:"
             f"igh_sign={igh_sign:g}:parallel_field_drive_sign={parallel_field_drive_sign:g}"
         ),
         notes=(
@@ -10218,7 +10218,7 @@ def _run_cyclone_base_case_velocity_space_slice_series_with_field_variants(
                     ixzero=ixzero,
                     time=current_step * dt,
                     source=(
-                        f"stellarator_gk:{source_label or 'series_variant'}:"
+                        f"jax_fluxtube_gk:{source_label or 'series_variant'}:"
                         f"igh_sign={igh_sign:g}:field_sign={parallel_field_drive_sign:g}"
                     ),
                     notes=(
@@ -10242,7 +10242,7 @@ def _run_cyclone_base_case_velocity_space_slice_series_with_field_variants(
         vperp=jnp.stack([snapshot.vperp for snapshot in snapshots]),
         real_part=jnp.stack([snapshot.real_part for snapshot in snapshots]),
         imag_part=jnp.stack([snapshot.imag_part for snapshot in snapshots]),
-        source=f"stellarator_gk:{source_label or 'series_variant'}",
+        source=f"jax_fluxtube_gk:{source_label or 'series_variant'}",
         notes=(
             "selected-ky CBC velocity-space slice series with controlled "
             "RHS/field variants"
@@ -14214,9 +14214,9 @@ def _selected_state_dump_files(paths) -> tuple[Path, ...]:
     if isinstance(paths, (str, Path)):
         path = Path(paths)
         if path.is_dir():
-            files = tuple(sorted(path.glob("stellarator_gk_selected_state_*.dat")))
+            files = tuple(sorted(path.glob("jax_fluxtube_gk_selected_state_*.dat")))
             if not files:
-                files = tuple(sorted(path.glob("stellarator_gk_rhs_state_*.dat")))
+                files = tuple(sorted(path.glob("jax_fluxtube_gk_rhs_state_*.dat")))
         else:
             files = (path,)
     else:
@@ -14233,7 +14233,7 @@ def _rhs_trace_dump_files(paths) -> tuple[Path, ...]:
     if isinstance(paths, (str, Path)):
         path = Path(paths)
         if path.is_dir():
-            files = tuple(sorted(path.glob("stellarator_gk_rhs_trace_*.dat")))
+            files = tuple(sorted(path.glob("jax_fluxtube_gk_rhs_trace_*.dat")))
         else:
             files = (path,)
     else:
@@ -14250,7 +14250,7 @@ def _rhs_apply_dump_files(paths) -> tuple[Path, ...]:
     if isinstance(paths, (str, Path)):
         path = Path(paths)
         if path.is_dir():
-            files = tuple(sorted(path.glob("stellarator_gk_rhs_apply_*.dat")))
+            files = tuple(sorted(path.glob("jax_fluxtube_gk_rhs_apply_*.dat")))
         else:
             files = (path,)
     else:
@@ -14267,7 +14267,7 @@ def _igh_matrix_dump_files(paths) -> tuple[Path, ...]:
     if isinstance(paths, (str, Path)):
         path = Path(paths)
         if path.is_dir():
-            files = tuple(sorted(path.glob("stellarator_gk_igh_matrix_*.dat")))
+            files = tuple(sorted(path.glob("jax_fluxtube_gk_igh_matrix_*.dat")))
         else:
             files = (path,)
     else:
@@ -14284,7 +14284,7 @@ def _igh_input_dump_file(path) -> Path:
     if isinstance(path, (str, Path)):
         file_path = Path(path)
         if file_path.is_dir():
-            file_path = file_path / "stellarator_gk_igh_inputs.dat"
+            file_path = file_path / "jax_fluxtube_gk_igh_inputs.dat"
     else:
         files = tuple(Path(item) for item in path)
         if len(files) != 1:

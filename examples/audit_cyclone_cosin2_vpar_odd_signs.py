@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stellarator_gk import run_cyclone_base_case_cosin2_vpar_odd_sign_audit
+from jax_fluxtube_gk import run_cyclone_base_case_cosin2_vpar_odd_sign_audit
 
 
 def main() -> None:

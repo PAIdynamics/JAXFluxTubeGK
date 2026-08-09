@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 
@@ -22,7 +22,7 @@ jax.config.update("jax_enable_x64", True)
 
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     FourierGridSpec,
     ParallelGridSpec,
     build_desc_geometry_from_arrays,
@@ -44,7 +44,7 @@ from stellarator_gk import (
 
 def main() -> None:
     args = _parse_args()
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("GX/GIST eik", args.eik_reference)
     if args.desc_root is not None:
@@ -82,7 +82,7 @@ def main() -> None:
     if args.cyclone_trace:
         traces.append(run_cyclone_base_case_trace(n_windows=args.cyclone_trace_windows))
 
-    print("# stellarator_gk reduced validation gates")
+    print("# jax_fluxtube_gk reduced validation gates")
     print("gate status observed reference residual tolerance notes")
     for result in results:
         status = "PASS" if bool(result.passed) else "OPEN"

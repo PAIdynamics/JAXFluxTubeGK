@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stellarator_gk import correlated_flux_statistics
+from jax_fluxtube_gk import correlated_flux_statistics
 
 
 _CONTRACT_KEYS = (
@@ -162,7 +162,7 @@ def merge_nonlinear_heat_flux_segments(
     )
     return {
         "schema_version": 1,
-        "producer": "optimal-fusion/nonlinear-heat-flux-merged",
+        "producer": "jax-fluxtube-gk/nonlinear-heat-flux-merged",
         "normalization": payloads[0]["normalization"],
         "case": contract
         | {

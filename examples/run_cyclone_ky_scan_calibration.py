@@ -24,14 +24,14 @@ import argparse
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     cyclone_base_case_growth_target,
     gx_salpha_cyclone_growth_target,
     run_production_control_cyclone_ky_scan_convention_audit,

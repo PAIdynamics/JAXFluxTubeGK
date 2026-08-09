@@ -32,7 +32,7 @@ def summarize_trace(trace_path: Path, *, expected_revision: str) -> dict[str, ob
     trace_path = Path(trace_path)
     header = trace_path.read_text(encoding="utf-8").splitlines()[:2]
     if not header or header[0].strip() != (
-        "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1"
     ):
         raise ValueError("unsupported or missing collision trace schema")
     values = np.loadtxt(trace_path)

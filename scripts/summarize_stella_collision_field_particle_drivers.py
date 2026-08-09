@@ -15,7 +15,7 @@ from scripts.summarize_stella_collision_field_particle_primitives import (
     QUADRATURE_COLUMNS,
     _set_consistent,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_laguerre_legendre_delta,
     build_stella_laguerre_legendre_driver,
@@ -155,17 +155,17 @@ def summarize_driver_trace(
     drivers = _read_values(
         driver_path,
         columns=len(DRIVER_COLUMNS),
-        schema="stellarator_gk_stella_collision_fieldpart_drivers_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_drivers_v1",
     )
     primitives = _read_values(
         primitive_path,
         columns=len(PRIMITIVE_COLUMNS),
-        schema="stellarator_gk_stella_collision_fieldpart_primitives_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_primitives_v1",
     )
     quadrature = _read_values(
         quadrature_path,
         columns=len(QUADRATURE_COLUMNS),
-        schema="stellarator_gk_stella_collision_velocity_quadrature_v1",
+        schema="jax_fluxtube_gk_stella_collision_velocity_quadrature_v1",
     )
     if not np.array_equal(drivers[:, :11], np.rint(drivers[:, :11])):
         raise ValueError("driver trace indices must be integers")

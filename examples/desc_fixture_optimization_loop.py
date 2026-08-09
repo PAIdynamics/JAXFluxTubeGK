@@ -21,7 +21,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     BenchmarkTarget,
     FourierGridSpec,

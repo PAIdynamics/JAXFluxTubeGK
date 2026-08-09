@@ -14,7 +14,7 @@ from examples.run_nonlinear_heat_flux import (
     _require_x64,
     _write_checkpoint,
 )
-from stellarator_gk import FourierGridSpec, build_fourier_grid
+from jax_fluxtube_gk import FourierGridSpec, build_fourier_grid
 
 
 def test_nonlinear_heat_flux_runner_defaults_and_hyperdiffusion(tmp_path):

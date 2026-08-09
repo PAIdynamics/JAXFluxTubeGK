@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stellarator_gk import PerKyModeStructureFixture
+from jax_fluxtube_gk import PerKyModeStructureFixture
 
 
 ROOT = Path(__file__).resolve().parents[1]

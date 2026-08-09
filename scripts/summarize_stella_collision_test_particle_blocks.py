@@ -13,10 +13,10 @@ from scripts.summarize_stella_collision_test_particle_matrix import (
     SCHEMA as MATRIX_SCHEMA,
     _dense_matrices,
 )
-from stellarator_gk import assemble_stella_test_particle_blocks
+from jax_fluxtube_gk import assemble_stella_test_particle_blocks
 
 
-SCHEMA = "# schema=stellarator_gk_stella_collision_test_particle_blocks_v1"
+SCHEMA = "# schema=jax_fluxtube_gk_stella_collision_test_particle_blocks_v1"
 COLUMNS = (
     "iz",
     "target",

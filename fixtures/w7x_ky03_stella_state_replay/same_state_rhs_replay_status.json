@@ -1,13 +1,13 @@
 {
-  "schema": "stellarator_gk_w7x_same_state_rhs_replay_v1",
+  "schema": "jax_fluxtube_gk_w7x_same_state_rhs_replay_v1",
   "status": "same_state_rhs_parity_passed",
   "passed": true,
   "relative_l2_tolerance": 0.1,
   "max_rhs_relative_l2_error": 0.04392216458084677,
   "acceptance_case": "replay_stella_native_32x8",
   "max_all_discriminators_rhs_relative_l2_error": 0.9045793476535515,
-  "trace_source": "/private/tmp/stellarator_gk_stella_w7x_rhs_trace_v5/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
-  "geometry_source": "/Users/mohsensadr/Codes/GitHub/fusion/optimal-fusion/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
+  "trace_source": "/private/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v5/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat",
+  "geometry_source": "/Users/mohsensadr/Codes/GitHub/fusion/jax-fluxtube-gk/fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry",
   "raw_trace_committed": false,
   "native_grid_mirror_reconstruction": {
     "max_relative_l2_error": 0.0037034624220949035,

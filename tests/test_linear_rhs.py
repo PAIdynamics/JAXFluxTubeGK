@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     GeometryScalarParams,
@@ -33,7 +33,7 @@ from stellarator_gk import (
     solve_adiabatic_electron_phi,
     velocity_recurrence_control,
 )
-from stellarator_gk.benchmarks import (
+from jax_fluxtube_gk.benchmarks import (
     _build_cyclone_base_case_setup,
     _gkw_fortran_igh_reference,
     cyclone_base_case_growth_target,

@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stellarator-gk"
+name = "jax-fluxtube-gk"
 version = "0.1.0"
-description = "Differentiable flux-tube stellarator gyrokinetic solver"
+description = "Differentiable local flux-tube gyrokinetics for magnetic-confinement design"
 requires-python = ">=3.11"
 dependencies = [
   "jax>=0.4.30",
@@ -41,7 +41,7 @@ mhd = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["stellarator_gk*"]
+include = ["jax_fluxtube_gk*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

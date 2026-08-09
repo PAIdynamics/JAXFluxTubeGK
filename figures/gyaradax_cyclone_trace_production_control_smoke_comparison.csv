@@ -1,8 +1,8 @@
 field,max_abs_error,tolerance,status,notes
-times,1.6653345369377348e-16,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-physical_amplitude,1.4594587581257673e-06,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-window_growth,0.001329078789099214,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-fitted_growth,0.001329078789099214,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-physical_phi_norm,4.864862527083e-07,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-physical_state_norm,1.7228416338613804e-07,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
-physical_rhs_norm,1.468802037890831e-05,0.02,PASS,observed=stellarator_gk; reference=gyaradax; trace-level CBC comparison
+times,1.6653345369377348e-16,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+physical_amplitude,1.4594587581257673e-06,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+window_growth,0.001329078789099214,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+fitted_growth,0.001329078789099214,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+physical_phi_norm,4.864862527083e-07,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+physical_state_norm,1.7228416338613804e-07,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison
+physical_rhs_norm,1.468802037890831e-05,0.02,PASS,observed=jax_fluxtube_gk; reference=gyaradax; trace-level CBC comparison

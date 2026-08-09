@@ -10,7 +10,7 @@ def benchmark_symbol(name: str, allowed: frozenset[str] | None = None) -> Any:
     """Load one validation symbol without importing benchmarks with the solver API."""
     if allowed is not None and name not in allowed:
         raise AttributeError(name)
-    module = import_module("stellarator_gk.benchmarks")
+    module = import_module("jax_fluxtube_gk.benchmarks")
     try:
         return getattr(module, name)
     except AttributeError as exc:

@@ -23,7 +23,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     DesignObjectiveSpec,
     FourierGridSpec,
     GeometryRequest,
@@ -43,7 +43,7 @@ from stellarator_gk import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = Path("/private/tmp/optimal-fusion-vmecpp-w7x-design/design_loop.json")
+DEFAULT_OUTPUT = Path("/private/tmp/jax-fluxtube-gk-vmecpp-w7x-design/design_loop.json")
 STATUS = "reduced_outer_finite_difference_real_vmecpp_not_end_to_end_ad"
 
 

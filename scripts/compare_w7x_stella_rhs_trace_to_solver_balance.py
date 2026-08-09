@@ -30,14 +30,14 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TRACE = Path(
-    "/tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat"
+    "/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat"
 )
 DEFAULT_STELLA_SUMMARY = (
     ROOT / "fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json"
 )
 DEFAULT_SOLVER_BALANCE = ROOT / "fixtures/w7x_ky03_rhs_model_balance"
 DEFAULT_OUTPUT_DIR = ROOT / "fixtures/w7x_ky03_stella_rhs_trace_comparison"
-DEFAULT_ARRAY_COMPARISON = Path("/tmp/stellarator_gk_w7x_ky03_array_comparison.csv")
+DEFAULT_ARRAY_COMPARISON = Path("/tmp/jax_fluxtube_gk_w7x_ky03_array_comparison.csv")
 
 TERM_GROUPS = (
     {
@@ -275,9 +275,9 @@ def load_stella_array_trace(trace_path: Path, summary: dict[str, Any]):
         ("rhs_total", "total"),
     )
     if summary.get("trace_format") in (
-        "stellarator_gk_stella_rhs_trace_v3",
-        "stellarator_gk_stella_rhs_trace_v4",
-        "stellarator_gk_stella_rhs_trace_v5",
+        "jax_fluxtube_gk_stella_rhs_trace_v3",
+        "jax_fluxtube_gk_stella_rhs_trace_v4",
+        "jax_fluxtube_gk_stella_rhs_trace_v5",
     ):
         required += (
             ("quasineutrality", "numerator"),
@@ -589,8 +589,8 @@ def compare_w7x_stella_rhs_trace_to_solver_balance(
             if available is None
         ]
         has_explicit_calls = stella.get("trace_format") in (
-            "stellarator_gk_stella_rhs_trace_v3",
-            "stellarator_gk_stella_rhs_trace_v4",
+            "jax_fluxtube_gk_stella_rhs_trace_v3",
+            "jax_fluxtube_gk_stella_rhs_trace_v4",
         )
         contract["rhs_calls_explicitly_labeled"] = has_explicit_calls
         contract["direct_array_parity_ready"] = has_explicit_calls and not contract[

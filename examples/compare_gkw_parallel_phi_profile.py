@@ -14,7 +14,7 @@ import csv
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 
@@ -22,7 +22,7 @@ jax.config.update("jax_enable_x64", True)
 
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     audit_parallel_phi_profile_alignment,
     compare_parallel_phi_traces,
     load_gkw_parallel_phi_trace,

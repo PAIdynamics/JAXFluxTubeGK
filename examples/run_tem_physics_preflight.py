@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict
 import json
 
-from stellarator_gk.tem_validation import (
+from jax_fluxtube_gk.tem_validation import (
     run_reduced_tem_linear_smoke,
     run_tem_physics_preflight,
 )

@@ -1,7 +1,7 @@
 source,initial_profile,diagnostic,growth,delta_from_target_0p179
 gkw_time_dat,cosine,late_fit_from_reconstructed_amplitude,0.18853144053590817,0.009531440535908165
 gkw_time_dat,cosine,late_mean_window_growth,0.180407525,0.0014075249999999967
-stellarator_gk_gate,cosine2,late_fit,0.1647145652510088,-0.014285434748991199
-stellarator_gk_gate,cosine2,late_mean_window,0.15674153067144372,-0.022258469328556275
-stellarator_gk_gate,cosine,late_fit,0.1659730160275755,-0.013026983972424497
-stellarator_gk_gate,cosine,late_mean_window,0.15572083125648728,-0.02327916874351272
+jax_fluxtube_gk_gate,cosine2,late_fit,0.1647145652510088,-0.014285434748991199
+jax_fluxtube_gk_gate,cosine2,late_mean_window,0.15674153067144372,-0.022258469328556275
+jax_fluxtube_gk_gate,cosine,late_fit,0.1659730160275755,-0.013026983972424497
+jax_fluxtube_gk_gate,cosine,late_mean_window,0.15572083125648728,-0.02327916874351272

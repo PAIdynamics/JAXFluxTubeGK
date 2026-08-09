@@ -1,12 +1,14 @@
-# stellarator-gk
+# JAXFluxTubeGK
 
-Differentiable local flux-tube gyrokinetics for stellarator design studies.
+Differentiable local flux-tube gyrokinetics for magnetic-confinement design.
 
-This repository is a standalone JAX-first implementation of a linear
-electrostatic flux-tube gyrokinetic solver. The physics and sign conventions
-are aligned with GKW and Gyaradax. DESC, VMEC++, GVEC, GX, and stella are
-separately installed geometry providers or validation tools, not vendored
-runtime dependencies.
+This repository is a standalone JAX-first implementation of a local flux-tube
+gyrokinetic solver. Its provider-neutral geometry interface supports any
+magnetic configuration for which an adapter supplies the required field-line
+and metric data, including stellarators and axisymmetric tokamaks. The physics
+and sign conventions are aligned with GKW and Gyaradax. DESC, VMEC++, GVEC,
+GX, and stella are separately installed geometry providers or validation
+tools, not vendored runtime dependencies.
 
 The current production milestone is a trusted linear W7-X stellarator run.  The
 code can already run reduced stellarator scans, reduced optimization examples,
@@ -38,7 +40,7 @@ result without writing an equilibrium file in this repository.
 ## Repository Map
 
 ```text
-src/stellarator_gk/      Python package and public solver API
+src/jax_fluxtube_gk/      Python package and public solver API
 tests/                   Unit, validation, fixture, and regression tests
 examples/                User-facing runnable workflows and diagnostics
 scripts/                 Fixture generators, external-code prep, audit tools
@@ -145,7 +147,7 @@ growth, frequency, and mode-structure parity open.
 
 These are the same standalone boundaries exercised by GitHub Actions. The CI
 job also builds an sdist and wheel, installs the wheel into a fresh environment,
-and verifies that `stellarator_gk` imports without repository-relative files.
+and verifies that `jax_fluxtube_gk` imports without repository-relative files.
 
 Build the paper:
 
@@ -194,7 +196,7 @@ All geometry backends return the same versioned physical contract before the
 solver derives its internal coefficients:
 
 ```python
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     GeometryRequest,
     SyntheticGeometryProvider,
     internal_geometry_from_result,
@@ -249,7 +251,7 @@ To exercise the real MHD boundary, prepare the MHD profile and run:
 JAX_ENABLE_X64=1 uv run --no-sync python \
   examples/vmecpp_w7x_design_loop.py \
   --iterations 1 --n-z 16 --n-vpar 2 --n-mu 2 --n-steps 1 \
-  --output /tmp/optimal-fusion-vmecpp-w7x-design/smoke.json
+  --output /tmp/jax-fluxtube-gk-vmecpp-w7x-design/smoke.json
 ```
 
 This obtains W7-X from VMEC++, performs fresh finite-difference equilibrium
@@ -371,7 +373,7 @@ storage (large numerical traces are deliberately refused inside the repository):
 
 ```bash
 JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
-  --array-output /tmp/stellarator_gk_w7x_ky03_solver_arrays.npz
+  --array-output /tmp/jax_fluxtube_gk_w7x_ky03_solver_arrays.npz
 ```
 
 The archive uses `(z, vpar, mu)` phase-space order and contains coordinates,
@@ -391,14 +393,14 @@ weighted comparison:
 ```bash
 JAX_ENABLE_X64=1 uv run python scripts/audit_w7x_ky03_rhs_model_balance.py \
   --n-windows 1999 \
-  --output-dir /tmp/stellarator_gk_w7x_ky03_solver_balance_t1999 \
-  --array-output /tmp/stellarator_gk_w7x_ky03_solver_arrays_t1999.npz
+  --output-dir /tmp/jax_fluxtube_gk_w7x_ky03_solver_balance_t1999 \
+  --array-output /tmp/jax_fluxtube_gk_w7x_ky03_solver_arrays_t1999.npz
 uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
   --require-raw-trace \
-  --solver-balance-dir /tmp/stellarator_gk_w7x_ky03_solver_balance_t1999 \
-  --solver-array /tmp/stellarator_gk_w7x_ky03_solver_arrays_t1999.npz \
-  --output-dir /tmp/stellarator_gk_w7x_ky03_comparison_t1999 \
-  --array-comparison-output /tmp/stellarator_gk_w7x_ky03_array_comparison_t1999.csv
+  --solver-balance-dir /tmp/jax_fluxtube_gk_w7x_ky03_solver_balance_t1999 \
+  --solver-array /tmp/jax_fluxtube_gk_w7x_ky03_solver_arrays_t1999.npz \
+  --output-dir /tmp/jax_fluxtube_gk_w7x_ky03_comparison_t1999 \
+  --array-comparison-output /tmp/jax_fluxtube_gk_w7x_ky03_array_comparison_t1999.csv
 ```
 
 The v3 trace labels all three RHS calls and includes stella-side quasineutrality
@@ -414,7 +416,7 @@ Replay the external stella states directly through the solver operators:
 
 ```bash
 JAX_ENABLE_X64=1 uv run python scripts/replay_w7x_stella_state_in_solver.py \
-  --trace /tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat
+  --trace /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v3/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat
 ```
 
 This writes only compact results. It compares periodic, open-chain, and
@@ -434,19 +436,19 @@ uv run --no-sync python scripts/prepare_stella_w7x_rhs_trace_run.py \
   --stella-source /path/to/revision-pinned/stella \
   --vmec-file /path/to/wout_w7x.nc \
   --overwrite \
-  --output-root /tmp/stellarator_gk_stella_w7x_rhs_trace
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
-bash /tmp/stellarator_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
+  --output-root /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace
+bash /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace/build_stella_rhs_trace.sh
+bash /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace/run_stella_rhs_trace.sh
 ```
 
 Summarize and compare the trace:
 
 ```bash
 uv run python scripts/summarize_stella_w7x_rhs_trace.py \
-  /tmp/stellarator_gk_stella_w7x_rhs_trace/run/stellarator_gk_w7x_ky03_rhs_trace.dat \
+  /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat \
   --stella-source /path/to/revision-pinned/stella \
   --stella-executable \
-    /tmp/stellarator_gk_stella_w7x_rhs_trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
+    /tmp/jax_fluxtube_gk_stella_w7x_rhs_trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
   --output fixtures/w7x_ky03_stella_rhs_trace_summary/rhs_trace_summary.json
 uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
   --require-raw-trace
@@ -491,7 +493,7 @@ PYTHONPATH=/path/to/gyaradax uv run --extra reference python \
   scripts/run_gyaradax_tem_reference.py \
   --gyaradax-root /path/to/gyaradax \
   --expected-revision 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234 \
-  --output /tmp/optimal-fusion-gyaradax-tem-ky07.json
+  --output /tmp/jax-fluxtube-gk-gyaradax-tem-ky07.json
 ```
 
 The exact notebook case produces `gamma=0.66370834` and `omega=-1.02976757`
@@ -509,7 +511,7 @@ JAX_ENABLE_X64=1 uv run --extra reference python \
   scripts/run_gyaradax_em_resolution_ladder.py \
   --gyaradax-root /path/to/gyaradax \
   --expected-revision 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234 \
-  --output-dir /tmp/optimal-fusion-em-ladder
+  --output-dir /tmp/jax-fluxtube-gk-em-ladder
 ```
 
 The default `8x8x4`, `12x12x6`, and `16x16x8` rungs enforce independent
@@ -527,7 +529,7 @@ geometry first, then build a reusable residual precompute object.
 ```python
 import jax.numpy as jnp
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     GeometryScalarParams,
@@ -608,7 +610,7 @@ scratch storage after preparing the pinned validation dependency:
 python3 scripts/bootstrap_dependencies.py --dependency stella \
   --local-root .. --skip-project
 .venv/bin/python scripts/run_stella_collision_field_particle_discriminator.py \
-  --output-dir /tmp/optimal-fusion-stella-collisions \
+  --output-dir /tmp/jax-fluxtube-gk-stella-collisions \
   --stella-executable .dependencies/bin/stella \
   --stella-source ../stella
 ```
@@ -625,46 +627,46 @@ storage; the dependency checkout is never edited:
 ```bash
 .venv/bin/python scripts/prepare_stella_collision_field_particle_trace_run.py \
   --stella-source ../stella \
-  --output-root /tmp/optimal-fusion-stella-collision-trace --overwrite
-bash /tmp/optimal-fusion-stella-collision-trace/build_stella_collision_trace.sh
-bash /tmp/optimal-fusion-stella-collision-trace/run_stella_collision_trace.sh
+  --output-root /tmp/jax-fluxtube-gk-stella-collision-trace --overwrite
+bash /tmp/jax-fluxtube-gk-stella-collision-trace/build_stella_collision_trace.sh
+bash /tmp/jax-fluxtube-gk-stella-collision-trace/run_stella_collision_trace.sh
 .venv/bin/python scripts/summarize_stella_collision_field_particle_trace.py \
-  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+  /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/trace-summary.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/trace-summary.json
 .venv/bin/python scripts/summarize_stella_collision_field_particle_components.py \
   --components \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_components.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_components.dat \
   --aggregate \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/component-summary.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/component-summary.json
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_field_particle_factors.py \
   --factors \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_factors.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_factors.dat \
   --aggregate \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_trace.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/factor-summary.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/factor-summary.json
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_field_particle_primitives.py \
   --primitives \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_primitives.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_primitives.dat \
   --quadrature \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_velocity_quadrature.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_velocity_quadrature.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/primitive-summary.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/primitive-summary.json
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_field_particle_drivers.py \
   --drivers \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_drivers.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_drivers.dat \
   --primitives \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_primitives.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_primitives.dat \
   --quadrature \
-    /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_velocity_quadrature.dat \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_velocity_quadrature.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/driver-summary.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/driver-summary.json
 ```
 
 This traces both the aggregate signed field-particle RHS and all eight
@@ -689,8 +691,8 @@ state can be generated without rebuilding the instrumented executable:
 ```bash
 .venv/bin/python scripts/run_stella_collision_trace_state.py \
   --executable \
-    /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/stella \
-  --output-dir /tmp/optimal-fusion-stella-collision-second-state \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/stella/COMPILATION/stella \
+  --output-dir /tmp/jax-fluxtube-gk-stella-collision-second-state \
   --initial-amplitude 0.017 --initial-width 0.7
 ```
 
@@ -718,16 +720,16 @@ structure and replay the complete native implicit update with:
 
 ```bash
 .venv/bin/python scripts/summarize_stella_collision_test_particle_matrix.py \
-  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
+  /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_test_particle_matrix.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-matrix.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/test-particle-matrix.json
 
 .venv/bin/python scripts/replay_stella_implicit_collision_state.py \
-  --matrix /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
-  --field-particle /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_field_particle_trace.dat \
-  --final-state /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_final_state.dat \
+  --matrix /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_test_particle_matrix.dat \
+  --field-particle /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_field_particle_trace.dat \
+  --final-state /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_final_state.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/implicit-collision-replay.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/implicit-collision-replay.json
 ```
 
 For the pinned compact case, all 234 matrices are real `12x12` operators with
@@ -747,9 +749,9 @@ The analytic coefficients beneath that matrix can be validated separately:
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_test_particle_primitives.py \
-  /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_primitives.dat \
+  /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_test_particle_primitives.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-primitives.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/test-particle-primitives.json
 ```
 
 `build_stella_test_particle_primitives(...)` independently constructs speed,
@@ -769,10 +771,10 @@ velocity blocks. Validate their independent JAX packing with:
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_test_particle_blocks.py \
-  --blocks /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_blocks.dat \
-  --matrix /tmp/optimal-fusion-stella-collision-trace/run/stellarator_gk_collision_test_particle_matrix.dat \
+  --blocks /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_test_particle_blocks.dat \
+  --matrix /tmp/jax-fluxtube-gk-stella-collision-trace/run/jax_fluxtube_gk_collision_test_particle_matrix.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-collision-trace/test-particle-blocks.json
+  --output /tmp/jax-fluxtube-gk-stella-collision-trace/test-particle-blocks.json
 ```
 
 `assemble_stella_test_particle_blocks(...)` sums background channels, packs
@@ -787,8 +789,8 @@ by running identical cases with stella's `mu_operator` enabled and disabled:
 
 ```bash
 .venv/bin/python scripts/run_stella_collision_block_decomposition.py \
-  --executable /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
-  --output-dir /tmp/optimal-fusion-stella-block-decomposition \
+  --executable /tmp/jax-fluxtube-gk-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
+  --output-dir /tmp/jax-fluxtube-gk-stella-block-decomposition \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --overwrite
 ```
@@ -816,13 +818,13 @@ the pair-resolved `bb` blocks. Validate it with:
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python \
   scripts/summarize_stella_collision_two_mu_diffusion.py \
-  --primitives /tmp/optimal-fusion-stella-block-decomposition/stellarator_gk_collision_test_particle_primitives.dat \
-  --no-mixed-full /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_full.dat \
-  --no-mixed-vpar /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_no_mixed_vpar.dat \
-  --vpar /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_vpar.dat \
-  --full /tmp/optimal-fusion-stella-block-decomposition/collision_blocks_full.dat \
+  --primitives /tmp/jax-fluxtube-gk-stella-block-decomposition/jax_fluxtube_gk_collision_test_particle_primitives.dat \
+  --no-mixed-full /tmp/jax-fluxtube-gk-stella-block-decomposition/collision_blocks_no_mixed_full.dat \
+  --no-mixed-vpar /tmp/jax-fluxtube-gk-stella-block-decomposition/collision_blocks_no_mixed_vpar.dat \
+  --vpar /tmp/jax-fluxtube-gk-stella-block-decomposition/collision_blocks_vpar.dat \
+  --full /tmp/jax-fluxtube-gk-stella-block-decomposition/collision_blocks_full.dat \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
-  --output /tmp/optimal-fusion-stella-block-decomposition/two-mu.json
+  --output /tmp/jax-fluxtube-gk-stella-block-decomposition/two-mu.json
 ```
 
 All 1,248 native block rows agree at `1.10e-15` relative L2 and `7.99e-15`
@@ -877,9 +879,9 @@ stella's four collision-frequency knobs:
 
 ```bash
 .venv/bin/python scripts/run_stella_collision_channel_traces.py \
-  --output-dir /tmp/optimal-fusion-stella-collision-channels \
+  --output-dir /tmp/jax-fluxtube-gk-stella-collision-channels \
   --patched-stella-executable \
-    /tmp/optimal-fusion-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
+    /tmp/jax-fluxtube-gk-stella-collision-trace/stella/COMPILATION/build_cmake/COMPILATION/stella \
   --expected-revision 564ca09b89904c231421c17c00068a9362061278 \
   --overwrite
 ```
@@ -910,7 +912,7 @@ repository:
   --gx-root /path/to/gx \
   --expected-revision bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5 \
   --run-manifest /scratch/gx-cyclone-nonlinear/gx_nonlinear_run.json \
-  --netcdf /scratch/gx-cyclone-nonlinear/optimal_fusion_cyclone_nonlinear.nc \
+  --netcdf /scratch/gx-cyclone-nonlinear/jax_fluxtube_gk_cyclone_nonlinear.nc \
   --output /tmp/gx-cyclone-nonlinear-heat-flux.json
 ```
 
@@ -927,7 +929,7 @@ Generate the matching local reduced trajectory in caller-owned storage with:
 
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
-  --output /tmp/optimal-fusion-cyclone-nonlinear.json \
+  --output /tmp/jax-fluxtube-gk-cyclone-nonlinear.json \
   --flux-moment gx_total_energy
 ```
 
@@ -943,7 +945,7 @@ total-energy moment used by pinned GX revision
 locally; the local nonzero-`ky` Parseval factor also matches GX's explicit
 factor of two. Reports from this mode therefore use `gx_Q_over_Q_GB` directly.
 The default `nonadvective_heat` mode retains the historical
-`T_s(E_s-3/2)f_s` diagnostic and `optimal_fusion_native` label; the two differ
+`T_s(E_s-3/2)f_s` diagnostic and `jax_fluxtube_gk_native` label; the two differ
 by `3/2 T_s` times the particle flux and must not be silently interchanged.
 
 The default random perturbation seeds only nonzonal modes. This avoids a large

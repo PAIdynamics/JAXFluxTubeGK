@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 
@@ -28,7 +28,7 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     OptimizationKnobs,

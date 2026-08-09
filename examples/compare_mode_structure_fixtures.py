@@ -16,14 +16,14 @@ import csv
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     PerKyModeStructureFixture,
     compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,

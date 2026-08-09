@@ -13,7 +13,7 @@ uv run python scripts/generate_w7x_itg_reduced_benchmark.py
 ```
 
 The geometry is a real W7-X external eik table. The committed growth rates,
-real frequencies, and complex mode structures are reduced `stellarator_gk`
+real frequencies, and complex mode structures are reduced `jax_fluxtube_gk`
 regression artifacts, not an external-code parity claim. Replace those
 diagnostics once a matching GX, GKW, GS2, or stella W7-X time-history or
 mode-structure fixture is available.

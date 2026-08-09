@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from stellarator_gk import PerKyModeStructureFixture
+from jax_fluxtube_gk import PerKyModeStructureFixture
 
 
 ROOT = Path(__file__).resolve().parents[1]

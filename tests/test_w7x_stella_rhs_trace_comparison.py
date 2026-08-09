@@ -78,7 +78,7 @@ def test_array_contract_reports_shape_and_fixture_blockers(tmp_path: Path):
     geometry_csv = tmp_path / "geometry.csv"
     geometry_csv.write_text("z\n0\n1\n", encoding="utf-8")
     stella_summary = {
-        "trace_format": "stellarator_gk_stella_rhs_trace_v1",
+        "trace_format": "jax_fluxtube_gk_stella_rhs_trace_v1",
         "rhs_units": "stella_native_rhs_times_code_dt",
         "total_rows": 10,
         "steps": [20],
@@ -140,7 +140,7 @@ def test_array_contract_accepts_v2_velocity_weight_columns(tmp_path: Path):
     geometry_csv = tmp_path / "geometry.csv"
     geometry_csv.write_text("z\n0\n1\n", encoding="utf-8")
     stella_summary = {
-        "trace_format": "stellarator_gk_stella_rhs_trace_v2",
+        "trace_format": "jax_fluxtube_gk_stella_rhs_trace_v2",
         "rhs_units": "stella_native_rhs_times_code_dt",
         "total_rows": 10,
         "steps": [20],

@@ -20,20 +20,20 @@ from scripts.run_stella_collision_field_particle_discriminator import (
 
 
 TARGET = Path("STELLA_CODE/dissipation/collisions_fokkerplanck.f90")
-TRACE_FILENAME = "stellarator_gk_collision_field_particle_trace.dat"
-COMPONENT_TRACE_FILENAME = "stellarator_gk_collision_field_particle_components.dat"
-FACTOR_TRACE_FILENAME = "stellarator_gk_collision_field_particle_factors.dat"
-PRIMITIVE_TRACE_FILENAME = "stellarator_gk_collision_field_particle_primitives.dat"
-QUADRATURE_TRACE_FILENAME = "stellarator_gk_collision_velocity_quadrature.dat"
-DRIVER_TRACE_FILENAME = "stellarator_gk_collision_field_particle_drivers.dat"
+TRACE_FILENAME = "jax_fluxtube_gk_collision_field_particle_trace.dat"
+COMPONENT_TRACE_FILENAME = "jax_fluxtube_gk_collision_field_particle_components.dat"
+FACTOR_TRACE_FILENAME = "jax_fluxtube_gk_collision_field_particle_factors.dat"
+PRIMITIVE_TRACE_FILENAME = "jax_fluxtube_gk_collision_field_particle_primitives.dat"
+QUADRATURE_TRACE_FILENAME = "jax_fluxtube_gk_collision_velocity_quadrature.dat"
+DRIVER_TRACE_FILENAME = "jax_fluxtube_gk_collision_field_particle_drivers.dat"
 TEST_PARTICLE_MATRIX_TRACE_FILENAME = (
-    "stellarator_gk_collision_test_particle_matrix.dat"
+    "jax_fluxtube_gk_collision_test_particle_matrix.dat"
 )
-FINAL_STATE_TRACE_FILENAME = "stellarator_gk_collision_final_state.dat"
+FINAL_STATE_TRACE_FILENAME = "jax_fluxtube_gk_collision_final_state.dat"
 TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME = (
-    "stellarator_gk_collision_test_particle_primitives.dat"
+    "jax_fluxtube_gk_collision_test_particle_primitives.dat"
 )
-TEST_PARTICLE_BLOCK_TRACE_FILENAME = "stellarator_gk_collision_test_particle_blocks.dat"
+TEST_PARTICLE_BLOCK_TRACE_FILENAME = "jax_fluxtube_gk_collision_test_particle_blocks.dat"
 
 
 def _replace_once(text: str, old: str, new: str) -> str:
@@ -48,7 +48,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
 
     source_path = Path(source_path)
     text = source_path.read_text(encoding="utf-8")
-    if "stellarator_gk collision field-particle trace patch" in text:
+    if "jax_fluxtube_gk collision field-particle trace patch" in text:
         return False
 
     declaration = "      complex, dimension(:, :, :), allocatable :: g_in\n"
@@ -56,21 +56,21 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         text,
         declaration,
         declaration
-        + "      ! stellarator_gk collision field-particle trace patch\n"
-        + "      complex, dimension(:, :, :), allocatable :: stellarator_gk_fieldpart_input\n",
+        + "      ! jax_fluxtube_gk collision field-particle trace patch\n"
+        + "      complex, dimension(:, :, :), allocatable :: jax_fluxtube_gk_fieldpart_input\n",
     )
     text = _replace_once(
         text,
         "      complex, dimension(:, :), allocatable :: g0spitzer\n",
         "      complex, dimension(:, :), allocatable :: g0spitzer\n"
-        "      complex, dimension(:, :), allocatable :: stellarator_gk_component_input\n"
-        "      complex :: stellarator_gk_component_increment\n"
-        "      complex :: stellarator_gk_factor_increment, stellarator_gk_psi\n"
-        "      real :: stellarator_gk_response_basis, stellarator_gk_response_sign\n"
-        "      real :: stellarator_gk_driver_basis, stellarator_gk_driver_clm\n"
-        "      integer :: stellarator_gk_component_unit, stellarator_gk_factor_unit\n"
-        "      integer :: stellarator_gk_primitive_unit, stellarator_gk_quadrature_unit\n"
-        "      integer :: stellarator_gk_driver_unit\n",
+        "      complex, dimension(:, :), allocatable :: jax_fluxtube_gk_component_input\n"
+        "      complex :: jax_fluxtube_gk_component_increment\n"
+        "      complex :: jax_fluxtube_gk_factor_increment, jax_fluxtube_gk_psi\n"
+        "      real :: jax_fluxtube_gk_response_basis, jax_fluxtube_gk_response_sign\n"
+        "      real :: jax_fluxtube_gk_driver_basis, jax_fluxtube_gk_driver_clm\n"
+        "      integer :: jax_fluxtube_gk_component_unit, jax_fluxtube_gk_factor_unit\n"
+        "      integer :: jax_fluxtube_gk_primitive_unit, jax_fluxtube_gk_quadrature_unit\n"
+        "      integer :: jax_fluxtube_gk_driver_unit\n",
     )
     text = _replace_once(
         text,
@@ -110,9 +110,9 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         snapshot,
         """      g = g_in
       if (fieldpart) then
-         allocate (stellarator_gk_fieldpart_input(nvpa, nmu, &
+         allocate (jax_fluxtube_gk_fieldpart_input(nvpa, nmu, &
               kxkyz_lo%llim_proc:kxkyz_lo%ulim_alloc))
-         stellarator_gk_fieldpart_input = g
+         jax_fluxtube_gk_fieldpart_input = g
       end if
 
       ! RHS is g^{***} + Ze/T*<phi^{n+1}>*F0 + sum_jlm psi_jlm^{n+1}*delta_jl
@@ -127,48 +127,48 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         component_start,
         f"""      ! add field particle contribution to RHS:
       if (fieldpart) then
-         allocate (stellarator_gk_component_input(nvpa, nmu))
+         allocate (jax_fluxtube_gk_component_input(nvpa, nmu))
          if (proc0) then
-            open(newunit=stellarator_gk_component_unit, file='{COMPONENT_TRACE_FILENAME}', &
+            open(newunit=jax_fluxtube_gk_component_unit, file='{COMPONENT_TRACE_FILENAME}', &
                  status='replace', action='write')
-            write(stellarator_gk_component_unit, '(a)') &
-                 '# schema=stellarator_gk_stella_collision_fieldpart_components_v1'
-            write(stellarator_gk_component_unit, '(a)') &
+            write(jax_fluxtube_gk_component_unit, '(a)') &
+                 '# schema=jax_fluxtube_gk_stella_collision_fieldpart_components_v1'
+            write(jax_fluxtube_gk_component_unit, '(a)') &
                  '# iv imu iky ikx iz tube species l m j vpa mu before_re before_im rhs_re rhs_im'
-            open(newunit=stellarator_gk_factor_unit, file='{FACTOR_TRACE_FILENAME}', &
+            open(newunit=jax_fluxtube_gk_factor_unit, file='{FACTOR_TRACE_FILENAME}', &
                  status='replace', action='write')
-            write(stellarator_gk_factor_unit, '(a)') &
-                 '# schema=stellarator_gk_stella_collision_fieldpart_factors_v1'
-            write(stellarator_gk_factor_unit, '(a)') &
+            write(jax_fluxtube_gk_factor_unit, '(a)') &
+                 '# schema=jax_fluxtube_gk_stella_collision_fieldpart_factors_v1'
+            write(jax_fluxtube_gk_factor_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu psi_re psi_im basis rhs_re rhs_im'
-            open(newunit=stellarator_gk_primitive_unit, file='{PRIMITIVE_TRACE_FILENAME}', &
+            open(newunit=jax_fluxtube_gk_primitive_unit, file='{PRIMITIVE_TRACE_FILENAME}', &
                  status='replace', action='write')
-            write(stellarator_gk_primitive_unit, '(a)') &
-                 '# schema=stellarator_gk_stella_collision_fieldpart_primitives_v1'
-            write(stellarator_gk_primitive_unit, '(a)') &
+            write(jax_fluxtube_gk_primitive_unit, '(a)') &
+                 '# schema=jax_fluxtube_gk_stella_collision_fieldpart_primitives_v1'
+            write(jax_fluxtube_gk_primitive_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu bmag frequency clm legendre gyroaverage mass_factor delta_j sign basis'
-            open(newunit=stellarator_gk_driver_unit, file='{DRIVER_TRACE_FILENAME}', &
+            open(newunit=jax_fluxtube_gk_driver_unit, file='{DRIVER_TRACE_FILENAME}', &
                  status='replace', action='write')
-            write(stellarator_gk_driver_unit, '(a)') &
-                 '# schema=stellarator_gk_stella_collision_fieldpart_drivers_v1'
-            write(stellarator_gk_driver_unit, '(a)') &
+            write(jax_fluxtube_gk_driver_unit, '(a)') &
+                 '# schema=jax_fluxtube_gk_stella_collision_fieldpart_drivers_v1'
+            write(jax_fluxtube_gk_driver_unit, '(a)') &
                  '# iv imu iky ikx iz tube target background l m j vpa mu measure clm legendre gyroaverage delta_j maxwellian psijnorm sign driver'
-            open(newunit=stellarator_gk_quadrature_unit, file='{QUADRATURE_TRACE_FILENAME}', &
+            open(newunit=jax_fluxtube_gk_quadrature_unit, file='{QUADRATURE_TRACE_FILENAME}', &
                  status='replace', action='write')
-            write(stellarator_gk_quadrature_unit, '(a)') &
-                 '# schema=stellarator_gk_stella_collision_velocity_quadrature_v1'
-            write(stellarator_gk_quadrature_unit, '(a)') &
+            write(jax_fluxtube_gk_quadrature_unit, '(a)') &
+                 '# schema=jax_fluxtube_gk_stella_collision_velocity_quadrature_v1'
+            write(jax_fluxtube_gk_quadrature_unit, '(a)') &
                  '# iv imu iz vpa mu bmag w_vpa w_mu'
             do iz = -nzgrid, nzgrid
                do iv = 1, nvpa
                   do imu = 1, nmu
-                     write(stellarator_gk_quadrature_unit, *) iv, imu, iz, &
+                     write(jax_fluxtube_gk_quadrature_unit, *) iv, imu, iz, &
                           vpa(iv), mu(imu), bmag(ia, iz), wgts_vpa(iv), &
                           wgts_mu(ia, iz, imu)
                   end do
                end do
             end do
-            close(stellarator_gk_quadrature_unit)
+            close(jax_fluxtube_gk_quadrature_unit)
          end if
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
 """,
@@ -181,7 +181,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         text,
         component_snapshot,
         """               jj1 = ij - 1
-               stellarator_gk_component_input = g(:, :, ikxkyz)
+               jax_fluxtube_gk_component_input = g(:, :, ikxkyz)
 
                if (density_conservation_tp .and. (jj1 == 0) .and. (ll1 == 0)) then
 """,
@@ -200,43 +200,43 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                if (proc0) then
                   do iv = 1, nvpa
                      do imu = 1, nmu
-                        stellarator_gk_component_increment = &
+                        jax_fluxtube_gk_component_increment = &
                              (g(iv, imu, ikxkyz) - &
-                              stellarator_gk_component_input(iv, imu)) / code_dt
-                        write(stellarator_gk_component_unit, *) iv, imu, iky, ikx, &
+                              jax_fluxtube_gk_component_input(iv, imu)) / code_dt
+                        write(jax_fluxtube_gk_component_unit, *) iv, imu, iky, ikx, &
                              iz, it, is, ll1, mm1, jj1, vpa(iv), mu(imu), &
-                             real(stellarator_gk_component_input(iv, imu)), &
-                             aimag(stellarator_gk_component_input(iv, imu)), &
-                             real(stellarator_gk_component_increment), &
-                             aimag(stellarator_gk_component_increment)
+                             real(jax_fluxtube_gk_component_input(iv, imu)), &
+                             aimag(jax_fluxtube_gk_component_input(iv, imu)), &
+                             real(jax_fluxtube_gk_component_increment), &
+                             aimag(jax_fluxtube_gk_component_increment)
                      end do
                   end do
                   if (.not. density_conservation_tp) then
                      do isb = 1, nspec
-                        stellarator_gk_psi = flds(iky, ikx, iz, it, &
+                        jax_fluxtube_gk_psi = flds(iky, ikx, iz, it, &
                              2 + (is - 1) * ((jmax + 1) * (lmax + 1)**2 * nspec) &
                              + (idx1 - 1) * nspec + (isb - 1))
                         do iv = 1, nvpa
                            do imu = 1, nmu
-                              stellarator_gk_response_basis = spec(is)%vnew(isb) &
+                              jax_fluxtube_gk_response_basis = spec(is)%vnew(isb) &
                                    * clm * legendre_vpamu(ll1, mm1, iv, imu, iz) &
                                    * jm(imu, abs(mm1), iky, ikx, iz, is) &
                                    * (spec(is)%mass / spec(isb)%mass)**(-1.5) &
                                    * deltaj(ll1, jj1, is, isb, iv, imu, ia, iz)
-                              stellarator_gk_response_sign = 1.0
-                              if (mm1 < 0) stellarator_gk_response_sign = (-1)**mm1
-                              stellarator_gk_response_basis = &
-                                   stellarator_gk_response_sign * stellarator_gk_response_basis
-                              stellarator_gk_factor_increment = stellarator_gk_psi &
-                                   * stellarator_gk_response_basis
-                              write(stellarator_gk_factor_unit, *) iv, imu, iky, &
+                              jax_fluxtube_gk_response_sign = 1.0
+                              if (mm1 < 0) jax_fluxtube_gk_response_sign = (-1)**mm1
+                              jax_fluxtube_gk_response_basis = &
+                                   jax_fluxtube_gk_response_sign * jax_fluxtube_gk_response_basis
+                              jax_fluxtube_gk_factor_increment = jax_fluxtube_gk_psi &
+                                   * jax_fluxtube_gk_response_basis
+                              write(jax_fluxtube_gk_factor_unit, *) iv, imu, iky, &
                                    ikx, iz, it, is, isb, ll1, mm1, jj1, vpa(iv), &
-                                   mu(imu), real(stellarator_gk_psi), &
-                                   aimag(stellarator_gk_psi), &
-                                   stellarator_gk_response_basis, &
-                                   real(stellarator_gk_factor_increment), &
-                                   aimag(stellarator_gk_factor_increment)
-                              write(stellarator_gk_primitive_unit, *) iv, imu, &
+                                   mu(imu), real(jax_fluxtube_gk_psi), &
+                                   aimag(jax_fluxtube_gk_psi), &
+                                   jax_fluxtube_gk_response_basis, &
+                                   real(jax_fluxtube_gk_factor_increment), &
+                                   aimag(jax_fluxtube_gk_factor_increment)
+                              write(jax_fluxtube_gk_primitive_unit, *) iv, imu, &
                                    iky, ikx, iz, it, is, isb, ll1, mm1, jj1, &
                                    vpa(iv), mu(imu), bmag(ia, iz), &
                                    spec(is)%vnew(isb), clm, &
@@ -244,33 +244,33 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                                    jm(imu, abs(mm1), iky, ikx, iz, is), &
                                    (spec(is)%mass / spec(isb)%mass)**(-1.5), &
                                    deltaj(ll1, jj1, is, isb, iv, imu, ia, iz), &
-                                   stellarator_gk_response_sign, &
-                                   stellarator_gk_response_basis
-                              stellarator_gk_driver_clm = (-1)**mm1 * &
+                                   jax_fluxtube_gk_response_sign, &
+                                   jax_fluxtube_gk_response_basis
+                              jax_fluxtube_gk_driver_clm = (-1)**mm1 * &
                                    sqrt(((2 * ll1 + 1) * &
                                    gamma(ll1 + mm1 + 1.)) / &
                                    (4 * pi * gamma(ll1 - mm1 + 1.)))
-                              stellarator_gk_driver_basis = &
-                                   stellarator_gk_response_sign * &
+                              jax_fluxtube_gk_driver_basis = &
+                                   jax_fluxtube_gk_response_sign * &
                                    wgts_vpa(iv) * wgts_mu(ia, iz, imu) * &
-                                   stellarator_gk_driver_clm * &
+                                   jax_fluxtube_gk_driver_clm * &
                                    legendre_vpamu(ll1, -mm1, iv, imu, iz) * &
                                    jm(imu, abs(mm1), iky, ikx, iz, isb) * &
                                    deltaj(ll1, jj1, isb, is, iv, imu, ia, iz) / &
                                    mw(iv, imu, iz, isb) / &
                                    psijnorm(ll1, jj1, is, isb, iz)
-                              write(stellarator_gk_driver_unit, *) iv, imu, &
+                              write(jax_fluxtube_gk_driver_unit, *) iv, imu, &
                                    iky, ikx, iz, it, is, isb, ll1, mm1, jj1, &
                                    vpa(iv), mu(imu), &
                                    wgts_vpa(iv) * wgts_mu(ia, iz, imu), &
-                                   stellarator_gk_driver_clm, &
+                                   jax_fluxtube_gk_driver_clm, &
                                    legendre_vpamu(ll1, -mm1, iv, imu, iz), &
                                    jm(imu, abs(mm1), iky, ikx, iz, isb), &
                                    deltaj(ll1, jj1, isb, is, iv, imu, ia, iz), &
                                    mw(iv, imu, iz, isb), &
                                    psijnorm(ll1, jj1, is, isb, iz), &
-                                   stellarator_gk_response_sign, &
-                                   stellarator_gk_driver_basis
+                                   jax_fluxtube_gk_response_sign, &
+                                   jax_fluxtube_gk_driver_basis
                            end do
                         end do
                      end do
@@ -279,11 +279,11 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
 
             end do
          end do
-         if (proc0) close(stellarator_gk_component_unit)
-         if (proc0) close(stellarator_gk_factor_unit)
-         if (proc0) close(stellarator_gk_primitive_unit)
-         if (proc0) close(stellarator_gk_driver_unit)
-         deallocate (stellarator_gk_component_input)
+         if (proc0) close(jax_fluxtube_gk_component_unit)
+         if (proc0) close(jax_fluxtube_gk_factor_unit)
+         if (proc0) close(jax_fluxtube_gk_primitive_unit)
+         if (proc0) close(jax_fluxtube_gk_driver_unit)
+         deallocate (jax_fluxtube_gk_component_input)
 
       end if
 """,
@@ -297,9 +297,9 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         end_fieldpart,
         """      end if
       if (fieldpart) then
-         call stellarator_gk_trace_field_particle_increment( &
-              stellarator_gk_fieldpart_input, g)
-         deallocate (stellarator_gk_fieldpart_input)
+         call jax_fluxtube_gk_trace_field_particle_increment( &
+              jax_fluxtube_gk_fieldpart_input, g)
+         deallocate (jax_fluxtube_gk_fieldpart_input)
       end if
 
       deallocate (flds)
@@ -310,7 +310,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         "      !fields_updated = .false.\n\n"
         "      deallocate (g_in)\n",
         "      !fields_updated = .false.\n\n"
-        "      call stellarator_gk_trace_collision_final_state(g_in, g)\n\n"
+        "      call jax_fluxtube_gk_trace_collision_final_state(g_in, g)\n\n"
         "      deallocate (g_in)\n",
     )
     text = _replace_once(
@@ -333,11 +333,11 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         text,
         "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n",
         "      integer :: nc, nb, lldab, bm_colind, bm_rowind\n"
-        "      integer :: stellarator_gk_matrix_unit\n"
-        "      integer :: stellarator_gk_tp_primitive_unit\n"
-        "      integer :: stellarator_gk_tp_block_unit\n"
-        "      integer :: stellarator_gk_matrix_row, stellarator_gk_matrix_col\n"
-        "      integer :: stellarator_gk_matrix_band_row\n",
+        "      integer :: jax_fluxtube_gk_matrix_unit\n"
+        "      integer :: jax_fluxtube_gk_tp_primitive_unit\n"
+        "      integer :: jax_fluxtube_gk_tp_block_unit\n"
+        "      integer :: jax_fluxtube_gk_matrix_row, jax_fluxtube_gk_matrix_col\n"
+        "      integer :: jax_fluxtube_gk_matrix_band_row\n",
     )
     matrix_factorization = (
         "      ! AVB: LU factorise cdiffmat, using LAPACK's zgbtrf routine for banded matrices\n"
@@ -350,12 +350,12 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
         text,
         block_assembly,
         f"""      if (proc0) then
-         open(newunit=stellarator_gk_tp_block_unit, &
+         open(newunit=jax_fluxtube_gk_tp_block_unit, &
               file='{TEST_PARTICLE_BLOCK_TRACE_FILENAME}', &
               status='replace', action='write')
-         write(stellarator_gk_tp_block_unit, '(a)') &
-              '# schema=stellarator_gk_stella_collision_test_particle_blocks_v1'
-         write(stellarator_gk_tp_block_unit, '(a)') &
+         write(jax_fluxtube_gk_tp_block_unit, '(a)') &
+              '# schema=jax_fluxtube_gk_stella_collision_test_particle_blocks_v1'
+         write(jax_fluxtube_gk_tp_block_unit, '(a)') &
               '# iz target background iv row_mu col_mu lower_re lower_im ' // &
               'diagonal_re diagonal_im upper_re upper_im code_dt'
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
@@ -368,7 +368,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                do iv = 1, nvpa
                   do imu = 1, nmu
                      do imu2 = 1, nmu
-                        write(stellarator_gk_tp_block_unit, *) &
+                        write(jax_fluxtube_gk_tp_block_unit, *) &
                              iz, is, isb, iv, imu, imu2, &
                              real(aa_blcs(iv, imu, imu2, ikxkyz, isb)), &
                              aimag(aa_blcs(iv, imu, imu2, ikxkyz, isb)), &
@@ -381,7 +381,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                end do
             end do
          end do
-         close(stellarator_gk_tp_block_unit)
+         close(jax_fluxtube_gk_tp_block_unit)
       end if
 
 {block_assembly}""",
@@ -389,45 +389,45 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
     text = _replace_once(
         text,
         matrix_factorization,
-        f"""      ! stellarator_gk collision test-particle matrix trace patch
+        f"""      ! jax_fluxtube_gk collision test-particle matrix trace patch
       nc = nvpa * nmu
       nb = nmu + 1
       if (proc0) then
-         open(newunit=stellarator_gk_matrix_unit, &
+         open(newunit=jax_fluxtube_gk_matrix_unit, &
               file='{TEST_PARTICLE_MATRIX_TRACE_FILENAME}', &
               status='replace', action='write')
-         write(stellarator_gk_matrix_unit, '(a)') &
-              '# schema=stellarator_gk_stella_collision_test_particle_matrix_v1'
-         write(stellarator_gk_matrix_unit, '(a)') &
+         write(jax_fluxtube_gk_matrix_unit, '(a)') &
+              '# schema=jax_fluxtube_gk_stella_collision_test_particle_matrix_v1'
+         write(jax_fluxtube_gk_matrix_unit, '(a)') &
               '# iky ikx iz species row col matrix_re matrix_im kperp2 code_dt'
          do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
             iky = iky_idx(kxkyz_lo, ikxkyz)
             ikx = ikx_idx(kxkyz_lo, ikxkyz)
             iz = iz_idx(kxkyz_lo, ikxkyz)
             is = is_idx(kxkyz_lo, ikxkyz)
-            do stellarator_gk_matrix_col = 1, nc
-               do stellarator_gk_matrix_row = &
-                    max(1, stellarator_gk_matrix_col - nb), &
-                    min(nc, stellarator_gk_matrix_col + nb)
-                  stellarator_gk_matrix_band_row = 2 * nb + 1 &
-                       + stellarator_gk_matrix_row - stellarator_gk_matrix_col
-                  write(stellarator_gk_matrix_unit, *) iky, ikx, iz, is, &
-                       stellarator_gk_matrix_row, stellarator_gk_matrix_col, &
-                       real(cdiffmat_band(stellarator_gk_matrix_band_row, &
-                            stellarator_gk_matrix_col, iky, ikx, iz, is)), &
-                       aimag(cdiffmat_band(stellarator_gk_matrix_band_row, &
-                            stellarator_gk_matrix_col, iky, ikx, iz, is)), &
+            do jax_fluxtube_gk_matrix_col = 1, nc
+               do jax_fluxtube_gk_matrix_row = &
+                    max(1, jax_fluxtube_gk_matrix_col - nb), &
+                    min(nc, jax_fluxtube_gk_matrix_col + nb)
+                  jax_fluxtube_gk_matrix_band_row = 2 * nb + 1 &
+                       + jax_fluxtube_gk_matrix_row - jax_fluxtube_gk_matrix_col
+                  write(jax_fluxtube_gk_matrix_unit, *) iky, ikx, iz, is, &
+                       jax_fluxtube_gk_matrix_row, jax_fluxtube_gk_matrix_col, &
+                       real(cdiffmat_band(jax_fluxtube_gk_matrix_band_row, &
+                            jax_fluxtube_gk_matrix_col, iky, ikx, iz, is)), &
+                       aimag(cdiffmat_band(jax_fluxtube_gk_matrix_band_row, &
+                            jax_fluxtube_gk_matrix_col, iky, ikx, iz, is)), &
                        kperp2(iky, ikx, ia, iz), code_dt
                end do
             end do
          end do
-         close(stellarator_gk_matrix_unit)
-         open(newunit=stellarator_gk_tp_primitive_unit, &
+         close(jax_fluxtube_gk_matrix_unit)
+         open(newunit=jax_fluxtube_gk_tp_primitive_unit, &
               file='{TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME}', &
               status='replace', action='write')
-         write(stellarator_gk_tp_primitive_unit, '(a)') &
-              '# schema=stellarator_gk_stella_collision_test_particle_primitives_v1'
-         write(stellarator_gk_tp_primitive_unit, '(a)') &
+         write(jax_fluxtube_gk_tp_primitive_unit, '(a)') &
+              '# schema=jax_fluxtube_gk_stella_collision_test_particle_primitives_v1'
+         write(jax_fluxtube_gk_tp_primitive_unit, '(a)') &
               '# iv imu iz target background vpa mu bmag target_mass ' // &
               'background_mass frequency speed maxwell nupa nuD nux ' // &
               'target_smz dvpa dmu code_dt deflknob eiediffknob ' // &
@@ -437,7 +437,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                do iz = -nzgrid, nzgrid
                   do iv = 1, nvpa
                      do imu = 1, nmu
-                        write(stellarator_gk_tp_primitive_unit, *) &
+                        write(jax_fluxtube_gk_tp_primitive_unit, *) &
                              iv, imu, iz, is, isb, vpa(iv), mu(imu), &
                              bmag(ia, iz), spec(is)%mass, spec(isb)%mass, &
                              spec(is)%vnew(isb), velvpamu(iv, imu, iz), &
@@ -451,7 +451,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
                end do
             end do
          end do
-         close(stellarator_gk_tp_primitive_unit)
+         close(jax_fluxtube_gk_tp_primitive_unit)
       end if
 
 {matrix_factorization}""",
@@ -461,7 +461,7 @@ def patch_stella_collision_field_particle_trace(source_path: Path) -> bool:
 
 
 FIELD_PARTICLE_TRACE_HELPER = f"""
-   subroutine stellarator_gk_trace_field_particle_increment(before, after)
+   subroutine jax_fluxtube_gk_trace_field_particle_increment(before, after)
       use mp, only: proc0
       use grids_time, only: code_dt
       use grids_velocity, only: nvpa, nmu, vpa, mu
@@ -473,7 +473,7 @@ FIELD_PARTICLE_TRACE_HELPER = f"""
       complex :: increment
       if (.not. proc0) return
       open(newunit=unit, file='{TRACE_FILENAME}', status='replace', action='write')
-      write(unit, '(a)') '# schema=stellarator_gk_stella_collision_fieldpart_trace_v1'
+      write(unit, '(a)') '# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1'
       write(unit, '(a)') '# iv imu iky ikx iz tube species vpa mu before_re before_im rhs_re rhs_im'
       do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
          iky = iky_idx(kxkyz_lo, ikxkyz)
@@ -491,12 +491,12 @@ FIELD_PARTICLE_TRACE_HELPER = f"""
          end do
       end do
       close(unit)
-   end subroutine stellarator_gk_trace_field_particle_increment
+   end subroutine jax_fluxtube_gk_trace_field_particle_increment
 """
 
 
 FINAL_STATE_TRACE_HELPER = f"""
-   subroutine stellarator_gk_trace_collision_final_state(before, after)
+   subroutine jax_fluxtube_gk_trace_collision_final_state(before, after)
       use mp, only: proc0
       use grids_velocity, only: nvpa, nmu
       use parallelisation_layouts, only: kxkyz_lo
@@ -507,7 +507,7 @@ FINAL_STATE_TRACE_HELPER = f"""
       if (.not. proc0) return
       open(newunit=unit, file='{FINAL_STATE_TRACE_FILENAME}', &
            status='replace', action='write')
-      write(unit, '(a)') '# schema=stellarator_gk_stella_collision_final_state_v1'
+      write(unit, '(a)') '# schema=jax_fluxtube_gk_stella_collision_final_state_v1'
       write(unit, '(a)') &
            '# iv imu iky ikx iz tube species input_re input_im output_re output_im'
       do ikxkyz = kxkyz_lo%llim_proc, kxkyz_lo%ulim_proc
@@ -525,7 +525,7 @@ FINAL_STATE_TRACE_HELPER = f"""
          end do
       end do
       close(unit)
-   end subroutine stellarator_gk_trace_collision_final_state
+   end subroutine jax_fluxtube_gk_trace_collision_final_state
 """
 
 

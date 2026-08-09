@@ -65,31 +65,31 @@ def test_stella_explicit_rhs_trace_patch_is_focused_and_idempotent(tmp_path: Pat
     )
     text = source.read_text()
 
-    assert "stellarator_gk W7-X ky=0.3 RHS trace patch" in text
-    assert "integer, parameter :: stellarator_gk_trace_step = 123" in text
-    assert "integer, parameter :: stellarator_gk_trace_iky = 4" in text
-    assert "integer, parameter :: stellarator_gk_trace_ikx = 1" in text
-    assert "stellarator_gk_trace_rhs_call = stellarator_gk_trace_rhs_call + 1" in text
+    assert "jax_fluxtube_gk W7-X ky=0.3 RHS trace patch" in text
+    assert "integer, parameter :: jax_fluxtube_gk_trace_step = 123" in text
+    assert "integer, parameter :: jax_fluxtube_gk_trace_iky = 4" in text
+    assert "integer, parameter :: jax_fluxtube_gk_trace_ikx = 1" in text
+    assert "jax_fluxtube_gk_trace_rhs_call = jax_fluxtube_gk_trace_rhs_call + 1" in text
     assert "use grids_velocity, only: vpa, mu, wgts_vpa, wgts_mu" in text
-    assert "call stellarator_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)" in text
-    assert "call stellarator_gk_write_phi_trace(istep, phi)" in text
-    assert "call stellarator_gk_write_native_coefficients(istep)" in text
+    assert "call jax_fluxtube_gk_write_complex_state('pdf_g', 'input_pdf', istep, pdf)" in text
+    assert "call jax_fluxtube_gk_write_phi_trace(istep, phi)" in text
+    assert "call jax_fluxtube_gk_write_native_coefficients(istep)" in text
     assert "use gk_mirror, only: mirror" in text
     assert "use gk_parallel_streaming, only: stream" in text
     assert "'coefficient', 'mirror_force'" in text
     assert "'coefficient', 'magnetic_drift_g_y'" in text
     assert "'coefficient', 'equilibrium_drive'" in text
     assert "'coefficient', 'gyroaverage_j0'" in text
-    assert "denominator_fields(stellarator_gk_trace_iky" in text
+    assert "denominator_fields(jax_fluxtube_gk_trace_iky" in text
     assert "'quasineutrality', 'numerator'" in text
     assert "'quasineutrality', 'denominator'" in text
     assert "'normalization', 'native_state_scale'" in text
-    assert "call stellarator_gk_write_rhs_delta('mirror_force'" in text
-    assert "call stellarator_gk_write_rhs_delta('magnetic_drift_y'" in text
-    assert "call stellarator_gk_write_rhs_delta('magnetic_drift_x'" in text
-    assert "call stellarator_gk_write_rhs_delta('equilibrium_drive_wstar'" in text
-    assert "call stellarator_gk_write_rhs_delta('parallel_streaming'" in text
-    assert "call stellarator_gk_write_complex_state('rhs_total', 'total', istep, rhs)" in text
+    assert "call jax_fluxtube_gk_write_rhs_delta('mirror_force'" in text
+    assert "call jax_fluxtube_gk_write_rhs_delta('magnetic_drift_y'" in text
+    assert "call jax_fluxtube_gk_write_rhs_delta('magnetic_drift_x'" in text
+    assert "call jax_fluxtube_gk_write_rhs_delta('equilibrium_drive_wstar'" in text
+    assert "call jax_fluxtube_gk_write_rhs_delta('parallel_streaming'" in text
+    assert "call jax_fluxtube_gk_write_complex_state('rhs_total', 'total', istep, rhs)" in text
     assert "record step rhs_call term" in text
     assert "wgts_vpa wgts_mu code_time code_dt real imag" in text
     assert "wgts_vpa(iv), wgts_mu(1, iz, imu)" in text
@@ -178,13 +178,13 @@ def test_prepare_rhs_trace_run_writes_minimal_patched_tree(tmp_path: Path):
     assert metadata["vmec_source"] == str(vmec)
     assert metadata["trace_step"] == 20
     assert metadata["rhs_units"] == "stella_native_rhs_times_code_dt"
-    assert metadata["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
+    assert metadata["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v5"
     assert metadata["velocity_weight_columns"] == ["wgts_vpa", "wgts_mu"]
     assert metadata["rhs_call_column"] == "rhs_call"
     assert metadata["force_explicit_stream_mirror"] is True
-    assert metadata["trace_output"].endswith("stellarator_gk_w7x_ky03_rhs_trace.dat")
+    assert metadata["trace_output"].endswith("jax_fluxtube_gk_w7x_ky03_rhs_trace.dat")
     assert prepared.build_script.read_text().startswith("#!/usr/bin/env bash")
     assert "STELLA_EXECUTABLE" in prepared.run_script.read_text()
-    assert "integer, parameter :: stellarator_gk_trace_step = 20" in patched_text
+    assert "integer, parameter :: jax_fluxtube_gk_trace_step = 20" in patched_text
     assert "nstep = 20" in prepared.input_file.read_text()
     assert "stream_implicit = F" in prepared.input_file.read_text()

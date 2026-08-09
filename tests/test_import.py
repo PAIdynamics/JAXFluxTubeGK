@@ -1,8 +1,8 @@
 def test_import_smoke():
-    import stellarator_gk
+    import jax_fluxtube_gk
 
-    assert stellarator_gk.__version__
-    assert hasattr(stellarator_gk, "build_velocity_grid")
+    assert jax_fluxtube_gk.__version__
+    assert hasattr(jax_fluxtube_gk, "build_velocity_grid")
 
 
 def test_core_import_does_not_load_benchmark_implementation():
@@ -13,9 +13,9 @@ def test_core_import_does_not_load_benchmark_implementation():
         [
             sys.executable,
             "-c",
-            "import sys, stellarator_gk; "
-            "assert 'stellarator_gk.benchmarks' not in sys.modules; "
-            "assert 'CycloneTrace' not in stellarator_gk.__all__",
+            "import sys, jax_fluxtube_gk; "
+            "assert 'jax_fluxtube_gk.benchmarks' not in sys.modules; "
+            "assert 'CycloneTrace' not in jax_fluxtube_gk.__all__",
         ],
         check=False,
         capture_output=True,
@@ -25,13 +25,13 @@ def test_core_import_does_not_load_benchmark_implementation():
 
 
 def test_validation_namespace_and_legacy_attribute_are_lazy_compatible():
-    from stellarator_gk.validation.fixture_io import PerKyModeStructureFixture
+    from jax_fluxtube_gk.validation.fixture_io import PerKyModeStructureFixture
 
-    assert PerKyModeStructureFixture.__module__ == "stellarator_gk.benchmarks"
+    assert PerKyModeStructureFixture.__module__ == "jax_fluxtube_gk.benchmarks"
 
-    from stellarator_gk import CycloneTrace
+    from jax_fluxtube_gk import CycloneTrace
 
-    assert CycloneTrace.__module__ == "stellarator_gk.benchmarks"
+    assert CycloneTrace.__module__ == "jax_fluxtube_gk.benchmarks"
 
 
 def test_validation_namespace_import_is_itself_lazy():
@@ -42,8 +42,8 @@ def test_validation_namespace_import_is_itself_lazy():
         [
             sys.executable,
             "-c",
-            "import sys, stellarator_gk.validation; "
-            "assert 'stellarator_gk.benchmarks' not in sys.modules",
+            "import sys, jax_fluxtube_gk.validation; "
+            "assert 'jax_fluxtube_gk.benchmarks' not in sys.modules",
         ],
         check=False,
         capture_output=True,

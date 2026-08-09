@@ -159,7 +159,7 @@ def _export_external_fixture(
     paths: dict[str, Path],
     metadata: dict[str, object],
 ) -> dict[str, object]:
-    from stellarator_gk import (
+    from jax_fluxtube_gk import (
         load_gx_mode_structure_fixture,
         write_per_ky_mode_structure_fixture_csv,
     )

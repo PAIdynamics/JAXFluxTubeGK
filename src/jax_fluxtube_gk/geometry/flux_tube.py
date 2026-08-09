@@ -142,7 +142,7 @@ class PhysicalFluxTubeGeometry(_PyTreeDataclass):
     topology: str = "periodic"
     endpoint_policy: str = "exclude"
     twist_and_shift: bool = False
-    normalization: str = "stellarator_gk_physical_v2"
+    normalization: str = "jax_fluxtube_gk_physical_v2"
     provider: str = "precomputed"
     radial_coordinate: str = "rho"
     source: str = "precomputed"
@@ -382,7 +382,7 @@ def build_physical_flux_tube_geometry_from_coordinate_arrays(
     radial_coordinate: RadialCoordinate = "rho",
     source: str = "precomputed",
     provider: str = "precomputed",
-    normalization: str = "stellarator_gk_physical_v2",
+    normalization: str = "jax_fluxtube_gk_physical_v2",
 ) -> PhysicalFluxTubeGeometry:
     """Build the provider-neutral physical contract from coordinate arrays."""
 
@@ -454,7 +454,7 @@ def build_physical_flux_tube_geometry_from_arrays(
     equilibrium_drive_scale=None,
     source: str = "precomputed",
     provider: str = "precomputed",
-    normalization: str = "stellarator_gk_physical_v2",
+    normalization: str = "jax_fluxtube_gk_physical_v2",
 ) -> PhysicalFluxTubeGeometry:
     """Create a physical flux-tube geometry object from precomputed arrays."""
 

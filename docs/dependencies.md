@@ -1,6 +1,6 @@
 # External Dependencies
 
-`optimal-fusion` keeps external source trees outside its repository while
+`jax-fluxtube-gk` keeps external source trees outside its repository while
 providing a reproducible preparation step in `scripts/bootstrap_dependencies.py`.
 All sources and exact fork commits are declared in `dependencies.toml`.
 
@@ -12,7 +12,7 @@ extra instead.
 
 ## Profiles
 
-- `core`: install only `optimal-fusion` and its development tools.
+- `core`: install only `jax-fluxtube-gk` and its development tools.
 - `mhd`: fetch/build/install VMEC++, DESC, and GVEC as geometry providers.
 - `validation-python`: install Gyaradax for Python-level comparisons.
 - `validation-native`: fetch and compile GX, stella, and GKW.

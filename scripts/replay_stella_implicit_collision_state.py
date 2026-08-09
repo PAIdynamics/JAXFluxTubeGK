@@ -15,8 +15,8 @@ from scripts.summarize_stella_collision_test_particle_matrix import (
 )
 
 
-FIELD_SCHEMA = "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1"
-FINAL_SCHEMA = "# schema=stellarator_gk_stella_collision_final_state_v1"
+FIELD_SCHEMA = "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1"
+FINAL_SCHEMA = "# schema=jax_fluxtube_gk_stella_collision_final_state_v1"
 
 
 def _read_trace(path: Path, schema: str, columns: int) -> np.ndarray:

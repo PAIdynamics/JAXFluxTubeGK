@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import sys
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 
@@ -29,7 +29,7 @@ from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     FourierGridSpec,
     ParallelGridSpec,
     build_desc_geometry_from_arrays,
@@ -251,9 +251,9 @@ def _run_gx_gist_suite_gate():
 
 
 def _required_dependency_root(name: str) -> Path:
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
-    variable = f"OPTIMAL_FUSION_{name.upper()}_ROOT"
+    variable = f"JAX_FLUXTUBE_GK_{name.upper()}_ROOT"
     value = os.environ.get(variable)
     if not value:
         raise RuntimeError(f"set {variable} to the pinned {name} checkout")

@@ -1,5 +1,5 @@
 ! Linear selected-ky Cyclone trace input for the local serial/no-FFT GKW build.
-! This is matched to the stellarator_gk/Gyaradax production-control trace:
+! This is matched to the jax_fluxtube_gk/Gyaradax production-control trace:
 !   ky*rho_s = 0.5, nperiod = 5, Nz = 48, Nvpar = 32, Nmu = 8,
 !   dt = 0.003, 20 steps per diagnostic window, 80 windows.
 

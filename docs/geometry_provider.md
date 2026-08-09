@@ -1,6 +1,6 @@
 # Geometry Provider Contract
 
-`stellarator_gk.geometry` defines the boundary between equilibrium/geometry
+`jax_fluxtube_gk.geometry` defines the boundary between equilibrium/geometry
 codes and the gyrokinetic solver. Providers implement one method:
 
 ```python
@@ -29,7 +29,7 @@ record this version and all `GeometryMetadata` fields:
 - normalization name and the unit of every physical array;
 - whether continuous provider outputs are differentiable.
 
-The version-2 normalization is `stellarator_gk_physical_v2`. It adds a physical
+The version-2 normalization is `jax_fluxtube_gk_physical_v2`. It adds a physical
 `equilibrium_drive_scale`, keeping the diamagnetic-gradient coordinate scale
 separate from grad-B/curvature drift arrays. Providers that do not yet expose a
 native value retain the version-1 drift-derived fallback. `theta`, `phi`,

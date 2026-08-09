@@ -52,12 +52,12 @@ def summarize_component_trace(
     components = _read_values(
         component_path,
         columns=len(COMPONENT_COLUMNS),
-        schema="stellarator_gk_stella_collision_fieldpart_components_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_components_v1",
     )
     aggregate = _read_values(
         aggregate_path,
         columns=13,
-        schema="stellarator_gk_stella_collision_fieldpart_trace_v1",
+        schema="jax_fluxtube_gk_stella_collision_fieldpart_trace_v1",
     )
     component_indices = components[:, :10]
     aggregate_indices = aggregate[:, :7]

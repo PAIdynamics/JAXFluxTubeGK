@@ -26,7 +26,7 @@ DEFAULT_BUNDLE = ROOT / "fixtures/gx_w7x_mode_structure_run/w7x_external_referen
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     if args.gx_root is not None:
         announce_external_path("GX source", args.gx_root)

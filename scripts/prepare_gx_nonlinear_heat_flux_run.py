@@ -117,7 +117,7 @@ def prepare_gx_nonlinear_heat_flux_run(
     if not source.exists():
         raise FileNotFoundError(source)
     output_dir.mkdir(parents=True, exist_ok=True)
-    prepared = output_dir / "optimal_fusion_cyclone_nonlinear.in"
+    prepared = output_dir / "jax_fluxtube_gk_cyclone_nonlinear.in"
     manifest_path = output_dir / "gx_nonlinear_run.json"
     if not overwrite and (prepared.exists() or manifest_path.exists()):
         raise FileExistsError("GX nonlinear run already exists; pass --overwrite")

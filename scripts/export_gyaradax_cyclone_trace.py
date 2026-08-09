@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 import sys
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ _TRACE_PROFILES = {
 
 def main() -> None:
     args = _parse_args()
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("Gyaradax source", args.gyaradax_root)
     repo_root = Path(__file__).resolve().parents[1]
@@ -93,7 +93,7 @@ def main() -> None:
     from gyaradax.simulate import gk_run
     from gyaradax.solver import default_state, init_f, linear_precompute, mode_amplitude
 
-    from stellarator_gk import (
+    from jax_fluxtube_gk import (
         compare_cyclone_base_case_traces,
         run_cyclone_base_case_trace,
         write_cyclone_trace_csv,
@@ -226,7 +226,7 @@ def _run_gyaradax_trace(
     params,
     args,
 ):
-    from stellarator_gk import CycloneTrace
+    from jax_fluxtube_gk import CycloneTrace
 
     df = init_f(geometry, finit=args.finit, amp_init_real=1.0e-4)
     state = default_state(nky=1)

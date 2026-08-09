@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from stellarator_gk.external import announce_external_path, external_path_provenance
+from jax_fluxtube_gk.external import announce_external_path, external_path_provenance
 
 
 def test_external_path_provenance_reports_repository_revision(capsys):

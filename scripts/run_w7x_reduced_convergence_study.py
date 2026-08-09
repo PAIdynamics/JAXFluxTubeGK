@@ -47,7 +47,7 @@ class W7XConvergenceCase:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("GX/GIST eik", args.eik_reference)
     output_dir = args.output_dir
@@ -113,7 +113,7 @@ def run_w7x_reduced_convergence_study(
     """Run reduced scans and write convergence/timing artifacts."""
 
     from examples.run_stellarator_linear_scan import main as run_scan
-    from stellarator_gk import estimate_linear_memory_from_dimensions, format_bytes
+    from jax_fluxtube_gk import estimate_linear_memory_from_dimensions, format_bytes
 
     cases = cases or default_convergence_cases()
     output_dir.mkdir(parents=True, exist_ok=True)

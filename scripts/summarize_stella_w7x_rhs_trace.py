@@ -232,13 +232,13 @@ def summarize_trace(
     with trace_path.open(encoding="utf-8") as handle:
         header = tuple(handle.readline().strip().split())
         if header == TRACE_COLUMNS_V1:
-            trace_format = "stellarator_gk_stella_rhs_trace_v1"
+            trace_format = "jax_fluxtube_gk_stella_rhs_trace_v1"
             has_velocity_weights = False
         elif header == TRACE_COLUMNS_V2:
-            trace_format = "stellarator_gk_stella_rhs_trace_v2"
+            trace_format = "jax_fluxtube_gk_stella_rhs_trace_v2"
             has_velocity_weights = True
         elif header == TRACE_COLUMNS_V3:
-            trace_format = "stellarator_gk_stella_rhs_trace_v3"
+            trace_format = "jax_fluxtube_gk_stella_rhs_trace_v3"
             has_velocity_weights = True
         else:
             raise ValueError(f"unexpected trace header in {trace_path}: {header}")
@@ -312,15 +312,15 @@ def summarize_trace(
         for record, term in sorted(V4_REQUIRED_RECORD_TERMS)
         if (record, term) not in present
     ]
-    if trace_format == "stellarator_gk_stella_rhs_trace_v3" and not v4_missing:
-        trace_format = "stellarator_gk_stella_rhs_trace_v4"
+    if trace_format == "jax_fluxtube_gk_stella_rhs_trace_v3" and not v4_missing:
+        trace_format = "jax_fluxtube_gk_stella_rhs_trace_v4"
     v5_missing = [
         {"record": record, "term": term}
         for record, term in sorted(V5_REQUIRED_RECORD_TERMS)
         if (record, term) not in present
     ]
-    if trace_format == "stellarator_gk_stella_rhs_trace_v4" and not v5_missing:
-        trace_format = "stellarator_gk_stella_rhs_trace_v5"
+    if trace_format == "jax_fluxtube_gk_stella_rhs_trace_v4" and not v5_missing:
+        trace_format = "jax_fluxtube_gk_stella_rhs_trace_v5"
     summary = {
         "trace_path": str(trace_path),
         "trace_format": trace_format,

@@ -1,4 +1,4 @@
-"""Fetch, build, and install pinned optional dependencies for optimal-fusion."""
+"""Fetch, build, and install pinned optional dependencies for jax-fluxtube-gk."""
 
 from __future__ import annotations
 

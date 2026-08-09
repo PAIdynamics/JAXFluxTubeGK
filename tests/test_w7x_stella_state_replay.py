@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_replay_velocity_grids_are_inside_stella_trace_domain():
-    from stellarator_gk import VelocityGridSpec, build_velocity_grid
+    from jax_fluxtube_gk import VelocityGridSpec, build_velocity_grid
 
     for case in replay_cases():
         if case.name.startswith("replay_stella_native_"):

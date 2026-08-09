@@ -26,9 +26,9 @@ JAX_ENABLE_X64=1 .venv/bin/python -m pytest -m external \
 ```
 
 The equivalent environment variables are
-`OPTIMAL_FUSION_GYARADAX_ROOT`, `OPTIMAL_FUSION_GX_ROOT`,
-`OPTIMAL_FUSION_DESC_ROOT`, `OPTIMAL_FUSION_STELLA_ROOT`, and
-`OPTIMAL_FUSION_GKW_ROOT`. Prefer `--name-root=PATH` syntax so pytest does not
+`JAX_FLUXTUBE_GK_GYARADAX_ROOT`, `JAX_FLUXTUBE_GK_GX_ROOT`,
+`JAX_FLUXTUBE_GK_DESC_ROOT`, `JAX_FLUXTUBE_GK_STELLA_ROOT`, and
+`JAX_FLUXTUBE_GK_GKW_ROOT`. Prefer `--name-root=PATH` syntax so pytest does not
 mistake a separated path value for an additional collection target.
 
 Prepare pinned dependencies before integration testing when needed:

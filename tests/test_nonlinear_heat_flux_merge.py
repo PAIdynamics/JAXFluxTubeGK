@@ -10,8 +10,8 @@ def _segment(path, start, stop, *, hyperdiffusion=0.05):
     times = np.linspace(start, stop, 101)
     payload = {
         "schema_version": 1,
-        "producer": "optimal-fusion/nonlinear-heat-flux",
-        "normalization": "optimal_fusion_native",
+        "producer": "jax-fluxtube-gk/nonlinear-heat-flux",
+        "normalization": "jax_fluxtube_gk_native",
         "end_time": stop,
         "trajectory_lineage": {
             "schema_version": 1,

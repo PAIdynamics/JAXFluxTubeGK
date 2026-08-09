@@ -26,10 +26,10 @@ def test_replays_native_implicit_collision_update(tmp_path):
     field_trace = tmp_path / "field.dat"
     final_trace = tmp_path / "final.dat"
     field_trace.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1\n# columns\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1\n# columns\n"
     )
     final_trace.write_text(
-        "# schema=stellarator_gk_stella_collision_final_state_v1\n# columns\n"
+        "# schema=jax_fluxtube_gk_stella_collision_final_state_v1\n# columns\n"
     )
     with field_trace.open("a") as field_stream, final_trace.open("a") as final_stream:
         for iv in range(2):

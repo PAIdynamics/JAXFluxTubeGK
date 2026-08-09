@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     compare_nonlinear_heat_flux,
     compare_nonlinear_heat_flux_convergence,
     compare_nonlinear_heat_flux_ensemble,
@@ -294,7 +294,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     payload = {
         "schema_version": 1,
-        "producer": "optimal-fusion/nonlinear-heat-flux-campaign",
+        "producer": "jax-fluxtube-gk/nonlinear-heat-flux-campaign",
         "inputs": {
             "resolution_reports": [str(path.resolve()) for path in args.resolution_report],
             "domain_reports": [str(path.resolve()) for path in args.domain_report],

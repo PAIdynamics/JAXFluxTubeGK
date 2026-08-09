@@ -18,7 +18,7 @@ import sys
 import tempfile
 from time import perf_counter
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stellarator_gk_matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/jax_fluxtube_gk_matplotlib")
 
 import jax
 import jax.numpy as jnp
@@ -26,7 +26,7 @@ import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     ParallelGridSpec,
@@ -54,7 +54,7 @@ DEFAULT_OUTPUT = DEFAULT_CONVERGENCE_DIR / "production_cpu_timing.json"
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     if args.eik_reference is not None:
         announce_external_path("GX/GIST eik", args.eik_reference)
@@ -278,14 +278,14 @@ def _benchmark_stella_production_scan(args: argparse.Namespace) -> dict[str, obj
         raise ValueError("stella-production timing requires --stella-geometry")
     module_path = ROOT / "examples/run_stellarator_linear_scan.py"
     spec = importlib.util.spec_from_file_location(
-        "_optimal_fusion_stella_production_timing_scan", module_path
+        "_jax_fluxtube_gk_stella_production_timing_scan", module_path
     )
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load stellarator scan from {module_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    with tempfile.TemporaryDirectory(prefix="optimal-fusion-w7x-timing-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="jax-fluxtube-gk-w7x-timing-") as scratch:
         scan_args = _stella_scan_args(args, Path(scratch))
         start = perf_counter()
         exit_code = module.main(scan_args)

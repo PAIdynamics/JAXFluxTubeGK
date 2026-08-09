@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy import special
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     GxMomentRHSParams,
     VelocityBasisKind,
     VelocityBasisSpec,

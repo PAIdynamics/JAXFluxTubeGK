@@ -10,7 +10,7 @@ state_reverse_vpar_error,0.23656817732771251
 state_phase_aligned_error,0.04780479264318512
 state_reverse_vpar_phase_aligned_error,0.1813647945882065
 passed,False
-notes,observed=fixtures/gkw_cyclone_selected_ky_cosin2_selected_state; reference=stellarator_gk; best_state_layout=direct_phase_aligned; best_phi_layout=direct_phase_aligned; selected-mode state trace comparison
+notes,observed=fixtures/gkw_cyclone_selected_ky_cosin2_selected_state; reference=jax_fluxtube_gk; best_state_layout=direct_phase_aligned; best_phi_layout=direct_phase_aligned; selected-mode state trace comparison
 
 step,time,phi_max_gkw,phi_max_solver,phi_phase_aligned_max_error,state_max_gkw,state_max_solver,state_phase_aligned_max_error,state_phase_aligned_relative_l2
 20,0.06,0.6742772602473351,0.6873365468458855,0.05845543963934988,0.015632707642132652,0.01886978133771273,0.006818132998122401,0.21828000073318485

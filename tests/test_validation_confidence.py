@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from stellarator_gk.validation_confidence import (
+from jax_fluxtube_gk.validation_confidence import (
     ScientificClaimNotReadyError,
     priority5_confidence_gaps,
     require_validation_claim_ready,

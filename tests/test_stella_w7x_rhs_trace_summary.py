@@ -50,7 +50,7 @@ def test_summarize_trace_counts_terms_and_norms(tmp_path: Path):
     assert summary["iky_values"] == [4]
     assert summary["ikx_values"] == [1]
     assert summary["required_record_terms_present"] is True
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v1"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v1"
     assert summary["velocity_weight_columns_present"] is False
     assert summary["provenance"] == {"stella_revision": "test-revision"}
     assert terms[("pdf_g", "input_pdf")]["rows"] == 1
@@ -83,7 +83,7 @@ def test_summarize_trace_accepts_v2_velocity_weight_columns(tmp_path: Path):
     summary = module.summarize_trace(trace, required_record_terms=(("pdf_g", "input_pdf"),))
     term = summary["term_summaries"][0]
 
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v2"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v2"
     assert summary["rhs_calls"] == [0]
     assert summary["v3_required_record_terms_present"] is False
     assert summary["velocity_weight_columns_present"] is True
@@ -114,7 +114,7 @@ def test_summarize_trace_accepts_v3_rhs_call_column(tmp_path: Path):
         trace, required_record_terms=(("pdf_g", "input_pdf"),)
     )
 
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v3"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v3"
     assert summary["rhs_calls"] == [1, 2]
     assert summary["term_summaries"][0]["rhs_call_range"] == [1, 2]
 
@@ -136,7 +136,7 @@ def test_summarize_trace_infers_v4_from_native_coefficients(tmp_path: Path):
 
     summary = module.summarize_trace(trace, required_record_terms=required)
 
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v4"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v4"
     assert summary["v4_required_record_terms_present"] is True
     assert summary["v5_required_record_terms_present"] is False
 
@@ -158,7 +158,7 @@ def test_summarize_trace_infers_v5_from_native_gyroaverage(tmp_path: Path):
 
     summary = module.summarize_trace(trace, required_record_terms=required)
 
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v5"
     assert summary["v5_required_record_terms_present"] is True
 
 
@@ -194,7 +194,7 @@ def test_committed_w7x_rhs_trace_summary_contract():
     assert summary["steps"] == [2000]
     assert summary["iky_values"] == [4]
     assert summary["ikx_values"] == [1]
-    assert summary["trace_format"] == "stellarator_gk_stella_rhs_trace_v5"
+    assert summary["trace_format"] == "jax_fluxtube_gk_stella_rhs_trace_v5"
     assert summary["rhs_calls"] == [1, 2, 3]
     assert summary["v3_required_record_terms_present"] is True
     assert summary["v4_required_record_terms_present"] is True

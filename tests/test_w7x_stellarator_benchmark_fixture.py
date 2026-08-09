@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from stellarator_gk import load_per_ky_mode_structure_fixture_csv
+from jax_fluxtube_gk import load_per_ky_mode_structure_fixture_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]

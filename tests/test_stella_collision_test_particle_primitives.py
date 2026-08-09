@@ -5,7 +5,7 @@ from scripts.summarize_stella_collision_test_particle_primitives import (
     SCHEMA,
     summarize_test_particle_primitives,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_test_particle_primitives,
     build_velocity_grid_from_nodes,

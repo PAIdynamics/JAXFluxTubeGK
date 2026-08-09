@@ -13,7 +13,7 @@ def _write_trace(path: Path, *, duplicate: bool = False) -> None:
     if duplicate:
         rows[1] = rows[0]
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1\n"
         "# iv imu iky ikx iz tube species vpa mu before_re before_im rhs_re rhs_im\n"
         + "\n".join(rows)
         + "\n"

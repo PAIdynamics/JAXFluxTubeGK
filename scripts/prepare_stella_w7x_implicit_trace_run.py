@@ -18,7 +18,7 @@ from scripts.prepare_stella_w7x_rhs_trace_run import (
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.in"
-DEFAULT_OUTPUT_ROOT = Path("/private/tmp/stellarator_gk_stella_w7x_implicit_trace")
+DEFAULT_OUTPUT_ROOT = Path("/private/tmp/jax_fluxtube_gk_stella_w7x_implicit_trace")
 TARGET = Path("STELLA_CODE/gyrokinetic_equation/gk_implicit_terms.f90")
 MIRROR_TARGET = Path(
     "STELLA_CODE/gyrokinetic_equation/gyrokinetic_equation_implicit.f90"
@@ -26,7 +26,7 @@ MIRROR_TARGET = Path(
 EXPLICIT_TARGET = Path(
     "STELLA_CODE/gyrokinetic_equation/gyrokinetic_equation_explicit.f90"
 )
-TRACE_FILENAME = "stellarator_gk_w7x_implicit_stage_trace.dat"
+TRACE_FILENAME = "jax_fluxtube_gk_w7x_implicit_stage_trace.dat"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -149,17 +149,17 @@ def patch_stella_implicit_stage_trace(source_path: Path) -> bool:
 
     source_path = Path(source_path)
     text = source_path.read_text(encoding="utf-8")
-    if "stellarator_gk implicit stage trace patch" in text:
+    if "jax_fluxtube_gk implicit stage trace patch" in text:
         return False
     module_marker = "   private\n"
     module_state = f"""
-   ! stellarator_gk implicit stage trace patch
-   integer, parameter :: stellarator_gk_trace_iky = 4
-   integer, parameter :: stellarator_gk_trace_ikx = 1
-   integer, parameter :: stellarator_gk_trace_unit = 9314
-   character(len=*), parameter :: stellarator_gk_trace_filename = '{TRACE_FILENAME}'
-   integer :: stellarator_gk_implicit_call = 0
-   logical :: stellarator_gk_trace_initialised = .false.
+   ! jax_fluxtube_gk implicit stage trace patch
+   integer, parameter :: jax_fluxtube_gk_trace_iky = 4
+   integer, parameter :: jax_fluxtube_gk_trace_ikx = 1
+   integer, parameter :: jax_fluxtube_gk_trace_unit = 9314
+   character(len=*), parameter :: jax_fluxtube_gk_trace_filename = '{TRACE_FILENAME}'
+   integer :: jax_fluxtube_gk_implicit_call = 0
+   logical :: jax_fluxtube_gk_trace_initialised = .false.
 
 """
     text = _replace_once(text, module_marker, module_marker + module_state)
@@ -168,21 +168,21 @@ def patch_stella_implicit_stage_trace(source_path: Path) -> bool:
     text = _replace_once(
         text,
         entry_marker,
-        entry_marker + "      stellarator_gk_implicit_call = stellarator_gk_implicit_call + 1\n",
+        entry_marker + "      jax_fluxtube_gk_implicit_call = jax_fluxtube_gk_implicit_call + 1\n",
     )
     input_marker = "      g1 = g\n      g2 = g\n"
     text = _replace_once(
         text,
         input_marker,
         input_marker
-        + "      call stellarator_gk_trace_pdf('input_pdf', g1)\n"
-        + "      call stellarator_gk_trace_phi('input_phi', phi)\n",
+        + "      call jax_fluxtube_gk_trace_pdf('input_pdf', g1)\n"
+        + "      call jax_fluxtube_gk_trace_phi('input_phi', phi)\n",
     )
     inhom_pdf_marker = "         ! We now have g_{inh}^{n+1, i+1} stored in g\n"
     text = _replace_once(
         text,
         inhom_pdf_marker,
-        "         call stellarator_gk_trace_pdf('inhomogeneous_pdf', g)\n"
+        "         call jax_fluxtube_gk_trace_pdf('inhomogeneous_pdf', g)\n"
         + inhom_pdf_marker,
     )
     inhom_phi_marker = (
@@ -192,21 +192,21 @@ def patch_stella_implicit_stage_trace(source_path: Path) -> bool:
     text = _replace_once(
         text,
         inhom_phi_marker,
-        "         call stellarator_gk_trace_phi('inhomogeneous_phi', phi)\n"
+        "         call jax_fluxtube_gk_trace_phi('inhomogeneous_phi', phi)\n"
         + inhom_phi_marker,
     )
     response_marker = "         call invert_parstream_response(phi, apar, bpar)\n"
     text = _replace_once(
         text,
         response_marker,
-        response_marker + "         call stellarator_gk_trace_phi('response_phi', phi)\n",
+        response_marker + "         call jax_fluxtube_gk_trace_phi('response_phi', phi)\n",
     )
     final_marker = "         itt = itt + 1\n"
     text = _replace_once(
         text,
         final_marker,
-        "         call stellarator_gk_trace_pdf('final_pdf', g)\n"
-        "         call stellarator_gk_trace_phi('final_phi', phi)\n"
+        "         call jax_fluxtube_gk_trace_pdf('final_pdf', g)\n"
+        "         call jax_fluxtube_gk_trace_phi('final_phi', phi)\n"
         + final_marker,
     )
     text = _replace_once(
@@ -223,16 +223,16 @@ def patch_stella_mirror_stage_trace(source_path: Path) -> bool:
 
     source_path = Path(source_path)
     text = source_path.read_text(encoding="utf-8")
-    if "stellarator_gk mirror stage trace patch" in text:
+    if "jax_fluxtube_gk mirror stage trace patch" in text:
         return False
     module_marker = "   private\n"
     module_state = f"""
-   ! stellarator_gk mirror stage trace patch
-   integer, parameter :: stellarator_gk_mirror_trace_iky = 4
-   integer, parameter :: stellarator_gk_mirror_trace_ikx = 1
-   integer, parameter :: stellarator_gk_mirror_trace_unit = 9315
-   character(len=*), parameter :: stellarator_gk_mirror_trace_filename = '{TRACE_FILENAME}'
-   logical :: stellarator_gk_mirror_trace_initialised = .false.
+   ! jax_fluxtube_gk mirror stage trace patch
+   integer, parameter :: jax_fluxtube_gk_mirror_trace_iky = 4
+   integer, parameter :: jax_fluxtube_gk_mirror_trace_ikx = 1
+   integer, parameter :: jax_fluxtube_gk_mirror_trace_unit = 9315
+   character(len=*), parameter :: jax_fluxtube_gk_mirror_trace_filename = '{TRACE_FILENAME}'
+   logical :: jax_fluxtube_gk_mirror_trace_initialised = .false.
 
 """
     text = _replace_once(text, module_marker, module_marker + module_state)
@@ -242,9 +242,9 @@ def patch_stella_mirror_stage_trace(source_path: Path) -> bool:
          end if
 """
     traced_block = """         if (mirror_implicit .and. include_mirror) then
-            call stellarator_gk_trace_mirror_pdf('mirror_input_pdf', istep, g)
+            call jax_fluxtube_gk_trace_mirror_pdf('mirror_input_pdf', istep, g)
             call advance_mirror_implicit(collisions_implicit, g, apar)
-            call stellarator_gk_trace_mirror_pdf('mirror_final_pdf', istep, g)
+            call jax_fluxtube_gk_trace_mirror_pdf('mirror_final_pdf', istep, g)
             fields_updated = .false.
          end if
 """
@@ -267,16 +267,16 @@ def patch_stella_explicit_stage_trace(source_path: Path) -> bool:
 
     source_path = Path(source_path)
     text = source_path.read_text(encoding="utf-8")
-    if "stellarator_gk explicit stage trace patch" in text:
+    if "jax_fluxtube_gk explicit stage trace patch" in text:
         return False
     module_marker = "   private\n"
     module_state = f"""
-   ! stellarator_gk explicit stage trace patch
-   integer, parameter :: stellarator_gk_explicit_trace_iky = 4
-   integer, parameter :: stellarator_gk_explicit_trace_ikx = 1
-   integer, parameter :: stellarator_gk_explicit_trace_unit = 9316
-   character(len=*), parameter :: stellarator_gk_explicit_trace_filename = '{TRACE_FILENAME}'
-   logical :: stellarator_gk_explicit_trace_initialised = .false.
+   ! jax_fluxtube_gk explicit stage trace patch
+   integer, parameter :: jax_fluxtube_gk_explicit_trace_iky = 4
+   integer, parameter :: jax_fluxtube_gk_explicit_trace_ikx = 1
+   integer, parameter :: jax_fluxtube_gk_explicit_trace_unit = 9316
+   character(len=*), parameter :: jax_fluxtube_gk_explicit_trace_filename = '{TRACE_FILENAME}'
+   logical :: jax_fluxtube_gk_explicit_trace_initialised = .false.
 
 """
     text = _replace_once(text, module_marker, module_marker + module_state)
@@ -288,43 +288,43 @@ def patch_stella_explicit_stage_trace(source_path: Path) -> bool:
         rk3,
         "      g0 = g\n",
         "      g0 = g\n"
-        "      call stellarator_gk_trace_explicit_pdf('explicit_input_pdf', istep, g0)\n",
+        "      call jax_fluxtube_gk_trace_explicit_pdf('explicit_input_pdf', istep, g0)\n",
     )
     rk3 = _replace_once(
         rk3,
         "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g0, g1, restart_time_step, istep)\n"
-        "            call stellarator_gk_trace_explicit_pdf('explicit_rhs1_pdf', istep, g1)\n",
+        "            call jax_fluxtube_gk_trace_explicit_pdf('explicit_rhs1_pdf', istep, g1)\n",
     )
     rk3 = _replace_once(
         rk3,
         "            g1 = g0 + g1\n",
         "            g1 = g0 + g1\n"
-        "            call stellarator_gk_trace_explicit_pdf('explicit_state1_pdf', istep, g1)\n",
+        "            call jax_fluxtube_gk_trace_explicit_pdf('explicit_state1_pdf', istep, g1)\n",
     )
     rk3 = _replace_once(
         rk3,
         "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g1, g2, restart_time_step, istep)\n"
-        "            call stellarator_gk_trace_explicit_pdf('explicit_rhs2_pdf', istep, g2)\n",
+        "            call jax_fluxtube_gk_trace_explicit_pdf('explicit_rhs2_pdf', istep, g2)\n",
     )
     rk3 = _replace_once(
         rk3,
         "            g2 = g1 + g2\n",
         "            g2 = g1 + g2\n"
-        "            call stellarator_gk_trace_explicit_pdf('explicit_state2_pdf', istep, g2)\n",
+        "            call jax_fluxtube_gk_trace_explicit_pdf('explicit_state2_pdf', istep, g2)\n",
     )
     rk3 = _replace_once(
         rk3,
         "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n",
         "            call add_explicit_gyrokinetic_terms(g2, g, restart_time_step, istep)\n"
-        "            call stellarator_gk_trace_explicit_pdf('explicit_rhs3_pdf', istep, g)\n",
+        "            call jax_fluxtube_gk_trace_explicit_pdf('explicit_rhs3_pdf', istep, g)\n",
     )
     rk3 = _replace_once(
         rk3,
         "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n",
         "      g = g0 / 3.+0.5 * g1 + (g2 + g) / 6.\n"
-        "      call stellarator_gk_trace_explicit_pdf('explicit_final_pdf', istep, g)\n",
+        "      call jax_fluxtube_gk_trace_explicit_pdf('explicit_final_pdf', istep, g)\n",
     )
     text = text[:rk3_start] + rk3 + text[rk3_end:]
     text = _replace_once(
@@ -343,7 +343,7 @@ def _replace_once(text: str, old: str, new: str) -> str:
 
 
 IMPLICIT_TRACE_HELPERS = r"""
-   subroutine stellarator_gk_trace_pdf(stage, values)
+   subroutine jax_fluxtube_gk_trace_pdf(stage, values)
       use mp, only: proc0
       use parallelisation_layouts, only: vmu_lo, iv_idx, imu_idx, is_idx
       use grids_z, only: nzgrid
@@ -353,23 +353,23 @@ IMPLICIT_TRACE_HELPERS = r"""
       character(len=*), intent(in) :: stage
       complex, dimension(:, :, -nzgrid:, :, vmu_lo%llim_proc:), intent(in) :: values
       integer :: iz, ivmu, iv, imu, is
-      if (.not. proc0 .or. stellarator_gk_implicit_call /= 1) return
-      if (stellarator_gk_trace_iky > naky .or. stellarator_gk_trace_ikx > nakx) return
-      call stellarator_gk_open_implicit_trace()
+      if (.not. proc0 .or. jax_fluxtube_gk_implicit_call /= 1) return
+      if (jax_fluxtube_gk_trace_iky > naky .or. jax_fluxtube_gk_trace_ikx > nakx) return
+      call jax_fluxtube_gk_open_implicit_trace()
       do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
          iv = iv_idx(vmu_lo, ivmu); imu = imu_idx(vmu_lo, ivmu); is = is_idx(vmu_lo, ivmu)
          do iz = -nzgrid, nzgrid
-            write (stellarator_gk_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
-                 'pdf', trim(stage), stellarator_gk_implicit_call, stellarator_gk_trace_iky, &
-                 stellarator_gk_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
-                 real(values(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, 1, ivmu)), &
-                 aimag(values(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, 1, ivmu))
+            write (jax_fluxtube_gk_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
+                 'pdf', trim(stage), jax_fluxtube_gk_implicit_call, jax_fluxtube_gk_trace_iky, &
+                 jax_fluxtube_gk_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
+                 real(values(jax_fluxtube_gk_trace_iky, jax_fluxtube_gk_trace_ikx, iz, 1, ivmu)), &
+                 aimag(values(jax_fluxtube_gk_trace_iky, jax_fluxtube_gk_trace_ikx, iz, 1, ivmu))
          end do
       end do
-      close (stellarator_gk_trace_unit)
-   end subroutine stellarator_gk_trace_pdf
+      close (jax_fluxtube_gk_trace_unit)
+   end subroutine jax_fluxtube_gk_trace_pdf
 
-   subroutine stellarator_gk_trace_phi(stage, values)
+   subroutine jax_fluxtube_gk_trace_phi(stage, values)
       use mp, only: proc0
       use grids_z, only: nzgrid
       use grids_kxky, only: naky, nakx
@@ -377,44 +377,44 @@ IMPLICIT_TRACE_HELPERS = r"""
       character(len=*), intent(in) :: stage
       complex, dimension(:, :, -nzgrid:, :), intent(in) :: values
       integer :: iz
-      if (.not. proc0 .or. stellarator_gk_implicit_call /= 1) return
-      if (stellarator_gk_trace_iky > naky .or. stellarator_gk_trace_ikx > nakx) return
-      call stellarator_gk_open_implicit_trace()
+      if (.not. proc0 .or. jax_fluxtube_gk_implicit_call /= 1) return
+      if (jax_fluxtube_gk_trace_iky > naky .or. jax_fluxtube_gk_trace_ikx > nakx) return
+      call jax_fluxtube_gk_open_implicit_trace()
       do iz = -nzgrid, nzgrid
-         write (stellarator_gk_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
-              'phi', trim(stage), stellarator_gk_implicit_call, stellarator_gk_trace_iky, &
-              stellarator_gk_trace_ikx, iz, 0, 0, 0, 0, 0.0, 0.0, &
-              real(values(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, 1)), &
-              aimag(values(stellarator_gk_trace_iky, stellarator_gk_trace_ikx, iz, 1))
+         write (jax_fluxtube_gk_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
+              'phi', trim(stage), jax_fluxtube_gk_implicit_call, jax_fluxtube_gk_trace_iky, &
+              jax_fluxtube_gk_trace_ikx, iz, 0, 0, 0, 0, 0.0, 0.0, &
+              real(values(jax_fluxtube_gk_trace_iky, jax_fluxtube_gk_trace_ikx, iz, 1)), &
+              aimag(values(jax_fluxtube_gk_trace_iky, jax_fluxtube_gk_trace_ikx, iz, 1))
       end do
-      close (stellarator_gk_trace_unit)
-   end subroutine stellarator_gk_trace_phi
+      close (jax_fluxtube_gk_trace_unit)
+   end subroutine jax_fluxtube_gk_trace_phi
 
-   subroutine stellarator_gk_open_implicit_trace()
+   subroutine jax_fluxtube_gk_open_implicit_trace()
       implicit none
       logical :: trace_exists
-      if (.not. stellarator_gk_trace_initialised) then
-         inquire (file=stellarator_gk_trace_filename, exist=trace_exists)
+      if (.not. jax_fluxtube_gk_trace_initialised) then
+         inquire (file=jax_fluxtube_gk_trace_filename, exist=trace_exists)
          if (trace_exists) then
-            open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
+            open (unit=jax_fluxtube_gk_trace_unit, file=jax_fluxtube_gk_trace_filename, &
                  status='old', position='append', action='write')
          else
-            open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
+            open (unit=jax_fluxtube_gk_trace_unit, file=jax_fluxtube_gk_trace_filename, &
                  status='replace', action='write')
-            write (stellarator_gk_trace_unit, '(A)') &
+            write (jax_fluxtube_gk_trace_unit, '(A)') &
                  'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
          end if
-         stellarator_gk_trace_initialised = .true.
+         jax_fluxtube_gk_trace_initialised = .true.
       else
-         open (unit=stellarator_gk_trace_unit, file=stellarator_gk_trace_filename, &
+         open (unit=jax_fluxtube_gk_trace_unit, file=jax_fluxtube_gk_trace_filename, &
               status='old', position='append', action='write')
       end if
-   end subroutine stellarator_gk_open_implicit_trace
+   end subroutine jax_fluxtube_gk_open_implicit_trace
 """
 
 
 MIRROR_TRACE_HELPER = r"""
-   subroutine stellarator_gk_trace_mirror_pdf(stage, istep, values)
+   subroutine jax_fluxtube_gk_trace_mirror_pdf(stage, istep, values)
       use mp, only: proc0
       use parallelisation_layouts, only: vmu_lo, iv_idx, imu_idx, is_idx
       use grids_z, only: nzgrid
@@ -427,40 +427,40 @@ MIRROR_TRACE_HELPER = r"""
       integer :: iz, ivmu, iv, imu, is
       logical :: trace_exists
       if (.not. proc0 .or. istep /= 1) return
-      if (stellarator_gk_mirror_trace_iky > naky .or. stellarator_gk_mirror_trace_ikx > nakx) return
-      if (.not. stellarator_gk_mirror_trace_initialised) then
-         inquire (file=stellarator_gk_mirror_trace_filename, exist=trace_exists)
+      if (jax_fluxtube_gk_mirror_trace_iky > naky .or. jax_fluxtube_gk_mirror_trace_ikx > nakx) return
+      if (.not. jax_fluxtube_gk_mirror_trace_initialised) then
+         inquire (file=jax_fluxtube_gk_mirror_trace_filename, exist=trace_exists)
          if (trace_exists) then
-            open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+            open (unit=jax_fluxtube_gk_mirror_trace_unit, file=jax_fluxtube_gk_mirror_trace_filename, &
                  status='old', position='append', action='write')
          else
-            open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+            open (unit=jax_fluxtube_gk_mirror_trace_unit, file=jax_fluxtube_gk_mirror_trace_filename, &
                  status='replace', action='write')
-            write (stellarator_gk_mirror_trace_unit, '(A)') &
+            write (jax_fluxtube_gk_mirror_trace_unit, '(A)') &
                  'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
          end if
-         stellarator_gk_mirror_trace_initialised = .true.
+         jax_fluxtube_gk_mirror_trace_initialised = .true.
       else
-         open (unit=stellarator_gk_mirror_trace_unit, file=stellarator_gk_mirror_trace_filename, &
+         open (unit=jax_fluxtube_gk_mirror_trace_unit, file=jax_fluxtube_gk_mirror_trace_filename, &
               status='old', position='append', action='write')
       end if
       do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
          iv = iv_idx(vmu_lo, ivmu); imu = imu_idx(vmu_lo, ivmu); is = is_idx(vmu_lo, ivmu)
          do iz = -nzgrid, nzgrid
-            write (stellarator_gk_mirror_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
-                 'pdf', trim(stage), 1, stellarator_gk_mirror_trace_iky, &
-                 stellarator_gk_mirror_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
-                 real(values(stellarator_gk_mirror_trace_iky, stellarator_gk_mirror_trace_ikx, iz, 1, ivmu)), &
-                 aimag(values(stellarator_gk_mirror_trace_iky, stellarator_gk_mirror_trace_ikx, iz, 1, ivmu))
+            write (jax_fluxtube_gk_mirror_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
+                 'pdf', trim(stage), 1, jax_fluxtube_gk_mirror_trace_iky, &
+                 jax_fluxtube_gk_mirror_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
+                 real(values(jax_fluxtube_gk_mirror_trace_iky, jax_fluxtube_gk_mirror_trace_ikx, iz, 1, ivmu)), &
+                 aimag(values(jax_fluxtube_gk_mirror_trace_iky, jax_fluxtube_gk_mirror_trace_ikx, iz, 1, ivmu))
          end do
       end do
-      close (stellarator_gk_mirror_trace_unit)
-   end subroutine stellarator_gk_trace_mirror_pdf
+      close (jax_fluxtube_gk_mirror_trace_unit)
+   end subroutine jax_fluxtube_gk_trace_mirror_pdf
 """
 
 
 EXPLICIT_TRACE_HELPER = r"""
-   subroutine stellarator_gk_trace_explicit_pdf(stage, istep, values)
+   subroutine jax_fluxtube_gk_trace_explicit_pdf(stage, istep, values)
       use mp, only: proc0
       use parallelisation_layouts, only: vmu_lo, iv_idx, imu_idx, is_idx
       use grids_z, only: nzgrid
@@ -472,29 +472,29 @@ EXPLICIT_TRACE_HELPER = r"""
       complex, dimension(:, :, -nzgrid:, :, vmu_lo%llim_proc:), intent(in) :: values
       integer :: iz, ivmu, iv, imu, is
       if (.not. proc0 .or. istep /= 1) return
-      if (stellarator_gk_explicit_trace_iky > naky .or. stellarator_gk_explicit_trace_ikx > nakx) return
-      if (.not. stellarator_gk_explicit_trace_initialised) then
-         open (unit=stellarator_gk_explicit_trace_unit, file=stellarator_gk_explicit_trace_filename, &
+      if (jax_fluxtube_gk_explicit_trace_iky > naky .or. jax_fluxtube_gk_explicit_trace_ikx > nakx) return
+      if (.not. jax_fluxtube_gk_explicit_trace_initialised) then
+         open (unit=jax_fluxtube_gk_explicit_trace_unit, file=jax_fluxtube_gk_explicit_trace_filename, &
               status='replace', action='write')
-         write (stellarator_gk_explicit_trace_unit, '(A)') &
+         write (jax_fluxtube_gk_explicit_trace_unit, '(A)') &
               'record stage implicit_call iky ikx iz ivmu iv imu is vpa mu real imag'
-         stellarator_gk_explicit_trace_initialised = .true.
+         jax_fluxtube_gk_explicit_trace_initialised = .true.
       else
-         open (unit=stellarator_gk_explicit_trace_unit, file=stellarator_gk_explicit_trace_filename, &
+         open (unit=jax_fluxtube_gk_explicit_trace_unit, file=jax_fluxtube_gk_explicit_trace_filename, &
               status='old', position='append', action='write')
       end if
       do ivmu = vmu_lo%llim_proc, vmu_lo%ulim_proc
          iv = iv_idx(vmu_lo, ivmu); imu = imu_idx(vmu_lo, ivmu); is = is_idx(vmu_lo, ivmu)
          do iz = -nzgrid, nzgrid
-            write (stellarator_gk_explicit_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
-                 'pdf', trim(stage), 1, stellarator_gk_explicit_trace_iky, &
-                 stellarator_gk_explicit_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
-                 real(values(stellarator_gk_explicit_trace_iky, stellarator_gk_explicit_trace_ikx, iz, 1, ivmu)), &
-                 aimag(values(stellarator_gk_explicit_trace_iky, stellarator_gk_explicit_trace_ikx, iz, 1, ivmu))
+            write (jax_fluxtube_gk_explicit_trace_unit, '(A,1X,A,8(1X,I0),4(1X,ES24.16E3))') &
+                 'pdf', trim(stage), 1, jax_fluxtube_gk_explicit_trace_iky, &
+                 jax_fluxtube_gk_explicit_trace_ikx, iz, ivmu, iv, imu, is, vpa(iv), mu(imu), &
+                 real(values(jax_fluxtube_gk_explicit_trace_iky, jax_fluxtube_gk_explicit_trace_ikx, iz, 1, ivmu)), &
+                 aimag(values(jax_fluxtube_gk_explicit_trace_iky, jax_fluxtube_gk_explicit_trace_ikx, iz, 1, ivmu))
          end do
       end do
-      close (stellarator_gk_explicit_trace_unit)
-   end subroutine stellarator_gk_trace_explicit_pdf
+      close (jax_fluxtube_gk_explicit_trace_unit)
+   end subroutine jax_fluxtube_gk_trace_explicit_pdf
 """
 
 

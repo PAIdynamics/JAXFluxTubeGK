@@ -9,7 +9,7 @@ from scripts.summarize_stella_collision_field_particle_components import (
 
 def _write_component_trace(path: Path, values: tuple[float, ...]) -> Path:
     rows = [
-        "# schema=stellarator_gk_stella_collision_fieldpart_components_v1",
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_components_v1",
         "# iv imu iky ikx iz tube species l m j vpa mu before_re before_im rhs_re rhs_im",
     ]
     for index, value in enumerate(values):
@@ -20,7 +20,7 @@ def _write_component_trace(path: Path, values: tuple[float, ...]) -> Path:
 
 def _write_aggregate_trace(path: Path, rhs: float) -> Path:
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1\n"
         "# iv imu iky ikx iz tube species vpa mu before_re before_im rhs_re rhs_im\n"
         f"1 1 1 1 0 1 1 -1 0.5 2 0 {rhs} 0\n"
     )

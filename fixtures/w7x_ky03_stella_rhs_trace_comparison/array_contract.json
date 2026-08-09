@@ -26,7 +26,7 @@
     "weighting": "use_quadrature_of_the_chosen_target_grid"
   },
   "missing_array_records": [],
-  "raw_trace_path": "/tmp/stellarator_gk_stella_w7x_rhs_trace_v3/run/stellarator_gk_w7x_ky03_rhs_trace.dat",
+  "raw_trace_path": "/tmp/jax_fluxtube_gk_stella_w7x_rhs_trace_v3/run/jax_fluxtube_gk_w7x_ky03_rhs_trace.dat",
   "raw_trace_used": true,
   "rhs_calls_explicitly_labeled": true,
   "solver_case": {
@@ -120,7 +120,7 @@
   "stella_step": 2000,
   "stella_total_rhs_rows": 197376,
   "stella_total_rows": 1383948,
-  "stella_trace_format": "stellarator_gk_stella_rhs_trace_v3",
+  "stella_trace_format": "jax_fluxtube_gk_stella_rhs_trace_v3",
   "stella_velocity_weight_columns_present": true,
   "stella_vpa_range": [
     -3.0,

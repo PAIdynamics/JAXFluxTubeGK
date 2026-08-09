@@ -19,7 +19,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     OptimizationKnobs,
@@ -76,7 +76,7 @@ def main() -> None:
 
     value_and_grad = jax.jit(jax.value_and_grad(objective, has_aux=True))
 
-    print("# reduced fixed-topology stellarator_gk optimization loop")
+    print("# reduced fixed-topology jax_fluxtube_gk optimization loop")
     print(f"# iterations={args.iterations} learning_rate={args.learning_rate:g}")
     print(
         "iter objective selected_growth max_growth q shat "

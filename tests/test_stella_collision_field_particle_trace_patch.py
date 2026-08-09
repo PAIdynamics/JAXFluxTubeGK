@@ -72,7 +72,7 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert not patch_stella_collision_field_particle_trace(source)
     patched = source.read_text()
 
-    assert "stellarator_gk_fieldpart_input = g" in patched
+    assert "jax_fluxtube_gk_fieldpart_input = g" in patched
     assert "(after(iv, imu, ikxkyz) - before(iv, imu, ikxkyz)) / code_dt" in patched
     assert TRACE_FILENAME in patched
     assert COMPONENT_TRACE_FILENAME in patched
@@ -86,14 +86,14 @@ def test_trace_patch_captures_signed_increment_and_is_idempotent(tmp_path):
     assert TEST_PARTICLE_BLOCK_TRACE_FILENAME in patched
     assert "rhs_re rhs_im" in patched
     assert "ll1, mm1, jj1" in patched
-    assert "stellarator_gk_factor_increment = stellarator_gk_psi" in patched
+    assert "jax_fluxtube_gk_factor_increment = jax_fluxtube_gk_psi" in patched
     assert "legendre_vpamu(ll1, mm1, iv, imu, iz)" in patched
-    assert "stellarator_gk_response_sign" in patched
+    assert "jax_fluxtube_gk_response_sign" in patched
     assert "wgts_mu(ia, iz, imu)" in patched
     assert "psijnorm(ll1, jj1, is, isb, iz)" in patched
-    assert "stellarator_gk_matrix_band_row = 2 * nb + 1" in patched
-    assert "real(cdiffmat_band(stellarator_gk_matrix_band_row" in patched
-    assert "stellarator_gk_trace_collision_final_state(g_in, g)" in patched
+    assert "jax_fluxtube_gk_matrix_band_row = 2 * nb + 1" in patched
+    assert "real(cdiffmat_band(jax_fluxtube_gk_matrix_band_row" in patched
+    assert "jax_fluxtube_gk_trace_collision_final_state(g_in, g)" in patched
     assert "nupa(iv, imu, iz, is, isb)" in patched
     assert "dmu(min(imu, nmu - 1))" in patched
     assert "real(aa_blcs(iv, imu, imu2, ikxkyz, isb))" in patched
@@ -124,6 +124,6 @@ def test_prepare_trace_run_writes_only_to_scratch_copy(tmp_path):
     assert TEST_PARTICLE_PRIMITIVE_TRACE_FILENAME in metadata_payload
     assert TEST_PARTICLE_BLOCK_TRACE_FILENAME in metadata_payload
     assert (
-        "stellarator_gk collision field-particle trace patch"
+        "jax_fluxtube_gk collision field-particle trace patch"
         in (output / "stella" / target.relative_to(source_root)).read_text()
     )

@@ -9,14 +9,14 @@ from pathlib import Path
 import numpy as np
 
 from scripts.summarize_stella_collision_field_particle_factors import _axis_lookup
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     SpeciesParams,
     build_stella_test_particle_primitives,
     build_velocity_grid_from_nodes,
 )
 
 
-SCHEMA = "# schema=stellarator_gk_stella_collision_test_particle_primitives_v1"
+SCHEMA = "# schema=jax_fluxtube_gk_stella_collision_test_particle_primitives_v1"
 COLUMNS = (
     "iv",
     "imu",

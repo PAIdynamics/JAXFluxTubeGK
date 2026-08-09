@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     PerKyModeStructureFixture,
     load_per_ky_mode_structure_fixture_csv,
     resample_per_ky_mode_structure_fixture,

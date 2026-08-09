@@ -34,15 +34,15 @@ from scripts.compare_w7x_stella_rhs_trace_to_solver_balance import (
     load_stella_array_trace,
     weighted_complex_metrics,
 )
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     SpeciesParams,
     build_linear_residual_precompute,
     build_velocity_grid_from_nodes,
     linear_residual,
 )
-from stellarator_gk.geometry import load_stella_geometry_data
-from stellarator_gk.physics import adiabatic_density_numerator
+from jax_fluxtube_gk.geometry import load_stella_geometry_data
+from jax_fluxtube_gk.physics import adiabatic_density_numerator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -468,9 +468,9 @@ def run_same_state_replay(
         raise FileNotFoundError(trace_path)
     summary = json.loads(Path(stella_summary).read_text(encoding="utf-8"))
     if summary.get("trace_format") not in {
-        "stellarator_gk_stella_rhs_trace_v3",
-        "stellarator_gk_stella_rhs_trace_v4",
-        "stellarator_gk_stella_rhs_trace_v5",
+        "jax_fluxtube_gk_stella_rhs_trace_v3",
+        "jax_fluxtube_gk_stella_rhs_trace_v4",
+        "jax_fluxtube_gk_stella_rhs_trace_v5",
     }:
         raise ValueError("same-state replay requires an explicitly labeled v3/v4/v5 trace")
     stella = load_stella_array_trace(trace_path, summary)
@@ -682,7 +682,7 @@ def _status(
     maximum = max(float(row["aligned_relative_l2_error"]) for row in acceptance_rows)
     passed = maximum <= tolerance
     return {
-        "schema": "stellarator_gk_w7x_same_state_rhs_replay_v1",
+        "schema": "jax_fluxtube_gk_w7x_same_state_rhs_replay_v1",
         "status": "same_state_rhs_parity_passed" if passed else "same_state_rhs_parity_failed",
         "passed": passed,
         "relative_l2_tolerance": tolerance,

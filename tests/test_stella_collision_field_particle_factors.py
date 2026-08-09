@@ -9,7 +9,7 @@ from scripts.summarize_stella_collision_field_particle_factors import (
 
 def _write_factor(path: Path, *, rhs: float) -> Path:
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_factors_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_factors_v1\n"
         "# iv imu iky ikx iz tube target background l m j vpa mu psi_re psi_im basis rhs_re rhs_im\n"
         f"1 1 1 1 0 1 1 1 0 0 1 -1 0.5 0.5 0 2 {rhs} 0\n"
     )
@@ -18,7 +18,7 @@ def _write_factor(path: Path, *, rhs: float) -> Path:
 
 def _write_aggregate(path: Path, *, rhs: float) -> Path:
     path.write_text(
-        "# schema=stellarator_gk_stella_collision_fieldpart_trace_v1\n"
+        "# schema=jax_fluxtube_gk_stella_collision_fieldpart_trace_v1\n"
         "# iv imu iky ikx iz tube species vpa mu before_re before_im rhs_re rhs_im\n"
         f"1 1 1 1 0 1 1 -1 0.5 3 0 {rhs} 0\n"
     )

@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     DESC_GEOMETRY_COMPUTE_KEYS,
     DescGeometryProvider,
     GeometryRequest,

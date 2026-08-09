@@ -16,7 +16,7 @@ from .flux_tube import FluxTubeGeometry, PhysicalFluxTubeGeometry, map_physical_
 
 
 GEOMETRY_SCHEMA_VERSION = 2
-GEOMETRY_NORMALIZATION = "stellarator_gk_physical_v2"
+GEOMETRY_NORMALIZATION = "jax_fluxtube_gk_physical_v2"
 GEOMETRY_FIELD_UNITS = (
     ("z", "declared_parallel_coordinate"),
     ("theta", "radian"),
@@ -414,7 +414,7 @@ def write_geometry_result_cache(
 
     physical = result.physical
     payload = {
-        "format": "stellarator_gk_geometry_cache_v1",
+        "format": "jax_fluxtube_gk_geometry_cache_v1",
         "schema_version": GEOMETRY_SCHEMA_VERSION,
         "metadata": asdict(result.metadata),
         "parallel_static": {
@@ -462,7 +462,7 @@ def load_geometry_result_cache(
     if not metadata_path.is_file() or not arrays_path.is_file():
         raise ValueError(f"geometry cache requires metadata.json and arrays.npz: {cache}")
     payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if payload.get("format") != "stellarator_gk_geometry_cache_v1":
+    if payload.get("format") != "jax_fluxtube_gk_geometry_cache_v1":
         raise ValueError(f"unsupported geometry cache format in {metadata_path}")
     if payload.get("schema_version") != GEOMETRY_SCHEMA_VERSION:
         raise ValueError(

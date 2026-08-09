@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     FourierGridSpec,
     GeometryScalarParams,
     ParallelGridSpec,
@@ -31,7 +31,7 @@ from stellarator_gk import (
     solve_parallel_ampere,
     solve_perpendicular_magnetic_fields,
 )
-from stellarator_gk.tem_validation import (
+from jax_fluxtube_gk.tem_validation import (
     _build_tem_system,
     _initial_tem_state,
     gyaradax_tem_case_spec,
@@ -205,7 +205,7 @@ def test_electromagnetic_field_contract_recovers_kinetic_electrostatic_limit():
     ).astype(jnp.complex128)
     phi, apar, bpar, physical = solve_electromagnetic_fields(mixed, precompute)
 
-    from stellarator_gk import solve_kinetic_electron_phi
+    from jax_fluxtube_gk import solve_kinetic_electron_phi
 
     np.testing.assert_allclose(apar, 0.0, atol=0.0)
     np.testing.assert_allclose(bpar, 0.0, atol=0.0)
@@ -378,7 +378,7 @@ def test_parallel_ampere_precompute_matches_pinned_gyaradax(gyaradax_root):
         reference_geometry, params
     )
 
-    # optimal-fusion uses a differentiable Cephes J0 approximation while
+    # jax-fluxtube-gk uses a differentiable Cephes J0 approximation while
     # Gyaradax uses jax.scipy.special.bessel_jn.  Their field coefficients
     # agree to the approximation error rather than bitwise precision.
     np.testing.assert_allclose(observed.source_weight, reference_weight, rtol=3e-8, atol=2e-13)
@@ -487,7 +487,7 @@ def test_electromagnetic_rhs_and_rk4_step_match_pinned_gyaradax(gyaradax_root):
 
     spec = dataclasses.replace(gyaradax_tem_case_spec(), n_z=8, n_vpar=8, n_mu=4)
     velocity, parallel, fourier, geometry, species, electrostatic = _build_tem_system(spec)
-    from stellarator_gk import build_mode_connectivity
+    from jax_fluxtube_gk import build_mode_connectivity
 
     observed_precompute = build_linear_residual_precompute(
         velocity,
@@ -578,7 +578,7 @@ def test_electromagnetic_rhs_and_rk4_step_match_pinned_gyaradax(gyaradax_root):
         mixed, observed_precompute.field
     )
     observed_rhs = linear_residual(mixed, precomputed=observed_precompute)
-    from stellarator_gk import linear_residual_from_phi
+    from jax_fluxtube_gk import linear_residual_from_phi
 
     observed_electrostatic_rhs = linear_residual_from_phi(
         physical_obs, phi_obs, observed_precompute.rhs

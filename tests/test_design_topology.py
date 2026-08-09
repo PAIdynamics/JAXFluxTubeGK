@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     FourierGridSpec,
     ParallelGridSpec,
     TopologyChangeError,

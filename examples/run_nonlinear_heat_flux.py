@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
     GeometryScalarParams,
@@ -456,9 +456,9 @@ def main(argv: list[str] | None = None) -> None:
     }
     payload = {
         "schema_version": 1,
-        "producer": "optimal-fusion/nonlinear-heat-flux",
+        "producer": "jax-fluxtube-gk/nonlinear-heat-flux",
         "normalization": (
-            "gx_Q_over_Q_GB" if args.flux_moment == "gx_total_energy" else "optimal_fusion_native"
+            "gx_Q_over_Q_GB" if args.flux_moment == "gx_total_energy" else "jax_fluxtube_gk_native"
         ),
         "case": {
             key: str(value) if isinstance(value, Path) else value

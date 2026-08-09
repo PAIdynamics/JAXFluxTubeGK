@@ -731,7 +731,7 @@ __all__ = [
 ]
 
 # Benchmark names are excluded from ``__all__`` and loaded only for legacy
-# attribute access. New code should import them from ``stellarator_gk.validation``.
+# attribute access. New code should import them from ``jax_fluxtube_gk.validation``.
 _VALIDATION_COMPAT_NAMES = frozenset(
     {
         "BenchmarkGateResult",

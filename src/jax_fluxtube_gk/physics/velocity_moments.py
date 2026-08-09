@@ -175,7 +175,7 @@ def build_velocity_basis(spec: VelocityBasisSpec) -> HermiteLaguerreBasis:
     """Build the configured velocity basis.
 
     The Chebyshev collocation backend is still built by
-    :func:`stellarator_gk.build_velocity_grid`; this dispatcher reserves a
+    :func:`jax_fluxtube_gk.build_velocity_grid`; this dispatcher reserves a
     common entry point for future backend selection.
     """
 

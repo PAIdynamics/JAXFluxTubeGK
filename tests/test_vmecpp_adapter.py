@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     GeometryRequest,
     VmecppGeometryProvider,
     internal_geometry_from_result,

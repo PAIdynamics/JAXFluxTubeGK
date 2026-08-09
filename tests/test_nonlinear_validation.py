@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     NonlinearHeatFluxRecord,
     compare_nonlinear_heat_flux,
     compare_nonlinear_heat_flux_convergence,

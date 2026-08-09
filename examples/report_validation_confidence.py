@@ -7,7 +7,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from stellarator_gk.validation_confidence import (
+from jax_fluxtube_gk.validation_confidence import (
     VALIDATION_CONFIDENCE_SCHEMA_VERSION,
     priority5_confidence_gaps,
     write_validation_confidence_report,

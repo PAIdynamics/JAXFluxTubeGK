@@ -17,7 +17,7 @@ import shutil
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = REPO_ROOT / "fixtures" / "gkw_cyclone_selected_ky_linear_input.dat"
-DEFAULT_OUTPUT_ROOT = Path("/tmp/stellarator_gk_gkw_cosin2")
+DEFAULT_OUTPUT_ROOT = Path("/tmp/jax_fluxtube_gk_gkw_cosin2")
 PATCHED_SELECTOR = "cosin2"
 
 
@@ -210,7 +210,7 @@ def add_multitime_velocity_slice_patch(diagnostic_path: Path) -> bool:
     """Patch copied GKW diagnostics to write ``distr*_<ntotstep>.dat`` snapshots."""
 
     text = diagnostic_path.read_text(encoding="utf-8")
-    if "stellarator_gk multi-time distr patch" in text:
+    if "jax_fluxtube_gk multi-time distr patch" in text:
         return False
 
     control_import = "  use control,      only : output3d, lphi_diagnostics\n"
@@ -223,7 +223,7 @@ def add_multitime_velocity_slice_patch(diagnostic_path: Path) -> bool:
 
     call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
     call_patch = (
-        "  ! stellarator_gk multi-time distr patch: write selected peak-phi\n"
+        "  ! jax_fluxtube_gk multi-time distr patch: write selected peak-phi\n"
         "  ! velocity-space slices at every normal diagnostic output window.\n"
         "  call velocity_space_output(ntotstep)\n\n"
     )
@@ -274,14 +274,14 @@ def add_state_trace_patch(diagnostic_path: Path) -> bool:
     """Patch copied GKW diagnostics to write compact state/field norm traces."""
 
     text = diagnostic_path.read_text(encoding="utf-8")
-    if "stellarator_gk compact state trace patch" in text:
+    if "jax_fluxtube_gk compact state trace patch" in text:
         return False
 
     call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
     call_patch = (
-        "  ! stellarator_gk compact state trace patch: write state and field\n"
+        "  ! jax_fluxtube_gk compact state trace patch: write state and field\n"
         "  ! norms at every normal diagnostic output window.\n"
-        "  call stellarator_gk_state_trace_output\n\n"
+        "  call jax_fluxtube_gk_state_trace_output\n\n"
     )
     if call_marker not in text:
         raise ValueError(f"could not find write_output insertion marker in {diagnostic_path}")
@@ -299,14 +299,14 @@ def add_selected_state_dump_patch(diagnostic_path: Path) -> bool:
     """Patch copied GKW diagnostics to dump the full selected-mode state."""
 
     text = diagnostic_path.read_text(encoding="utf-8")
-    if "stellarator_gk selected-state dump patch" in text:
+    if "jax_fluxtube_gk selected-state dump patch" in text:
         return False
 
     call_marker = "  ! 2D outputs: CHECK THESE WORK WITH PARALLEL_S\n"
     call_patch = (
-        "  ! stellarator_gk selected-state dump patch: write imod=1, ix=1,\n"
+        "  ! jax_fluxtube_gk selected-state dump patch: write imod=1, ix=1,\n"
         "  ! species=1 distribution and phi at every diagnostic output window.\n"
-        "  call stellarator_gk_selected_state_dump_output\n\n"
+        "  call jax_fluxtube_gk_selected_state_dump_output\n\n"
     )
     if call_marker not in text:
         raise ValueError(f"could not find write_output insertion marker in {diagnostic_path}")
@@ -328,7 +328,7 @@ def add_initial_state_dump_exp_integration_patch(exp_integration_path: Path) -> 
     """Patch copied GKW to dump selected states around initial normalization."""
 
     text = exp_integration_path.read_text(encoding="utf-8")
-    if "stellarator_gk initial selected-state dump patch" in text:
+    if "jax_fluxtube_gk initial selected-state dump patch" in text:
         return False
 
     call_pattern = re.compile(
@@ -338,11 +338,11 @@ def add_initial_state_dump_exp_integration_patch(exp_integration_path: Path) -> 
     )
     call_patch = (
         "  if (itime == 1) then\n"
-        "    ! stellarator_gk initial selected-state dump patch: write before\n"
+        "    ! jax_fluxtube_gk initial selected-state dump patch: write before\n"
         "    ! and after the first normalize(2) call.\n"
-        "    call stellarator_gk_initial_state_output('pre_normalize')\n"
+        "    call jax_fluxtube_gk_initial_state_output('pre_normalize')\n"
         "    call normalize(2,fdisi(1),nsolc)\n"
-        "    call stellarator_gk_initial_state_output('post_normalize')\n"
+        "    call jax_fluxtube_gk_initial_state_output('post_normalize')\n"
         "  endif\n"
     )
     match = call_pattern.search(text)
@@ -370,14 +370,14 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
     """Patch copied GKW matrix storage to retain linear-term IDs."""
 
     text = matdat_path.read_text(encoding="utf-8")
-    if "stellarator_gk rhs trace matdat patch" in text:
+    if "jax_fluxtube_gk rhs trace matdat patch" in text:
         return False
 
     public_marker = "public :: put_element_correct_apar\n"
     public_patch = (
         "public :: put_element_correct_apar\n"
-        "public :: stellarator_gk_set_trace_term, stellarator_gk_mat_term\n"
-        "public :: stellarator_gk_source_by_term, stellarator_gk_n_trace_terms\n"
+        "public :: jax_fluxtube_gk_set_trace_term, jax_fluxtube_gk_mat_term\n"
+        "public :: jax_fluxtube_gk_source_by_term, jax_fluxtube_gk_n_trace_terms\n"
     )
     if public_marker not in text:
         raise ValueError(f"could not find matdat public marker in {matdat_path}")
@@ -386,11 +386,11 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
     source_decl = "complex, allocatable :: source(:)\n"
     source_patch = (
         "complex, allocatable :: source(:)\n"
-        "! stellarator_gk rhs trace matdat patch\n"
-        "integer, parameter :: stellarator_gk_n_trace_terms = 8\n"
-        "integer :: stellarator_gk_current_trace_term = 0\n"
-        "integer, allocatable :: stellarator_gk_mat_term(:)\n"
-        "complex, allocatable :: stellarator_gk_source_by_term(:,:)\n"
+        "! jax_fluxtube_gk rhs trace matdat patch\n"
+        "integer, parameter :: jax_fluxtube_gk_n_trace_terms = 8\n"
+        "integer :: jax_fluxtube_gk_current_trace_term = 0\n"
+        "integer, allocatable :: jax_fluxtube_gk_mat_term(:)\n"
+        "complex, allocatable :: jax_fluxtube_gk_source_by_term(:,:)\n"
     )
     if source_decl not in text:
         raise ValueError(f"could not find source declaration in {matdat_path}")
@@ -402,23 +402,23 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
         raise ValueError(f"could not find source initialization in {matdat_path}")
     source_init_patch = (
         source_init_match.group(0)
-        + "allocate(stellarator_gk_source_by_term(nsolc,0:stellarator_gk_n_trace_terms),"
+        + "allocate(jax_fluxtube_gk_source_by_term(nsolc,0:jax_fluxtube_gk_n_trace_terms),"
         "stat=ierr)\n"
         "if (ierr.ne.0) then\n"
-        "  stop 'Could not allocate stellarator_gk_source_by_term in matdat'\n"
+        "  stop 'Could not allocate jax_fluxtube_gk_source_by_term in matdat'\n"
         "endif\n"
-        "stellarator_gk_source_by_term = (0.,0.)\n"
+        "jax_fluxtube_gk_source_by_term = (0.,0.)\n"
     )
     text = text[: source_init_match.start()] + source_init_patch + text[source_init_match.end() :]
 
     mat_alloc = "  allocate(mat(ntot),stat=ierr)\n"
     mat_alloc_patch = (
         mat_alloc
-        + "  allocate(stellarator_gk_mat_term(ntot),stat=ierr)\n"
+        + "  allocate(jax_fluxtube_gk_mat_term(ntot),stat=ierr)\n"
         + "  if (ierr.ne.0) then\n"
-        + "    stop 'Could not allocate stellarator_gk_mat_term in matdat'\n"
+        + "    stop 'Could not allocate jax_fluxtube_gk_mat_term in matdat'\n"
         + "  endif\n"
-        + "  stellarator_gk_mat_term = 0\n"
+        + "  jax_fluxtube_gk_mat_term = 0\n"
     )
     if mat_alloc not in text:
         raise ValueError(f"could not find complex matrix allocation in {matdat_path}")
@@ -430,7 +430,7 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
         raise ValueError(f"could not find complex matrix store in {matdat_path}")
     mat_store_patch = (
         mat_store_match.group(0)
-        + "  stellarator_gk_mat_term(nmat) = stellarator_gk_current_trace_term\n"
+        + "  jax_fluxtube_gk_mat_term(nmat) = jax_fluxtube_gk_current_trace_term\n"
     )
     text = text[: mat_store_match.start()] + mat_store_patch + text[mat_store_match.end() :]
 
@@ -440,22 +440,22 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
         raise ValueError(f"could not find source store in {matdat_path}")
     source_store_patch = (
         source_store_match.group(0)
-        + "stellarator_gk_source_by_term(iih,stellarator_gk_current_trace_term) = &\n"
-        + "     & stellarator_gk_source_by_term(iih,stellarator_gk_current_trace_term) + mat_elem\n"
+        + "jax_fluxtube_gk_source_by_term(iih,jax_fluxtube_gk_current_trace_term) = &\n"
+        + "     & jax_fluxtube_gk_source_by_term(iih,jax_fluxtube_gk_current_trace_term) + mat_elem\n"
     )
     text = text[: source_store_match.start()] + source_store_patch + text[source_store_match.end() :]
 
     duplicate_check = "    if ((ii(i).eq.ii(ireduced)).and.(jj(i).eq.jj(ireduced))) then\n"
     duplicate_patch = (
         "    if ((ii(i).eq.ii(ireduced)).and.(jj(i).eq.jj(ireduced)) &\n"
-        "        & .and.(stellarator_gk_mat_term(i).eq.stellarator_gk_mat_term(ireduced))) then\n"
+        "        & .and.(jax_fluxtube_gk_mat_term(i).eq.jax_fluxtube_gk_mat_term(ireduced))) then\n"
     )
     if duplicate_check not in text:
         raise ValueError(f"could not find compression duplicate check in {matdat_path}")
     text = text.replace(duplicate_check, duplicate_patch, 1)
 
     reduced_copy = "      mat(ireduced) = mat(i)\n"
-    reduced_copy_patch = reduced_copy + "      stellarator_gk_mat_term(ireduced) = stellarator_gk_mat_term(i)\n"
+    reduced_copy_patch = reduced_copy + "      jax_fluxtube_gk_mat_term(ireduced) = jax_fluxtube_gk_mat_term(i)\n"
     if reduced_copy not in text:
         raise ValueError(f"could not find compression matrix copy in {matdat_path}")
     text = text.replace(reduced_copy, reduced_copy_patch, 1)
@@ -463,9 +463,9 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
     heap_swap = "    ctmp = mat(ind) ; mat(ind) = mat(i_start) ; mat(i_start) = ctmp\n"
     heap_swap_patch = (
         heap_swap
-        + "    itmp = stellarator_gk_mat_term(ind)\n"
-        + "    stellarator_gk_mat_term(ind) = stellarator_gk_mat_term(i_start)\n"
-        + "    stellarator_gk_mat_term(i_start) = itmp\n"
+        + "    itmp = jax_fluxtube_gk_mat_term(ind)\n"
+        + "    jax_fluxtube_gk_mat_term(ind) = jax_fluxtube_gk_mat_term(i_start)\n"
+        + "    jax_fluxtube_gk_mat_term(i_start) = itmp\n"
     )
     if heap_swap not in text:
         raise ValueError(f"could not find heap-sort matrix swap in {matdat_path}")
@@ -474,9 +474,9 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
     sift_swap = "      ctmp = mat(ind2) ; mat(ind2) = mat(ind) ; mat(ind) = ctmp\n"
     sift_swap_patch = (
         sift_swap
-        + "      itmp = stellarator_gk_mat_term(ind2)\n"
-        + "      stellarator_gk_mat_term(ind2) = stellarator_gk_mat_term(ind)\n"
-        + "      stellarator_gk_mat_term(ind) = itmp\n"
+        + "      itmp = jax_fluxtube_gk_mat_term(ind2)\n"
+        + "      jax_fluxtube_gk_mat_term(ind2) = jax_fluxtube_gk_mat_term(ind)\n"
+        + "      jax_fluxtube_gk_mat_term(ind) = itmp\n"
     )
     if sift_swap not in text:
         raise ValueError(f"could not find sift matrix swap in {matdat_path}")
@@ -484,13 +484,13 @@ def add_rhs_trace_matdat_patch(matdat_path: Path) -> bool:
 
     subroutine_marker = "subroutine put_element(iih,jjh,mat_elem,itime_est)\n"
     setter = (
-        "subroutine stellarator_gk_set_trace_term(term_id)\n"
+        "subroutine jax_fluxtube_gk_set_trace_term(term_id)\n"
         "  integer, intent(in) :: term_id\n"
-        "  if (term_id < 0 .or. term_id > stellarator_gk_n_trace_terms) then\n"
-        "    stop 'stellarator_gk_set_trace_term: term out of range'\n"
+        "  if (term_id < 0 .or. term_id > jax_fluxtube_gk_n_trace_terms) then\n"
+        "    stop 'jax_fluxtube_gk_set_trace_term: term out of range'\n"
         "  endif\n"
-        "  stellarator_gk_current_trace_term = term_id\n"
-        "end subroutine stellarator_gk_set_trace_term\n\n"
+        "  jax_fluxtube_gk_current_trace_term = term_id\n"
+        "end subroutine jax_fluxtube_gk_set_trace_term\n\n"
     )
     if subroutine_marker not in text:
         raise ValueError(f"could not find put_element marker in {matdat_path}")
@@ -504,14 +504,14 @@ def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
     """Patch copied GKW linear-term assembly to tag matrix/source entries."""
 
     text = linear_terms_path.read_text(encoding="utf-8")
-    if "stellarator_gk rhs trace linear_terms patch" in text:
+    if "jax_fluxtube_gk rhs trace linear_terms patch" in text:
         return False
 
     use_marker = "  use matdat,      only : finish_matrix_section\n"
     use_patch = (
         "  use matdat,      only : finish_matrix_section, &\n"
-        "      & stellarator_gk_set_trace_term\n"
-        "  ! stellarator_gk rhs trace linear_terms patch\n"
+        "      & jax_fluxtube_gk_set_trace_term\n"
+        "  ! jax_fluxtube_gk rhs trace linear_terms patch\n"
     )
     if use_marker not in text:
         raise ValueError(f"could not find calc_linear_terms matdat use in {linear_terms_path}")
@@ -533,7 +533,7 @@ def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
             raise ValueError(f"could not find linear term marker {marker!r}")
         text = text.replace(
             marker,
-            f"  call stellarator_gk_set_trace_term({term_id})\n" + marker,
+            f"  call jax_fluxtube_gk_set_trace_term({term_id})\n" + marker,
             count,
         )
     reset_marker = "  if (neoclassics .and. lneoclassical) call neoclassical\n"
@@ -541,7 +541,7 @@ def add_rhs_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
         raise ValueError(f"could not find neoclassical marker in {linear_terms_path}")
     text = text.replace(
         reset_marker,
-        "  call stellarator_gk_set_trace_term(0)\n" + reset_marker,
+        "  call jax_fluxtube_gk_set_trace_term(0)\n" + reset_marker,
         1,
     )
 
@@ -553,14 +553,14 @@ def add_igh_input_trace_linear_terms_patch(linear_terms_path: Path) -> bool:
     """Patch copied GKW ``igh`` construction to dump row-level coefficient inputs."""
 
     text = linear_terms_path.read_text(encoding="utf-8")
-    if "stellarator_gk igh input trace patch" in text:
+    if "jax_fluxtube_gk igh input trace patch" in text:
         return False
 
     call_marker = "      call connect_parallel(imod,ix,i,k,i,ingrid,ixref,iref,kref,ist)\n"
     call_patch = (
         call_marker
-        + "      ! stellarator_gk igh input trace patch: dump row-level coefficients.\n"
-        + "      call stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &\n"
+        + "      ! jax_fluxtube_gk igh input trace patch: dump row-level coefficients.\n"
+        + "      call jax_fluxtube_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &\n"
         + "           & disp_s_dum,disp_v_dum,disp_par,disp_vp)\n"
     )
     if call_marker not in text:
@@ -590,16 +590,16 @@ def add_rhs_trace_exp_integration_patch(
     """Patch copied GKW time advancement to dump selected-mode RHS term actions."""
 
     text = exp_integration_path.read_text(encoding="utf-8")
-    if "stellarator_gk rhs trace exp_integration patch" in text:
-        if state_dump and "stellarator_gk rhs trace state dump" not in text:
+    if "jax_fluxtube_gk rhs trace exp_integration patch" in text:
+        if state_dump and "jax_fluxtube_gk rhs trace state dump" not in text:
             raise ValueError(
                 f"{exp_integration_path} is already patched without rhs trace state dump"
             )
-        if internal_apply and "stellarator_gk rhs trace internal apply" not in text:
+        if internal_apply and "jax_fluxtube_gk rhs trace internal apply" not in text:
             raise ValueError(
                 f"{exp_integration_path} is already patched without internal apply dump"
             )
-        if igh_matrix_dump and "stellarator_gk igh matrix dump" not in text:
+        if igh_matrix_dump and "jax_fluxtube_gk igh matrix dump" not in text:
             raise ValueError(
                 f"{exp_integration_path} is already patched without igh matrix dump"
             )
@@ -617,12 +617,12 @@ def add_rhs_trace_exp_integration_patch(
     )
     call_patch = (
         call_marker
-        + "  ! stellarator_gk rhs trace exp_integration patch: write selected-mode\n"
+        + "  ! jax_fluxtube_gk rhs trace exp_integration patch: write selected-mode\n"
         + "  ! dtim-scaled term actions after end-of-window normalization.\n"
-        + ("  call stellarator_gk_rhs_trace_state_output\n" if state_dump else "")
-        + ("  call stellarator_gk_rhs_apply_output\n" if internal_apply else "")
-        + ("  call stellarator_gk_igh_matrix_output\n" if igh_matrix_dump else "")
-        + "  call stellarator_gk_rhs_trace_output\n\n"
+        + ("  call jax_fluxtube_gk_rhs_trace_state_output\n" if state_dump else "")
+        + ("  call jax_fluxtube_gk_rhs_apply_output\n" if internal_apply else "")
+        + ("  call jax_fluxtube_gk_igh_matrix_output\n" if igh_matrix_dump else "")
+        + "  call jax_fluxtube_gk_rhs_trace_output\n\n"
     )
     if call_marker not in text:
         raise ValueError(
@@ -649,7 +649,7 @@ def add_rhs_trace_exp_integration_patch(
 
 
 IGH_INPUT_TRACE_SUBROUTINE = r"""
-subroutine stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
+subroutine jax_fluxtube_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
      & disp_s_dum,disp_v_dum,disp_par,disp_vp)
 
   use geom,         only : ffun, sgr_dist, gfun, bn
@@ -681,7 +681,7 @@ subroutine stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
   end do
 
   call get_free_lun(lun)
-  open(lun, FILE='stellarator_gk_igh_inputs.dat', STATUS='unknown', &
+  open(lun, FILE='jax_fluxtube_gk_igh_inputs.dat', STATUS='unknown', &
        & POSITION='append')
   if (.not. header_written) then
      write(lun,'(A)') '# imod ix is iz imu ivpar ist dum dum2 disp_s_dum ' // &
@@ -701,12 +701,12 @@ subroutine stellarator_gk_igh_input_output(imod,ix,is,i,j,k,ist,dum,dum2, &
        & (hbuf(hindex), hindex = 1, 25)
   close(lun)
 
-end subroutine stellarator_gk_igh_input_output
+end subroutine jax_fluxtube_gk_igh_input_output
 """
 
 
 INITIAL_STATE_DUMP_SUBROUTINE = r"""
-subroutine stellarator_gk_initial_state_output(label)
+subroutine jax_fluxtube_gk_initial_state_output(label)
 
   use control,      only : time, ntotstep
   use dist,         only : fdisi, nsolc, phi, get_phi, indx
@@ -722,7 +722,7 @@ subroutine stellarator_gk_initial_state_output(label)
   call get_phi(fdisi(1:nsolc), phi)
 
   if (root_processor) then
-     write(dump_file,'("stellarator_gk_initial_state_",A,".dat")') trim(label)
+     write(dump_file,'("jax_fluxtube_gk_initial_state_",A,".dat")') trim(label)
      call get_free_lun(lun)
      open(lun, FILE=trim(dump_file), STATUS='unknown')
      write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
@@ -740,12 +740,12 @@ subroutine stellarator_gk_initial_state_output(label)
      close(lun)
   end if
 
-end subroutine stellarator_gk_initial_state_output
+end subroutine jax_fluxtube_gk_initial_state_output
 """
 
 
 STATE_TRACE_SUBROUTINE = r"""
-subroutine stellarator_gk_state_trace_output
+subroutine jax_fluxtube_gk_state_trace_output
 
   use control,      only : time, ntotstep
   use dist,         only : fdisi, nf, nsolc, phi, get_phi
@@ -776,7 +776,7 @@ subroutine stellarator_gk_state_trace_output
 
   if (root_processor) then
      call get_free_lun(lun)
-     open(lun, FILE='stellarator_gk_state_trace.dat', STATUS='unknown', &
+     open(lun, FILE='jax_fluxtube_gk_state_trace.dat', STATUS='unknown', &
           & POSITION='append')
      if (.not. header_written) then
         write(lun,'(A)') '# step time state_norm phi_norm'
@@ -786,12 +786,12 @@ subroutine stellarator_gk_state_trace_output
      close(lun)
   end if
 
-end subroutine stellarator_gk_state_trace_output
+end subroutine jax_fluxtube_gk_state_trace_output
 """
 
 
 SELECTED_STATE_DUMP_SUBROUTINE = r"""
-subroutine stellarator_gk_selected_state_dump_output
+subroutine jax_fluxtube_gk_selected_state_dump_output
 
   use control,      only : time, ntotstep
   use dist,         only : fdisi, nsolc, phi, get_phi, indx
@@ -806,7 +806,7 @@ subroutine stellarator_gk_selected_state_dump_output
   call get_phi(fdisi(1:nsolc), phi)
 
   if (root_processor) then
-     write(dump_file,'("stellarator_gk_selected_state_",I8.8,".dat")') ntotstep
+     write(dump_file,'("jax_fluxtube_gk_selected_state_",I8.8,".dat")') ntotstep
      call get_free_lun(lun)
      open(lun, FILE=trim(dump_file), STATUS='unknown')
      write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
@@ -824,26 +824,26 @@ subroutine stellarator_gk_selected_state_dump_output
      close(lun)
   end if
 
-end subroutine stellarator_gk_selected_state_dump_output
+end subroutine jax_fluxtube_gk_selected_state_dump_output
 """
 
 
 def _rhs_trace_subroutine(steps: tuple[int, ...]) -> str:
     keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
     return rf"""
-subroutine stellarator_gk_rhs_trace_output
+subroutine jax_fluxtube_gk_rhs_trace_output
 
   use control,      only : time, ntotstep, dtim
   use dist,         only : fdisi, indx, nsolc
   use grid,         only : ns, nmu, nvpar
   use io,           only : get_free_lun
-  use matdat,       only : mat, ii, jj, n2, source, stellarator_gk_mat_term, &
-       & stellarator_gk_source_by_term, stellarator_gk_n_trace_terms
+  use matdat,       only : mat, ii, jj, n2, source, jax_fluxtube_gk_mat_term, &
+       & jax_fluxtube_gk_source_by_term, jax_fluxtube_gk_n_trace_terms
   use mpiinterface, only : root_processor
 
   integer :: iz, imu, ivpar, irow, elem, term_id, term, lun
   character (len=64) :: trace_file
-  complex :: action(0:stellarator_gk_n_trace_terms)
+  complex :: action(0:jax_fluxtube_gk_n_trace_terms)
   complex :: total_action
   logical :: keep_snapshot
 
@@ -852,7 +852,7 @@ subroutine stellarator_gk_rhs_trace_output
   if (.not. keep_snapshot) return
 
   if (root_processor) then
-     write(trace_file,'("stellarator_gk_rhs_trace_",I8.8,".dat")') ntotstep
+     write(trace_file,'("jax_fluxtube_gk_rhs_trace_",I8.8,".dat")') ntotstep
      call get_free_lun(lun)
      open(lun, FILE=trim(trace_file), STATUS='unknown')
      write(lun,'(A)') '# step time iz imu ivpar real_total imag_total ' // &
@@ -867,13 +867,13 @@ subroutine stellarator_gk_rhs_trace_output
            do ivpar = 1, nvpar
               irow = indx(1,1,iz,imu,ivpar,1)
               action = (0.,0.)
-              do term = 0, stellarator_gk_n_trace_terms
-                 action(term) = action(term) + dtim*stellarator_gk_source_by_term(irow,term)
+              do term = 0, jax_fluxtube_gk_n_trace_terms
+                 action(term) = action(term) + dtim*jax_fluxtube_gk_source_by_term(irow,term)
               end do
               do elem = 1, n2
                  if (ii(elem) .eq. irow) then
-                    term_id = stellarator_gk_mat_term(elem)
-                    if (term_id .lt. 0 .or. term_id .gt. stellarator_gk_n_trace_terms) then
+                    term_id = jax_fluxtube_gk_mat_term(elem)
+                    if (term_id .lt. 0 .or. term_id .gt. jax_fluxtube_gk_n_trace_terms) then
                        term_id = 0
                     endif
                     if (jj(elem) .ge. 1 .and. jj(elem) .le. nsolc) then
@@ -882,28 +882,28 @@ subroutine stellarator_gk_rhs_trace_output
                  endif
               end do
               total_action = (0.,0.)
-              do term = 0, stellarator_gk_n_trace_terms
+              do term = 0, jax_fluxtube_gk_n_trace_terms
                  total_action = total_action + action(term)
               end do
               write(lun,'(I12,1X,1PE22.14,3(1X,I8),20(1X,1PE22.14))') &
                    & ntotstep, time, iz, imu, ivpar, real(total_action), &
                    & aimag(total_action), &
                    & (real(action(term)), aimag(action(term)), &
-                   &  term = 0, stellarator_gk_n_trace_terms)
+                   &  term = 0, jax_fluxtube_gk_n_trace_terms)
            end do
         end do
      end do
      close(lun)
   end if
 
-end subroutine stellarator_gk_rhs_trace_output
+end subroutine jax_fluxtube_gk_rhs_trace_output
 """
 
 
 def _rhs_trace_state_subroutine(steps: tuple[int, ...]) -> str:
     keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
     return rf"""
-subroutine stellarator_gk_rhs_trace_state_output
+subroutine jax_fluxtube_gk_rhs_trace_state_output
 
   use control,      only : time, ntotstep
   use dist,         only : fdisi, indx, nsolc, phi, get_phi
@@ -916,8 +916,8 @@ subroutine stellarator_gk_rhs_trace_state_output
   complex :: fval, phival
   logical :: keep_snapshot
 
-  ! stellarator_gk rhs trace state dump: write the selected state at the same
-  ! post-normalization timing used by stellarator_gk_rhs_trace_output.
+  ! jax_fluxtube_gk rhs trace state dump: write the selected state at the same
+  ! post-normalization timing used by jax_fluxtube_gk_rhs_trace_output.
   keep_snapshot = .false.
 {keep_checks}
   if (.not. keep_snapshot) return
@@ -925,7 +925,7 @@ subroutine stellarator_gk_rhs_trace_state_output
   call get_phi(fdisi(1:nsolc), phi)
 
   if (root_processor) then
-     write(state_file,'("stellarator_gk_rhs_state_",I8.8,".dat")') ntotstep
+     write(state_file,'("jax_fluxtube_gk_rhs_state_",I8.8,".dat")') ntotstep
      call get_free_lun(lun)
      open(lun, FILE=trim(state_file), STATUS='unknown')
      write(lun,'(A)') '# step time iz imu ivpar real_f imag_f real_phi imag_phi'
@@ -943,14 +943,14 @@ subroutine stellarator_gk_rhs_trace_state_output
      close(lun)
   end if
 
-end subroutine stellarator_gk_rhs_trace_state_output
+end subroutine jax_fluxtube_gk_rhs_trace_state_output
 """
 
 
 def _rhs_trace_apply_subroutine(steps: tuple[int, ...]) -> str:
     keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
     return rf"""
-subroutine stellarator_gk_rhs_apply_output
+subroutine jax_fluxtube_gk_rhs_apply_output
 
   use control,      only : time, ntotstep
   use dist,         only : fdisi, indx, nsolc
@@ -963,18 +963,18 @@ subroutine stellarator_gk_rhs_apply_output
   complex, allocatable :: rhs_internal(:)
   logical :: keep_snapshot
 
-  ! stellarator_gk rhs trace internal apply: run GKW calculate_rhs on the
+  ! jax_fluxtube_gk rhs trace internal apply: run GKW calculate_rhs on the
   ! post-normalization state and dump the actual selected-row RHS totals.
   keep_snapshot = .false.
 {keep_checks}
   if (.not. keep_snapshot) return
 
   allocate(rhs_internal(nsolc), stat=ierr)
-  if (ierr .ne. 0) stop 'Could not allocate rhs_internal in stellarator_gk_rhs_apply_output'
+  if (ierr .ne. 0) stop 'Could not allocate rhs_internal in jax_fluxtube_gk_rhs_apply_output'
   call calculate_rhs(fdisi, rhs_internal)
 
   if (root_processor) then
-     write(apply_file,'("stellarator_gk_rhs_apply_",I8.8,".dat")') ntotstep
+     write(apply_file,'("jax_fluxtube_gk_rhs_apply_",I8.8,".dat")') ntotstep
      call get_free_lun(lun)
      open(lun, FILE=trim(apply_file), STATUS='unknown')
      write(lun,'(A)') '# step time iz imu ivpar real_calculate_rhs imag_calculate_rhs'
@@ -993,20 +993,20 @@ subroutine stellarator_gk_rhs_apply_output
 
   deallocate(rhs_internal)
 
-end subroutine stellarator_gk_rhs_apply_output
+end subroutine jax_fluxtube_gk_rhs_apply_output
 """
 
 
 def _igh_matrix_dump_subroutine(steps: tuple[int, ...]) -> str:
     keep_checks = "\n".join(f"  if (ntotstep .eq. {step}) keep_snapshot = .true." for step in steps)
     return rf"""
-subroutine stellarator_gk_igh_matrix_output
+subroutine jax_fluxtube_gk_igh_matrix_output
 
   use control,      only : time, ntotstep
   use dist,         only : indx, nsolc
   use grid,         only : ns, nmu, nvpar
   use io,           only : get_free_lun
-  use matdat,       only : mat, ii, jj, n2, stellarator_gk_mat_term
+  use matdat,       only : mat, ii, jj, n2, jax_fluxtube_gk_mat_term
   use mpiinterface, only : root_processor
 
   integer :: iz, imu, ivpar, elem, row_index, col_index, lun, ierr
@@ -1015,7 +1015,7 @@ subroutine stellarator_gk_igh_matrix_output
   character (len=64) :: matrix_file
   logical :: keep_snapshot
 
-  ! stellarator_gk igh matrix dump: dump compressed selected-row matrix
+  ! jax_fluxtube_gk igh matrix dump: dump compressed selected-row matrix
   ! entries tagged as igh_or_term_i after matdat compression/sorting.
   keep_snapshot = .false.
 {keep_checks}
@@ -1023,7 +1023,7 @@ subroutine stellarator_gk_igh_matrix_output
   if (.not. root_processor) return
 
   allocate(map_iz(nsolc), map_imu(nsolc), map_ivpar(nsolc), stat=ierr)
-  if (ierr .ne. 0) stop 'Could not allocate index maps in stellarator_gk_igh_matrix_output'
+  if (ierr .ne. 0) stop 'Could not allocate index maps in jax_fluxtube_gk_igh_matrix_output'
   map_iz = -1
   map_imu = -1
   map_ivpar = -1
@@ -1041,7 +1041,7 @@ subroutine stellarator_gk_igh_matrix_output
      end do
   end do
 
-  write(matrix_file,'("stellarator_gk_igh_matrix_",I8.8,".dat")') ntotstep
+  write(matrix_file,'("jax_fluxtube_gk_igh_matrix_",I8.8,".dat")') ntotstep
   call get_free_lun(lun)
   open(lun, FILE=trim(matrix_file), STATUS='unknown')
   write(lun,'(A)') '# step time elem row_index col_index row_iz row_imu row_ivpar ' // &
@@ -1050,7 +1050,7 @@ subroutine stellarator_gk_igh_matrix_output
   do elem = 1, n2
      row_index = ii(elem)
      col_index = jj(elem)
-     term_id = stellarator_gk_mat_term(elem)
+     term_id = jax_fluxtube_gk_mat_term(elem)
      if (term_id .eq. 1 .and. row_index .ge. 1 .and. row_index .le. nsolc) then
         if (map_iz(row_index) .gt. 0) then
            if (col_index .ge. 1 .and. col_index .le. nsolc) then
@@ -1072,7 +1072,7 @@ subroutine stellarator_gk_igh_matrix_output
 
   deallocate(map_iz, map_imu, map_ivpar)
 
-end subroutine stellarator_gk_igh_matrix_output
+end subroutine jax_fluxtube_gk_igh_matrix_output
 """
 
 
@@ -1086,21 +1086,21 @@ def _ignore_generated_gkw_files(_directory: str, names: list[str]) -> set[str]:
         "phi.dat",
         "fluxes.dat",
         "screen.out",
-        "stellarator_gk_state_trace.dat",
-        "stellarator_gk_igh_inputs.dat",
-        "stellarator_gk_initial_state_pre_normalize.dat",
-        "stellarator_gk_initial_state_post_normalize.dat",
+        "jax_fluxtube_gk_state_trace.dat",
+        "jax_fluxtube_gk_igh_inputs.dat",
+        "jax_fluxtube_gk_initial_state_pre_normalize.dat",
+        "jax_fluxtube_gk_initial_state_post_normalize.dat",
     }
     suffixes = (".o", ".mod", ".smod", ".log")
     return {
         name
         for name in names
         if name in generated_names
-        or name.startswith("stellarator_gk_selected_state_")
-        or name.startswith("stellarator_gk_rhs_trace_")
-        or name.startswith("stellarator_gk_rhs_state_")
-        or name.startswith("stellarator_gk_rhs_apply_")
-        or name.startswith("stellarator_gk_igh_matrix_")
+        or name.startswith("jax_fluxtube_gk_selected_state_")
+        or name.startswith("jax_fluxtube_gk_rhs_trace_")
+        or name.startswith("jax_fluxtube_gk_rhs_state_")
+        or name.startswith("jax_fluxtube_gk_rhs_apply_")
+        or name.startswith("jax_fluxtube_gk_igh_matrix_")
         or name.endswith(suffixes)
         or name == "__pycache__"
     }
@@ -1141,7 +1141,7 @@ The copied `src/diagnostic.F90` was also patched to write a compact state trace
 at every normal diagnostic output window:
 
 ```text
-stellarator_gk_state_trace.dat
+jax_fluxtube_gk_state_trace.dat
 ```
 
 The columns are `step`, `time`, `state_norm`, and `phi_norm`.
@@ -1152,8 +1152,8 @@ The copied `src/diagnostic.F90` was also patched to write the full selected
 single-mode state at every normal diagnostic output window:
 
 ```text
-stellarator_gk_selected_state_00000020.dat
-stellarator_gk_selected_state_00000040.dat
+jax_fluxtube_gk_selected_state_00000020.dat
+jax_fluxtube_gk_selected_state_00000040.dat
 ...
 ```
 
@@ -1166,12 +1166,12 @@ The copied `src/exp_integration.F90` was also patched to write the selected
 single-mode state immediately before and after the first `normalize(2)` call:
 
 ```text
-stellarator_gk_initial_state_pre_normalize.dat
-stellarator_gk_initial_state_post_normalize.dat
+jax_fluxtube_gk_initial_state_pre_normalize.dat
+jax_fluxtube_gk_initial_state_post_normalize.dat
 ```
 
 Each row uses the same selected-state columns as
-`stellarator_gk_selected_state_<step>.dat`, with `step=0` and `time=0` for the
+`jax_fluxtube_gk_selected_state_<step>.dat`, with `step=0` and `time=0` for the
 initialization contract.
 """
     if rhs_trace:
@@ -1183,9 +1183,9 @@ source term and write selected-mode dtim-scaled RHS/source actions at steps
 {step_list}:
 
 ```text
-stellarator_gk_rhs_trace_00000020.dat
-stellarator_gk_rhs_trace_00000800.dat
-stellarator_gk_rhs_trace_00001600.dat
+jax_fluxtube_gk_rhs_trace_00000020.dat
+jax_fluxtube_gk_rhs_trace_00000800.dat
+jax_fluxtube_gk_rhs_trace_00001600.dat
 ```
 
 Each row stores `step`, `time`, one-based `(z, mu, vpar)` indices, the total
@@ -1202,9 +1202,9 @@ The RHS trace patch also writes same-timing selected states from
 the RHS action trace:
 
 ```text
-stellarator_gk_rhs_state_00000020.dat
-stellarator_gk_rhs_state_00000800.dat
-stellarator_gk_rhs_state_00001600.dat
+jax_fluxtube_gk_rhs_state_00000020.dat
+jax_fluxtube_gk_rhs_state_00000800.dat
+jax_fluxtube_gk_rhs_state_00001600.dat
 ```
 
 These files use the selected-state row format and are intended as a
@@ -1216,9 +1216,9 @@ The RHS trace patch also writes an internal `calculate_rhs` total-action trace
 on the same post-normalization state:
 
 ```text
-stellarator_gk_rhs_apply_00000020.dat
-stellarator_gk_rhs_apply_00000800.dat
-stellarator_gk_rhs_apply_00001600.dat
+jax_fluxtube_gk_rhs_apply_00000020.dat
+jax_fluxtube_gk_rhs_apply_00000800.dat
+jax_fluxtube_gk_rhs_apply_00001600.dat
 ```
 
 These files record the selected-row totals returned by GKW's own
@@ -1232,9 +1232,9 @@ The RHS trace patch also writes compressed selected-row `igh_or_term_i` matrix
 entries after GKW matrix construction/compression:
 
 ```text
-stellarator_gk_igh_matrix_00000020.dat
-stellarator_gk_igh_matrix_00000800.dat
-stellarator_gk_igh_matrix_00001600.dat
+jax_fluxtube_gk_igh_matrix_00000020.dat
+jax_fluxtube_gk_igh_matrix_00000800.dat
+jax_fluxtube_gk_igh_matrix_00001600.dat
 ```
 
 Each row stores the compressed element number, raw row/column indices,
@@ -1248,7 +1248,7 @@ The copied `src/linear_terms.F90` was also patched to write row-level
 `igh` coefficient inputs during matrix construction:
 
 ```text
-stellarator_gk_igh_inputs.dat
+jax_fluxtube_gk_igh_inputs.dat
 ```
 
 Each row stores selected-mode one-based `(z, mu, vpar)`, boundary position
@@ -1256,7 +1256,7 @@ class, `dum`, `dum2`, recurrence-control inputs, local spacing/geometric
 factors, and the valid local `HH` stencil values used by the Arakawa
 coefficient construction.
 """
-    readme = output_root / "README_stellarator_gk_cosin2.md"
+    readme = output_root / "README_jax_fluxtube_gk_cosin2.md"
     readme.write_text(
         f"""# Patched GKW `cosin2` Run
 
@@ -1302,12 +1302,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--state-trace",
         action="store_true",
-        help="Patch copied GKW diagnostics to write stellarator_gk_state_trace.dat.",
+        help="Patch copied GKW diagnostics to write jax_fluxtube_gk_state_trace.dat.",
     )
     parser.add_argument(
         "--selected-state-dump",
         action="store_true",
-        help="Patch copied GKW diagnostics to write stellarator_gk_selected_state_<step>.dat.",
+        help="Patch copied GKW diagnostics to write jax_fluxtube_gk_selected_state_<step>.dat.",
     )
     parser.add_argument(
         "--initial-state-dump",
@@ -1320,14 +1320,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rhs-trace",
         action="store_true",
-        help="Patch copied GKW to write selected-mode stellarator_gk_rhs_trace_<step>.dat.",
+        help="Patch copied GKW to write selected-mode jax_fluxtube_gk_rhs_trace_<step>.dat.",
     )
     parser.add_argument(
         "--rhs-trace-state-dump",
         action="store_true",
         help=(
             "With --rhs-trace, also write same-timing "
-            "stellarator_gk_rhs_state_<step>.dat selected states."
+            "jax_fluxtube_gk_rhs_state_<step>.dat selected states."
         ),
     )
     parser.add_argument(
@@ -1335,7 +1335,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "With --rhs-trace, also write "
-            "stellarator_gk_rhs_apply_<step>.dat calculate_rhs totals."
+            "jax_fluxtube_gk_rhs_apply_<step>.dat calculate_rhs totals."
         ),
     )
     parser.add_argument(
@@ -1343,7 +1343,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "With --rhs-trace, also write compressed selected-row "
-            "stellarator_gk_igh_matrix_<step>.dat coefficient dumps."
+            "jax_fluxtube_gk_igh_matrix_<step>.dat coefficient dumps."
         ),
     )
     parser.add_argument(
@@ -1351,7 +1351,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "With --rhs-trace, also write selected-row "
-            "stellarator_gk_igh_inputs.dat construction inputs."
+            "jax_fluxtube_gk_igh_inputs.dat construction inputs."
         ),
     )
     parser.add_argument(
@@ -1373,7 +1373,7 @@ def _parse_step_list(value: str) -> tuple[int, ...]:
 
 def main() -> None:
     args = _parse_args()
-    from stellarator_gk.external import announce_external_path
+    from jax_fluxtube_gk.external import announce_external_path
 
     announce_external_path("GKW source", args.source_root)
     prepared = prepare_gkw_cosine2_run(

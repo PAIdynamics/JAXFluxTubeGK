@@ -1,14 +1,15 @@
-# TODO: Differentiable Flux-Tube Stellarator GK Solver
+# TODO: JAXFluxTubeGK
 
 Last reviewed: 2026-08-06
 
 ## Goal
 
-Build `optimal-fusion` as a standalone JAX package for differentiable, local
-flux-tube gyrokinetics in stellarator design.  The package must own its solver,
-geometry data contract, fixtures, and core tests.  MHD and reference
-gyrokinetic codes must remain separately installable providers or validation
-tools, not copied source trees or implicit runtime dependencies.
+Build JAXFluxTubeGK (`jax-fluxtube-gk`) as a standalone JAX package for
+differentiable, local flux-tube gyrokinetics in magnetic-confinement design.
+The package must own its solver, geometry data contract, fixtures, and core
+tests. MHD and reference gyrokinetic codes must remain separately installable
+providers or validation tools, not copied source trees or implicit runtime
+dependencies.
 
 The current scientific milestone remains a trusted, externally validated
 linear electrostatic W7-X run.  Nonlinear turbulence, collisions,
@@ -18,7 +19,7 @@ later milestones.
 Keep the workflow simple:
 
 1. Specify physics and numerics in `tex/main.tex`.
-2. Implement reusable package functionality in `src/stellarator_gk/`.
+2. Implement reusable package functionality in `src/jax_fluxtube_gk/`.
 3. Add focused, self-contained tests for each public contract.
 4. Keep external-code comparisons reproducible through explicit paths,
    versions, and generated fixtures.
@@ -43,7 +44,7 @@ Repository cleanup already completed:
 
 - [x] Remove tracked copies of external codes and papers from this repository.
 - [x] Keep DESC, GX, stella, GKW, Gyaradax, VMEC++, GVEC, and papers as sibling
-  repositories/reference material outside `optimal-fusion`.
+  repositories/reference material outside `jax-fluxtube-gk`.
 - [x] Move the project TeX sources to `tex/`.
 - [x] Add a pinned external dependency manifest and bootstrapper with separate
   `mhd`, Python-validation, and native-validation profiles; managed content is
@@ -73,7 +74,7 @@ Standalone acceptance on 2026-08-05:
 
 - [x] Remove all hard-coded `relevant-codes/...` defaults from tracked Python,
   tests, README files, and fixture metadata.  Never resolve a dependency by its
-  location relative to the `optimal-fusion` checkout.
+  location relative to the `jax-fluxtube-gk` checkout.
 - [x] First restore a green standalone suite by fixing the 13 known failures:
   replace three Gyaradax source-reading tests, eight GX input/eik tests, and two
   stella source-patching tests with synthetic/compact contracts or explicitly
@@ -102,7 +103,7 @@ Standalone acceptance on 2026-08-05:
   repositories available.
 - [x] Add an sdist/wheel smoke test and verify installed-package workflows do
   not depend on repository-relative files.
-- [x] Stop tracking `src/stellarator_gk.egg-info/`; build metadata must be
+- [x] Stop tracking `src/jax_fluxtube_gk.egg-info/`; build metadata must be
   generated and ignored.
 - [x] Decide whether provider packages should remain manifest-installed or
   also be exposed as PEP 508 extras. Add NetCDF4/reader extras as needed. The
@@ -560,7 +561,7 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   correctly reports `stationary=false`; it is plumbing evidence, not a
   turbulence result. Schema-v1 local/GX loaders and a shared acceptance layer
   now require stationary low-uncertainty windows, normalized mean-flux parity,
-  and stationary finest-pair convergence. Historical `optimal_fusion_native`
+  and stationary finest-pair convergence. Historical `jax_fluxtube_gk_native`
   reports remain intentionally incompatible with GX; new acceptance runs must
   select the source-matched `gx_total_energy` moment. Long resolution and box
   ladders are the active numerical blocker. The first driven `8x8x4`, `5x3`
@@ -842,9 +843,9 @@ shape-optimization claims named above pass.
   import cycles; preserve report/fixture schemas; and pass the standalone suite.
 - [x] Keep benchmark-only symbols out of the default top-level import path;
   expose a compact solver API and a separate validation namespace. A fresh
-  `import stellarator_gk` no longer loads `stellarator_gk.benchmarks`, benchmark
+  `import jax_fluxtube_gk` no longer loads `jax_fluxtube_gk.benchmarks`, benchmark
   symbols are absent from `__all__`, and legacy attribute imports resolve lazily
-  while callers migrate to `stellarator_gk.validation`.
+  while callers migrate to `jax_fluxtube_gk.validation`.
 - [x] Replace historical `Phase N` docstrings with subsystem descriptions and
   document which APIs are stable at version `0.1.x`. The stable solver,
   provider/schema, opt-in validation, compatibility, and experimental surfaces
@@ -864,7 +865,7 @@ with **572 tests passed and 25 external tests deselected**.
 
 ## Project Rules
 
-- `optimal-fusion` must never require a particular sibling-directory layout.
+- `jax-fluxtube-gk` must never require a particular sibling-directory layout.
 - External codes are optional producers and validators; their source is not
   part of this package.
 - `tex/main.tex` is the concise physics/numerics source of truth.

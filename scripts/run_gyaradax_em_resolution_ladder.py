@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from stellarator_gk import (
+from jax_fluxtube_gk import (
     compare_tem_resolution_ladder,
     gyaradax_tem_case_spec,
     load_tem_external_reference,
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     payload = {
         "schema_version": 1,
-        "producer": "optimal-fusion/gyaradax-electromagnetic-resolution-ladder",
+        "producer": "jax-fluxtube-gk/gyaradax-electromagnetic-resolution-ladder",
         "profile": args.profile if args.resolutions == list(RESOLUTION_PROFILES[args.profile]) else "custom",
         "beta": args.beta,
         "dt": args.dt,

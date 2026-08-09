@@ -96,7 +96,7 @@ def test_prepare_gx_nonlinear_run_is_revision_pinned_and_external(tmp_path) -> N
     assert manifest["gx_revision"] == revision
     assert manifest["case_contract"]["ky_min"] == pytest.approx(0.1)
     assert "--expected-revision" in manifest["summary_command"]
-    assert (output / "optimal_fusion_cyclone_nonlinear.in").exists()
+    assert (output / "jax_fluxtube_gk_cyclone_nonlinear.in").exists()
 
     with pytest.raises(RuntimeError, match="revision mismatch"):
         prepare_gx_nonlinear_heat_flux_run(
