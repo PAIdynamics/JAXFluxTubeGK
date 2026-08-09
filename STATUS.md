@@ -51,6 +51,8 @@ claimed.
   accepted scope. Nonlinear electromagnetic evolution, independent GX parity,
   the next domain rung, and unrestricted equilibrium-shape optimization remain
   explicit future work.
+- Final standalone verification passes with x64 enabled: repository-wide Ruff
+  is clean and pytest reports `608 passed, 25 deselected` in 632.86 seconds.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 
