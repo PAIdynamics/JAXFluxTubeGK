@@ -243,6 +243,11 @@ claimed.
 - Ruff and focused type, grid, performance, linear-residual, import,
   validation, reference, and optimization tests pass after the API boundary
   changes.
+- Audited the GKW fixture set: the retained selected slices total 178,763 bytes
+  and each is below 64 KiB. They cover distinct profile, velocity, time, and
+  selected-state conventions consumed by tests; no raw native run is tracked.
+  Added a fixture policy, archival ignore/source-manifest exclusions, and
+  regression size/name gates. The fixture/reference suite passes.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

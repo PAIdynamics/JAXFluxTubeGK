@@ -14,6 +14,13 @@ dist/
 # External codes are separately installed dependencies, never vendored here.
 relevant-codes/
 
+# Native solver archives stay in caller-owned storage; commit only selected
+# compact regression contracts described in docs/fixture_policy.md.
+fixtures/raw/
+fixtures/archive/
+fixtures/**/raw/
+fixtures/**/archive/
+
 # Generated external W7-X reference-run artifacts.
 fixtures/gx_w7x_mode_structure_run/*.tar.gz
 fixtures/gx_w7x_mode_structure_run/wout_*.nc

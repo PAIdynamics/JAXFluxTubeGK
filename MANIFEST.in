@@ -1,0 +1,5 @@
+prune fixtures/raw
+prune fixtures/archive
+recursive-exclude fixtures */raw/*
+recursive-exclude fixtures */archive/*
+global-exclude *.out.nc *.final_fields *.fluxes *.omega

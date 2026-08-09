@@ -845,9 +845,13 @@ shape-optimization claims named above pass.
   document which APIs are stable at version `0.1.x`. The stable solver,
   provider/schema, opt-in validation, compatibility, and experimental surfaces
   are defined in `docs/api_stability.md` and linked from the README.
-- [ ] Decide which large GKW traces are essential compact regression contracts,
+- [x] Decide which large GKW traces are essential compact regression contracts,
   regenerate smaller selected slices where possible, and move archival raw
-  traces out of the source distribution.
+  traces out of the source distribution. The retained selected-ky potential,
+  velocity-slice, multitime, state/RHS/matrix, time, and input contracts total
+  `178,763` bytes and are directly consumed by regression tests. No raw run is
+  tracked. `docs/fixture_policy.md`, ignore/manifest rules, and a `200 kB`
+  aggregate/`64 KiB` per-file regression budget enforce the decision.
 
 ## Project Rules
 
