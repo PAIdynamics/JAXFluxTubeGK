@@ -61,7 +61,12 @@ def gx_flux_stationary(
 ) -> bool:
     """Apply the declared flux-only stationarity gate to a GX summary."""
 
-    if min(max_relative_drift, max_relative_standard_error, min_window_duration) <= 0.0:
+    floating_controls = (
+        max_relative_drift,
+        max_relative_standard_error,
+        min_window_duration,
+    )
+    if not all(np.isfinite(value) and value > 0.0 for value in floating_controls):
         raise ValueError("GX stationarity tolerances and duration must be positive")
     if min_samples < 2 or min_blocks < 1:
         raise ValueError("GX stationarity requires samples and physical-time blocks")
@@ -161,7 +166,9 @@ def main(argv: list[str] | None = None) -> None:
         "normalization": "gx_Q_over_Q_GB",
         "revision": revision,
         "source_netcdf": str(netcdf),
-        "run_manifest": str(args.run_manifest.expanduser().resolve()) if args.run_manifest else None,
+        "run_manifest": str(args.run_manifest.expanduser().resolve())
+        if args.run_manifest
+        else None,
         "case": case_contract,
         "species_index": args.species_index,
         "start_fraction": args.start_fraction,

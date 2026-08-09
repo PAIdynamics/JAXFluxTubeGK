@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import shlex
@@ -17,9 +18,7 @@ PINNED_GX_REVISION = "bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5"
 
 
 def _replace_scalar(text: str, section: str, name: str, value: str) -> str:
-    pattern = re.compile(
-        rf"(?ms)(^\s*\[{re.escape(section)}\]\s*$.*?)(?=^\s*\[|\Z)"
-    )
+    pattern = re.compile(rf"(?ms)(^\s*\[{re.escape(section)}\]\s*$.*?)(?=^\s*\[|\Z)")
     match = pattern.search(text)
     if match is None:
         raise ValueError(f"GX input lacks [{section}] section")
@@ -47,9 +46,12 @@ def patch_gx_nonlinear_input(
 ) -> str:
     """Return a GX s-alpha input matched to the local nonlinear physics/box."""
 
-    if min(ntheta, nx, ny, nhermite, nlaguerre, random_seed, nwrite) < 1:
+    integer_controls = (ntheta, nx, ny, nhermite, nlaguerre, random_seed, nwrite)
+    if any(isinstance(value, bool) or not isinstance(value, int) for value in integer_controls):
+        raise ValueError("GX dimensions, seed, and diagnostic cadence must be integers")
+    if min(integer_controls) < 1:
         raise ValueError("GX dimensions, seed, and diagnostic cadence must be positive")
-    if y0 <= 0.0 or final_time <= 0.0:
+    if not all(math.isfinite(value) and value > 0.0 for value in (y0, final_time)):
         raise ValueError("GX y0 and final time must be positive")
     updates = (
         ("Dimensions", "ntheta", str(ntheta)),
@@ -126,7 +128,9 @@ def prepare_gx_nonlinear_heat_flux_run(
     digest = hashlib.sha256(patched.encode()).hexdigest()
     netcdf = prepared.with_suffix(".nc")
     summary = output_dir / "gx_nonlinear_heat_flux.json"
-    run_command = f"cd {shlex.quote(str(output_dir))} && {shlex.quote(gx_executable)} {prepared.name}"
+    run_command = (
+        f"cd {shlex.quote(str(output_dir))} && {shlex.quote(gx_executable)} {prepared.name}"
+    )
     summary_command = (
         f"{shlex.quote(str(ROOT / '.venv/bin/python'))} "
         f"{shlex.quote(str(ROOT / 'scripts/summarize_gx_nonlinear_heat_flux.py'))} "

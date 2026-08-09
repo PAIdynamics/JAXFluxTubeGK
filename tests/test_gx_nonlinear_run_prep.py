@@ -74,6 +74,15 @@ def test_patch_gx_nonlinear_input_matches_local_case() -> None:
     assert parsed["Diagnostics"]["fluxes"] is True
 
 
+@pytest.mark.parametrize(
+    "controls",
+    ({"y0": float("nan")}, {"final_time": float("inf")}, {"nx": 4.5}),
+)
+def test_patch_gx_nonlinear_input_rejects_invalid_controls(controls) -> None:
+    with pytest.raises(ValueError):
+        patch_gx_nonlinear_input(_INPUT, **controls)
+
+
 def test_prepare_gx_nonlinear_run_is_revision_pinned_and_external(tmp_path) -> None:
     gx_root = tmp_path / "gx"
     source = gx_root / "unit_tests/inputs"
@@ -82,7 +91,16 @@ def test_prepare_gx_nonlinear_run_is_revision_pinned_and_external(tmp_path) -> N
     subprocess.run(("git", "init", "-q"), cwd=gx_root, check=True)
     subprocess.run(("git", "add", "unit_tests/inputs/cyc_nl.in"), cwd=gx_root, check=True)
     subprocess.run(
-        ("git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture"),
+        (
+            "git",
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "fixture",
+        ),
         cwd=gx_root,
         check=True,
     )

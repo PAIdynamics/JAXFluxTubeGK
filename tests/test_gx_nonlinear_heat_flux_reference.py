@@ -57,3 +57,10 @@ def test_gx_heat_flux_reader_uses_documented_netcdf_groups(tmp_path):
 def test_gx_heat_flux_summary_rejects_invalid_traces(times, flux, message):
     with pytest.raises(ValueError, match=message):
         summarize_heat_flux(times, flux)
+
+
+@pytest.mark.parametrize("value", (float("nan"), float("inf")))
+def test_gx_stationarity_rejects_nonfinite_controls(value):
+    statistics = summarize_heat_flux(np.arange(8.0), np.ones(8), start_fraction=0.5)
+    with pytest.raises(ValueError, match="positive"):
+        gx_flux_stationary(statistics, max_relative_drift=value)
