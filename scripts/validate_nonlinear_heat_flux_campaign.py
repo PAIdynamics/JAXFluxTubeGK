@@ -51,12 +51,16 @@ def evaluate_campaign(
         raise ValueError("resolution and domain ladders each require at least two reports")
     resolution_contract = _validate_resolution_ladder(resolution_paths)
     domain_contract = _validate_domain_ladder(domain_paths)
+    cross_ladder_contract = _validate_cross_ladder_anchor(
+        resolution_paths[-1], domain_paths[0]
+    )
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
     parity_contract = _validate_reference_case(domain_paths[-1], reference_path)
     lineage_records = tuple(map(load_nonlinear_heat_flux_record, lineage_paths))
     lineage_producers_valid = all(record.producer in _LOCAL_PRODUCERS for record in lineage_records)
+    lineage_cases_valid = _validate_lineage_cases(lineage_paths, domain_paths[0])
     local_evidence_paths = tuple(dict.fromkeys((*resolution_paths, *domain_paths, *lineage_paths)))
     stationarity_evidence = {
         "local": [
@@ -110,20 +114,24 @@ def evaluate_campaign(
         "passed": (
             resolution_contract["passed"]
             and domain_contract["passed"]
+            and cross_ladder_contract["passed"]
             and resolution.passed
             and domain.passed
             and parity.passed
             and parity_contract["passed"]
             and ensemble.passed
             and lineage_producers_valid
+            and lineage_cases_valid
             and stationarity_evidence["passed"]
         ),
         "resolution_ladder_contract": resolution_contract,
         "domain_ladder_contract": domain_contract,
+        "cross_ladder_contract": cross_ladder_contract,
         "lineage_ensemble": asdict(ensemble),
         "lineage_producer_contract": {
-            "passed": lineage_producers_valid,
+            "passed": lineage_producers_valid and lineage_cases_valid,
             "allowed": sorted(_LOCAL_PRODUCERS),
+            "fixed_case": lineage_cases_valid,
         },
         "stationarity_evidence_contract": stationarity_evidence,
         "resolution_convergence": asdict(resolution),
@@ -252,6 +260,24 @@ def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
         "domain_expanded_without_lost_bandwidth": domain_expanded,
         "fourier_extents": list(extents),
     }
+
+
+def _validate_cross_ladder_anchor(resolution_path: Path, domain_path: Path) -> dict:
+    resolution = _case_contract(resolution_path)
+    domain = _case_contract(domain_path)
+    fixed_fourier = _same_values(resolution, domain, ("n_kx", "n_ky", "kx", "ky"))
+    fixed_physics = _same_values(resolution, domain, _PHYSICS_KEYS)
+    return {
+        "passed": fixed_fourier and fixed_physics,
+        "shared_base_fourier_grid": fixed_fourier,
+        "shared_physics": fixed_physics,
+    }
+
+
+def _validate_lineage_cases(paths: tuple[Path, ...], anchor_path: Path) -> bool:
+    anchor = _case_contract(anchor_path)
+    keys = (*_PHASE_RESOLUTION_KEYS, "n_kx", "n_ky", "kx", "ky", *_PHYSICS_KEYS)
+    return all(_same_values(anchor, _case_contract(path), keys) for path in paths)
 
 
 def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:

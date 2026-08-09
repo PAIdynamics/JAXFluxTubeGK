@@ -141,6 +141,8 @@ def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path
     assert report["independent_parity"]["passed"]
     assert report["resolution_ladder_contract"]["passed"]
     assert report["domain_ladder_contract"]["passed"]
+    assert report["cross_ladder_contract"]["passed"]
+    assert report["lineage_producer_contract"]["fixed_case"]
 
 
 def test_campaign_fails_closed_when_a_producer_rejected_a_rung(tmp_path):
@@ -273,6 +275,28 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
     )
     assert not spread_report["lineage_ensemble"]["passed"]
 
+    changed_case = _write_report(tmp_path / "changed-lineage.json", 4.0, seed=2)
+    payload = json.loads(changed_case.read_text())
+    payload["case"]["hyperdiffusion"] = 0.2
+    changed_case.write_text(json.dumps(payload))
+    case_report = evaluate_campaign(
+        (local, fine),
+        (local, wide),
+        _write_report(
+            tmp_path / "gx-case.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
+        lineage_paths=(
+            local,
+            changed_case,
+            _write_report(tmp_path / "case-third.json", 4.0, seed=3),
+        ),
+    )
+    assert not case_report["lineage_producer_contract"]["fixed_case"]
+    assert not case_report["passed"]
+
 
 def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
     coarse = _write_report(tmp_path / "coarse.json", 4.0)
@@ -319,6 +343,31 @@ def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
     )
     assert not physics_report["resolution_ladder_contract"]["fixed_physics"]
     assert not physics_report["passed"]
+
+    changed_domain_base = _write_report(tmp_path / "changed-domain-base.json", 4.0)
+    changed_domain_wide = _write_report(
+        tmp_path / "changed-domain-wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    for path in (changed_domain_base, changed_domain_wide):
+        payload = json.loads(path.read_text())
+        payload["case"]["collision_frequency"] = 0.1
+        path.write_text(json.dumps(payload))
+    cross_report = evaluate_campaign(
+        (coarse, _write_report(tmp_path / "cross-fine.json", 4.0, resolution=(16, 16, 8))),
+        (changed_domain_base, changed_domain_wide),
+        _write_report(
+            tmp_path / "gx-cross.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
+        lineage_paths=lineages,
+    )
+    assert not cross_report["cross_ladder_contract"]["shared_physics"]
+    assert not cross_report["passed"]
 
 
 def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
