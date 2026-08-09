@@ -3,6 +3,7 @@ import pytest
 from types import SimpleNamespace
 
 from examples.run_nonlinear_heat_flux import (
+    _candidate_window_amplitude_growth,
     _candidate_window_phi_growth,
     _checkpoint_contract,
     _hyperdiffusion,
@@ -64,9 +65,7 @@ def test_nonlinear_heat_flux_runner_rejects_even_kx(tmp_path):
         ("--final-time", "inf"),
     ),
 )
-def test_nonlinear_heat_flux_runner_rejects_invalid_physical_controls(
-    tmp_path, option, value
-):
+def test_nonlinear_heat_flux_runner_rejects_invalid_physical_controls(tmp_path, option, value):
     with pytest.raises(SystemExit):
         _parse_args(["--output", str(tmp_path / "result.json"), option, value])
 
@@ -108,6 +107,18 @@ def test_candidate_window_phi_growth_recovers_exponential_rate():
         np.exp(0.07 * times),
         rtol=2.0e-13,
     )
+
+
+@pytest.mark.parametrize(
+    ("amplitude", "times", "message"),
+    (
+        ([1.0, np.nan], [0.0, 1.0], "finite"),
+        ([1.0, 2.0], [0.0, 0.0], "strictly increase"),
+    ),
+)
+def test_candidate_window_growth_rejects_invalid_traces(amplitude, times, message):
+    with pytest.raises(ValueError, match=message):
+        _candidate_window_amplitude_growth(np.asarray(amplitude), np.asarray(times))
 
 
 def test_initial_state_does_not_seed_zonal_potential_by_default():

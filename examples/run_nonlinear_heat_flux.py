@@ -125,6 +125,10 @@ def _candidate_window_amplitude_growth(amplitude, times):
     window_times = jnp.asarray(times)
     if amplitude.ndim != 1 or window_times.shape != amplitude.shape or amplitude.size < 2:
         raise ValueError("amplitude and time traces must contain at least two matching samples")
+    if not bool(jnp.all(jnp.isfinite(amplitude))) or not bool(jnp.all(jnp.isfinite(window_times))):
+        raise ValueError("amplitude and time traces must be finite")
+    if bool(jnp.any(jnp.diff(window_times) <= 0.0)):
+        raise ValueError("candidate-window times must strictly increase")
     if bool(jnp.any(amplitude <= 0.0)):
         raise ValueError("amplitude trace must be positive")
     log_amplitude = jnp.log(jnp.maximum(amplitude, 1.0e-14))
