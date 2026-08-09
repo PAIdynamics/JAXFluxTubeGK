@@ -752,8 +752,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   complex128 time-20 bootstrap checkpoint after 572 steps. Its short startup
   window is intentionally nonstationary (mean `-3.70e-5`, `10.17%` block
   error, drift `-2.10`, field growth `0.103`) and is restart/feasibility
-  evidence only; long-time extensions remain. CUDA/GX execution is explicitly
-  deferred for now and is not counted as a passing independent parity result.
+  evidence only. A contract-identical time-20-to-40 continuation adds 572
+  steps and a valid finite checkpoint. It remains strongly growing (mean
+  `-0.00776`, `12.76%` block error, drift `-2.615`, field growth `0.1438`), and
+  the merged time-0-to-40 trace is also nonstationary. Long-time extensions
+  remain. CUDA/GX execution is explicitly deferred for now and is not counted
+  as a passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

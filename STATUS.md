@@ -293,6 +293,11 @@ claimed.
   `(12, 6, 12, 65, 33)` state shape. The short startup report is correctly
   nonstationary (mean `-3.70e-5`, `10.17%` block error, drift `-2.10`, field
   growth `0.103`); it establishes a recoverable feasible rung, not convergence.
+- Extended the same rung from time 20 to 40 in another 572 steps. Its finite
+  complex128 checkpoint passes the exact restart contract. The new segment is
+  still strongly growing (mean `-0.00776`, `12.76%` block error, drift
+  `-2.615`, field growth `0.1438`), and the time-0-to-40 merge remains
+  nonstationary; later checkpointed extensions are required.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.
