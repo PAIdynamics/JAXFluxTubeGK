@@ -21,6 +21,15 @@ CUDA/GX nonlinear parity, and unrestricted equilibrium-shape optimization
 remain explicitly deferred scientific gates. The pinned heavy-electron kinetic
 TEM and production-grid electromagnetic benchmarks pass.
 
+## Architecture and design loop
+
+![JAXFluxTubeGK architecture and differentiable fusion-device design loop](docs/jax_fluxtube_gk_design_loop.svg)
+
+JAXFluxTubeGK consumes provider-neutral, in-memory flux-tube geometry from MHD
+or equilibrium codes. It evaluates gyrokinetic objectives and sensitivities for
+the optimizer, while independent gyrokinetic codes remain optional validation
+references rather than runtime dependencies.
+
 ## Example Geometry
 
 ![W7-X VMEC stellarator geometry](figures/w7x_vmec_geometry.png)
