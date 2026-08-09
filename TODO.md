@@ -770,6 +770,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   window has only 37 samples and duration `9.914`, below the unchanged minima
   of 100 samples and duration 10. A longer uninterrupted late segment at the
   same diagnostic cadence is required; the sampling gate will not be lowered.
+  The time-120-to-140 continuation remains bounded in amplitude but is
+  intermittent rather than stationary: mean `-3.3663`, `1.65%` block error,
+  RMS ratio `0.899`, and field growth `-0.0119` pass, while drift rises to
+  `0.3385`. Merging time 100-to-140 also fails drift (`0.3349`) and contains
+  only 73 candidate samples. The validated time-140 checkpoint must therefore
+  feed a longer uninterrupted late segment.
   CUDA/GX execution is explicitly deferred for now and is not counted as a
   passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone

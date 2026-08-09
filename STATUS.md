@@ -321,6 +321,12 @@ claimed.
   37 samples and spans `9.914`, below the declared 100-sample and 10-time-unit
   minima. The finite complex128 time-120 checkpoint is valid. The next run must
   be a longer uninterrupted late segment at the same diagnostic cadence.
+- Extended the final rung from time 120 to 140 in another 572 steps. The field
+  remains bounded (mean `-3.3663`, `1.65%` block error, RMS ratio `0.899`, field
+  growth `-0.0119`) but flux drift rises to `0.3385`, so the short segment is
+  not stationary. The time-100-to-140 merge likewise fails drift (`0.3349`)
+  and has only 73 candidate samples. The finite complex128 time-140 checkpoint
+  is valid and a longer uninterrupted late segment remains necessary.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.
