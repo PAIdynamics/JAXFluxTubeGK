@@ -202,12 +202,19 @@ def _load_checkpoint(
         raise ValueError("nonlinear checkpoint state shape does not match its contract")
     if not np.isfinite(state).all() or not np.isfinite(time) or time < 0.0:
         raise ValueError("nonlinear checkpoint state and time must be finite and nonnegative")
+    schedule = lineage.get("segment_end_times") if isinstance(lineage, dict) else None
     if (
         not isinstance(lineage, dict)
         or lineage.get("schema_version") != 1
-        or not isinstance(lineage.get("segment_end_times"), list)
-        or not lineage["segment_end_times"]
-        or abs(float(lineage["segment_end_times"][-1]) - time) > 1.0e-10 * max(1.0, abs(time))
+        or not isinstance(schedule, list)
+        or not schedule
+    ):
+        raise ValueError("nonlinear checkpoint trajectory lineage is invalid")
+    endpoints = tuple(float(value) for value in schedule)
+    if (
+        not all(np.isfinite(value) and value > 0.0 for value in endpoints)
+        or any(right <= left for left, right in zip(endpoints, endpoints[1:], strict=False))
+        or abs(endpoints[-1] - time) > 1.0e-10 * max(1.0, abs(time))
     ):
         raise ValueError("nonlinear checkpoint trajectory lineage is invalid")
     if expected_lineage_root is not None:

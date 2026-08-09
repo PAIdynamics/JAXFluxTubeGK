@@ -169,3 +169,8 @@ def test_nonlinear_checkpoint_roundtrip_and_contract_guard(tmp_path):
                 "initial_zonal_fraction": 0.0,
             },
         )
+
+    invalid_lineage = lineage | {"segment_end_times": [3.5, 3.0, 3.5]}
+    _write_checkpoint(path, state, 3.5, contract, invalid_lineage)
+    with pytest.raises(ValueError, match="trajectory lineage is invalid"):
+        _load_checkpoint(path, contract)
