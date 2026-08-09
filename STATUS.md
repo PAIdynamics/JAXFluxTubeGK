@@ -223,6 +223,20 @@ claimed.
   explicit handoff permits Priority 6 maintainability work without erasing or
   overstating the remaining scientific blockers.
 
+### 2026-08-09: Priority 6 Validation API Boundary
+
+- Added focused lazy validation namespaces for fixture I/O, Cyclone/GKW,
+  geometry parity, and W7-X contracts. The default solver import no longer
+  loads the 16k-line benchmark implementation or advertises benchmark-only
+  names in `__all__`; legacy top-level imports remain lazy-compatible.
+- Physically extracted the stable `BenchmarkTarget`, residual, and cost
+  contracts into `targets.py`, removing optimization's dependency on the
+  benchmark monolith. A subprocess regression test enforces the import
+  boundary.
+- Ruff passes and the focused import, benchmark, reference, and optimization
+  suite passes. The remaining internal split of the densely coupled legacy
+  benchmark implementation stays open behind the new public facades.
+
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
 - Added a fail-closed ensemble gate for chaotic nonlinear trajectories. The

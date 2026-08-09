@@ -9,11 +9,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .benchmarks import BenchmarkTarget, benchmark_target_cost, benchmark_target_residual
 from .geometry import build_circular_geometry, build_s_alpha_geometry, k_perp_squared
 from .objectives import LinearObjectiveValues, initial_value_growth_objectives
 from .physics import AdiabaticElectronParams, default_adiabatic_electron_params
 from .solver import build_linear_residual_precompute
+from .targets import BenchmarkTarget, benchmark_target_cost, benchmark_target_residual
 from .types import (
     FourierGrid,
     GeometryScalarParams,

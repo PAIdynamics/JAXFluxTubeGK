@@ -831,9 +831,16 @@ shape-optimization claims named above pass.
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 
 - [ ] Split the 16k-line `benchmarks.py` into focused fixture I/O, Cyclone/GKW,
-  geometry parity, and W7-X validation modules.
-- [ ] Keep benchmark-only symbols out of the default top-level import path;
-  expose a compact solver API and a separate validation namespace.
+  geometry parity, and W7-X validation modules. The public split is in place as
+  lazy `validation.fixture_io`, `validation.cyclone_gkw`,
+  `validation.geometry_parity`, and `validation.w7x` namespaces, and the shared
+  scalar target contract has moved physically to `targets.py`. The densely
+  coupled legacy implementation still needs to be split behind those facades.
+- [x] Keep benchmark-only symbols out of the default top-level import path;
+  expose a compact solver API and a separate validation namespace. A fresh
+  `import stellarator_gk` no longer loads `stellarator_gk.benchmarks`, benchmark
+  symbols are absent from `__all__`, and legacy attribute imports resolve lazily
+  while callers migrate to `stellarator_gk.validation`.
 - [ ] Replace historical `Phase N` docstrings with subsystem descriptions and
   document which APIs are stable at version `0.1.x`.
 - [ ] Decide which large GKW traces are essential compact regression contracts,
