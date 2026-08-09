@@ -764,7 +764,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   decaying post-burst window. The time-80-to-100 segment flattens substantially:
   mean `-5.7446`, `1.30%` block error, RMS ratio `0.867`, and field growth
   `-0.0134` pass, but drift `0.2251` narrowly exceeds the unchanged `0.20`
-  limit. A later stationary window is still required.
+  limit. The time-100-to-120 segment then satisfies every numerical statistic
+  (mean `-4.1290`, `0.409%` block error, drift `0.0739`, RMS ratio `0.953`,
+  field growth `-0.00472`) but is correctly rejected because its candidate
+  window has only 37 samples and duration `9.914`, below the unchanged minima
+  of 100 samples and duration 10. A longer uninterrupted late segment at the
+  same diagnostic cadence is required; the sampling gate will not be lowered.
   CUDA/GX execution is explicitly deferred for now and is not counted as a
   passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone

@@ -314,6 +314,13 @@ claimed.
   field growth `-0.0134` satisfy their gates, but drift `0.2251` narrowly fails
   the unchanged `0.20` limit. The finite complex128 time-100 checkpoint is the
   next restart boundary; no borderline stationarity pass is claimed.
+- Extended the final rung from time 100 to 120 in another 572 steps. All
+  numerical stationarity statistics now pass (mean `-4.1290`, `0.409%` block
+  error, drift `0.0739`, RMS ratio `0.953`, field growth `-0.00472`), but the
+  producer correctly remains fail-closed: the candidate window contains only
+  37 samples and spans `9.914`, below the declared 100-sample and 10-time-unit
+  minima. The finite complex128 time-120 checkpoint is valid. The next run must
+  be a longer uninterrupted late segment at the same diagnostic cadence.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.
