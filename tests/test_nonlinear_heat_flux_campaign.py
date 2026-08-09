@@ -5,7 +5,7 @@ import pytest
 from scripts.validate_nonlinear_heat_flux_campaign import evaluate_campaign
 
 
-def _gx_case(ky_min=0.1):
+def _gx_case(ky_min=0.05):
     return {
         "geometry": "s-alpha",
         "q": 1.4,
@@ -361,6 +361,39 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     assert not report["independent_parity_contract"]["passed"]
     assert not report["independent_parity_contract"]["checks"]["ky_min"]
     assert not report["passed"]
+
+
+def test_campaign_parity_uses_finest_domain_rung(tmp_path):
+    resolution = (
+        _write_report(tmp_path / "r0.json", 4.0),
+        _write_report(tmp_path / "r1.json", 4.0, resolution=(16, 16, 8)),
+    )
+    domain = (
+        _write_report(tmp_path / "d0.json", 8.0),
+        _write_report(
+            tmp_path / "d1.json",
+            8.0,
+            kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+            ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+        ),
+    )
+    reference = _write_report(
+        tmp_path / "gx.json",
+        8.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
+    lineages = tuple(
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
+        for seed in (1, 2, 3)
+    )
+
+    report = evaluate_campaign(
+        resolution, domain, reference, lineage_paths=lineages
+    )
+
+    assert report["passed"]
+    assert report["independent_parity"]["mean_relative_error"] == pytest.approx(0.0)
 
 
 def test_campaign_rejects_unknown_reference_and_irregular_fourier_grid(tmp_path):

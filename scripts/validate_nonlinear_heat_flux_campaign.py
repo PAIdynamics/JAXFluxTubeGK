@@ -54,7 +54,7 @@ def evaluate_campaign(
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
-    parity_contract = _validate_reference_case(resolution_paths[-1], reference_path)
+    parity_contract = _validate_reference_case(domain_paths[-1], reference_path)
     lineage_records = tuple(map(load_nonlinear_heat_flux_record, lineage_paths))
     lineage_producers_valid = all(record.producer in _LOCAL_PRODUCERS for record in lineage_records)
     local_evidence_paths = tuple(dict.fromkeys((*resolution_paths, *domain_paths, *lineage_paths)))
@@ -99,7 +99,7 @@ def evaluate_campaign(
         relative_standard_error_tolerance=relative_standard_error_tolerance,
     )
     parity = compare_nonlinear_heat_flux(
-        resolution_records[-1],
+        domain_records[-1],
         reference,
         local_to_reference_factor=local_to_reference_factor,
         mean_tolerance=mean_tolerance,
