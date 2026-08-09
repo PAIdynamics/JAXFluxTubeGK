@@ -25,6 +25,11 @@ _LOCAL_PRODUCERS = frozenset(
     }
 )
 _REFERENCE_PRODUCER = "gx-nonlinear-heat-flux"
+_MIN_STATIONARY_SAMPLES = 100
+_MIN_STATIONARY_DURATION = 10.0
+_MIN_STATIONARY_BLOCKS = 6
+_MIN_NONZONAL_RMS_RATIO = 0.8
+_MAX_ABSOLUTE_FIELD_GROWTH = 0.02
 
 
 def evaluate_campaign(
@@ -52,6 +57,27 @@ def evaluate_campaign(
     parity_contract = _validate_reference_case(resolution_paths[-1], reference_path)
     lineage_records = tuple(map(load_nonlinear_heat_flux_record, lineage_paths))
     lineage_producers_valid = all(record.producer in _LOCAL_PRODUCERS for record in lineage_records)
+    local_evidence_paths = tuple(dict.fromkeys((*resolution_paths, *domain_paths, *lineage_paths)))
+    stationarity_evidence = {
+        "local": [
+            _validate_stationarity_evidence(
+                path,
+                drift_tolerance=drift_tolerance,
+                relative_standard_error_tolerance=relative_standard_error_tolerance,
+                require_field_evidence=True,
+            )
+            for path in local_evidence_paths
+        ],
+        "reference": _validate_stationarity_evidence(
+            reference_path,
+            drift_tolerance=drift_tolerance,
+            relative_standard_error_tolerance=relative_standard_error_tolerance,
+            require_field_evidence=False,
+        ),
+    }
+    stationarity_evidence["passed"] = all(
+        item["passed"] for item in stationarity_evidence["local"]
+    ) and stationarity_evidence["reference"]["passed"]
     lineage_ids = tuple(_lineage_id(path) for path in lineage_paths)
     ensemble = compare_nonlinear_heat_flux_ensemble(
         lineage_records,
@@ -90,6 +116,7 @@ def evaluate_campaign(
             and parity_contract["passed"]
             and ensemble.passed
             and lineage_producers_valid
+            and stationarity_evidence["passed"]
         ),
         "resolution_ladder_contract": resolution_contract,
         "domain_ladder_contract": domain_contract,
@@ -98,6 +125,7 @@ def evaluate_campaign(
             "passed": lineage_producers_valid,
             "allowed": sorted(_LOCAL_PRODUCERS),
         },
+        "stationarity_evidence_contract": stationarity_evidence,
         "resolution_convergence": asdict(resolution),
         "domain_convergence": asdict(domain),
         "independent_parity": asdict(parity),
@@ -273,6 +301,117 @@ def _local_producers_valid(paths: tuple[Path, ...]) -> bool:
         in _LOCAL_PRODUCERS
         for path in paths
     )
+
+
+def _validate_stationarity_evidence(
+    path: Path,
+    *,
+    drift_tolerance: float,
+    relative_standard_error_tolerance: float,
+    require_field_evidence: bool,
+) -> dict:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    statistics = payload.get("statistics")
+    if not isinstance(statistics, dict):
+        return {"path": str(path), "passed": False, "checks": {"statistics": False}}
+    case = payload.get("case")
+    controls = case if require_field_evidence else payload.get("stationarity_controls")
+    if not isinstance(controls, dict):
+        return {"path": str(path), "passed": False, "checks": {"controls": False}}
+
+    if require_field_evidence:
+        duration = payload.get("stationary_window_duration", np.nan)
+        declared = {
+            "max_relative_drift": controls.get("max_relative_drift", np.nan),
+            "max_relative_standard_error": controls.get(
+                "max_relative_standard_error", np.nan
+            ),
+            "min_samples": controls.get("min_stationary_samples", np.nan),
+            "min_duration": controls.get("min_stationary_window_duration", np.nan),
+            "min_blocks": controls.get("min_stationary_blocks", np.nan),
+        }
+    else:
+        duration = float(statistics.get("window_end_time", np.nan)) - float(
+            statistics.get("window_start_time", np.nan)
+        )
+        declared = {
+            "max_relative_drift": controls.get("max_relative_drift", np.nan),
+            "max_relative_standard_error": controls.get(
+                "max_relative_standard_error", np.nan
+            ),
+            "min_samples": controls.get("min_stationary_samples", np.nan),
+            "min_duration": controls.get("min_stationary_window_duration", np.nan),
+            "min_blocks": controls.get("min_stationary_blocks", np.nan),
+        }
+
+    checks = {
+        "producer_stationary": payload.get("stationary") is True,
+        "sample_count": _finite_at_least(
+            statistics.get("n_samples"), _MIN_STATIONARY_SAMPLES
+        ),
+        "window_duration": _finite_at_least(duration, _MIN_STATIONARY_DURATION),
+        "physical_time_blocks": _finite_at_least(
+            statistics.get("n_blocks"), _MIN_STATIONARY_BLOCKS
+        ),
+        "declared_sample_minimum": _finite_at_least(
+            declared["min_samples"], _MIN_STATIONARY_SAMPLES
+        ),
+        "declared_duration_minimum": _finite_at_least(
+            declared["min_duration"], _MIN_STATIONARY_DURATION
+        ),
+        "declared_block_minimum": _finite_at_least(
+            declared["min_blocks"], _MIN_STATIONARY_BLOCKS
+        ),
+        "declared_drift_limit": _finite_at_most(
+            declared["max_relative_drift"], drift_tolerance
+        ),
+        "declared_error_limit": _finite_at_most(
+            declared["max_relative_standard_error"],
+            relative_standard_error_tolerance,
+        ),
+    }
+    if require_field_evidence:
+        checks |= {
+            "declared_amplitude_minimum": _finite_at_least(
+                controls.get("min_phi_rms_ratio"), _MIN_NONZONAL_RMS_RATIO
+            ),
+            "declared_growth_limit": _finite_at_most(
+                controls.get("max_absolute_phi_growth_rate"),
+                _MAX_ABSOLUTE_FIELD_GROWTH,
+            ),
+            "nonzonal_amplitude_ratio": _finite_at_least(
+                payload.get("nonzonal_phi_rms_ratio"), _MIN_NONZONAL_RMS_RATIO
+            ),
+            "nonzonal_growth_rate": _finite_absolute_at_most(
+                payload.get("candidate_nonzonal_phi_growth_rate"),
+                _MAX_ABSOLUTE_FIELD_GROWTH,
+            ),
+        }
+    return {"path": str(path), "passed": all(checks.values()), "checks": checks}
+
+
+def _finite_at_least(value, limit: float) -> bool:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(numeric) and numeric >= limit)
+
+
+def _finite_at_most(value, limit: float) -> bool:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(numeric) and 0.0 < numeric <= limit)
+
+
+def _finite_absolute_at_most(value, limit: float) -> bool:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(numeric) and abs(numeric) <= limit)
 
 
 def _lineage_id(path: Path) -> str:

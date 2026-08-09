@@ -37,33 +37,39 @@ def _write_report(
     producer="jax-fluxtube-gk/nonlinear-heat-flux",
     reference_case=None,
 ):
-    path.write_text(
-        json.dumps(
-            {
+    case = reference_case if reference_case is not None else {
+        "n_z": resolution[0],
+        "n_vpar": resolution[1],
+        "n_mu": resolution[2],
+        "n_kx": len(kx),
+        "n_ky": len(ky),
+        "kx": list(kx),
+        "ky": list(ky),
+        "parallel_boundary_model": "twist_shift",
+        "parallel_recurrence_rate": 1.0,
+        "rmaj_over_lref": 2.77778,
+        "gx_fprim": 0.8,
+        "gx_tprim": 2.49,
+        "density_gradient_R_over_Ln": 2.222224,
+        "temperature_gradient_R_over_LT": 6.9166722,
+        "hyperdiffusion": 0.05,
+        "collision_frequency": 0.0,
+        "flux_moment": "gx_total_energy",
+        "ikxspace": 1,
+        "max_relative_drift": 0.2,
+        "max_relative_standard_error": 0.1,
+        "min_stationary_samples": 100,
+        "min_stationary_window_duration": 10.0,
+        "min_stationary_blocks": 6,
+        "min_phi_rms_ratio": 0.8,
+        "max_absolute_phi_growth_rate": 0.02,
+    }
+    payload = {
                 "schema_version": 1,
                 "producer": producer,
                 "normalization": normalization,
                 "stationary": stationary,
-                "case": reference_case if reference_case is not None else {
-                    "n_z": resolution[0],
-                    "n_vpar": resolution[1],
-                    "n_mu": resolution[2],
-                    "n_kx": len(kx),
-                    "n_ky": len(ky),
-                    "kx": list(kx),
-                    "ky": list(ky),
-                    "parallel_boundary_model": "twist_shift",
-                    "parallel_recurrence_rate": 1.0,
-                    "rmaj_over_lref": 2.77778,
-                    "gx_fprim": 0.8,
-                    "gx_tprim": 2.49,
-                    "density_gradient_R_over_Ln": 2.222224,
-                    "temperature_gradient_R_over_LT": 6.9166722,
-                    "hyperdiffusion": 0.05,
-                    "collision_frequency": 0.0,
-                    "flux_moment": "gx_total_energy",
-                    "ikxspace": 1,
-                },
+                "case": case,
                 "trajectory_lineage": {
                     "schema_version": 1,
                     "seed": seed,
@@ -76,10 +82,22 @@ def _write_report(
                     "standard_error": abs(mean) * 0.01,
                     "relative_window_drift": drift,
                     "n_samples": 200,
+                    "n_blocks": 6,
                 },
+                "stationary_window_duration": 20.0,
+                "nonzonal_phi_rms_ratio": 1.0,
+                "candidate_nonzonal_phi_growth_rate": 0.0,
             }
-        )
-    )
+    if producer == "gx-nonlinear-heat-flux":
+        payload["statistics"] |= {"window_start_time": 80.0, "window_end_time": 100.0}
+        payload["stationarity_controls"] = {
+            "max_relative_drift": 0.2,
+            "max_relative_standard_error": 0.1,
+            "min_stationary_samples": 100,
+            "min_stationary_window_duration": 10.0,
+            "min_stationary_blocks": 6,
+        }
+    path.write_text(json.dumps(payload))
     return path
 
 
@@ -376,3 +394,40 @@ def test_campaign_rejects_unknown_reference_and_irregular_fourier_grid(tmp_path)
         evaluate_campaign(
             (coarse, irregular), (coarse, wide), unknown, lineage_paths=lineages
         )
+
+
+def test_campaign_rejects_stationarity_declared_with_weakened_controls(tmp_path):
+    coarse = _write_report(tmp_path / "coarse.json", 4.0)
+    fine = _write_report(tmp_path / "fine.json", 4.0, resolution=(16, 16, 8))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    weak = _write_report(tmp_path / "weak.json", 4.0, seed=1)
+    payload = json.loads(weak.read_text())
+    payload["case"]["min_stationary_samples"] = 2
+    weak.write_text(json.dumps(payload))
+    lineages = (
+        weak,
+        _write_report(tmp_path / "lineage2.json", 4.0, seed=2),
+        _write_report(tmp_path / "lineage3.json", 4.0, seed=3),
+    )
+    gx = _write_report(
+        tmp_path / "gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
+
+    report = evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
+
+    assert not report["stationarity_evidence_contract"]["passed"]
+    weak_evidence = next(
+        item
+        for item in report["stationarity_evidence_contract"]["local"]
+        if item["path"] == str(weak)
+    )
+    assert not weak_evidence["checks"]["declared_sample_minimum"]
+    assert not report["passed"]
