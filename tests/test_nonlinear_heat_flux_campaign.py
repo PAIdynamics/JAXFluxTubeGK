@@ -381,6 +381,30 @@ def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
     assert not cross_report["cross_ladder_contract"]["shared_physics"]
     assert not cross_report["passed"]
 
+    mismatched_base = _write_report(
+        tmp_path / "mismatched-domain-base.json", 4.0, resolution=(10, 10, 4)
+    )
+    mismatched_wide = _write_report(
+        tmp_path / "mismatched-domain-wide.json",
+        4.0,
+        resolution=(10, 10, 4),
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    phase_report = evaluate_campaign(
+        (coarse, _write_report(tmp_path / "phase-fine.json", 4.0, resolution=(16, 16, 8))),
+        (mismatched_base, mismatched_wide),
+        _write_report(
+            tmp_path / "gx-phase.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
+        lineage_paths=lineages,
+    )
+    assert not phase_report["cross_ladder_contract"]["shared_phase_space_resolution"]
+    assert not phase_report["passed"]
+
 
 def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     coarse = _write_report(tmp_path / "coarse.json", 4.0)

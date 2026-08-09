@@ -52,7 +52,7 @@ def evaluate_campaign(
         raise ValueError("resolution and domain ladders each require at least two reports")
     resolution_contract = _validate_resolution_ladder(resolution_paths)
     domain_contract = _validate_domain_ladder(domain_paths)
-    cross_ladder_contract = _validate_cross_ladder_anchor(resolution_paths[-1], domain_paths[0])
+    cross_ladder_contract = _validate_cross_ladder_anchor(resolution_paths[0], domain_paths[0])
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
@@ -265,10 +265,12 @@ def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
 def _validate_cross_ladder_anchor(resolution_path: Path, domain_path: Path) -> dict:
     resolution = _case_contract(resolution_path)
     domain = _case_contract(domain_path)
+    fixed_phase_resolution = _same_values(resolution, domain, _PHASE_RESOLUTION_KEYS)
     fixed_fourier = _same_values(resolution, domain, ("n_kx", "n_ky", "kx", "ky"))
     fixed_physics = _same_values(resolution, domain, _PHYSICS_KEYS)
     return {
-        "passed": fixed_fourier and fixed_physics,
+        "passed": fixed_phase_resolution and fixed_fourier and fixed_physics,
+        "shared_phase_space_resolution": fixed_phase_resolution,
         "shared_base_fourier_grid": fixed_fourier,
         "shared_physics": fixed_physics,
     }
