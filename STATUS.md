@@ -282,7 +282,12 @@ claimed.
   time-100-to-200 continuation completes in 2,856 steps but remains
   nonstationary: mean `-3.3568`, `7.91%` block error, drift `0.6739`, and field
   growth `-6.05e-3`. A time-0-to-200 merge also fails on drift (`0.3990`), with
-  mean `-3.4244` and `5.99%` block error, so late-window extensions remain.
+  mean `-3.4244` and `5.99%` block error. The time-200-to-300 continuation is
+  the first stationary window for this rung after another 2,856 steps: mean
+  `-5.4858`, `5.61%` block error, drift `0.0922`, and field growth `1.41e-3`.
+  Its `29.0%` change from the stationary `17x9` mean `-7.0770`, normalized to
+  the finer result, still fails the unchanged `15%` domain gate. A
+  bandwidth-preserving `65x33, ky_min=0.0125` rung is therefore required.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.

@@ -743,10 +743,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   nonstationary after 2,856 steps: mean `-3.3568`, `7.91%` block error, drift
   `0.6739`, and field growth `-6.05e-3`. Merging time 0-to-200 still fails on
   drift (`0.3990`, with mean `-3.4244` and `5.99%` block error), so this is not
-  a short-window false negative. It must be extended to a stationary late
-  window before the `17x9 -> 33x17` finest-pair domain decision. CUDA/GX
-  execution is explicitly deferred for now and is not counted as a passing
-  independent parity result.
+  a short-window false negative. The next time-200-to-300 segment is the first
+  stationary window for this rung: mean `-5.4858`, `5.61%` block error, drift
+  `0.0922`, and field growth `1.41e-3`. It differs from the stationary `17x9`
+  mean `-7.0770` by `29.0%` when normalized to the finer result, above the
+  unchanged `15%` gate. Domain convergence therefore still fails and requires
+  a bandwidth-preserving `65x33, ky_min=0.0125` rung. CUDA/GX execution is
+  explicitly deferred for now and is not counted as a passing independent
+  parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
