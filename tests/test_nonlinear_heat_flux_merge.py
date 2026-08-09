@@ -137,3 +137,15 @@ def test_merge_applies_amplitude_ratio_to_candidate_window(tmp_path):
     assert report["candidate_nonzonal_phi_rms_ratio"] == pytest.approx(0.7)
     assert abs(report["candidate_nonzonal_phi_growth_rate"]) < 0.02
     assert report["stationary"] is False
+
+
+def test_merge_accepts_immutable_pre_rename_local_reports(tmp_path):
+    first = _segment(tmp_path / "first.json", 20.0, 40.0)
+    second = _segment(tmp_path / "second.json", 40.0, 60.0, schedule=[40.0, 60.0])
+    payload = json.loads(first.read_text())
+    payload["producer"] = "optimal-fusion/nonlinear-heat-flux"
+    first.write_text(json.dumps(payload))
+
+    report = merge_nonlinear_heat_flux_segments((first, second), min_blocks=4)
+
+    assert report["producer"] == "jax-fluxtube-gk/nonlinear-heat-flux-merged"

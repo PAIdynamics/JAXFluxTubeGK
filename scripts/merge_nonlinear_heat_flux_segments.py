@@ -36,6 +36,9 @@ _INPUT_PRODUCERS = frozenset(
     {
         "jax-fluxtube-gk/nonlinear-heat-flux",
         "jax-fluxtube-gk/nonlinear-heat-flux-merged",
+        # Immutable caller-owned reports produced before the project rename.
+        "optimal-fusion/nonlinear-heat-flux",
+        "optimal-fusion/nonlinear-heat-flux-merged",
     }
 )
 
