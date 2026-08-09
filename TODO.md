@@ -755,7 +755,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   evidence only. A contract-identical time-20-to-40 continuation adds 572
   steps and a valid finite checkpoint. It remains strongly growing (mean
   `-0.00776`, `12.76%` block error, drift `-2.615`, field growth `0.1438`), and
-  the merged time-0-to-40 trace is also nonstationary. Long-time extensions
+  the merged time-0-to-40 trace is also nonstationary. The time-40-to-60
+  continuation adds another 572 steps and remains strongly growing (mean
+  `-2.7114`, `12.80%` block error, drift `-2.624`, field growth `0.1471`, RMS
+  ratio `4.29`); saturation has not begun by time 60. Long-time extensions
   remain. CUDA/GX execution is explicitly deferred for now and is not counted
   as a passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone

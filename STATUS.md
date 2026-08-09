@@ -298,6 +298,11 @@ claimed.
   still strongly growing (mean `-0.00776`, `12.76%` block error, drift
   `-2.615`, field growth `0.1438`), and the time-0-to-40 merge remains
   nonstationary; later checkpointed extensions are required.
+- Extended the final rung from time 40 to 60 in another 572 steps. The segment
+  remains strongly growing (mean `-2.7114`, `12.80%` block error, drift
+  `-2.624`, field growth `0.1471`, RMS ratio `4.29`), while its finite
+  complex128 time-60 checkpoint passes validation. Saturation has not begun,
+  so later checkpointed extensions remain necessary.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.
