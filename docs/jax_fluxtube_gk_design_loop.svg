@@ -22,14 +22,14 @@
       <feGaussianBlur stdDeviation="9" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <marker id="arrowCyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M1 1 L11 6 L1 11 Z" fill="#58d7ee"/>
+    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1.5 L9 5 L1 8.5 Z" fill="#58d7ee"/>
     </marker>
-    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M1 1 L11 6 L1 11 Z" fill="#b397ff"/>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1.5 L9 5 L1 8.5 Z" fill="#b397ff"/>
     </marker>
-    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M1 1 L11 6 L1 11 Z" fill="#8ee6b0"/>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1 1.5 L9 5 L1 8.5 Z" fill="#8ee6b0"/>
     </marker>
     <style>
       .title { font: 700 42px Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f4f8ff; letter-spacing: -1px; }
@@ -51,9 +51,9 @@
   <text x="70" y="82" class="title">JAXFluxTubeGK</text>
   <text x="70" y="116" class="subtitle">Differentiable local flux-tube gyrokinetics in the fusion-device design loop</text>
   <g transform="translate(1215 67)">
-    <line x1="0" y1="0" x2="40" y2="0" stroke="#58d7ee" stroke-width="3" marker-end="url(#arrowCyan)"/>
+    <line x1="0" y1="0" x2="40" y2="0" stroke="#58d7ee" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
     <text x="54" y="5" class="small">production flow</text>
-    <line x1="0" y1="32" x2="40" y2="32" stroke="#b397ff" stroke-width="2.5" stroke-dasharray="7 7"/>
+    <line x1="0" y1="32" x2="40" y2="32" stroke="#b397ff" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 7"/>
     <text x="54" y="37" class="small">validation</text>
   </g>
 
@@ -124,7 +124,7 @@
   <text x="1371" y="490" class="chip">value + gradient</text>
 
   <!-- Main arrows -->
-  <g fill="none" stroke="#58d7ee" stroke-width="3" marker-end="url(#arrowCyan)">
+  <g fill="none" stroke="#58d7ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowCyan)">
     <path d="M320 395 H356"/>
     <path d="M630 395 H666"/>
     <path d="M930 395 H966"/>
@@ -141,7 +141,7 @@
   </g>
   <text x="1020" y="166" class="card-title" style="font-size:18px">JAX ecosystem</text>
   <text x="1020" y="190" class="small">autodiff · XLA · CPU/GPU acceleration</text>
-  <path d="M1130 205 V232" fill="none" stroke="#b397ff" stroke-width="2.5" marker-end="url(#arrowPurple)"/>
+  <path d="M1130 205 V232" fill="none" stroke="#b397ff" stroke-width="2.25" stroke-linecap="round" marker-end="url(#arrowPurple)"/>
 
   <!-- Optimizer and feedback loop -->
   <g filter="url(#shadow)">
@@ -151,9 +151,9 @@
   <text x="600" y="729" class="card-title">Design optimizer</text>
   <text x="600" y="759" class="card-copy" style="fill:#d8d0f3">Aggregate objectives · enforce constraints · propose next design</text>
 
-  <path d="M1430 520 V585 Q1430 615 1400 615 H1055 Q1025 615 1025 645" fill="none" stroke="#8ee6b0" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <path d="M1430 520 V585 Q1430 615 1400 615 H1055 Q1025 615 1025 645" fill="none" stroke="#8ee6b0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowGreen)"/>
   <text x="1190" y="600" class="arrow-label" style="fill:#a9e9c1">objectives and sensitivities</text>
-  <path d="M570 723 H365 Q195 723 195 540" fill="none" stroke="#8ee6b0" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <path d="M570 723 H365 Q195 723 195 540" fill="none" stroke="#8ee6b0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowGreen)"/>
   <text x="282" y="707" class="arrow-label" style="fill:#a9e9c1">update parameters</text>
 
   <!-- Validation lane -->
@@ -168,8 +168,8 @@
   <text x="1355" y="755" class="card-title" style="font-size:19px">Parity gates</text>
   <text x="1355" y="790" class="card-copy">Fixtures</text>
   <text x="1355" y="817" class="card-copy">Convergence · traces</text>
-  <path d="M1290 787 H1316" fill="none" stroke="#b397ff" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrowPurple)"/>
-  <path d="M1430 715 V650 Q1430 625 1405 625 H1160 Q1130 625 1130 558" fill="none" stroke="#b397ff" stroke-width="2.5" stroke-dasharray="7 7" marker-end="url(#arrowPurple)"/>
+  <path d="M1290 787 H1316" fill="none" stroke="#b397ff" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="6 7" marker-end="url(#arrowPurple)"/>
+  <path d="M1430 715 V650 Q1430 625 1405 625 H1160 Q1130 625 1130 558" fill="none" stroke="#b397ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7" marker-end="url(#arrowPurple)"/>
 
   <!-- Footer contract -->
   <rect x="70" y="905" width="1460" height="1" fill="#7d91ae" opacity="0.18"/>
