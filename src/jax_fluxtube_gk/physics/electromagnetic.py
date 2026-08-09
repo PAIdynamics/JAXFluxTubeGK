@@ -365,8 +365,10 @@ def _safe_denominator(precompute: ParallelAmperePrecompute):
 
 def _safe_field_denominator(denominator, denominator_floor):
     denominator = jnp.asarray(denominator)
-    floor = jnp.asarray(denominator_floor, dtype=denominator.dtype)
-    return jnp.where(jnp.abs(denominator) < floor, floor, denominator)
+    floor = jnp.asarray(denominator_floor, dtype=denominator.real.dtype)
+    sign = jnp.where(jnp.real(denominator) < 0.0, -1.0, 1.0)
+    replacement = sign.astype(denominator.dtype) * floor.astype(denominator.dtype)
+    return jnp.where(jnp.abs(denominator) < floor, replacement, denominator)
 
 
 def _with_species_axis(values, n_species: int):

@@ -9,6 +9,7 @@ from jax_fluxtube_gk import (
     FourierGridSpec,
     GeometryScalarParams,
     ParallelGridSpec,
+    PerpendicularMagneticPrecompute,
     SpeciesParams,
     VelocityGridSpec,
     build_fourier_grid,
@@ -165,6 +166,25 @@ def test_perpendicular_magnetic_response_is_differentiable():
         return jnp.sum(jnp.abs(phi) ** 2 + jnp.abs(bpar) ** 2)
 
     assert np.isfinite(float(jax.grad(objective)(0.01)))
+
+
+def test_perpendicular_magnetic_floor_preserves_denominator_sign():
+    precompute = PerpendicularMagneticPrecompute(
+        phi_weight=jnp.ones((1, 1, 1, 1, 1, 1)),
+        bpar_weight=jnp.zeros((1, 1, 1, 1, 1, 1)),
+        denominator=jnp.asarray([[[-1.0e-20]]]),
+        bpar_chi_factor=jnp.zeros((1, 1, 1, 1, 1, 1)),
+        beta=jnp.asarray(0.01),
+        denominator_floor=1.0e-14,
+        n_species=1,
+    )
+
+    phi, bpar = solve_perpendicular_magnetic_fields(
+        jnp.ones((1, 1, 1, 1, 1)), precompute
+    )
+
+    np.testing.assert_allclose(phi, 1.0e14, rtol=1.0e-15)
+    np.testing.assert_allclose(bpar, 0.0, atol=0.0)
 
 
 def test_electromagnetic_mixed_variable_transform_roundtrips_and_closes_fields():
