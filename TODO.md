@@ -857,6 +857,11 @@ shape-optimization claims named above pass.
   tracked. `docs/fixture_policy.md`, ignore/manifest rules, and a `200 kB`
   aggregate/`64 KiB` per-file regression budget enforce the decision.
 
+Priority 6 status: **three maintainability items complete; the physical split
+of the legacy benchmark implementation is explicit future work behind stable,
+lazy public facades**. Repository-wide verification after these changes passes
+with **572 tests passed and 25 external tests deselected**.
+
 ## Project Rules
 
 - `optimal-fusion` must never require a particular sibling-directory layout.

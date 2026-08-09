@@ -252,6 +252,13 @@ claimed.
   selected-state conventions consumed by tests; no raw native run is tracked.
   Added a fixture policy, archival ignore/source-manifest exclusions, and
   regression size/name gates. The fixture/reference suite passes.
+- Repository-wide verification is green after the Priority 5 handoff and
+  Priority 6 work: Ruff passes, and the standalone Python 3.13/JAX-x64 suite
+  reports **572 passed and 25 external tests deselected in 616.17 s**.
+- Current deferred work is now narrow and explicit: finish the `65x33`
+  nonlinear domain rung and independent GX parity; attempt unrestricted shape
+  optimization only after those gates; and physically split the legacy
+  benchmark implementation behind the already-stable lazy facades.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 
