@@ -52,9 +52,7 @@ def evaluate_campaign(
         raise ValueError("resolution and domain ladders each require at least two reports")
     resolution_contract = _validate_resolution_ladder(resolution_paths)
     domain_contract = _validate_domain_ladder(domain_paths)
-    cross_ladder_contract = _validate_cross_ladder_anchor(
-        resolution_paths[-1], domain_paths[0]
-    )
+    cross_ladder_contract = _validate_cross_ladder_anchor(resolution_paths[-1], domain_paths[0])
     resolution_records = tuple(map(load_nonlinear_heat_flux_record, resolution_paths))
     domain_records = tuple(map(load_nonlinear_heat_flux_record, domain_paths))
     reference = load_nonlinear_heat_flux_record(reference_path)
@@ -80,9 +78,10 @@ def evaluate_campaign(
             require_field_evidence=False,
         ),
     }
-    stationarity_evidence["passed"] = all(
-        item["passed"] for item in stationarity_evidence["local"]
-    ) and stationarity_evidence["reference"]["passed"]
+    stationarity_evidence["passed"] = (
+        all(item["passed"] for item in stationarity_evidence["local"])
+        and stationarity_evidence["reference"]["passed"]
+    )
     lineage_ids = tuple(_lineage_id(path) for path in lineage_paths)
     ensemble = compare_nonlinear_heat_flux_ensemble(
         lineage_records,
@@ -330,8 +329,7 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
 
 def _local_producers_valid(paths: tuple[Path, ...]) -> bool:
     return all(
-        json.loads(Path(path).read_text(encoding="utf-8")).get("producer")
-        in _LOCAL_PRODUCERS
+        json.loads(Path(path).read_text(encoding="utf-8")).get("producer") in _LOCAL_PRODUCERS
         for path in paths
     )
 
@@ -356,9 +354,7 @@ def _validate_stationarity_evidence(
         duration = payload.get("stationary_window_duration", np.nan)
         declared = {
             "max_relative_drift": controls.get("max_relative_drift", np.nan),
-            "max_relative_standard_error": controls.get(
-                "max_relative_standard_error", np.nan
-            ),
+            "max_relative_standard_error": controls.get("max_relative_standard_error", np.nan),
             "min_samples": controls.get("min_stationary_samples", np.nan),
             "min_duration": controls.get("min_stationary_window_duration", np.nan),
             "min_blocks": controls.get("min_stationary_blocks", np.nan),
@@ -369,9 +365,7 @@ def _validate_stationarity_evidence(
         )
         declared = {
             "max_relative_drift": controls.get("max_relative_drift", np.nan),
-            "max_relative_standard_error": controls.get(
-                "max_relative_standard_error", np.nan
-            ),
+            "max_relative_standard_error": controls.get("max_relative_standard_error", np.nan),
             "min_samples": controls.get("min_stationary_samples", np.nan),
             "min_duration": controls.get("min_stationary_window_duration", np.nan),
             "min_blocks": controls.get("min_stationary_blocks", np.nan),
@@ -379,9 +373,7 @@ def _validate_stationarity_evidence(
 
     checks = {
         "producer_stationary": payload.get("stationary") is True,
-        "sample_count": _finite_at_least(
-            statistics.get("n_samples"), _MIN_STATIONARY_SAMPLES
-        ),
+        "sample_count": _finite_at_least(statistics.get("n_samples"), _MIN_STATIONARY_SAMPLES),
         "window_duration": _finite_at_least(duration, _MIN_STATIONARY_DURATION),
         "physical_time_blocks": _finite_at_least(
             statistics.get("n_blocks"), _MIN_STATIONARY_BLOCKS
@@ -392,12 +384,8 @@ def _validate_stationarity_evidence(
         "declared_duration_minimum": _finite_at_least(
             declared["min_duration"], _MIN_STATIONARY_DURATION
         ),
-        "declared_block_minimum": _finite_at_least(
-            declared["min_blocks"], _MIN_STATIONARY_BLOCKS
-        ),
-        "declared_drift_limit": _finite_at_most(
-            declared["max_relative_drift"], drift_tolerance
-        ),
+        "declared_block_minimum": _finite_at_least(declared["min_blocks"], _MIN_STATIONARY_BLOCKS),
+        "declared_drift_limit": _finite_at_most(declared["max_relative_drift"], drift_tolerance),
         "declared_error_limit": _finite_at_most(
             declared["max_relative_standard_error"],
             relative_standard_error_tolerance,
@@ -455,7 +443,34 @@ def _lineage_id(path: Path) -> str:
     keys = ("seed", "initial_amplitude", "initial_zonal_fraction")
     if any(key not in lineage for key in keys):
         raise ValueError("trajectory lineage lacks initialization controls")
-    return json.dumps({key: lineage[key] for key in keys}, sort_keys=True)
+    seed = lineage["seed"]
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise ValueError("trajectory lineage seed must be an integer")
+    amplitude = float(lineage["initial_amplitude"])
+    zonal_fraction = float(lineage["initial_zonal_fraction"])
+    if not np.isfinite(amplitude) or amplitude <= 0.0:
+        raise ValueError("trajectory lineage amplitude must be finite and positive")
+    if not np.isfinite(zonal_fraction) or not 0.0 <= zonal_fraction <= 1.0:
+        raise ValueError("trajectory lineage zonal fraction must lie in [0, 1]")
+    schedule = lineage.get("segment_end_times")
+    if not isinstance(schedule, list) or not schedule:
+        raise ValueError("trajectory lineage lacks segment endpoints")
+    endpoints = tuple(float(value) for value in schedule)
+    if not all(np.isfinite(value) for value in endpoints) or any(
+        right <= left for left, right in zip(endpoints, endpoints[1:], strict=False)
+    ):
+        raise ValueError("trajectory lineage endpoints must strictly increase")
+    end_time = float(payload.get("end_time", np.nan))
+    if not np.isfinite(end_time) or not np.isclose(endpoints[-1], end_time):
+        raise ValueError("trajectory lineage does not terminate at report end time")
+    return json.dumps(
+        {
+            "seed": seed,
+            "initial_amplitude": amplitude,
+            "initial_zonal_fraction": zonal_fraction,
+        },
+        sort_keys=True,
+    )
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -486,8 +501,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if not all(np.isfinite(value) and value > 0.0 for value in tolerances) or (
         args.local_to_reference_factor is not None
         and (
-            not np.isfinite(args.local_to_reference_factor)
-            or args.local_to_reference_factor <= 0.0
+            not np.isfinite(args.local_to_reference_factor) or args.local_to_reference_factor <= 0.0
         )
     ):
         parser.error("normalization factor and tolerances must be positive")

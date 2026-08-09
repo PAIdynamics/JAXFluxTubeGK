@@ -37,57 +37,63 @@ def _write_report(
     producer="jax-fluxtube-gk/nonlinear-heat-flux",
     reference_case=None,
 ):
-    case = reference_case if reference_case is not None else {
-        "n_z": resolution[0],
-        "n_vpar": resolution[1],
-        "n_mu": resolution[2],
-        "n_kx": len(kx),
-        "n_ky": len(ky),
-        "kx": list(kx),
-        "ky": list(ky),
-        "parallel_boundary_model": "twist_shift",
-        "parallel_recurrence_rate": 1.0,
-        "rmaj_over_lref": 2.77778,
-        "gx_fprim": 0.8,
-        "gx_tprim": 2.49,
-        "density_gradient_R_over_Ln": 2.222224,
-        "temperature_gradient_R_over_LT": 6.9166722,
-        "hyperdiffusion": 0.05,
-        "collision_frequency": 0.0,
-        "flux_moment": "gx_total_energy",
-        "ikxspace": 1,
-        "max_relative_drift": 0.2,
-        "max_relative_standard_error": 0.1,
-        "min_stationary_samples": 100,
-        "min_stationary_window_duration": 10.0,
-        "min_stationary_blocks": 6,
-        "min_phi_rms_ratio": 0.8,
-        "max_absolute_phi_growth_rate": 0.02,
-    }
+    case = (
+        reference_case
+        if reference_case is not None
+        else {
+            "n_z": resolution[0],
+            "n_vpar": resolution[1],
+            "n_mu": resolution[2],
+            "n_kx": len(kx),
+            "n_ky": len(ky),
+            "kx": list(kx),
+            "ky": list(ky),
+            "parallel_boundary_model": "twist_shift",
+            "parallel_recurrence_rate": 1.0,
+            "rmaj_over_lref": 2.77778,
+            "gx_fprim": 0.8,
+            "gx_tprim": 2.49,
+            "density_gradient_R_over_Ln": 2.222224,
+            "temperature_gradient_R_over_LT": 6.9166722,
+            "hyperdiffusion": 0.05,
+            "collision_frequency": 0.0,
+            "flux_moment": "gx_total_energy",
+            "ikxspace": 1,
+            "max_relative_drift": 0.2,
+            "max_relative_standard_error": 0.1,
+            "min_stationary_samples": 100,
+            "min_stationary_window_duration": 10.0,
+            "min_stationary_blocks": 6,
+            "min_phi_rms_ratio": 0.8,
+            "max_absolute_phi_growth_rate": 0.02,
+        }
+    )
     payload = {
-                "schema_version": 1,
-                "producer": producer,
-                "normalization": normalization,
-                "stationary": stationary,
-                "case": case,
-                "trajectory_lineage": {
-                    "schema_version": 1,
-                    "seed": seed,
-                    "initial_amplitude": 1.0e-3,
-                    "initial_zonal_fraction": 0.0,
-                    "segment_end_times": [100.0],
-                },
-                "statistics": {
-                    "mean": mean,
-                    "standard_error": abs(mean) * 0.01,
-                    "relative_window_drift": drift,
-                    "n_samples": 200,
-                    "n_blocks": 6,
-                },
-                "stationary_window_duration": 20.0,
-                "nonzonal_phi_rms_ratio": 1.0,
-                "candidate_nonzonal_phi_growth_rate": 0.0,
-            }
+        "schema_version": 1,
+        "producer": producer,
+        "normalization": normalization,
+        "stationary": stationary,
+        "start_time": 0.0,
+        "end_time": 100.0,
+        "case": case,
+        "trajectory_lineage": {
+            "schema_version": 1,
+            "seed": seed,
+            "initial_amplitude": 1.0e-3,
+            "initial_zonal_fraction": 0.0,
+            "segment_end_times": [100.0],
+        },
+        "statistics": {
+            "mean": mean,
+            "standard_error": abs(mean) * 0.01,
+            "relative_window_drift": drift,
+            "n_samples": 200,
+            "n_blocks": 6,
+        },
+        "stationary_window_duration": 20.0,
+        "nonzonal_phi_rms_ratio": 1.0,
+        "candidate_nonzonal_phi_growth_rate": 0.0,
+    }
     if producer == "gx-nonlinear-heat-flux":
         payload["revision"] = "bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5"
         payload["run_manifest"] = "/scratch/gx/gx_nonlinear_run.json"
@@ -126,8 +132,7 @@ def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path
         reference_case=_gx_case(),
     )
     lineages = tuple(
-        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
-        for seed in (1, 2, 3)
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
 
     report = evaluate_campaign(
@@ -215,7 +220,12 @@ def test_campaign_needs_no_factor_for_source_matched_normalization(tmp_path):
     )
 
     report = evaluate_campaign(
-        (local, _write_report(tmp_path / "fine.json", 4.0, normalization="gx_Q_over_Q_GB", resolution=(16, 16, 8))),
+        (
+            local,
+            _write_report(
+                tmp_path / "fine.json", 4.0, normalization="gx_Q_over_Q_GB", resolution=(16, 16, 8)
+            ),
+        ),
         (
             local,
             _write_report(
@@ -315,8 +325,7 @@ def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
         ky=(0.0, 0.05, 0.1, 0.15, 0.2),
     )
     lineages = tuple(
-        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
-        for seed in (1, 2, 3)
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
 
     repeated_report = evaluate_campaign(
@@ -383,8 +392,7 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
         ky=(0.0, 0.05, 0.1, 0.15, 0.2),
     )
     lineages = tuple(
-        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
-        for seed in (1, 2, 3)
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
     gx_case = {
         "geometry": "s-alpha",
@@ -407,9 +415,7 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
         producer="gx-nonlinear-heat-flux",
         reference_case=gx_case,
     )
-    report = evaluate_campaign(
-        (coarse, fine), (coarse, wide), gx, lineage_paths=lineages
-    )
+    report = evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
     assert not report["independent_parity_contract"]["passed"]
     assert not report["independent_parity_contract"]["checks"]["ky_min"]
     assert not report["passed"]
@@ -424,9 +430,7 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     payload = json.loads(gx.read_text())
     payload["revision"] = "0" * 40
     gx.write_text(json.dumps(payload))
-    report = evaluate_campaign(
-        (coarse, fine), (coarse, wide), gx, lineage_paths=lineages
-    )
+    report = evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
     assert not report["independent_parity_contract"]["checks"]["revision"]
     assert not report["passed"]
 
@@ -452,13 +456,10 @@ def test_campaign_parity_uses_finest_domain_rung(tmp_path):
         reference_case=_gx_case(),
     )
     lineages = tuple(
-        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
-        for seed in (1, 2, 3)
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
 
-    report = evaluate_campaign(
-        resolution, domain, reference, lineage_paths=lineages
-    )
+    report = evaluate_campaign(resolution, domain, reference, lineage_paths=lineages)
 
     assert report["passed"]
     assert report["independent_parity"]["mean_relative_error"] == pytest.approx(0.0)
@@ -474,14 +475,11 @@ def test_campaign_rejects_unknown_reference_and_irregular_fourier_grid(tmp_path)
         ky=(0.0, 0.05, 0.1, 0.15, 0.2),
     )
     lineages = tuple(
-        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
-        for seed in (1, 2, 3)
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
     )
     unknown = _write_report(tmp_path / "unknown.json", 4.0, producer="unknown")
 
-    report = evaluate_campaign(
-        (coarse, fine), (coarse, wide), unknown, lineage_paths=lineages
-    )
+    report = evaluate_campaign((coarse, fine), (coarse, wide), unknown, lineage_paths=lineages)
     assert not report["independent_parity_contract"]["passed"]
     assert not report["passed"]
 
@@ -492,9 +490,7 @@ def test_campaign_rejects_unknown_reference_and_irregular_fourier_grid(tmp_path)
         kx=(-2.0, -0.7, 0.0, 0.7, 2.0),
     )
     with pytest.raises(ValueError, match="invalid Fourier grid"):
-        evaluate_campaign(
-            (coarse, irregular), (coarse, wide), unknown, lineage_paths=lineages
-        )
+        evaluate_campaign((coarse, irregular), (coarse, wide), unknown, lineage_paths=lineages)
 
 
 def test_campaign_rejects_stationarity_declared_with_weakened_controls(tmp_path):
@@ -567,3 +563,37 @@ def test_campaign_cli_rejects_nonfinite_acceptance_controls(option, value):
     ]
     with pytest.raises(SystemExit):
         _parse_args(argv)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("seed", 1.0, "seed must be an integer"),
+        ("initial_amplitude", float("nan"), "amplitude must be finite"),
+        ("segment_end_times", [99.0], "terminate at report end time"),
+    ),
+)
+def test_campaign_rejects_invalid_lineage_identity(tmp_path, field, value, message):
+    coarse = _write_report(tmp_path / "coarse.json", 4.0)
+    fine = _write_report(tmp_path / "fine.json", 4.0, resolution=(16, 16, 8))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    lineages = tuple(
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed) for seed in (1, 2, 3)
+    )
+    payload = json.loads(lineages[0].read_text())
+    payload["trajectory_lineage"][field] = value
+    lineages[0].write_text(json.dumps(payload))
+    gx = _write_report(
+        tmp_path / "gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        evaluate_campaign((coarse, fine), (coarse, wide), gx, lineage_paths=lineages)
