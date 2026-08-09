@@ -313,8 +313,10 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
     }
     checks = {
         "revision": reference_payload.get("revision") == PINNED_GX_REVISION,
-        "run_manifest": bool(reference_payload.get("run_manifest")),
-        "source_netcdf": bool(reference_payload.get("source_netcdf")),
+        "run_manifest": isinstance(reference_payload.get("run_manifest"), str)
+        and bool(reference_payload["run_manifest"].strip()),
+        "source_netcdf": isinstance(reference_payload.get("source_netcdf"), str)
+        and bool(reference_payload["source_netcdf"].strip()),
     } | {
         key: (
             bool(np.isclose(float(reference.get(key, np.nan)), value, rtol=1.0e-12, atol=1.0e-12))
@@ -481,8 +483,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args.relative_standard_error_tolerance,
         args.lineage_mean_spread_tolerance,
     )
-    if min(tolerances) <= 0.0 or (
-        args.local_to_reference_factor is not None and args.local_to_reference_factor <= 0.0
+    if not all(np.isfinite(value) and value > 0.0 for value in tolerances) or (
+        args.local_to_reference_factor is not None
+        and (
+            not np.isfinite(args.local_to_reference_factor)
+            or args.local_to_reference_factor <= 0.0
+        )
     ):
         parser.error("normalization factor and tolerances must be positive")
     return args

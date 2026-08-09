@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from scripts.validate_nonlinear_heat_flux_campaign import evaluate_campaign
+from scripts.validate_nonlinear_heat_flux_campaign import _parse_args, evaluate_campaign
 
 
 def _gx_case(ky_min=0.05):
@@ -532,3 +532,38 @@ def test_campaign_rejects_stationarity_declared_with_weakened_controls(tmp_path)
     )
     assert not weak_evidence["checks"]["declared_sample_minimum"]
     assert not report["passed"]
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    (
+        ("--convergence-tolerance", "nan"),
+        ("--mean-tolerance", "inf"),
+        ("--local-to-reference-factor", "nan"),
+    ),
+)
+def test_campaign_cli_rejects_nonfinite_acceptance_controls(option, value):
+    argv = [
+        "--resolution-report",
+        "r0.json",
+        "--resolution-report",
+        "r1.json",
+        "--domain-report",
+        "d0.json",
+        "--domain-report",
+        "d1.json",
+        "--reference-report",
+        "gx.json",
+        "--lineage-report",
+        "s0.json",
+        "--lineage-report",
+        "s1.json",
+        "--lineage-report",
+        "s2.json",
+        "--output",
+        "campaign.json",
+        option,
+        value,
+    ]
+    with pytest.raises(SystemExit):
+        _parse_args(argv)
