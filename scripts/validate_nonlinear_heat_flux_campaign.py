@@ -16,6 +16,7 @@ from jax_fluxtube_gk import (
     compare_nonlinear_heat_flux_ensemble,
     load_nonlinear_heat_flux_record,
 )
+from scripts.prepare_gx_nonlinear_heat_flux_run import PINNED_GX_REVISION
 
 
 _LOCAL_PRODUCERS = frozenset(
@@ -311,6 +312,10 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
         "collision_frequency": float(local["collision_frequency"]),
     }
     checks = {
+        "revision": reference_payload.get("revision") == PINNED_GX_REVISION,
+        "run_manifest": bool(reference_payload.get("run_manifest")),
+        "source_netcdf": bool(reference_payload.get("source_netcdf")),
+    } | {
         key: (
             bool(np.isclose(float(reference.get(key, np.nan)), value, rtol=1.0e-12, atol=1.0e-12))
             if isinstance(value, float)

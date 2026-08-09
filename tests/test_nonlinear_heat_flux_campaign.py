@@ -89,6 +89,9 @@ def _write_report(
                 "candidate_nonzonal_phi_growth_rate": 0.0,
             }
     if producer == "gx-nonlinear-heat-flux":
+        payload["revision"] = "bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5"
+        payload["run_manifest"] = "/scratch/gx/gx_nonlinear_run.json"
+        payload["source_netcdf"] = "/scratch/gx/jax_fluxtube_gk_cyclone_nonlinear.nc"
         payload["statistics"] |= {"window_start_time": 80.0, "window_end_time": 100.0}
         payload["stationarity_controls"] = {
             "max_relative_drift": 0.2,
@@ -409,6 +412,22 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     )
     assert not report["independent_parity_contract"]["passed"]
     assert not report["independent_parity_contract"]["checks"]["ky_min"]
+    assert not report["passed"]
+
+    gx_case["ky_min"] = 0.05
+    gx = _write_report(
+        tmp_path / "wrong-revision-gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=gx_case,
+    )
+    payload = json.loads(gx.read_text())
+    payload["revision"] = "0" * 40
+    gx.write_text(json.dumps(payload))
+    report = evaluate_campaign(
+        (coarse, fine), (coarse, wide), gx, lineage_paths=lineages
+    )
+    assert not report["independent_parity_contract"]["checks"]["revision"]
     assert not report["passed"]
 
 
