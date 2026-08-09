@@ -50,7 +50,7 @@
 
   <text x="70" y="82" class="title">JAXFluxTubeGK</text>
   <text x="70" y="116" class="subtitle">Differentiable local flux-tube gyrokinetics in the fusion-device design loop</text>
-  <g transform="translate(1215 67)">
+  <g transform="translate(1280 67)">
     <line x1="0" y1="0" x2="40" y2="0" stroke="#58d7ee" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrowCyan)"/>
     <text x="54" y="5" class="small">production flow</text>
     <line x1="0" y1="32" x2="40" y2="32" stroke="#b397ff" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 7"/>
@@ -137,19 +137,23 @@
 
   <!-- JAX foundation -->
   <g filter="url(#shadow)">
-    <rect x="995" y="135" width="270" height="70" rx="18" fill="#141f3b" stroke="#675fa2"/>
+    <rect x="995" y="100" width="270" height="125" rx="18" fill="#141f3b" stroke="#675fa2"/>
   </g>
-  <text x="1020" y="166" class="card-title" style="font-size:18px">JAX ecosystem</text>
-  <text x="1020" y="190" class="small">autodiff · XLA · CPU/GPU acceleration</text>
-  <path d="M1130 205 V232" fill="none" stroke="#b397ff" stroke-width="2.25" stroke-linecap="round" marker-end="url(#arrowPurple)"/>
+  <text x="1020" y="136" class="card-title" style="font-size:18px">JAX ecosystem</text>
+  <text x="1020" y="164" class="small">Automatic differentiation</text>
+  <text x="1020" y="187" class="small">XLA compilation</text>
+  <text x="1020" y="210" class="small">CPU / GPU acceleration</text>
+  <path d="M1130 225 V232" fill="none" stroke="#b397ff" stroke-width="2.25" stroke-linecap="round" marker-end="url(#arrowPurple)"/>
 
   <!-- Optimizer and feedback loop -->
   <g filter="url(#shadow)">
-    <rect x="570" y="650" width="460" height="145" rx="23" fill="url(#optimizer)" stroke="#9f8ae8"/>
+    <rect x="570" y="650" width="460" height="175" rx="23" fill="url(#optimizer)" stroke="#9f8ae8"/>
   </g>
   <text x="600" y="692" class="eyebrow" fill="#c4b6ff">GRADIENT-BASED SEARCH</text>
   <text x="600" y="729" class="card-title">Design optimizer</text>
-  <text x="600" y="759" class="card-copy" style="fill:#d8d0f3">Aggregate objectives · enforce constraints · propose next design</text>
+  <text x="600" y="759" class="card-copy" style="fill:#d8d0f3">Aggregate physics objectives</text>
+  <text x="600" y="784" class="card-copy" style="fill:#d8d0f3">Enforce engineering constraints</text>
+  <text x="600" y="809" class="card-copy" style="fill:#d8d0f3">Propose the next device design</text>
 
   <path d="M1430 520 V585 Q1430 615 1400 615 H1055 Q1025 615 1025 645" fill="none" stroke="#8ee6b0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowGreen)"/>
   <text x="1190" y="600" class="arrow-label" style="fill:#a9e9c1">objectives and sensitivities</text>
