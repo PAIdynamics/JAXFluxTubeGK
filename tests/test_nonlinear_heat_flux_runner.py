@@ -60,6 +60,8 @@ def test_nonlinear_heat_flux_runner_rejects_even_kx(tmp_path):
         ("--start-fraction", "1"),
         ("--max-relative-drift", "0"),
         ("--max-relative-standard-error", "-0.1"),
+        ("--hyperdiffusion", "nan"),
+        ("--final-time", "inf"),
     ),
 )
 def test_nonlinear_heat_flux_runner_rejects_invalid_physical_controls(

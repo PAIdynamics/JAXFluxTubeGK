@@ -260,6 +260,28 @@ def _parse_args(argv: list[str] | None = None):
     parser.add_argument("--diagnostic-stride", type=int, default=1)
     parser.add_argument("--require-stationary", action="store_true")
     args = parser.parse_args(argv)
+    floating_controls = (
+        args.final_time,
+        args.kx_max,
+        args.ky_min,
+        args.parallel_recurrence_rate,
+        args.rmaj_over_lref,
+        args.gx_fprim,
+        args.gx_tprim,
+        args.hyperdiffusion,
+        args.collision_frequency,
+        args.initial_amplitude,
+        args.initial_zonal_fraction,
+        args.start_fraction,
+        args.max_relative_drift,
+        args.max_relative_standard_error,
+        args.min_phi_rms_ratio,
+        args.min_stationary_window_duration,
+        args.stationary_block_duration,
+        args.max_absolute_phi_growth_rate,
+    )
+    if not all(np.isfinite(value) for value in floating_controls):
+        parser.error("floating nonlinear controls must be finite")
     if args.n_kx < 3 or args.n_kx % 2 == 0 or args.n_ky < 2:
         parser.error("n-kx must be odd and at least 3; n-ky must be at least 2")
     if min(args.n_z, args.n_vpar, args.n_mu) < 2 or args.final_time <= 0.0:
