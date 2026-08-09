@@ -309,6 +309,11 @@ claimed.
   fitted field growth is `-0.0389`. The producer therefore correctly rejects
   this decaying post-burst interval rather than declaring it stationary. The
   finite complex128 time-80 checkpoint is ready for a later window.
+- Extended the final rung from time 80 to 100 in another 572 steps. The decay
+  is flattening: mean `-5.7446`, `1.30%` block error, RMS ratio `0.867`, and
+  field growth `-0.0134` satisfy their gates, but drift `0.2251` narrowly fails
+  the unchanged `0.20` limit. The finite complex128 time-100 checkpoint is the
+  next restart boundary; no borderline stationarity pass is claimed.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.

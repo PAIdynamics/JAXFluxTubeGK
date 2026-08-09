@@ -761,7 +761,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   ratio `4.29`). The time-60-to-80 continuation reaches the first turnover:
   its mean `-8.6117`, `4.00%` block error, and `0.1601` drift pass their limits,
   but the RMS ratio `0.603` and field growth `-0.0389` correctly reject a
-  decaying post-burst window. A later stationary window is still required.
+  decaying post-burst window. The time-80-to-100 segment flattens substantially:
+  mean `-5.7446`, `1.30%` block error, RMS ratio `0.867`, and field growth
+  `-0.0134` pass, but drift `0.2251` narrowly exceeds the unchanged `0.20`
+  limit. A later stationary window is still required.
   CUDA/GX execution is explicitly deferred for now and is not counted as a
   passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
