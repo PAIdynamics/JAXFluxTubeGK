@@ -303,6 +303,12 @@ claimed.
   `-2.624`, field growth `0.1471`, RMS ratio `4.29`), while its finite
   complex128 time-60 checkpoint passes validation. Saturation has not begun,
   so later checkpointed extensions remain necessary.
+- Extended the final rung from time 60 to 80 in 576 steps. Flux statistics turn
+  over and individually satisfy the uncertainty/drift limits (mean `-8.6117`,
+  `4.00%` block error, drift `0.1601`), but nonzonal RMS falls to `0.603` and
+  fitted field growth is `-0.0389`. The producer therefore correctly rejects
+  this decaying post-burst interval rather than declaring it stationary. The
+  finite complex128 time-80 checkpoint is ready for a later window.
 - CUDA/GX nonlinear execution is deferred at the user's direction. It remains
   an open independent-parity gate and is not represented as passing while the
   CPU-local domain campaign continues.

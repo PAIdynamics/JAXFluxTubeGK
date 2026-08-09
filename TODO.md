@@ -758,9 +758,12 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   the merged time-0-to-40 trace is also nonstationary. The time-40-to-60
   continuation adds another 572 steps and remains strongly growing (mean
   `-2.7114`, `12.80%` block error, drift `-2.624`, field growth `0.1471`, RMS
-  ratio `4.29`); saturation has not begun by time 60. Long-time extensions
-  remain. CUDA/GX execution is explicitly deferred for now and is not counted
-  as a passing independent parity result.
+  ratio `4.29`). The time-60-to-80 continuation reaches the first turnover:
+  its mean `-8.6117`, `4.00%` block error, and `0.1601` drift pass their limits,
+  but the RMS ratio `0.603` and field growth `-0.0389` correctly reject a
+  decaying post-burst window. A later stationary window is still required.
+  CUDA/GX execution is explicitly deferred for now and is not counted as a
+  passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
