@@ -403,7 +403,8 @@ def _validate_stationarity_evidence(
                 _MAX_ABSOLUTE_FIELD_GROWTH,
             ),
             "nonzonal_amplitude_ratio": _finite_at_least(
-                payload.get("nonzonal_phi_rms_ratio"), _MIN_NONZONAL_RMS_RATIO
+                payload.get("candidate_nonzonal_phi_rms_ratio"),
+                _MIN_NONZONAL_RMS_RATIO,
             ),
             "nonzonal_growth_rate": _finite_absolute_at_most(
                 payload.get("candidate_nonzonal_phi_growth_rate"),

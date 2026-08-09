@@ -47,9 +47,7 @@ def _hyperdiffusion(fourier, coefficient: float):
 
 def _require_x64(enabled: bool) -> None:
     if not enabled:
-        raise RuntimeError(
-            "nonlinear acceptance runs require x64; rerun with JAX_ENABLE_X64=1"
-        )
+        raise RuntimeError("nonlinear acceptance runs require x64; rerun with JAX_ENABLE_X64=1")
 
 
 def _initial_state(precompute, amplitude: float, seed: int, zonal_fraction: float = 0.0):
@@ -180,7 +178,9 @@ def _write_checkpoint(path: Path, state, time: float, contract: dict, lineage: d
         )
 
 
-def _load_checkpoint(path: Path, expected_contract: dict, expected_lineage_root: dict | None = None):
+def _load_checkpoint(
+    path: Path, expected_contract: dict, expected_lineage_root: dict | None = None
+):
     path = path.expanduser().resolve()
     with np.load(path, allow_pickle=False) as checkpoint:
         required = {"state", "time", "contract", "lineage"}
@@ -421,9 +421,7 @@ def main(argv: list[str] | None = None) -> None:
             precompute.rhs.flr_factors.bessel_j0,
         )
         flux = jnp.sum(
-            radial_flux_spectrum(
-                phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval
-            )
+            radial_flux_spectrum(phi, heat, fourier.ky, w_z=geometry.w_z, parseval=fourier.parseval)
         )
         total_rms = jnp.sqrt(jnp.mean(jnp.abs(phi) ** 2))
         nonzonal_rms = jnp.sqrt(jnp.mean(jnp.abs(phi[..., 1:]) ** 2))
@@ -491,7 +489,7 @@ def main(argv: list[str] | None = None) -> None:
         and window_duration >= args.min_stationary_window_duration
         and abs(float(statistics.relative_window_drift)) <= args.max_relative_drift
         and relative_standard_error <= args.max_relative_standard_error
-        and float(phi_diagnostics["nonzonal_phi_rms_ratio"]) >= args.min_phi_rms_ratio
+        and float(candidate_phi["candidate_nonzonal_phi_rms_ratio"]) >= args.min_phi_rms_ratio
         and abs(float(candidate_phi["candidate_nonzonal_phi_growth_rate"]))
         <= args.max_absolute_phi_growth_rate
     )

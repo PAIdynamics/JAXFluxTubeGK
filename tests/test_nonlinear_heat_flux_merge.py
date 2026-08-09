@@ -89,9 +89,7 @@ def test_merge_nonlinear_segments_rejects_broken_lineage_and_trace_metadata(tmp_
     with pytest.raises(ValueError, match="lineage schedules"):
         merge_nonlinear_heat_flux_segments((first, broken_lineage))
 
-    wrong_endpoint = _segment(
-        tmp_path / "wrong-endpoint.json", 40.0, 60.0, schedule=[40.0, 60.0]
-    )
+    wrong_endpoint = _segment(tmp_path / "wrong-endpoint.json", 40.0, 60.0, schedule=[40.0, 60.0])
     payload = json.loads(wrong_endpoint.read_text())
     payload["start_time"] = 39.0
     wrong_endpoint.write_text(json.dumps(payload))
@@ -121,3 +119,21 @@ def test_merge_rejects_untrusted_producers_and_nonfinite_controls(tmp_path):
     local = _segment(tmp_path / "local.json", 20.0, 40.0)
     with pytest.raises(ValueError, match="finite and positive"):
         merge_nonlinear_heat_flux_segments((local,), max_relative_drift=float("nan"))
+
+
+def test_merge_applies_amplitude_ratio_to_candidate_window(tmp_path):
+    first = _segment(tmp_path / "first.json", 20.0, 40.0)
+    second = _segment(tmp_path / "second.json", 40.0, 60.0, schedule=[40.0, 60.0])
+    first_payload = json.loads(first.read_text())
+    second_payload = json.loads(second.read_text())
+    first_payload["nonzonal_phi_rms"] = np.linspace(1.0, 10.0, 101).tolist()
+    second_payload["nonzonal_phi_rms"] = np.linspace(10.0, 7.0, 101).tolist()
+    first.write_text(json.dumps(first_payload))
+    second.write_text(json.dumps(second_payload))
+
+    report = merge_nonlinear_heat_flux_segments((first, second), min_blocks=4)
+
+    assert report["nonzonal_phi_rms_ratio"] > 0.8
+    assert report["candidate_nonzonal_phi_rms_ratio"] == pytest.approx(0.7)
+    assert abs(report["candidate_nonzonal_phi_growth_rate"]) < 0.02
+    assert report["stationary"] is False

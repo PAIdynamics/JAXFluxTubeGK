@@ -92,6 +92,7 @@ def _write_report(
         },
         "stationary_window_duration": 20.0,
         "nonzonal_phi_rms_ratio": 1.0,
+        "candidate_nonzonal_phi_rms_ratio": 1.0,
         "candidate_nonzonal_phi_growth_rate": 0.0,
     }
     if producer == "gx-nonlinear-heat-flux":

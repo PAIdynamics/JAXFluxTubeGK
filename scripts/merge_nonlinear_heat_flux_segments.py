@@ -94,9 +94,8 @@ def _lineage_root(payload: dict) -> dict:
 def _lineage_schedule(payload: dict) -> tuple[float, ...]:
     lineage = payload["trajectory_lineage"]
     schedule = tuple(float(value) for value in lineage["segment_end_times"])
-    if (
-        not all(np.isfinite(value) and value > 0.0 for value in schedule)
-        or any(right <= left for left, right in zip(schedule, schedule[1:], strict=False))
+    if not all(np.isfinite(value) and value > 0.0 for value in schedule) or any(
+        right <= left for left, right in zip(schedule, schedule[1:], strict=False)
     ):
         raise ValueError("nonlinear segment trajectory endpoints must strictly increase")
     return schedule
@@ -208,7 +207,7 @@ def merge_nonlinear_heat_flux_segments(
         and duration >= min_window_duration
         and abs(relative_drift) <= max_relative_drift
         and relative_standard_error <= max_relative_standard_error
-        and amplitude_ratio >= min_phi_rms_ratio
+        and float(window_amplitude[-1] / window_amplitude[0]) >= min_phi_rms_ratio
         and abs(growth) <= max_absolute_phi_growth_rate
     )
     return {
