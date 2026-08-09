@@ -18,6 +18,15 @@ from jax_fluxtube_gk import (
 )
 
 
+_LOCAL_PRODUCERS = frozenset(
+    {
+        "jax-fluxtube-gk/nonlinear-heat-flux",
+        "jax-fluxtube-gk/nonlinear-heat-flux-merged",
+    }
+)
+_REFERENCE_PRODUCER = "gx-nonlinear-heat-flux"
+
+
 def evaluate_campaign(
     resolution_paths: tuple[Path, ...],
     domain_paths: tuple[Path, ...],
@@ -42,6 +51,7 @@ def evaluate_campaign(
     reference = load_nonlinear_heat_flux_record(reference_path)
     parity_contract = _validate_reference_case(resolution_paths[-1], reference_path)
     lineage_records = tuple(map(load_nonlinear_heat_flux_record, lineage_paths))
+    lineage_producers_valid = all(record.producer in _LOCAL_PRODUCERS for record in lineage_records)
     lineage_ids = tuple(_lineage_id(path) for path in lineage_paths)
     ensemble = compare_nonlinear_heat_flux_ensemble(
         lineage_records,
@@ -79,10 +89,15 @@ def evaluate_campaign(
             and parity.passed
             and parity_contract["passed"]
             and ensemble.passed
+            and lineage_producers_valid
         ),
         "resolution_ladder_contract": resolution_contract,
         "domain_ladder_contract": domain_contract,
         "lineage_ensemble": asdict(ensemble),
+        "lineage_producer_contract": {
+            "passed": lineage_producers_valid,
+            "allowed": sorted(_LOCAL_PRODUCERS),
+        },
         "resolution_convergence": asdict(resolution),
         "domain_convergence": asdict(domain),
         "independent_parity": asdict(parity),
@@ -117,14 +132,22 @@ def _case_contract(path: Path) -> dict:
         raise ValueError(f"nonlinear ladder report {path} lacks case keys: {missing}")
     kx = np.asarray(case["kx"], dtype=float)
     ky = np.asarray(case["ky"], dtype=float)
+    kx_spacing = np.diff(kx)
+    ky_spacing = np.diff(ky)
     if (
         kx.shape != (int(case["n_kx"]),)
         or ky.shape != (int(case["n_ky"]),)
+        or kx.size < 3
+        or kx.size % 2 == 0
+        or ky.size < 2
         or not np.all(np.isfinite(kx))
         or not np.all(np.isfinite(ky))
-        or np.any(np.diff(kx) <= 0.0)
-        or np.any(np.diff(ky) <= 0.0)
-        or ky[0] != 0.0
+        or np.any(kx_spacing <= 0.0)
+        or np.any(ky_spacing <= 0.0)
+        or not np.allclose(kx_spacing, kx_spacing[0], rtol=1.0e-12, atol=1.0e-14)
+        or not np.allclose(ky_spacing, ky_spacing[0], rtol=1.0e-12, atol=1.0e-14)
+        or not np.allclose(kx, -kx[::-1], rtol=1.0e-12, atol=1.0e-14)
+        or not np.isclose(ky[0], 0.0, rtol=0.0, atol=1.0e-14)
     ):
         raise ValueError(f"nonlinear ladder report {path} has an invalid Fourier grid")
     return case
@@ -136,6 +159,7 @@ def _same_values(left: dict, right: dict, keys: tuple[str, ...]) -> bool:
 
 def _validate_resolution_ladder(paths: tuple[Path, ...]) -> dict:
     cases = tuple(_case_contract(path) for path in paths)
+    local_producers = _local_producers_valid(paths)
     base = cases[0]
     fixed_fourier = all(
         _same_values(base, case, ("n_kx", "n_ky", "kx", "ky")) for case in cases[1:]
@@ -148,7 +172,8 @@ def _validate_resolution_ladder(paths: tuple[Path, ...]) -> dict:
         for previous, current in zip(resolutions, resolutions[1:], strict=False)
     )
     return {
-        "passed": fixed_fourier and fixed_physics and strictly_refined,
+        "passed": local_producers and fixed_fourier and fixed_physics and strictly_refined,
+        "local_producers": local_producers,
         "fixed_fourier_grid": fixed_fourier,
         "fixed_physics": fixed_physics,
         "strictly_refined": strictly_refined,
@@ -173,6 +198,7 @@ def _fourier_extent(case: dict) -> dict:
 
 def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
     cases = tuple(_case_contract(path) for path in paths)
+    local_producers = _local_producers_valid(paths)
     base = cases[0]
     fixed_phase_resolution = all(
         _same_values(base, case, _PHASE_RESOLUTION_KEYS) for case in cases[1:]
@@ -191,7 +217,8 @@ def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
         for previous, current in zip(extents, extents[1:], strict=False)
     )
     return {
-        "passed": fixed_phase_resolution and fixed_physics and domain_expanded,
+        "passed": local_producers and fixed_phase_resolution and fixed_physics and domain_expanded,
+        "local_producers": local_producers,
         "fixed_phase_space_resolution": fixed_phase_resolution,
         "fixed_physics": fixed_physics,
         "domain_expanded_without_lost_bandwidth": domain_expanded,
@@ -201,8 +228,13 @@ def _validate_domain_ladder(paths: tuple[Path, ...]) -> dict:
 
 def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
     reference_payload = json.loads(Path(reference_path).read_text(encoding="utf-8"))
-    if reference_payload.get("producer") != "gx-nonlinear-heat-flux":
-        return {"passed": True, "required": False, "checks": {}}
+    if reference_payload.get("producer") != _REFERENCE_PRODUCER:
+        return {
+            "passed": False,
+            "required": True,
+            "checks": {"producer": False},
+            "expected_producer": _REFERENCE_PRODUCER,
+        }
     local = _case_contract(local_path)
     reference = reference_payload.get("case")
     if not isinstance(reference, dict):
@@ -233,6 +265,14 @@ def _validate_reference_case(local_path: Path, reference_path: Path) -> dict:
         for key, value in expected.items()
     }
     return {"passed": all(checks.values()), "required": True, "checks": checks}
+
+
+def _local_producers_valid(paths: tuple[Path, ...]) -> bool:
+    return all(
+        json.loads(Path(path).read_text(encoding="utf-8")).get("producer")
+        in _LOCAL_PRODUCERS
+        for path in paths
+    )
 
 
 def _lineage_id(path: Path) -> str:

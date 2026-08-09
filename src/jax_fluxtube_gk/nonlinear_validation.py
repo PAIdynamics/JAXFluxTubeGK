@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 
 
@@ -62,7 +63,12 @@ def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord
     normalization = payload.get("normalization")
     statistics = payload.get("statistics")
     stationary = payload.get("stationary")
-    if not isinstance(producer, str) or not isinstance(normalization, str):
+    if (
+        not isinstance(producer, str)
+        or not producer.strip()
+        or not isinstance(normalization, str)
+        or not normalization.strip()
+    ):
         raise ValueError("nonlinear heat-flux report lacks producer or normalization")
     if not isinstance(statistics, dict):
         raise ValueError("nonlinear heat-flux report lacks statistics")
@@ -80,8 +86,10 @@ def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("nonlinear heat-flux statistics are incomplete") from exc
-    if record.n_samples < 2:
-        raise ValueError("nonlinear heat-flux window requires at least two samples")
+    _validate_heat_flux_record(record)
+    raw_n_samples = statistics.get("n_samples")
+    if isinstance(raw_n_samples, bool) or not float(raw_n_samples).is_integer():
+        raise ValueError("nonlinear heat-flux sample count must be an integer")
     return record
 
 
@@ -96,7 +104,10 @@ def compare_nonlinear_heat_flux(
 ) -> NonlinearHeatFluxParityReport:
     """Require stationary local/reference windows and normalized mean parity."""
 
-    if min(mean_tolerance, drift_tolerance, relative_standard_error_tolerance) <= 0.0:
+    _validate_heat_flux_record(local)
+    _validate_heat_flux_record(reference)
+    tolerances = (mean_tolerance, drift_tolerance, relative_standard_error_tolerance)
+    if not all(math.isfinite(value) and value > 0.0 for value in tolerances):
         raise ValueError("nonlinear heat-flux tolerances must be positive")
     if local_to_reference_factor is None:
         if local.normalization != reference.normalization:
@@ -104,7 +115,7 @@ def compare_nonlinear_heat_flux(
         factor = 1.0
     else:
         factor = float(local_to_reference_factor)
-        if factor <= 0.0:
+        if not math.isfinite(factor) or factor <= 0.0:
             raise ValueError("local_to_reference_factor must be positive")
     local_mean = factor * local.mean
     local_error = factor * local.standard_error
@@ -144,8 +155,17 @@ def compare_nonlinear_heat_flux_convergence(
 ) -> NonlinearHeatFluxConvergenceReport:
     """Require stationary rungs and convergence between the finest two means."""
 
-    if len(records) < 2 or tolerance <= 0.0:
+    if len(records) < 2 or not math.isfinite(tolerance) or tolerance <= 0.0:
         raise ValueError("convergence requires at least two rungs and positive tolerance")
+    for record in records:
+        _validate_heat_flux_record(record)
+    if len({record.normalization for record in records}) != 1:
+        raise ValueError("nonlinear convergence normalizations differ")
+    if not all(
+        math.isfinite(value) and value > 0.0
+        for value in (drift_tolerance, relative_standard_error_tolerance)
+    ):
+        raise ValueError("nonlinear convergence tolerances must be positive")
     stationary = tuple(
         record.stationary
         and abs(record.relative_window_drift) <= drift_tolerance
@@ -178,7 +198,18 @@ def compare_nonlinear_heat_flux_ensemble(
         raise ValueError("records and lineage_ids must have equal length")
     if len(records) < minimum_lineages or minimum_lineages < 2:
         raise ValueError("nonlinear ensemble requires the declared minimum lineages")
-    if mean_spread_tolerance <= 0.0 or not 0.0 < minimum_stationary_fraction <= 1.0:
+    for record in records:
+        _validate_heat_flux_record(record)
+    if (
+        not math.isfinite(mean_spread_tolerance)
+        or mean_spread_tolerance <= 0.0
+        or not math.isfinite(minimum_stationary_fraction)
+        or not 0.0 < minimum_stationary_fraction <= 1.0
+        or not math.isfinite(drift_tolerance)
+        or drift_tolerance <= 0.0
+        or not math.isfinite(relative_standard_error_tolerance)
+        or relative_standard_error_tolerance <= 0.0
+    ):
         raise ValueError("ensemble tolerances must be positive and fraction at most one")
     if len({record.normalization for record in records}) != 1:
         raise ValueError("nonlinear ensemble normalizations differ")
@@ -216,6 +247,22 @@ def compare_nonlinear_heat_flux_ensemble(
         mean_spread_tolerance=mean_spread_tolerance,
         minimum_stationary_fraction=minimum_stationary_fraction,
     )
+
+
+def _validate_heat_flux_record(record: NonlinearHeatFluxRecord) -> None:
+    if not isinstance(record.producer, str) or not record.producer.strip():
+        raise ValueError("nonlinear heat-flux record requires a producer")
+    if not isinstance(record.normalization, str) or not record.normalization.strip():
+        raise ValueError("nonlinear heat-flux record requires a normalization")
+    if not all(
+        math.isfinite(value)
+        for value in (record.mean, record.standard_error, record.relative_window_drift)
+    ):
+        raise ValueError("nonlinear heat-flux statistics must be finite")
+    if record.standard_error < 0.0:
+        raise ValueError("nonlinear heat-flux standard error must be nonnegative")
+    if isinstance(record.n_samples, bool) or record.n_samples < 2:
+        raise ValueError("nonlinear heat-flux window requires at least two samples")
 
 
 __all__ = [

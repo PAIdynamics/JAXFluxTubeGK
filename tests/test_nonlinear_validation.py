@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 
@@ -51,6 +52,11 @@ def test_nonlinear_convergence_requires_stationary_finest_pair():
     assert not failed.passed
     assert not failed.all_stationary
 
+    with pytest.raises(ValueError, match="normalizations differ"):
+        compare_nonlinear_heat_flux_convergence(
+            (_record(normalization="native"), _record(normalization="gx"))
+        )
+
 
 def test_nonlinear_ensemble_requires_unique_stationary_consistent_lineages():
     report = compare_nonlinear_heat_flux_ensemble(
@@ -102,4 +108,35 @@ def test_nonlinear_record_loader_validates_schema(tmp_path):
     del payload["stationary"]
     path.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="explicit stationary decision"):
+        load_nonlinear_heat_flux_record(path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("mean", math.nan, "finite"),
+        ("standard_error", math.inf, "finite"),
+        ("standard_error", -0.1, "nonnegative"),
+        ("relative_window_drift", -math.inf, "finite"),
+        ("n_samples", 3.5, "integer"),
+    ),
+)
+def test_nonlinear_record_loader_rejects_invalid_statistics(tmp_path, field, value, message):
+    payload = {
+        "schema_version": 1,
+        "producer": "gx-nonlinear-heat-flux",
+        "normalization": "gx_Q_over_Q_GB",
+        "stationary": True,
+        "statistics": {
+            "mean": 3.0,
+            "standard_error": 0.1,
+            "relative_window_drift": 0.02,
+            "n_samples": 10,
+        },
+    }
+    payload["statistics"][field] = value
+    path = tmp_path / "invalid.json"
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match=message):
         load_nonlinear_heat_flux_record(path)

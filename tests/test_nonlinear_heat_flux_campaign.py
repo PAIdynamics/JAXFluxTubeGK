@@ -5,6 +5,24 @@ import pytest
 from scripts.validate_nonlinear_heat_flux_campaign import evaluate_campaign
 
 
+def _gx_case(ky_min=0.1):
+    return {
+        "geometry": "s-alpha",
+        "q": 1.4,
+        "shat": 0.8,
+        "eps": 0.18,
+        "rmaj_over_lref": 2.77778,
+        "fprim": 0.8,
+        "tprim": 2.49,
+        "ky_min": ky_min,
+        "boundary": "linked",
+        "electrostatic": True,
+        "hyperdiffusion": 0.05,
+        "hyperdiffusion_order": 4,
+        "collision_frequency": 0.0,
+    }
+
+
 def _write_report(
     path,
     mean,
@@ -16,7 +34,7 @@ def _write_report(
     resolution=(12, 12, 6),
     kx=(-2.0, -1.0, 0.0, 1.0, 2.0),
     ky=(0.0, 0.1, 0.2),
-    producer="test",
+    producer="jax-fluxtube-gk/nonlinear-heat-flux",
     reference_case=None,
 ):
     path.write_text(
@@ -79,7 +97,13 @@ def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path
             ky=(0.0, 0.05, 0.1, 0.15, 0.2),
         ),
     )
-    reference = _write_report(tmp_path / "gx.json", 8.0, normalization="gx")
+    reference = _write_report(
+        tmp_path / "gx.json",
+        8.0,
+        normalization="gx",
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
     lineages = tuple(
         _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
         for seed in (1, 2, 3)
@@ -104,7 +128,12 @@ def test_campaign_requires_both_convergence_axes_and_independent_parity(tmp_path
 def test_campaign_fails_closed_when_a_producer_rejected_a_rung(tmp_path):
     rejected = _write_report(tmp_path / "rejected.json", 4.0, stationary=False)
     accepted = _write_report(tmp_path / "accepted.json", 4.0)
-    reference = _write_report(tmp_path / "gx.json", 4.0)
+    reference = _write_report(
+        tmp_path / "gx.json",
+        4.0,
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
     lineages = (
         _write_report(tmp_path / "lineage1.json", 4.0, seed=1),
         _write_report(tmp_path / "lineage2.json", 4.0, seed=2),
@@ -145,7 +174,13 @@ def test_campaign_requires_two_rungs_per_axis(tmp_path):
 
 def test_campaign_needs_no_factor_for_source_matched_normalization(tmp_path):
     local = _write_report(tmp_path / "local.json", 4.0, normalization="gx_Q_over_Q_GB")
-    reference = _write_report(tmp_path / "gx.json", 4.0, normalization="gx_Q_over_Q_GB")
+    reference = _write_report(
+        tmp_path / "gx.json",
+        4.0,
+        normalization="gx_Q_over_Q_GB",
+        producer="gx-nonlinear-heat-flux",
+        reference_case=_gx_case(),
+    )
     lineages = tuple(
         _write_report(
             tmp_path / f"lineage{seed}.json",
@@ -192,7 +227,12 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
     duplicate_report = evaluate_campaign(
         (local, fine),
         (local, wide),
-        local,
+        _write_report(
+            tmp_path / "gx-duplicate.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
         lineage_paths=(local, duplicate, _write_report(tmp_path / "third.json", 4.0, seed=3)),
     )
     assert not duplicate_report["lineage_ensemble"]["all_lineages_unique"]
@@ -201,7 +241,12 @@ def test_campaign_rejects_duplicate_or_inconsistent_lineages(tmp_path):
     spread_report = evaluate_campaign(
         (local, fine),
         (local, wide),
-        local,
+        _write_report(
+            tmp_path / "gx-spread.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
         lineage_paths=(
             local,
             _write_report(tmp_path / "second.json", 4.0, seed=2),
@@ -230,13 +275,29 @@ def test_campaign_rejects_fake_ladders_that_repeat_or_change_physics(tmp_path):
     )
 
     repeated_report = evaluate_campaign(
-        (coarse, repeated), (coarse, wide), coarse, lineage_paths=lineages
+        (coarse, repeated),
+        (coarse, wide),
+        _write_report(
+            tmp_path / "gx-repeated.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
+        lineage_paths=lineages,
     )
     assert not repeated_report["resolution_ladder_contract"]["passed"]
     assert not repeated_report["passed"]
 
     physics_report = evaluate_campaign(
-        (coarse, changed_physics), (coarse, wide), coarse, lineage_paths=lineages
+        (coarse, changed_physics),
+        (coarse, wide),
+        _write_report(
+            tmp_path / "gx-physics.json",
+            4.0,
+            producer="gx-nonlinear-heat-flux",
+            reference_case=_gx_case(),
+        ),
+        lineage_paths=lineages,
     )
     assert not physics_report["resolution_ladder_contract"]["fixed_physics"]
     assert not physics_report["passed"]
@@ -282,3 +343,36 @@ def test_campaign_requires_gx_reference_case_to_match_local_physics(tmp_path):
     assert not report["independent_parity_contract"]["passed"]
     assert not report["independent_parity_contract"]["checks"]["ky_min"]
     assert not report["passed"]
+
+
+def test_campaign_rejects_unknown_reference_and_irregular_fourier_grid(tmp_path):
+    coarse = _write_report(tmp_path / "coarse.json", 4.0)
+    fine = _write_report(tmp_path / "fine.json", 4.0, resolution=(16, 16, 8))
+    wide = _write_report(
+        tmp_path / "wide.json",
+        4.0,
+        kx=(-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0),
+        ky=(0.0, 0.05, 0.1, 0.15, 0.2),
+    )
+    lineages = tuple(
+        _write_report(tmp_path / f"lineage{seed}.json", 4.0, seed=seed)
+        for seed in (1, 2, 3)
+    )
+    unknown = _write_report(tmp_path / "unknown.json", 4.0, producer="unknown")
+
+    report = evaluate_campaign(
+        (coarse, fine), (coarse, wide), unknown, lineage_paths=lineages
+    )
+    assert not report["independent_parity_contract"]["passed"]
+    assert not report["passed"]
+
+    irregular = _write_report(
+        tmp_path / "irregular.json",
+        4.0,
+        resolution=(16, 16, 8),
+        kx=(-2.0, -0.7, 0.0, 0.7, 2.0),
+    )
+    with pytest.raises(ValueError, match="invalid Fourier grid"):
+        evaluate_campaign(
+            (coarse, irregular), (coarse, wide), unknown, lineage_paths=lineages
+        )
