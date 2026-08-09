@@ -58,7 +58,7 @@ def linear_operator_action(
     connectivity: ModeConnectivity | None = None,
     project_output: bool = True,
 ):
-    """Apply the Phase 7 matrix-free linear residual, optionally restricted by mode."""
+    """Apply the matrix-free linear residual, optionally restricted by mode."""
 
     input_state = project_to_mode_chain(state, connectivity, ky_index=ky_index)
     output = linear_residual(input_state, precomputed=precomputed)
@@ -107,7 +107,7 @@ def dense_linear_operator_matrix(
     connectivity: ModeConnectivity | None = None,
     max_size: int | None = 4096,
 ):
-    """Build a dense matrix for the restricted Phase 7 residual on a small template."""
+    """Build a dense restricted residual matrix on a small validation template."""
 
     def action(state):
         return linear_operator_action(

@@ -385,8 +385,8 @@ def linear_residual(
     ``precomputed`` may be either a ``LinearResidualPrecompute`` for a
     self-consistent phi solve or a ``LinearRHSPrecompute`` when ``phi`` is
     supplied explicitly.  The ``geometry`` and ``params`` positional slots are
-    accepted to match the project-level residual interface; Phase 7 keeps all
-    expensive geometry/species work inside the precompute object.
+    accepted to match the project-level residual interface; the production
+    solver keeps expensive geometry/species work inside the precompute object.
     """
 
     precompute = _coerce_precompute(geometry, params, precomputed)
@@ -535,7 +535,7 @@ def _coerce_precompute(geometry, params, precomputed):
         return geometry
     if isinstance(params, (LinearResidualPrecompute, LinearRHSPrecompute)):
         return params
-    raise ValueError("a Phase 7 precompute object is required")
+    raise ValueError("a linear residual precompute object is required")
 
 
 def _normalize_field_model(field_model: str) -> str:

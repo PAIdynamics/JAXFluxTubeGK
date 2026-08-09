@@ -841,8 +841,10 @@ shape-optimization claims named above pass.
   `import stellarator_gk` no longer loads `stellarator_gk.benchmarks`, benchmark
   symbols are absent from `__all__`, and legacy attribute imports resolve lazily
   while callers migrate to `stellarator_gk.validation`.
-- [ ] Replace historical `Phase N` docstrings with subsystem descriptions and
-  document which APIs are stable at version `0.1.x`.
+- [x] Replace historical `Phase N` docstrings with subsystem descriptions and
+  document which APIs are stable at version `0.1.x`. The stable solver,
+  provider/schema, opt-in validation, compatibility, and experimental surfaces
+  are defined in `docs/api_stability.md` and linked from the README.
 - [ ] Decide which large GKW traces are essential compact regression contracts,
   regenerate smaller selected slices where possible, and move archival raw
   traces out of the source distribution.

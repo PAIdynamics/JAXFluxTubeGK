@@ -111,7 +111,7 @@ def estimate_linear_memory_from_precompute(
     n_steps: int = 0,
     store_history: bool = True,
 ) -> LinearMemoryEstimate:
-    """Estimate memory from an assembled Phase 7 precompute and state shape."""
+    """Estimate memory from an assembled linear-residual precompute and state shape."""
 
     if n_steps < 0:
         raise ValueError("n_steps must be nonnegative")

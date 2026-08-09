@@ -56,6 +56,10 @@ references. Keep their checkouts outside this repository and pass their paths
 explicitly to integration workflows; they are not runtime dependencies of the
 core solver.
 
+The compact solver API and the opt-in validation namespaces are documented in
+[`docs/api_stability.md`](docs/api_stability.md). Benchmark-only compatibility
+names are not part of the default top-level export surface.
+
 ## Install
 
 Use Python 3.11 or newer.  The project is configured for `uv`.

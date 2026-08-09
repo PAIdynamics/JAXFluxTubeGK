@@ -1,4 +1,4 @@
-"""Grid, spectral-operator, and topology builders for Phase 2."""
+"""Grid, spectral-operator, and fixed-topology builders."""
 
 from __future__ import annotations
 

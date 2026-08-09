@@ -236,6 +236,13 @@ claimed.
 - Ruff passes and the focused import, benchmark, reference, and optimization
   suite passes. The remaining internal split of the densely coupled legacy
   benchmark implementation stays open behind the new public facades.
+- Replaced every historical `Phase N` source description with subsystem terms
+  and added `docs/api_stability.md`. It defines the stable `0.1.x` top-level
+  solver/schema contracts, opt-in validation surface, lazy compatibility
+  bridge, and explicitly experimental internals. README links the policy.
+- Ruff and focused type, grid, performance, linear-residual, import,
+  validation, reference, and optimization tests pass after the API boundary
+  changes.
 
 ### 2026-08-07: Nonlinear Multi-Lineage Acceptance Gate
 

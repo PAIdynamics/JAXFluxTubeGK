@@ -1,4 +1,4 @@
-"""Immutable public data containers for Phase 2.
+"""Immutable public data containers for grids, species, and solver controls.
 
 The static/dynamic split is explicit so JAX transforms see only continuous
 arrays and differentiable scalar parameters as leaves. Topology, enum choices,

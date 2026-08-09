@@ -313,7 +313,6 @@ def _calc_geom_tensors(circular, *, sign_B: float, sign_J: float):
         drift = drift / B[:, None]
 
     # The remaining tensors will be useful for rotation/extended physics later;
-    # Phase 3 exposes the ExB and magnetic-drift tensors only.
+    # the current analytic geometry API exposes ExB and magnetic-drift tensors.
     _ = major_radius, sign_B
     return exb, drift
-
