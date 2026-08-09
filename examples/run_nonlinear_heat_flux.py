@@ -180,7 +180,7 @@ def _write_checkpoint(path: Path, state, time: float, contract: dict, lineage: d
         )
 
 
-def _load_checkpoint(path: Path, expected_contract: dict):
+def _load_checkpoint(path: Path, expected_contract: dict, expected_lineage_root: dict | None = None):
     path = path.expanduser().resolve()
     with np.load(path, allow_pickle=False) as checkpoint:
         required = {"state", "time", "contract", "lineage"}
@@ -206,6 +206,12 @@ def _load_checkpoint(path: Path, expected_contract: dict):
         or abs(float(lineage["segment_end_times"][-1]) - time) > 1.0e-10 * max(1.0, abs(time))
     ):
         raise ValueError("nonlinear checkpoint trajectory lineage is invalid")
+    if expected_lineage_root is not None:
+        keys = ("seed", "initial_amplitude", "initial_zonal_fraction")
+        if any(lineage.get(key) != expected_lineage_root.get(key) for key in keys):
+            raise ValueError(
+                "nonlinear checkpoint initialization controls do not match requested run"
+            )
     return jnp.asarray(state), time, lineage
 
 
@@ -358,7 +364,15 @@ def main(argv: list[str] | None = None) -> None:
             "segment_end_times": [],
         }
     else:
-        initial, start_time, lineage = _load_checkpoint(args.restart_from, checkpoint_contract)
+        initial, start_time, lineage = _load_checkpoint(
+            args.restart_from,
+            checkpoint_contract,
+            {
+                "seed": args.seed,
+                "initial_amplitude": args.initial_amplitude,
+                "initial_zonal_fraction": args.initial_zonal_fraction,
+            },
+        )
     if start_time >= args.final_time:
         raise ValueError("final-time must be greater than the restart checkpoint time")
     response_function = (

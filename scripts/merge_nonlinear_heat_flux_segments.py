@@ -57,6 +57,15 @@ def _trace(payload: dict):
         raise ValueError("segment traces must be finite")
     if np.any(np.diff(arrays[0]) <= 0.0) or np.any(arrays[2] <= 0.0):
         raise ValueError("segment times must increase and nonzonal RMS must be positive")
+    start_time = float(payload.get("start_time", np.nan))
+    end_time = float(payload.get("end_time", np.nan))
+    if (
+        not np.isfinite(start_time)
+        or not np.isfinite(end_time)
+        or not np.isclose(arrays[0][0], start_time, rtol=1.0e-10, atol=1.0e-12)
+        or not np.isclose(arrays[0][-1], end_time, rtol=1.0e-10, atol=1.0e-12)
+    ):
+        raise ValueError("segment trace endpoints do not match report start/end times")
     return arrays
 
 
@@ -74,6 +83,17 @@ def _lineage_root(payload: dict) -> dict:
     if any(key not in lineage for key in keys):
         raise ValueError("nonlinear segment trajectory lineage lacks initialization controls")
     return {key: lineage[key] for key in keys}
+
+
+def _lineage_schedule(payload: dict) -> tuple[float, ...]:
+    lineage = payload["trajectory_lineage"]
+    schedule = tuple(float(value) for value in lineage["segment_end_times"])
+    if (
+        not all(np.isfinite(value) and value > 0.0 for value in schedule)
+        or any(right <= left for left, right in zip(schedule, schedule[1:], strict=False))
+    ):
+        raise ValueError("nonlinear segment trajectory endpoints must strictly increase")
+    return schedule
 
 
 def merge_nonlinear_heat_flux_segments(
@@ -113,6 +133,12 @@ def merge_nonlinear_heat_flux_segments(
     lineage_root = _lineage_root(payloads[0])
     if any(_lineage_root(payload) != lineage_root for payload in payloads[1:]):
         raise ValueError("nonlinear segments do not share one trajectory initialization")
+    lineage_schedules = tuple(_lineage_schedule(payload) for payload in payloads)
+    if any(
+        len(current) != len(previous) + 1 or current[:-1] != previous
+        for previous, current in zip(lineage_schedules, lineage_schedules[1:], strict=False)
+    ):
+        raise ValueError("nonlinear segment lineage schedules do not extend in supplied order")
 
     merged = [[], [], []]
     previous_end = None
@@ -123,6 +149,10 @@ def merge_nonlinear_heat_flux_segments(
             tolerance = 1.0e-10 * max(1.0, abs(previous_end))
             if abs(float(trace[0][0]) - previous_end) > tolerance:
                 raise ValueError("nonlinear segments must be contiguous in the supplied order")
+            if not np.isclose(merged[1][-1][-1], trace[1][0], rtol=1.0e-10, atol=1.0e-12):
+                raise ValueError("nonlinear segment heat flux is discontinuous at restart")
+            if not np.isclose(merged[2][-1][-1], trace[2][0], rtol=1.0e-10, atol=1.0e-12):
+                raise ValueError("nonlinear segment nonzonal RMS is discontinuous at restart")
             start = 1
         for target, values in zip(merged, trace, strict=True):
             target.append(values[start:])
@@ -183,6 +213,7 @@ def merge_nonlinear_heat_flux_segments(
         "trajectory_lineage": {
             "schema_version": 1,
             **lineage_root,
+            "segment_end_times": list(lineage_schedules[-1]),
             "source_segment_end_times": [
                 payload["trajectory_lineage"]["segment_end_times"] for payload in payloads
             ],

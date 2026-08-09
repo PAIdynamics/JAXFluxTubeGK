@@ -127,3 +127,13 @@ def test_nonlinear_checkpoint_roundtrip_and_contract_guard(tmp_path):
     assert contract["state_dtype"] == "complex128"
     with pytest.raises(ValueError, match="contract does not match"):
         _load_checkpoint(path, contract | {"hyperdiffusion": 0.2})
+    with pytest.raises(ValueError, match="initialization controls"):
+        _load_checkpoint(
+            path,
+            contract,
+            {
+                "seed": 18,
+                "initial_amplitude": 1.0e-3,
+                "initial_zonal_fraction": 0.0,
+            },
+        )

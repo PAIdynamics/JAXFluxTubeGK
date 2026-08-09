@@ -6,19 +6,20 @@ import pytest
 from scripts.merge_nonlinear_heat_flux_segments import merge_nonlinear_heat_flux_segments
 
 
-def _segment(path, start, stop, *, hyperdiffusion=0.05):
+def _segment(path, start, stop, *, hyperdiffusion=0.05, schedule=None):
     times = np.linspace(start, stop, 101)
     payload = {
         "schema_version": 1,
         "producer": "jax-fluxtube-gk/nonlinear-heat-flux",
         "normalization": "jax_fluxtube_gk_native",
+        "start_time": start,
         "end_time": stop,
         "trajectory_lineage": {
             "schema_version": 1,
             "seed": 17,
             "initial_amplitude": 1.0e-3,
             "initial_zonal_fraction": 0.0,
-            "segment_end_times": [stop],
+            "segment_end_times": [stop] if schedule is None else schedule,
         },
         "case": {
             "n_z": 12,
@@ -52,7 +53,7 @@ def _segment(path, start, stop, *, hyperdiffusion=0.05):
 
 def test_merge_nonlinear_segments_recomputes_one_contiguous_window(tmp_path):
     first = _segment(tmp_path / "first.json", 20.0, 40.0)
-    second = _segment(tmp_path / "second.json", 40.0, 60.0)
+    second = _segment(tmp_path / "second.json", 40.0, 60.0, schedule=[40.0, 60.0])
 
     report = merge_nonlinear_heat_flux_segments((first, second), min_blocks=4)
 
@@ -62,14 +63,48 @@ def test_merge_nonlinear_segments_recomputes_one_contiguous_window(tmp_path):
     assert len(report["times"]) == 201
     assert report["statistics"]["n_samples"] == 101
     assert report["candidate_nonzonal_phi_growth_rate"] == pytest.approx(1.0e-3)
+    assert report["trajectory_lineage"]["segment_end_times"] == [40.0, 60.0]
 
 
 def test_merge_nonlinear_segments_rejects_contract_changes_and_gaps(tmp_path):
     first = _segment(tmp_path / "first.json", 20.0, 40.0)
-    changed = _segment(tmp_path / "changed.json", 40.0, 60.0, hyperdiffusion=0.1)
-    gap = _segment(tmp_path / "gap.json", 41.0, 60.0)
+    changed = _segment(
+        tmp_path / "changed.json",
+        40.0,
+        60.0,
+        hyperdiffusion=0.1,
+        schedule=[40.0, 60.0],
+    )
+    gap = _segment(tmp_path / "gap.json", 41.0, 60.0, schedule=[40.0, 60.0])
 
     with pytest.raises(ValueError, match="contracts do not match"):
         merge_nonlinear_heat_flux_segments((first, changed))
     with pytest.raises(ValueError, match="contiguous"):
         merge_nonlinear_heat_flux_segments((first, gap))
+
+
+def test_merge_nonlinear_segments_rejects_broken_lineage_and_trace_metadata(tmp_path):
+    first = _segment(tmp_path / "first.json", 20.0, 40.0)
+    broken_lineage = _segment(tmp_path / "broken.json", 40.0, 60.0)
+    with pytest.raises(ValueError, match="lineage schedules"):
+        merge_nonlinear_heat_flux_segments((first, broken_lineage))
+
+    wrong_endpoint = _segment(
+        tmp_path / "wrong-endpoint.json", 40.0, 60.0, schedule=[40.0, 60.0]
+    )
+    payload = json.loads(wrong_endpoint.read_text())
+    payload["start_time"] = 39.0
+    wrong_endpoint.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="trace endpoints"):
+        merge_nonlinear_heat_flux_segments((first, wrong_endpoint))
+
+
+def test_merge_nonlinear_segments_rejects_restart_diagnostic_discontinuity(tmp_path):
+    first = _segment(tmp_path / "first.json", 20.0, 40.0)
+    second = _segment(tmp_path / "second.json", 40.0, 60.0, schedule=[40.0, 60.0])
+    payload = json.loads(second.read_text())
+    payload["heat_flux"][0] += 0.5
+    second.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="heat flux is discontinuous"):
+        merge_nonlinear_heat_flux_segments((first, second))
