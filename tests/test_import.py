@@ -32,3 +32,21 @@ def test_validation_namespace_and_legacy_attribute_are_lazy_compatible():
     from stellarator_gk import CycloneTrace
 
     assert CycloneTrace.__module__ == "stellarator_gk.benchmarks"
+
+
+def test_validation_namespace_import_is_itself_lazy():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, stellarator_gk.validation; "
+            "assert 'stellarator_gk.benchmarks' not in sys.modules",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr

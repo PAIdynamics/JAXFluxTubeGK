@@ -899,7 +899,7 @@ _VALIDATION_COMPAT_NAMES = frozenset(
 def __getattr__(name: str):
     if name not in _VALIDATION_COMPAT_NAMES:
         raise AttributeError(name)
-    from .validation import benchmark_symbol
+    from .validation._lazy import benchmark_symbol
 
     return benchmark_symbol(name)
 

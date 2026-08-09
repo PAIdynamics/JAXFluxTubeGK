@@ -836,6 +836,10 @@ shape-optimization claims named above pass.
   `validation.geometry_parity`, and `validation.w7x` namespaces, and the shared
   scalar target contract has moved physically to `targets.py`. The densely
   coupled legacy implementation still needs to be split behind those facades.
+  Future-work completion means: move fixture records/readers first, geometry
+  parity second, then Cyclone/GKW workflows and shared numerics; reduce
+  `benchmarks.py` to a compatibility facade under 500 lines; introduce no
+  import cycles; preserve report/fixture schemas; and pass the standalone suite.
 - [x] Keep benchmark-only symbols out of the default top-level import path;
   expose a compact solver API and a separate validation namespace. A fresh
   `import stellarator_gk` no longer loads `stellarator_gk.benchmarks`, benchmark

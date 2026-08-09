@@ -229,6 +229,10 @@ claimed.
   geometry parity, and W7-X contracts. The default solver import no longer
   loads the 16k-line benchmark implementation or advertises benchmark-only
   names in `__all__`; legacy top-level imports remain lazy-compatible.
+- Importing `stellarator_gk.validation` is itself now lazy; the 16k-line
+  implementation loads only when a concrete validation symbol is requested.
+  The remaining physical split has an ordered handoff and a measurable target:
+  a schema-preserving compatibility facade below 500 lines with no cycles.
 - Physically extracted the stable `BenchmarkTarget`, residual, and cost
   contracts into `targets.py`, removing optimization's dependency on the
   benchmark monolith. A subprocess regression test enforces the import
