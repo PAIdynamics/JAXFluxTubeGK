@@ -739,8 +739,14 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   That second expansion has reached its first caller-owned time-100 checkpoint
   in 2,867 steps. It remains transient (mean `-10.2580`, `39.0%` block error,
   drift `-0.0729`, field growth `0.0308`) and costs about 31 CPU minutes per
-  100-unit segment. It must be extended to a stationary late window before the
-  `17x9 -> 33x17` finest-pair domain decision.
+  100-unit segment. The contract-identical time-100-to-200 continuation is also
+  nonstationary after 2,856 steps: mean `-3.3568`, `7.91%` block error, drift
+  `0.6739`, and field growth `-6.05e-3`. Merging time 0-to-200 still fails on
+  drift (`0.3990`, with mean `-3.4244` and `5.99%` block error), so this is not
+  a short-window false negative. It must be extended to a stationary late
+  window before the `17x9 -> 33x17` finest-pair domain decision. CUDA/GX
+  execution is explicitly deferred for now and is not counted as a passing
+  independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 

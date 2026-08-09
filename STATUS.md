@@ -278,7 +278,14 @@ claimed.
 - The required `33x17, ky_min=0.025` second expansion now has a valid time-100
   checkpoint after 2,867 steps. Its first window is transient (mean `-10.2580`,
   `39.0%` block error, drift `-0.0729`, field growth `0.0308`). Measured CPU
-  cost is about 31 minutes per 100 time units; late-window extensions remain.
+  cost is about 31 minutes per 100 time units. Its contract-identical
+  time-100-to-200 continuation completes in 2,856 steps but remains
+  nonstationary: mean `-3.3568`, `7.91%` block error, drift `0.6739`, and field
+  growth `-6.05e-3`. A time-0-to-200 merge also fails on drift (`0.3990`), with
+  mean `-3.4244` and `5.99%` block error, so late-window extensions remain.
+- CUDA/GX nonlinear execution is deferred at the user's direction. It remains
+  an open independent-parity gate and is not represented as passing while the
+  CPU-local domain campaign continues.
 - Repository-wide verification after the lineage, precision, and pair-resolved
   collision changes passes: Ruff is clean and the standalone x64 suite reports
   **517 passed and 25 external tests deselected in 563.49 s**.
