@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-08-07
+Last updated: 2026-08-10
 
 ## Executive Summary
 
@@ -22,6 +22,35 @@ design objectives, gradient audits, topology guards, robust multi-sample
 aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
+
+### 2026-08-10: Priority 5 Acceptance Audit and Finest-Domain Result
+
+- Audited nonlinear acceptance from raw producer through checkpoint restart,
+  segment merge, resolution/domain ladders, lineage ensemble, and pinned GX
+  comparison. Reports now fail closed on malformed/nonfinite statistics and
+  controls, weakened stationarity declarations, inconsistent cases, invalid or
+  discontinuous lineage, untrusted producers, and missing reference provenance.
+- The GX contract now requires pinned revision
+  `bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`, nonblank manifest/NetCDF
+  artifacts, case-matched physics, and recorded minimum numerical resolution.
+  CUDA/native GX execution remains deferred and is not counted as parity.
+- Corrected a stationarity bug: amplitude retention is now evaluated over the
+  same late candidate window as flux drift, uncertainty, and field growth,
+  rather than over the entire segment. Producer, merger, and final campaign
+  enforce the same window.
+- Completed the caller-owned `65x33`, `ky_min=0.0125`, seed-19 continuation
+  from time 140 to 200 in 1,714 adaptive steps. The segment is bounded and
+  satisfies every scalar gate except the six-block minimum. The contiguous
+  time-100-to-200 merge is stationary: mean `-4.41179645`, 180 samples over
+  49.91 time units, nine blocks, `4.8447%` relative block error, drift
+  `-0.09617`, candidate RMS ratio `1.21823`, and field growth `2.238e-3`.
+- The stationary `33x17 -> 65x33` mean change is `24.34%`, above the unchanged
+  `15%` domain-convergence gate. The next scientific rung is therefore
+  `129x65`, `ky_min=0.00625`; solver output remains outside the repository.
+- Collision and linear-electromagnetic implementation remain complete for the
+  accepted scope. Nonlinear electromagnetic evolution, independent GX parity,
+  the next domain rung, and unrestricted equilibrium-shape optimization remain
+  explicit future work.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 
@@ -1164,8 +1193,10 @@ inexact so prepared providers remain installed.
   ill-conditioned during design optimization; branch/gradient checks are not
   yet implemented for real equilibria.
 - Production CPU scaling on approximately 100 CPUs has not been demonstrated.
-- Collisions, electromagnetic physics, nonlinear turbulence, kinetic-electron
-  TEM production validation, and full shape optimization are deferred.
+- Nonlinear electromagnetic evolution, nonlinear domain convergence and GX
+  parity, kinetic-electron TEM production validation, native MHD autodiff, and
+  unrestricted shape optimization remain deferred. Production collisions and
+  the validated linear electromagnetic path are implemented.
 
 ## Round Log
 

@@ -778,8 +778,17 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   intermittent rather than stationary: mean `-3.3663`, `1.65%` block error,
   RMS ratio `0.899`, and field growth `-0.0119` pass, while drift rises to
   `0.3385`. Merging time 100-to-140 also fails drift (`0.3349`) and contains
-  only 73 candidate samples. The validated time-140 checkpoint must therefore
-  feed a longer uninterrupted late segment.
+  only 73 candidate samples. The time-140-to-200 continuation completes in
+  1,714 steps and is bounded: its final half has mean `-4.4622`, `3.28%` block
+  error, drift `0.1567`, candidate RMS ratio `0.937`, and field growth
+  `-2.35e-3`. It has 108 samples over 29.74 time units but only five complete
+  physical-time blocks, so the unchanged six-block minimum correctly rejects
+  the segment. Merging time 100-to-200 produces the first stationary result
+  for this rung: mean `-4.4118`, 180 samples, 49.91 time units, nine blocks,
+  `4.84%` block error, drift `-0.0962`, candidate RMS ratio `1.218`, and field
+  growth `2.24e-3`. Its `24.34%` change from the stationary `33x17` mean
+  `-5.4858`, normalized to the finer result, still exceeds the unchanged 15%
+  domain gate. A `129x65, ky_min=0.00625` rung is therefore required.
   CUDA/GX execution is explicitly deferred for now and is not counted as a
   passing independent parity result.
 - [ ] Extend to full equilibrium-shape optimization only after the standalone
@@ -795,32 +804,31 @@ local/reference producer identities, finite CLI controls, and pinned GX source,
 artifact, numerical-resolution, and physics provenance. Keep both checkboxes
 above open until the following evidence exists:
 
-1. **Finish the CPU-local domain ladder.** The latest validated caller-owned
-   checkpoint is `/private/tmp/p5-domain-finest-seed19-t140.npz`: seed 19,
-   complex128, `12x12x6` phase space, `65x33` Fourier modes, and
-   `ky_min=0.0125`. Time 120-to-140 remains bounded but intermittent (mean
-   `-3.3663`, block error `1.65%`, drift `0.3385`, RMS ratio `0.899`, field
-   growth `-0.0119`). The merged time-100-to-140 candidate has only 73 samples
-   and drift `0.3349`. Resume with one uninterrupted time-140-to-200 segment at
-   `diagnostic_stride=8`; its final half should provide more than 100 samples
-   over more than 10 time units without weakening the acceptance gate:
+1. **Finish the CPU-local domain ladder.** The caller-owned
+   `/private/tmp/p5-domain-finest-seed19-t100-t200-merged.json` is a passing
+   stationary `65x33, ky_min=0.0125` report, and
+   `/private/tmp/p5-domain-finest-seed19-t200.npz` is its latest valid
+   checkpoint. Domain convergence nevertheless fails at `24.34%`, so start the
+   next bandwidth-preserving `129x65, ky_min=0.00625` rung from the same seed
+   and physics. First establish a finite complex128 time-20 bootstrap in
+   caller-owned storage:
 
    ```console
    JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
-     --output /tmp/p5-domain-finest-seed19-t140-t200.json \
-     --restart-from /private/tmp/p5-domain-finest-seed19-t140.npz \
-     --checkpoint-output /tmp/p5-domain-finest-seed19-t200.npz \
-     --final-time 200 --n-z 12 --n-vpar 12 --n-mu 6 \
-     --n-kx 65 --n-ky 33 --ky-min 0.0125 \
+     --output /tmp/p5-domain-next-seed19-t0-t20.json \
+     --checkpoint-output /tmp/p5-domain-next-seed19-t20.npz \
+     --final-time 20 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 129 --n-ky 65 --ky-min 0.00625 \
      --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
    ```
 
-   Require producer stationarity with at least 100 samples, duration 10,
+   Continue through bounded caller-owned checkpoints until a merged late window
+   satisfies producer stationarity with at least 100 samples, duration 10,
    relative block error at most `0.10`, absolute drift at most `0.20`, RMS
-   ratio at least `0.8`, and absolute field growth at most `0.02`. Only then
-   compare its mean with the stationary `33x17` mean `-5.4858`; the relative
-   finest-pair change must be at most `15%`. A failure requires another
-   bandwidth-preserving domain rung rather than a tolerance change.
+   ratio at least `0.8`, and absolute field growth at most `0.02`. Compare its
+   mean with `-4.4118`; the relative finest-pair change must be at most `15%`.
+   A failure requires another bandwidth-preserving domain rung rather than a
+   tolerance change. Do not commit checkpoints or reports.
 2. **Run independent nonlinear parity when CUDA/native capacity is available.**
    Use the revision-pinned GX preparation and schema-v1 summarization workflow;
    do not treat the current deferral as a pass or commit solver output.
