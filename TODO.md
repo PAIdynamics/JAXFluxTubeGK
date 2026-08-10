@@ -877,6 +877,25 @@ above open until the following evidence exists:
      --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
    ```
 
+   The time-60-to-80 continuation completed in 573 steps and produced a finite
+   complex128 checkpoint with exact `[20,40,60,80]` lineage. Its late
+   time-70-to-80 candidate passes every scalar gate: mean `-8.96128`, `0.535%`
+   block error, drift `-0.0447`, candidate RMS ratio `0.970`, and field growth
+   `-0.00249`. The producer correctly remains fail-closed because the candidate
+   has only 37 samples, one block, and duration `9.9765`, short of the unchanged
+   100-sample, six-block, and duration-10 minima. The broader time-40-to-80
+   merge includes the turnover and also fails. Continue the now-bounded state:
+
+   ```console
+   JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+     --output /tmp/p5-domain-next-seed19-t80-t100.json \
+     --restart-from /private/tmp/p5-domain-next-seed19-t80.npz \
+     --checkpoint-output /tmp/p5-domain-next-seed19-t100.npz \
+     --final-time 100 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+     --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+   ```
+
    Continue through bounded caller-owned checkpoints until a merged late window
    satisfies producer stationarity with at least 100 samples, duration 10,
    relative block error at most `0.10`, absolute drift at most `0.20`, RMS

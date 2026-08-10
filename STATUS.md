@@ -68,8 +68,13 @@ claimed.
   growth `0.1420`). The time-0-to-60 merge is likewise nonstationary (mean
   `-4.63125`, 109 candidate samples, five blocks, `78.09%` block error, drift
   `-4.442`, candidate RMS ratio `77.75`, growth `0.1471`). Time 60-to-80 is the
-  next exact continuation; no tolerance was weakened and no solver artifact
-  was added to the repository.
+  first turnover interval: it completed in 573 steps with a finite time-80
+  checkpoint and exact `[20,40,60,80]` lineage. Its time-70-to-80 candidate
+  passes all scalar gates (mean `-8.96128`, `0.535%` block error, drift
+  `-0.0447`, RMS ratio `0.970`, growth `-0.00249`) but correctly fails the
+  unchanged evidence minima with only 37 samples, one block, and duration
+  `9.9765`. Time 80-to-100 is the next bounded continuation. No tolerance was
+  weakened and no solver artifact was added to the repository.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 
