@@ -53,6 +53,12 @@ claimed.
   explicit future work.
 - Final standalone verification passes with x64 enabled: repository-wide Ruff
   is clean and pytest reports `608 passed, 25 deselected` in 632.86 seconds.
+- The next bandwidth-preserving `129x65`, `ky_min=0.00625` CPU rung now has a
+  valid caller-owned time-20 bootstrap after 572 adaptive steps. Its 106 MiB
+  checkpoint is finite complex128 with shape `(12,6,12,129,65)` and exact
+  seed-19 lineage. The startup remains strongly transient (mean
+  `-1.6364e-4`, drift `-2.166`, candidate growth `0.1094`) and is feasibility
+  evidence only; time 20-to-40 is the next continuation.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 

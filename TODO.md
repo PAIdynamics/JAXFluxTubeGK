@@ -829,6 +829,25 @@ above open until the following evidence exists:
    mean with `-4.4118`; the relative finest-pair change must be at most `15%`.
    A failure requires another bandwidth-preserving domain rung rather than a
    tolerance change. Do not commit checkpoints or reports.
+
+   The `129x65` time-0-to-20 bootstrap completed on 2026-08-10 in 572
+   adaptive steps. Its caller-owned checkpoint
+   `/private/tmp/p5-domain-next-seed19-t20.npz` contains a finite complex128
+   `(12,6,12,129,65)` state with exact seed-19 lineage. The startup window is
+   intentionally nonstationary: mean `-1.6364e-4`, `10.50%` block error,
+   drift `-2.166`, candidate RMS ratio `2.914`, field growth `0.1094`, 37
+   samples, and one physical-time block. Continue the identical trajectory to
+   time 40 rather than interpreting the transient:
+
+   ```console
+   JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+     --output /tmp/p5-domain-next-seed19-t20-t40.json \
+     --restart-from /private/tmp/p5-domain-next-seed19-t20.npz \
+     --checkpoint-output /tmp/p5-domain-next-seed19-t40.npz \
+     --final-time 40 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+     --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+   ```
 2. **Run independent nonlinear parity when CUDA/native capacity is available.**
    Use the revision-pinned GX preparation and schema-v1 summarization workflow;
    do not treat the current deferral as a pass or commit solver output.
