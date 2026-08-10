@@ -896,6 +896,24 @@ above open until the following evidence exists:
      --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
    ```
 
+   The time-80-to-100 continuation completed in 572 steps with a finite
+   complex128 checkpoint and exact `[20,40,60,80,100]` lineage. It remains
+   bounded, but its late candidate is not stationary: mean `-6.51294`, `1.67%`
+   block error, drift `0.3376`, candidate RMS ratio `0.873`, and field growth
+   `-0.0148`. The time-60-to-100 merge likewise fails on drift (`0.573`) and
+   still has only 73 candidate samples and four blocks. Continue the exact
+   intermittent saturated trajectory rather than using a premature mean:
+
+   ```console
+   JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+     --output /tmp/p5-domain-next-seed19-t100-t120.json \
+     --restart-from /private/tmp/p5-domain-next-seed19-t100.npz \
+     --checkpoint-output /tmp/p5-domain-next-seed19-t120.npz \
+     --final-time 120 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+     --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+   ```
+
    Continue through bounded caller-owned checkpoints until a merged late window
    satisfies producer stationarity with at least 100 samples, duration 10,
    relative block error at most `0.10`, absolute drift at most `0.20`, RMS
