@@ -320,6 +320,182 @@ optimization, or nonlinear turbulent transport; those remain deferred.
 
 ## Priority 5: Confidence Gaps and Deferred Physics
 
+### Objective and current boundary
+
+Priority 5 is no longer blocked on a missing local operator. The production
+CPU velocity representation, kinetic-electron physics, linear electromagnetic
+response, Landau/Fokker--Planck collision path, nonlinear ExB bracket,
+adaptive driver, restart contract, diagnostics, and fail-closed acceptance
+tools are implemented and tested. The remaining work is long-running
+scientific acceptance evidence plus the design demonstration that depends on
+that evidence.
+
+The authoritative remaining-work checklist is:
+
+- [ ] Obtain a stationary `129x65`, `ky_min=0.00625` local nonlinear report
+  and finish the bandwidth-preserving domain-convergence ladder.
+- [ ] Run the matched revision-pinned GX case on CUDA/native capacity and pass
+  the independent nonlinear heat-flux parity gate.
+- [ ] Run the complete campaign evaluator with stationary resolution, domain,
+  three-lineage, and GX reports; retain its passing schema-v1 report outside
+  the repository.
+- [ ] Attempt unrestricted equilibrium-shape optimization only after every
+  prerequisite gate passes, then add a checkpointed end-to-end design run.
+
+Do not mark Priority 5 complete from a flat-looking trace, a single seed, a
+local-only comparison, or a reduced tolerance. Generated states, NetCDF files,
+and JSON reports remain caller-owned scratch artifacts and must not be
+committed.
+
+### Recommended execution sequence
+
+#### 1. Finish the active `129x65` CPU trajectory
+
+The latest validated state is
+`/private/tmp/p5-domain-next-seed19-t100.npz`: a finite complex128
+`(12,6,12,129,65)` checkpoint at time 100 with exact seed-19 lineage
+`[20,40,60,80,100]`. The time-80-to-100 segment is bounded but not stationary;
+its candidate drift is `0.3376`. Continue from that state without changing the
+grid, physics, diagnostic cadence, seed, or checkpoint history:
+
+```console
+JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+  --output /private/tmp/p5-domain-next-seed19-t100-t120.json \
+  --restart-from /private/tmp/p5-domain-next-seed19-t100.npz \
+  --checkpoint-output /private/tmp/p5-domain-next-seed19-t120.npz \
+  --final-time 120 --n-z 12 --n-vpar 12 --n-mu 6 \
+  --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+  --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+```
+
+Continue in bounded 20-time-unit segments. After each segment:
+
+1. Verify that the state is finite complex128, the checkpoint time is exact,
+   and `trajectory_lineage.segment_end_times` contains the full schedule.
+2. Inspect the segment, but do not accept its mean when `stationary=false`.
+3. Merge only contiguous post-turnover segments with
+   `scripts/merge_nonlinear_heat_flux_segments.py`; do not include startup
+   growth merely to increase the sample count.
+4. Stop extending only when a merged late window reports `stationary=true`.
+
+At the current diagnostic cadence, two 20-unit segments provide only about 73
+candidate samples and four blocks after the merger applies its late-half
+window. Expect to reach at least time 140, then merge the three post-turnover
+segments as one contiguous report:
+
+```console
+uv run python scripts/merge_nonlinear_heat_flux_segments.py \
+  /private/tmp/p5-domain-next-seed19-t80-t100.json \
+  /private/tmp/p5-domain-next-seed19-t100-t120.json \
+  /private/tmp/p5-domain-next-seed19-t120-t140.json \
+  --output /private/tmp/p5-domain-next-seed19-t80-t140-merged.json
+```
+
+If that window fails a physical statistic, extend from time 140 and shift the
+merge start forward as needed. Never concatenate noncontiguous reports or
+reports with different contracts.
+
+The unchanged stationarity requirements are at least 100 samples, duration
+10, six physical-time blocks, relative block error at most `0.10`, absolute
+window drift at most `0.20`, candidate nonzonal-potential RMS ratio at least
+`0.8`, and absolute fitted field growth at most `0.02`.
+
+#### 2. Decide the domain-convergence gate
+
+Compare the accepted `129x65` mean against the stationary `65x33` result
+`-4.41179645` from
+`/private/tmp/p5-domain-finest-seed19-t100-t200-merged.json`. Normalize the
+absolute difference by the finer `129x65` mean. The gate passes at or below
+`15%`.
+
+If it fails, do not adjust the tolerance or dissipation. Add the next
+bandwidth-preserving rung by halving `ky_min` and increasing the Fourier grid
+to `257x129`, while holding `n_z=12`, `n_vpar=12`, `n_mu=6`, the physical
+profiles, boundary model, hyperdiffusion, flux moment, and seed fixed. Bootstrap
+that rung from its own seed-19 initial state and repeat the checkpointed
+stationarity procedure. Do not interpolate a turbulent checkpoint between
+Fourier grids and call it the same lineage.
+
+#### 3. Obtain independent GX parity
+
+This gate needs a CUDA-capable machine and the pinned GX revision
+`bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`. Prepare the external run with
+`scripts/prepare_gx_nonlinear_heat_flux_run.py`, execute the command it prints,
+and summarize the caller-owned NetCDF output with
+`scripts/summarize_gx_nonlinear_heat_flux.py`. Keep the generated GX input,
+manifest, NetCDF file, and summary outside this repository.
+
+```console
+uv run python scripts/prepare_gx_nonlinear_heat_flux_run.py \
+  --gx-root /path/to/gx --gx-executable /path/to/gx/bin/gx \
+  --output-dir /scratch/gx-cyclone-nonlinear
+
+# Run the command printed by the preparation helper on the CUDA host, then run
+# its printed summarization command against the resulting NetCDF file.
+```
+
+The GX report must be stationary and must match the finest accepted local case
+in geometry, profiles, Fourier box, linked boundary, electrostatic physics,
+hyperdiffusion, numerical resolution, and `gx_Q_over_Q_GB` normalization. The
+local/GX mean difference must be at most `20%`. CUDA comparison is currently
+deferred, not passed.
+
+#### 4. Run the final nonlinear campaign gate
+
+Use `scripts/validate_nonlinear_heat_flux_campaign.py` with:
+
+- at least two stationary phase-space resolution reports;
+- at least two stationary bandwidth-preserving domain reports;
+- at least three stationary reports with distinct initialization roots; and
+- the stationary pinned GX report.
+
+The existing `16x16x8 -> 20x20x10` resolution pair passes at `3.88%`, and the
+existing three-root coarse ensemble passes with `2.04%` maximum deviation.
+They remain usable only if their case contracts match what the evaluator
+requires. The evaluator is authoritative: it must exit successfully and emit
+`passed=true`. It also verifies that resolution rungs change only phase-space
+resolution, domain rungs change only the physical box while preserving
+bandwidth, every producer accepted its own stationarity window, lineage roots
+are distinct, and the GX provenance is pinned and case-matched.
+
+```console
+uv run python scripts/validate_nonlinear_heat_flux_campaign.py \
+  --resolution-report /scratch/resolution-coarse.json \
+  --resolution-report /scratch/resolution-fine.json \
+  --domain-report /scratch/domain-coarse.json \
+  --domain-report /scratch/domain-fine.json \
+  --lineage-report /scratch/lineage-seed-18.json \
+  --lineage-report /scratch/lineage-seed-19.json \
+  --lineage-report /scratch/lineage-seed-20.json \
+  --reference-report /scratch/gx-cyclone-nonlinear.json \
+  --output /scratch/nonlinear-campaign.json
+```
+
+#### 5. Demonstrate unrestricted design optimization
+
+Only after steps 1--4 pass, connect the accepted nonlinear objective to the
+existing MHD geometry/design interface. Preserve the fixed topology and
+remeshing contract, run a checkpointed end-to-end optimization, and verify the
+objective gradient against finite differences at representative design
+points. Record solver/provider revisions and commands, but keep large geometry,
+state, and solver-output artifacts outside the repository.
+
+### Definition of done
+
+Priority 5 is complete only when the repository can point to a passing final
+campaign report and a reproducible unrestricted design run. Collision and
+linear-electromagnetic implementation are already complete for the accepted
+scope. Nonlinear electromagnetic evolution, multispecies implicit-response
+shortcuts beyond their declared scope, and CUDA performance comparisons are
+future physics/performance extensions; they are not substitutes for, and do
+not silently block, the electrostatic acceptance sequence above.
+
+<details>
+<summary>Historical implementation and numerical campaign log</summary>
+
+The material below preserves the detailed evidence trail. It is not the
+authoritative remaining-work checklist; follow the sequence above.
+
 - [x] Keep GKW selected-mode state-history and multi-time velocity-slice gaps
   visible until closed or superseded by an independent stellarator reference.
 - [x] Decide whether Chebyshev/GKW finite-difference velocity collocation is
@@ -544,7 +720,7 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   of coupled linear and instantaneous ExB CFL bounds. Fixed-step integration
   remains the differentiable trajectory path because adaptive accept decisions
   are nonsmooth.
-- [ ] Demonstrate statistically stationary heat flux with resolution/domain
+- Historical open item: demonstrate statistically stationary heat flux with resolution/domain
   convergence and pass an independent nonlinear parity gate. The operator,
   adaptive driver, and diagnostics alone do not establish a turbulence claim.
   The collocation diagnostic now evaluates the gyroaveraged non-advective heat
@@ -791,10 +967,10 @@ optimization, or nonlinear turbulent transport; those remain deferred.
   domain gate. A `129x65, ky_min=0.00625` rung is therefore required.
   CUDA/GX execution is explicitly deferred for now and is not counted as a
   passing independent parity result.
-- [ ] Extend to full equilibrium-shape optimization only after the standalone
+- Historical open item: extend to full equilibrium-shape optimization only after the standalone
   geometry, W7-X parity, convergence, timing, and gradient gates pass.
 
-### Priority 5 future-work handoff
+### Historical 2026-08-10 future-work handoff
 
 The remaining Priority 5 electrostatic acceptance work is scientific
 validation, not a missing local operator or API. A 2026-08-10 fail-closed audit
@@ -941,6 +1117,8 @@ unsupported rather than silently approximated: the nonlinear residual rejects
 electromagnetic field models, and the implicit parallel-response shortcut is
 single-species only. These are later physics extensions, not blockers for the
 current electrostatic nonlinear campaign.
+
+</details>
 
 ## Priority 6: Maintainability After the Standalone Boundary Is Green
 
