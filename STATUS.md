@@ -62,7 +62,14 @@ claimed.
   with a finite time-40 checkpoint and exact `[20,40]` lineage. That segment
   remains strongly transient (mean `-0.03929`, drift `-2.653`, candidate RMS
   ratio `4.265`, growth `0.1464`); the merged time-0-to-40 trace also fails.
-  Time 40-to-60 is the next continuation.
+  The time-40-to-60 continuation completed in another 572 steps with a finite
+  time-60 checkpoint and exact `[20,40,60]` lineage. It remains strongly
+  transient (mean `-13.1572`, drift `-2.498`, candidate RMS ratio `4.063`,
+  growth `0.1420`). The time-0-to-60 merge is likewise nonstationary (mean
+  `-4.63125`, 109 candidate samples, five blocks, `78.09%` block error, drift
+  `-4.442`, candidate RMS ratio `77.75`, growth `0.1471`). Time 60-to-80 is the
+  next exact continuation; no tolerance was weakened and no solver artifact
+  was added to the repository.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 

@@ -858,6 +858,25 @@ above open until the following evidence exists:
      --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
    ```
 
+   The time-40-to-60 continuation completed in 572 steps and wrote a finite
+   complex128 checkpoint with exact `[20,40,60]` seed-19 lineage. It remains
+   strongly transient: mean `-13.1572`, `12.13%` block error, drift `-2.498`,
+   candidate RMS ratio `4.063`, and field growth `0.1420`. The contiguous
+   time-0-to-60 merge is also nonstationary: mean `-4.63125`, 109 candidate
+   samples over 29.91 time units, five blocks, `78.09%` block error, drift
+   `-4.442`, candidate RMS ratio `77.75`, and field growth `0.1471`. Continue
+   the exact trajectory through the first nonlinear turnover:
+
+   ```console
+   JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
+     --output /tmp/p5-domain-next-seed19-t60-t80.json \
+     --restart-from /private/tmp/p5-domain-next-seed19-t60.npz \
+     --checkpoint-output /tmp/p5-domain-next-seed19-t80.npz \
+     --final-time 80 --n-z 12 --n-vpar 12 --n-mu 6 \
+     --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+     --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
+   ```
+
    Continue through bounded caller-owned checkpoints until a merged late window
    satisfies producer stationarity with at least 100 samples, duration 10,
    relative block error at most `0.10`, absolute drift at most `0.20`, RMS
