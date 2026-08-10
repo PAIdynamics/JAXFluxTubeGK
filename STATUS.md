@@ -58,7 +58,11 @@ claimed.
   checkpoint is finite complex128 with shape `(12,6,12,129,65)` and exact
   seed-19 lineage. The startup remains strongly transient (mean
   `-1.6364e-4`, drift `-2.166`, candidate growth `0.1094`) and is feasibility
-  evidence only; time 20-to-40 is the next continuation.
+  evidence only. Its time-20-to-40 continuation also completed in 572 steps
+  with a finite time-40 checkpoint and exact `[20,40]` lineage. That segment
+  remains strongly transient (mean `-0.03929`, drift `-2.653`, candidate RMS
+  ratio `4.265`, growth `0.1464`); the merged time-0-to-40 trace also fails.
+  Time 40-to-60 is the next continuation.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 
