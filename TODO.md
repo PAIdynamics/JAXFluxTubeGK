@@ -352,18 +352,20 @@ committed.
 #### 1. Finish the active `129x65` CPU trajectory
 
 The latest validated state is
-`/private/tmp/p5-domain-next-seed19-t100.npz`: a finite complex128
-`(12,6,12,129,65)` checkpoint at time 100 with exact seed-19 lineage
-`[20,40,60,80,100]`. The time-80-to-100 segment is bounded but not stationary;
-its candidate drift is `0.3376`. Continue from that state without changing the
-grid, physics, diagnostic cadence, seed, or checkpoint history:
+`/private/tmp/p5-domain-next-seed19-t120.npz`: a finite complex128
+`(12,6,12,129,65)` checkpoint at time 120 with exact seed-19 lineage
+`[20,40,60,80,100,120]`. The time-100-to-120 late candidate passes every
+physical statistic (mean `-5.97359`, `0.479%` block error, drift `-0.1023`, RMS
+ratio `1.070`, and field growth `0.00628`) but remains fail-closed with only 37
+samples, one block, and duration `9.914`. Continue from that state without
+changing the grid, physics, diagnostic cadence, seed, or checkpoint history:
 
 ```console
 JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
-  --output /private/tmp/p5-domain-next-seed19-t100-t120.json \
-  --restart-from /private/tmp/p5-domain-next-seed19-t100.npz \
-  --checkpoint-output /private/tmp/p5-domain-next-seed19-t120.npz \
-  --final-time 120 --n-z 12 --n-vpar 12 --n-mu 6 \
+  --output /private/tmp/p5-domain-next-seed19-t120-t140.json \
+  --restart-from /private/tmp/p5-domain-next-seed19-t120.npz \
+  --checkpoint-output /private/tmp/p5-domain-next-seed19-t140.npz \
+  --final-time 140 --n-z 12 --n-vpar 12 --n-mu 6 \
   --n-kx 129 --n-ky 65 --ky-min 0.00625 \
   --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
 ```

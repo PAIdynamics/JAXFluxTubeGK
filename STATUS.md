@@ -78,8 +78,13 @@ claimed.
   but the late candidate remains intermittent: mean `-6.51294`, `1.67%` block
   error, drift `0.3376`, RMS ratio `0.873`, and growth `-0.0148`. The
   time-60-to-100 merge also fails on drift (`0.573`) and evidence count (73
-  samples, four blocks). Time 100-to-120 is the next bounded continuation. No
-  tolerance was weakened and no solver artifact was added to the repository.
+  samples, four blocks). Time 100-to-120 completed in another 572 steps and
+  wrote a finite checkpoint with exact `[20,40,60,80,100,120]` lineage. Its
+  late candidate passes every physical statistic (mean `-5.97359`, `0.479%`
+  block error, drift `-0.1023`, RMS ratio `1.070`, growth `0.00628`) but is
+  correctly rejected with only 37 samples, one block, and duration `9.914`.
+  Time 120-to-140 is the next bounded continuation. No tolerance was weakened
+  and no solver artifact was added to the repository.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 
