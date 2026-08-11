@@ -352,22 +352,22 @@ committed.
 #### 1. Finish the active `129x65` CPU trajectory
 
 The latest validated state is
-`/private/tmp/p5-domain-next-seed19-t140.npz`: a finite complex128
-`(12,6,12,129,65)` checkpoint at time 140 with exact seed-19 lineage through
-`[20,40,60,80,100,120,140]`. The time-120-to-140 late candidate passes every
-physical statistic (mean `-7.03914`, `0.259%` block error, drift `0.0401`, RMS
-ratio `0.994`, and field growth `-9.63e-5`) but remains fail-closed with only 37
-samples, one block, and duration `9.914`. The time-80-to-140 merge has 109
-samples and acceptable error/amplitude/growth, but narrowly fails drift
-(`-0.2389`) and contains only five complete blocks. Continue from the time-140
-state without changing the contract:
+`/private/tmp/p5-domain-next-seed19-t160.npz`: a finite complex128
+`(12,6,12,129,65)` checkpoint at time 160 with exact seed-19 lineage through
+`[20,40,60,80,100,120,140,160]`. The time-140-to-160 late candidate passes
+every physical statistic (mean `-6.04226`, `0.149%` block error, drift
+`0.0315`, RMS ratio `0.983`, and field growth `-0.00137`) but remains
+fail-closed on evidence count. The time-80-to-160 merge has 145 samples, eight
+blocks, `2.62%` error, acceptable amplitude/growth, and fails only because
+drift `0.20709` narrowly exceeds `0.20`. Continue from time 160 and shift the
+late window forward without changing the contract:
 
 ```console
 JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
-  --output /private/tmp/p5-domain-next-seed19-t140-t160.json \
-  --restart-from /private/tmp/p5-domain-next-seed19-t140.npz \
-  --checkpoint-output /private/tmp/p5-domain-next-seed19-t160.npz \
-  --final-time 160 --n-z 12 --n-vpar 12 --n-mu 6 \
+  --output /private/tmp/p5-domain-next-seed19-t160-t180.json \
+  --restart-from /private/tmp/p5-domain-next-seed19-t160.npz \
+  --checkpoint-output /private/tmp/p5-domain-next-seed19-t180.npz \
+  --final-time 180 --n-z 12 --n-vpar 12 --n-mu 6 \
   --n-kx 129 --n-ky 65 --ky-min 0.00625 \
   --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
 ```
@@ -385,19 +385,20 @@ Continue in bounded 20-time-unit segments. After each segment:
 At the current diagnostic cadence, two 20-unit segments provide only about 73
 candidate samples and four blocks after the merger applies its late-half
 window. Three segments provide 109 samples but only five complete blocks
-because their late window is just under 30 time units. Reach time 160 and merge
-four post-turnover segments so the candidate window can contain eight blocks:
+because their late window is just under 30 time units. The first four-segment
+time-80-to-160 merge supplied eight blocks but missed the drift limit by
+`0.00709`. After reaching time 180, shift the four-segment window forward:
 
 ```console
 uv run python scripts/merge_nonlinear_heat_flux_segments.py \
-  /private/tmp/p5-domain-next-seed19-t80-t100.json \
   /private/tmp/p5-domain-next-seed19-t100-t120.json \
   /private/tmp/p5-domain-next-seed19-t120-t140.json \
   /private/tmp/p5-domain-next-seed19-t140-t160.json \
-  --output /private/tmp/p5-domain-next-seed19-t80-t160-merged.json
+  /private/tmp/p5-domain-next-seed19-t160-t180.json \
+  --output /private/tmp/p5-domain-next-seed19-t100-t180-merged.json
 ```
 
-If that window fails a physical statistic, extend from time 160 and shift the
+If that window fails a physical statistic, extend from time 180 and shift the
 merge start forward as needed. Never concatenate noncontiguous reports or
 reports with different contracts.
 

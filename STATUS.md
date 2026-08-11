@@ -89,7 +89,12 @@ claimed.
   merge remains narrowly fail-closed: its 109 samples pass error,
   amplitude-retention, and growth limits, but drift is `-0.2389` and only five
   complete blocks fit its 29.91-time-unit candidate window. Time 140-to-160 is
-  the next bounded continuation. No tolerance was weakened and no solver
+  also bounded and passes all scalar gates (mean `-6.04226`, `0.149%` error,
+  drift `0.0315`, RMS ratio `0.983`, growth `-0.00137`), with a finite
+  time-160 checkpoint and exact lineage. The time-80-to-160 merge now has 145
+  samples and eight blocks and passes error/amplitude/growth, but remains
+  fail-closed because drift `0.20709` narrowly exceeds `0.20`. Time 160-to-180
+  is the next bounded continuation. No tolerance was weakened and no solver
   artifact was added to the repository.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
