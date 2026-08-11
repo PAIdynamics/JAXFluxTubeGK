@@ -94,8 +94,14 @@ claimed.
   time-160 checkpoint and exact lineage. The time-80-to-160 merge now has 145
   samples and eight blocks and passes error/amplitude/growth, but remains
   fail-closed because drift `0.20709` narrowly exceeds `0.20`. Time 160-to-180
-  is the next bounded continuation. No tolerance was weakened and no solver
-  artifact was added to the repository.
+  completes in another 572 steps with a finite checkpoint and exact lineage.
+  The time-100-to-180 merge is the first stationary `129x65` result: mean
+  `-5.93381269`, 145 samples over 40 time units, eight blocks, `1.995%` error,
+  drift `0.18168`, RMS ratio `0.87996`, and growth `-0.00276`. Domain
+  convergence still fails: its change from the stationary `65x33` mean is
+  `25.65%`, above `15%`. The next required CPU rung is `257x129`,
+  `ky_min=0.003125`. No tolerance was weakened and no solver artifact was
+  added to the repository.
 
 ### 2026-08-07: Native stella Test-Particle Matrix Boundary
 

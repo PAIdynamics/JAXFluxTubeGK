@@ -349,26 +349,27 @@ committed.
 
 ### Recommended execution sequence
 
-#### 1. Finish the active `129x65` CPU trajectory
+#### 1. Finish the CPU domain ladder
 
-The latest validated state is
-`/private/tmp/p5-domain-next-seed19-t160.npz`: a finite complex128
-`(12,6,12,129,65)` checkpoint at time 160 with exact seed-19 lineage through
-`[20,40,60,80,100,120,140,160]`. The time-140-to-160 late candidate passes
-every physical statistic (mean `-6.04226`, `0.149%` block error, drift
-`0.0315`, RMS ratio `0.983`, and field growth `-0.00137`) but remains
-fail-closed on evidence count. The time-80-to-160 merge has 145 samples, eight
-blocks, `2.62%` error, acceptable amplitude/growth, and fails only because
-drift `0.20709` narrowly exceeds `0.20`. Continue from time 160 and shift the
-late window forward without changing the contract:
+The `129x65`, `ky_min=0.00625` seed-19 trajectory is stationary. Its validated
+time-100-to-180 merge at
+`/private/tmp/p5-domain-next-seed19-t100-t180-merged.json` has mean
+`-5.93381269`, 145 samples over 40 time units, eight blocks, `1.995%` relative
+block error, drift `0.18168`, candidate RMS ratio `0.87996`, and field growth
+`-0.00276`. Its finite complex128 time-180 checkpoint has exact lineage through
+`[20,40,60,80,100,120,140,160,180]`.
+
+Domain convergence nevertheless fails: the change from the stationary
+`65x33` mean `-4.41179645`, normalized by the `129x65` result, is `25.65%`,
+above the unchanged `15%` gate. Bootstrap the next bandwidth-preserving
+`257x129`, `ky_min=0.003125` rung from the same initialization and physics:
 
 ```console
 JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
-  --output /private/tmp/p5-domain-next-seed19-t160-t180.json \
-  --restart-from /private/tmp/p5-domain-next-seed19-t160.npz \
-  --checkpoint-output /private/tmp/p5-domain-next-seed19-t180.npz \
-  --final-time 180 --n-z 12 --n-vpar 12 --n-mu 6 \
-  --n-kx 129 --n-ky 65 --ky-min 0.00625 \
+  --output /private/tmp/p5-domain-ultra-seed19-t0-t20.json \
+  --checkpoint-output /private/tmp/p5-domain-ultra-seed19-t20.npz \
+  --final-time 20 --n-z 12 --n-vpar 12 --n-mu 6 \
+  --n-kx 257 --n-ky 129 --ky-min 0.003125 \
   --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
 ```
 
@@ -382,7 +383,7 @@ Continue in bounded 20-time-unit segments. After each segment:
    growth merely to increase the sample count.
 4. Stop extending only when a merged late window reports `stationary=true`.
 
-At the current diagnostic cadence, two 20-unit segments provide only about 73
+For every rung, two 20-unit segments provide only about 73
 candidate samples and four blocks after the merger applies its late-half
 window. Three segments provide 109 samples but only five complete blocks
 because their late window is just under 30 time units. The first four-segment
@@ -398,7 +399,7 @@ uv run python scripts/merge_nonlinear_heat_flux_segments.py \
   --output /private/tmp/p5-domain-next-seed19-t100-t180-merged.json
 ```
 
-If that window fails a physical statistic, extend from time 180 and shift the
+If a merged window fails a physical statistic, extend it and shift the
 merge start forward as needed. Never concatenate noncontiguous reports or
 reports with different contracts.
 
@@ -409,19 +410,18 @@ window drift at most `0.20`, candidate nonzonal-potential RMS ratio at least
 
 #### 2. Decide the domain-convergence gate
 
-Compare the accepted `129x65` mean against the stationary `65x33` result
-`-4.41179645` from
-`/private/tmp/p5-domain-finest-seed19-t100-t200-merged.json`. Normalize the
-absolute difference by the finer `129x65` mean. The gate passes at or below
-`15%`.
+The `65x33 -> 129x65` comparison fails at `25.65%`. Compare the accepted
+`257x129` mean against the stationary `129x65` result `-5.93381269`. Normalize
+the absolute difference by the finer `257x129` mean. The gate passes at or
+below `15%`.
 
-If it fails, do not adjust the tolerance or dissipation. Add the next
-bandwidth-preserving rung by halving `ky_min` and increasing the Fourier grid
-to `257x129`, while holding `n_z=12`, `n_vpar=12`, `n_mu=6`, the physical
-profiles, boundary model, hyperdiffusion, flux moment, and seed fixed. Bootstrap
-that rung from its own seed-19 initial state and repeat the checkpointed
-stationarity procedure. Do not interpolate a turbulent checkpoint between
-Fourier grids and call it the same lineage.
+If it fails again, do not adjust the tolerance or dissipation. Add another
+bandwidth-preserving rung by halving `ky_min` and applying the same
+`2*n-1` Fourier-grid refinement, while holding `n_z=12`, `n_vpar=12`,
+`n_mu=6`, the physical profiles, boundary model, hyperdiffusion, flux moment,
+and seed fixed. Bootstrap every rung from its own seed-19 initial state and
+repeat the checkpointed stationarity procedure. Do not interpolate a turbulent
+checkpoint between Fourier grids and call it the same lineage.
 
 #### 3. Obtain independent GX parity
 
