@@ -35,10 +35,12 @@ claimed.
   mean change is `25.65%`, above the unchanged `15%` gate. The required next
   rung is `257x129`, `ky_min=0.003125`, with the same `12x12x6` phase-space
   resolution, physics, seed, and diagnostic contract.
-- That `257x129` time-0-to-20 bootstrap was launched on the CPU-only macOS host
-  and remained active for more than fourteen hours without a solver or memory
-  error. At the last check it had not written its atomic report or checkpoint;
-  its completion must be validated before it is counted or relaunched.
+- That `257x129` time-0-to-20 bootstrap ran for about 19.5 hours on the
+  CPU-only macOS host without a solver or memory error but did not reach its
+  atomic output phase. It was deliberately terminated on 2026-08-12. A process
+  scan confirms that no JAXFluxTubeGK, stella, or GX simulation remains, and no
+  partial report/checkpoint exists. Relaunch this rung on suitable cluster or
+  GPU-backed JAX capacity.
 - Independent nonlinear GX parity is still externally blocked on a built GX
   executable and CUDA-capable host. The sibling source is at the required
   revision `bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`, but this machine has no

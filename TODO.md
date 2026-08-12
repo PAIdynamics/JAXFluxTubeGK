@@ -376,12 +376,11 @@ JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
 ```
 
 The bootstrap was launched on the CPU-only macOS development host on
-2026-08-11. It remained active for more than fourteen hours without a solver
-or memory error, but had not yet written its atomic report/checkpoint when the
-interactive monitor was interrupted. Before launching a duplicate, check for
-the two output paths above and whether the original process is still active.
-This machine is suitable for preserving the run, but a CPU cluster or GPU JAX
-backend is the practical place to complete this rung and its continuations.
+2026-08-11. It remained active for about 19.5 hours without a solver or memory
+error but had not written its atomic report/checkpoint, so it was deliberately
+terminated on 2026-08-12. No simulation process or partial output remains.
+Relaunch it on a CPU cluster or GPU JAX backend; this development host is not a
+practical place to complete this rung and its continuations.
 
 After the bootstrap completes, continue in bounded 20-time-unit segments. For
 each segment:
