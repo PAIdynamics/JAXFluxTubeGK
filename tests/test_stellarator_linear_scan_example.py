@@ -36,6 +36,8 @@ def test_stellarator_linear_scan_example_writes_machine_readable_outputs(tmp_pat
             "examples/run_stellarator_linear_scan.py",
             "--output-dir",
             str(output_dir),
+            "--geometry-source",
+            "fixture",
             "--steps-per-window",
             "1",
             "--n-windows",
@@ -91,6 +93,16 @@ def test_stellarator_linear_scan_example_writes_machine_readable_outputs(tmp_pat
     assert metadata["finite_growth"]
     assert metadata["finite_frequency"]
     assert metadata["steps_per_window"] == 1
+
+
+def test_stellarator_linear_scan_defaults_to_live_vmecpp_provider():
+    module = _load_scan_module()
+
+    args = module._parse_args([])
+
+    assert args.geometry_source == "vmecpp"
+    assert args.configuration == "w7x-standard"
+    assert args.output_dir == Path("runs/w7x_vmecpp_linear_scan")
 
 
 def test_stellarator_linear_scan_loads_stella_geometry_with_normalized_z():

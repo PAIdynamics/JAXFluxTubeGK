@@ -2,12 +2,13 @@
 
 Example from the repository root:
 
-    uv run --extra dev python examples/run_stellarator_linear_scan.py \
-        --output-dir runs/dshape_linear_scan
+    uv run --extra dev --extra vmecpp python \
+        examples/run_stellarator_linear_scan.py
 
-The default path uses the bundled DESC DSHAPE fixture.  A real DESC
-equilibrium can be used with ``--geometry-source desc-path --desc-path ...``.
-GX/GIST/GS2 eik geometry tables can be used with
+The default path runs VMEC++'s installed ``w7x-standard`` configuration and
+consumes its in-memory output. The bundled DESC DSHAPE fixture is available
+with ``--geometry-source fixture``. A saved DESC equilibrium can be used with
+``--geometry-source desc-path --desc-path ...``. GX/GIST/GS2 eik tables use
 ``--geometry-source eik --eik-reference ...``.  A stella ``.geometry`` file
 can be used with ``--geometry-source stella-geometry --stella-geometry ...``.
 """
@@ -162,14 +163,16 @@ def main(argv: list[str] | None = None) -> int:
 
 def _parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=Path("runs/dshape_linear_scan"))
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path("runs/w7x_vmecpp_linear_scan")
+    )
     parser.add_argument(
         "--geometry-source",
         "--geometry-provider",
         choices=("fixture", "desc-path", "vmecpp", "eik", "stella-geometry"),
-        default="fixture",
+        default="vmecpp",
         help=(
-            "use the bundled .npz fixture, evaluate DESC or VMEC++, sample a "
+            "evaluate VMEC++ (default), use the bundled .npz fixture or saved DESC, sample a "
             "GX/GIST/GS2 eik table, or import a stella .geometry table"
         ),
     )

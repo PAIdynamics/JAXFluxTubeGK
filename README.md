@@ -49,16 +49,17 @@ setup.
 
 ## First run
 
-Run a reduced stellarator scan using the committed DESC D-shape fixture:
+Run a reduced stellarator scan by solving the installed named W7-X input with
+VMEC++ and consuming its output in memory:
 
 ```bash
-uv run --extra dev python examples/run_stellarator_linear_scan.py \
-  --output-dir runs/dshape_linear_scan
+uv run --extra dev --extra vmecpp python examples/run_stellarator_linear_scan.py
 ```
 
 The scan produces geometry audits, growth rates, mode structures, convergence
 history, and a quasilinear proxy. It is an integration example rather than a
-production stellarator-optimization claim.
+production stellarator-optimization claim. The committed DESC fixture remains
+available explicitly with `--geometry-source fixture`.
 
 ## Geometry optimization notebooks
 
@@ -69,9 +70,11 @@ to the local GK solver and an optimization loop:
 - [GVEC geometry optimization](examples/gvec_geometry_optimization.ipynb)
 - [VMEC++ geometry optimization](examples/vmecpp_geometry_optimization.ipynb)
 
-They run without optional provider installations by default. Each shows the
+They use their live equilibrium providers by default: a named DESC equilibrium,
+an in-memory GVEC state, or a named VMEC++ input and solve. File-backed and
+synthetic paths are explicit opt-in alternatives. Each notebook shows the
 geometry contract, reduced GK objective, solver-side JAX differentiation, an
-outer-loop geometry surrogate, and the seam for a real equilibrium solve.
+outer-loop geometry surrogate, and the seam for a real design loop.
 
 ## Geometry interface
 

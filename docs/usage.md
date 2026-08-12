@@ -99,9 +99,12 @@ gyrokinetic solver → objective → optimizer workflow:
 - [GVEC geometry optimization](../examples/gvec_geometry_optimization.ipynb)
 - [VMEC++ geometry optimization](../examples/vmecpp_geometry_optimization.ipynb)
 
-They run without optional equilibrium packages by default. Each includes a
-real-provider switch, reduced GK evaluation, geometry plots, an executable
-outer-loop surrogate, and a clearly marked project-specific integration seam.
+They use their live equilibrium libraries by default and do not consume
+exported geometry files: DESC evaluates a named equilibrium, GVEC supplies an
+in-memory state, and VMEC++ runs a named input in memory. File-backed or
+synthetic modes require explicit selection. Each notebook includes a reduced
+GK evaluation, geometry plots, an executable outer-loop surrogate, and a
+clearly marked project-specific integration seam.
 
 For a real VMEC++ finite-difference boundary loop:
 
@@ -119,17 +122,18 @@ production shape optimization.
 
 ## Reduced stellarator scan
 
-The simplest end-to-end scan uses the committed DESC D-shape fixture:
+The default end-to-end scan runs VMEC++'s named W7-X configuration and consumes
+the equilibrium in memory:
 
 ```bash
-uv run --extra dev python examples/run_stellarator_linear_scan.py \
-  --output-dir runs/dshape_linear_scan
+uv run --extra dev --extra vmecpp python examples/run_stellarator_linear_scan.py
 ```
 
 The output contains geometry audits, growth rates, mode structures,
 convergence history, a quasilinear proxy, and the resolved run configuration.
 Alternative geometry inputs include:
 
+- `--geometry-source fixture` for the committed DESC D-shape fixture,
 - `--geometry-source desc-path --desc-path ...`
 - `--geometry-provider vmecpp --configuration w7x-standard`
 - `--geometry-source eik --eik-reference ...`
