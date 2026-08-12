@@ -499,7 +499,7 @@ def map_physical_to_internal_geometry(
     physical: PhysicalFluxTubeGeometry,
     parallel_grid: ParallelGrid,
 ) -> FluxTubeGeometry:
-    """Map physical Boozer/GX/GS2-like quantities to the solver contract."""
+    """Map physical field-line and metric quantities to the solver contract."""
 
     dB_dz = parallel_grid.D_z @ physical.B
     F = physical.b_dot_grad_z

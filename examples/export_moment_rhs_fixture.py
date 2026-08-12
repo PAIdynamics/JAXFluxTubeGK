@@ -1,14 +1,14 @@
-"""Export the reduced GX-style Hermite-Laguerre moment-RHS fixture.
+"""Export the reduced Hermite-Laguerre moment-RHS fixture.
 
 This is the no-external-binary fallback for the multi-ky physics discriminator.
-It writes the same portable per-ky mode-structure CSV used by the GX/GKW/Gyaradax
-fixture comparison tools.
+It writes the same portable per-ky mode-structure CSV used by independent
+fixture-comparison tools.
 
 Run from the repository root:
 
-    JAX_ENABLE_X64=1 uv run python examples/export_gx_moment_rhs_fixture.py \
+    JAX_ENABLE_X64=1 uv run python examples/export_moment_rhs_fixture.py \
         --ky-values 0.3,0.5 \
-        --output fixtures/gx_salpha_moment_rhs_mode_structure_fixture.csv
+        --output fixtures/s_alpha_moment_rhs_mode_structure_fixture.csv
 """
 
 # ruff: noqa: E402
@@ -25,15 +25,15 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
-from jax_fluxtube_gk import (
-    run_gx_salpha_moment_rhs_mode_structure_fixture,
-    write_per_ky_mode_structure_fixture_csv,
+from jax_fluxtube_gk.validation.cyclone_gkw import (
+    run_s_alpha_moment_rhs_mode_structure_fixture,
 )
+from jax_fluxtube_gk.validation.fixture_io import write_per_ky_mode_structure_fixture_csv
 
 
 def main() -> None:
     args = _parse_args()
-    fixture = run_gx_salpha_moment_rhs_mode_structure_fixture(
+    fixture = run_s_alpha_moment_rhs_mode_structure_fixture(
         ky_values=_parse_float_tuple(args.ky_values),
         n_z=args.n_z,
         n_hermite=args.n_hermite,
@@ -101,7 +101,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("fixtures/gx_salpha_moment_rhs_mode_structure_fixture.csv"),
+        default=Path("fixtures/s_alpha_moment_rhs_mode_structure_fixture.csv"),
     )
     return parser.parse_args()
 

@@ -3,7 +3,7 @@
     "finite_difference_mirror_force": true,
     "finite_geometry_fields": true,
     "finite_kperp2": true,
-    "gx_eik_export_contract": true,
+    "eik_export_contract": true,
     "nonnegative_representative_kperp2": true,
     "positive_B": true,
     "positive_metric_diagonal": true

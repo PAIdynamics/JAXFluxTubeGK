@@ -8,7 +8,7 @@ import pytest
 from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     FourierGridSpec,
-    GxEikGeometryProvider,
+    EikGeometryProvider,
     GeometryRequest,
     PhysicalArrayGeometryProvider,
     SpeciesParams,
@@ -26,7 +26,7 @@ from jax_fluxtube_gk import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GX_EIK = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
+EIK_FIXTURE = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
 STELLA_GEOMETRY = (
     ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"
 )
@@ -62,9 +62,9 @@ def _provider_cases():
         )
     yield "synthetic", SyntheticGeometryProvider(), base_request
     yield (
-        "gx-eik",
-        GxEikGeometryProvider(GX_EIK, iota=1.0 / 1.2012012012012012),
-        GeometryRequest(configuration="gx-eik", n_z=32),
+        "eik-table",
+        EikGeometryProvider(EIK_FIXTURE, iota=1.0 / 1.2012012012012012),
+        GeometryRequest(configuration="eik-table", n_z=32),
     )
     stella = load_stella_geometry_data(STELLA_GEOMETRY)
     yield (

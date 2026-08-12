@@ -152,6 +152,21 @@ def test_geometry_metadata_rejects_unknown_schema_version():
         GeometryMetadata(provenance=provenance, schema_version=GEOMETRY_SCHEMA_VERSION + 1)
 
 
+@pytest.mark.parametrize(
+    "overrides, message",
+    [
+        ({"alpha": np.nan}, "non-finite"),
+        ({"field_periods": np.inf}, "non-finite"),
+        ({"n_z": True}, "n_z must be at least 2"),
+        ({"dtype": "complex128"}, "real floating-point"),
+        ({"dtype": "not-a-dtype"}, "unsupported geometry dtype"),
+    ],
+)
+def test_geometry_request_rejects_invalid_production_inputs(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        GeometryRequest(**overrides)
+
+
 def test_cache_paths_must_stay_outside_source_tree(tmp_path: Path):
     repository = tmp_path / "repository"
     repository.mkdir()

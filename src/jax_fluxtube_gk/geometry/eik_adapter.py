@@ -1,4 +1,4 @@
-"""GX/GIST/GS2 eik file reader and provider adapter."""
+"""Provider-neutral reader and geometry adapter for ``eik`` tables."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from .provider import (
 
 
 @dataclass(frozen=True)
-class GxEikData:
+class EikData:
     """Provider-neutral representation of the fields stored in an eik table."""
 
     theta: np.ndarray
@@ -38,9 +38,9 @@ class GxEikData:
     def __post_init__(self) -> None:
         theta = np.asarray(self.theta, dtype=float)
         if theta.ndim != 1 or theta.size < 2:
-            raise ValueError("GX eik theta must be one-dimensional with at least two nodes")
+            raise ValueError("eik theta must be one-dimensional with at least two nodes")
         if not np.all(np.isfinite(theta)):
-            raise ValueError("GX eik theta contains non-finite values")
+            raise ValueError("eik theta contains non-finite values")
         object.__setattr__(self, "theta", theta)
         for name in (
             "bmag",
@@ -55,16 +55,16 @@ class GxEikData:
         ):
             values = np.asarray(getattr(self, name), dtype=float)
             if values.shape != theta.shape:
-                raise ValueError(f"GX eik field {name!r} must match theta shape {theta.shape}")
+                raise ValueError(f"eik field {name!r} must match theta shape {theta.shape}")
             if not np.all(np.isfinite(values)):
-                raise ValueError(f"GX eik field {name!r} contains non-finite values")
+                raise ValueError(f"eik field {name!r} contains non-finite values")
             object.__setattr__(self, name, values)
         object.__setattr__(self, "header", tuple(float(value) for value in self.header))
 
 
 @dataclass(frozen=True)
-class GxEikGeometryProvider:
-    """Read an explicit GX/GIST/GS2 eik table through the common provider API."""
+class EikGeometryProvider:
+    """Read an explicit eik table through the common geometry-provider API."""
 
     path: str | Path
     iota: float = 1.0
@@ -73,12 +73,22 @@ class GxEikGeometryProvider:
     provider_version: str = "unknown"
     revision: str = "unknown"
 
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.iota) or self.iota == 0.0:
+            raise ValueError("eik provider iota must be finite and non-zero")
+        if not np.isfinite(self.shear):
+            raise ValueError("eik provider shear must be finite")
+        if isinstance(self.nfp, bool) or not isinstance(self.nfp, int) or self.nfp < 1:
+            raise ValueError("eik provider nfp must be a positive integer")
+        if not str(self.provider_version).strip() or not str(self.revision).strip():
+            raise ValueError("eik provider version and revision must be non-empty")
+
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
         if request.topology != "periodic":
-            raise ValueError("GX eik provider currently requires periodic topology")
+            raise ValueError("eik provider currently requires periodic topology")
         if request.parallel_coordinate_unit != "radian":
-            raise ValueError("GX eik provider requires a radian parallel coordinate")
-        data = resample_gx_eik_data(load_gx_eik_data(self.path), _request_z(request))
+            raise ValueError("eik provider requires a radian parallel coordinate")
+        data = resample_eik_data(load_eik_data(self.path), _request_z(request))
         parallel = build_parallel_grid(
             ParallelGridSpec(
                 n_z=request.n_z,
@@ -112,12 +122,12 @@ class GxEikGeometryProvider:
             endpoint_policy=request.endpoint_policy,
             radial_coordinate=request.radial_coordinate,
             source=str(Path(self.path)),
-            provider="gx-eik",
+            provider="eik-table",
         )
         metadata = build_geometry_metadata(
             request,
             provenance=GeometryProvenance(
-                provider="gx-eik",
+                provider="eik-table",
                 provider_version=self.provider_version,
                 revision=self.revision,
                 source=str(Path(self.path)),
@@ -129,8 +139,8 @@ class GxEikGeometryProvider:
         return GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata)
 
 
-def load_gx_eik_data(path: str | Path) -> GxEikData:
-    """Load either the numeric ten-column or GX multi-block eik layout."""
+def load_eik_data(path: str | Path) -> EikData:
+    """Load either the numeric ten-column or labelled multi-block eik layout."""
 
     path = Path(path)
     text = path.read_text(encoding="utf-8")
@@ -138,11 +148,11 @@ def load_gx_eik_data(path: str | Path) -> GxEikData:
         return _load_block_eik(path, text)
     rows = _numeric_rows(path)
     if len(rows) < 2:
-        raise ValueError("GX eik file must contain a numeric header and data rows")
+        raise ValueError("eik file must contain a numeric header and data rows")
     data = np.asarray([row for row in rows[1:] if len(row) >= 10], dtype=float)
     if data.ndim != 2 or data.shape[1] < 10:
-        raise ValueError("GX eik data rows must have at least 10 numeric columns")
-    return GxEikData(
+        raise ValueError("eik data rows must have at least 10 numeric columns")
+    return EikData(
         theta=data[:, 0],
         bmag=data[:, 1],
         gradpar=data[:, 2],
@@ -158,18 +168,18 @@ def load_gx_eik_data(path: str | Path) -> GxEikData:
     )
 
 
-def resample_gx_eik_data(data: GxEikData, theta) -> GxEikData:
+def resample_eik_data(data: EikData, theta) -> EikData:
     """Interpolate an eik table onto a strictly increasing requested grid."""
 
     target = np.asarray(theta, dtype=float)
     source = np.asarray(data.theta, dtype=float)
     if target.ndim != 1 or target.size < 2:
-        raise ValueError("requested GX eik theta must be one-dimensional")
+        raise ValueError("requested eik theta must be one-dimensional")
     if not np.all(np.diff(source) > 0.0):
-        raise ValueError("GX eik source theta must be strictly increasing")
+        raise ValueError("eik source theta must be strictly increasing")
     if target[0] < source[0] - 1.0e-12 or target[-1] > source[-1] + 1.0e-12:
         raise ValueError(
-            "requested parallel interval lies outside the GX eik theta interval; "
+            "requested parallel interval lies outside the eik theta interval; "
             "generate a table covering the requested field line"
         )
     fields = {
@@ -186,7 +196,7 @@ def resample_gx_eik_data(data: GxEikData, theta) -> GxEikData:
             "cvdrift0",
         )
     }
-    return GxEikData(
+    return EikData(
         theta=target,
         **fields,
         source=data.source,
@@ -198,11 +208,11 @@ def _request_z(request: GeometryRequest) -> np.ndarray:
     return np.linspace(request.z_min, request.z_max, request.n_z, endpoint=False, dtype=float)
 
 
-def _load_block_eik(path: Path, text: str) -> GxEikData:
+def _load_block_eik(path: Path, text: str) -> EikData:
     lines = text.splitlines()
     header = _first_numeric_row(lines)
     if len(header) < 8:
-        raise ValueError("GX eik block header must contain at least 8 values")
+        raise ValueError("eik block header must contain at least 8 values")
     expected_rows = int(round(header[2])) + 1
     gb = _parse_block(lines, "gbdrift gradpar grho tgrid", expected_rows, 4)
     cv = _parse_block(lines, "cvdrift gds2 bmag tgrid", expected_rows, 4)
@@ -215,8 +225,8 @@ def _load_block_eik(path: Path, text: str) -> GxEikData:
         ("cvdrift0", drift0[:, 2]),
     ):
         if not np.allclose(theta, values, rtol=2.0e-12, atol=2.0e-12):
-            raise ValueError(f"GX eik block {name!r} uses an inconsistent theta grid")
-    return GxEikData(
+            raise ValueError(f"eik block {name!r} uses an inconsistent theta grid")
+    return EikData(
         theta=theta,
         bmag=cv[:, 2],
         gradpar=gb[:, 1],
@@ -253,7 +263,7 @@ def _first_numeric_row(lines: list[str]) -> list[float]:
             continue
         if row:
             return row
-    raise ValueError("GX eik file contains no numeric header row")
+    raise ValueError("eik file contains no numeric header row")
 
 
 def _parse_block(
@@ -265,7 +275,7 @@ def _parse_block(
     try:
         start = next(index for index, line in enumerate(lines) if line.strip() == label)
     except StopIteration as exc:
-        raise ValueError(f"GX eik file is missing block {label!r}") from exc
+        raise ValueError(f"eik file is missing block {label!r}") from exc
     rows = []
     for line in lines[start + 1 :]:
         try:
@@ -279,6 +289,6 @@ def _parse_block(
             break
     if len(rows) != expected_rows:
         raise ValueError(
-            f"GX eik block {label!r} expected {expected_rows} rows; got {len(rows)}"
+            f"eik block {label!r} expected {expected_rows} rows; got {len(rows)}"
         )
     return np.asarray(rows, dtype=float)

@@ -33,7 +33,6 @@ from jax_fluxtube_gk import (
     SpeciesParams,
     VelocityGridSpec,
     benchmark_linear_residual,
-    build_flux_tube_geometry_from_gx_eik_reference,
     build_fourier_grid,
     build_linear_residual_precompute,
     build_mode_connectivity,
@@ -41,8 +40,13 @@ from jax_fluxtube_gk import (
     build_velocity_grid,
     estimate_linear_memory_from_dimensions,
     format_bytes,
-    load_gx_eik_geometry_reference,
-    resample_gx_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.fixture_io import (
+    load_eik_geometry_reference,
+    resample_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.geometry_parity import (
+    build_flux_tube_geometry_from_eik_reference,
 )
 
 
@@ -140,7 +144,7 @@ def build_timing_problem(args: argparse.Namespace, controls: dict[str, object]):
 
     if args.eik_reference is None:
         raise ValueError("a production timing run requires --eik-reference")
-    eik = load_gx_eik_geometry_reference(args.eik_reference)
+    eik = load_eik_geometry_reference(args.eik_reference)
     theta = np.linspace(
         -np.pi * controls["field_line_periods"],
         np.pi * controls["field_line_periods"],
@@ -148,8 +152,8 @@ def build_timing_problem(args: argparse.Namespace, controls: dict[str, object]):
         endpoint=False,
     )
     parallel = _parallel_grid_from_theta(theta)
-    sampled = resample_gx_eik_geometry_reference(eik, theta)
-    geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+    sampled = resample_eik_geometry_reference(eik, theta)
+    geometry = build_flux_tube_geometry_from_eik_reference(sampled, parallel)
     velocity = build_velocity_grid(
         VelocityGridSpec(
             n_vpar=controls["n_vpar"],

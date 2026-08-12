@@ -89,10 +89,10 @@ _DECISIONS = {
         backend="hermite_laguerre",
         representation="moments",
         maturity="experimental",
-        supported_claims=("gx_reduced_discriminator",),
+        supported_claims=("experimental_moment_discriminator",),
         rationale=(
-            "Moment transforms, recurrences, hypercollision, and a reduced GX-style "
-            "RHS are valuable branch-shape discriminators."
+            "Moment transforms, recurrences, hypercollision, and a reduced linear "
+            "RHS are useful branch-shape discriminators."
         ),
         limitations=(
             "It is not integrated with the production stellarator geometry/residual, "

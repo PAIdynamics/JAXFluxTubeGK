@@ -16,6 +16,16 @@ from jax_fluxtube_gk import (
     ParallelGridSpec,
     SingleSurfaceOptimizationConfig,
     VelocityGridSpec,
+    benchmark_target_cost,
+    benchmark_target_residual,
+    build_desc_geometry_from_arrays,
+    build_fourier_grid,
+    build_mode_connectivity,
+    build_parallel_grid,
+    build_velocity_grid,
+    single_surface_benchmark_objective,
+)
+from jax_fluxtube_gk.benchmarks import (
     CycloneCoefficientSourceAudit,
     CycloneDiagnosticPackingAudit,
     CycloneIghArakawaAudit,
@@ -54,27 +64,20 @@ from jax_fluxtube_gk import (
     audit_parallel_phi_profile_alignment,
     audit_velocity_space_slice_conventions,
     audit_velocity_space_slice_phase_alignment,
-    benchmark_target_cost,
-    benchmark_target_residual,
-    build_desc_gx_eik_reference_from_path,
-    build_desc_geometry_from_arrays,
-    build_fourier_grid,
-    build_flux_tube_geometry_from_gx_eik_reference,
-    build_mode_connectivity,
-    build_parallel_grid,
-    build_velocity_grid,
+    build_desc_eik_reference_from_path,
+    build_flux_tube_geometry_from_eik_reference,
     calibrate_gx_growth_rate_reference_to_target,
     cyclone_base_case_growth_target,
     compare_cyclone_base_case_traces,
     compare_gx_cyclone_input_to_solver_controls,
-    compare_geometry_to_gx_eik_reference,
+    compare_geometry_to_eik_reference,
     compare_parallel_phi_traces,
     compare_per_ky_mode_structure_fixtures,
     evaluate_cyclone_ky_scan_convention_audit,
     evaluate_cyclone_ky_scan_gate,
     evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,
     evaluate_parallel_phi_profile_gate,
-    geometry_to_gx_eik_reference,
+    geometry_to_eik_reference,
     gx_growth_rate_target,
     gx_salpha_cyclone_growth_target,
     load_cyclone_trace_csv,
@@ -83,14 +86,14 @@ from jax_fluxtube_gk import (
     load_gkw_velocity_space_slice,
     load_gkw_velocity_space_slice_series,
     load_gx_cyclone_input_reference,
-    load_gx_eik_geometry_reference,
+    load_eik_geometry_reference,
     load_gx_growth_rate_reference,
     load_gx_mode_structure_fixture,
     load_per_ky_mode_structure_fixture_csv,
     load_stella_mode_structure_fixture,
     resample_per_ky_mode_structure_fixture,
-    resample_gx_eik_geometry_reference,
-    run_geometry_to_gx_eik_export_gate,
+    resample_eik_geometry_reference,
+    run_geometry_to_eik_export_gate,
     run_cyclone_base_case_coefficient_source_audit,
     run_cyclone_base_case_diagnostic_packing_audit,
     run_cyclone_base_case_igh_arakawa_audit,
@@ -104,9 +107,9 @@ from jax_fluxtube_gk import (
     run_cyclone_base_case_cosin2_velocity_slice_audit,
     run_cyclone_base_case_cosin2_term_vii_field_convention_audit,
     run_cyclone_base_case_cosin2_vpar_odd_sign_audit,
-    run_desc_gx_eik_external_geometry_gate,
-    run_gx_gist_external_eik_suite_gate,
-    run_gx_salpha_moment_rhs_mode_structure_fixture,
+    run_desc_eik_external_geometry_gate,
+    run_external_eik_suite_gate,
+    run_s_alpha_moment_rhs_mode_structure_fixture,
     run_independent_external_eik_producer_gate,
     run_independent_external_eik_producer_report,
     run_cyclone_base_case_profile_operator_audit,
@@ -126,14 +129,13 @@ from jax_fluxtube_gk import (
     run_cyclone_base_case_velocity_space_slice_series,
     rosenbluth_hinton_residual,
     rosenbluth_hinton_target,
-    run_gx_eik_geometry_gate,
+    run_eik_geometry_gate,
     run_production_cyclone_base_case_gate,
     run_production_control_cyclone_ky_scan_convention_audit,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
-    run_solver_geometry_to_gx_eik_gate,
-    single_surface_benchmark_objective,
+    run_solver_geometry_to_eik_gate,
     write_cyclone_source_term_trace_csv,
     write_cyclone_ky_scan_convention_audit_csv,
     write_per_ky_mode_structure_fixture_csv,
@@ -712,7 +714,7 @@ def test_gx_eik_geometry_reference_loads_vmec_gs2_fixture(gx_root: Path):
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
 
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
 
     assert reference.theta.shape == (20001,)
     assert reference.header[0] == pytest.approx(10000.0)
@@ -731,7 +733,7 @@ def test_gx_eik_loader_uses_gist_drift_column_order(gx_root: Path):
         "gist_gs2_wout_li383_1.4m.txt_highres_surf12_pol_10_nz0_10000"
     )
 
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
 
     np.testing.assert_allclose(reference.cvdrift[0], 9.4946168708e-01)
     np.testing.assert_allclose(reference.cvdrift0[0], -2.1124355474e-02)
@@ -742,7 +744,7 @@ def test_gx_eik_loader_uses_gist_drift_column_order(gx_root: Path):
 def test_gx_eik_loader_reads_desc_block_eik_fixture():
     path = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
 
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
 
     assert reference.theta.shape == (33,)
     assert reference.header[0] == pytest.approx(16.0)
@@ -760,13 +762,13 @@ def test_gx_eik_geometry_gate_matches_solver_kperp_contract(gx_root: Path):
         / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
     theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
-    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    sampled = resample_eik_geometry_reference(reference, theta)
     parallel = _parallel_grid_from_theta(theta)
     fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35)))
 
-    result = run_gx_eik_geometry_gate(sampled, parallel, fourier)
+    result = run_eik_geometry_gate(sampled, parallel, fourier)
 
     assert bool(result.passed)
     np.testing.assert_allclose(result.observed_value, 0.0, atol=1.0e-13)
@@ -780,15 +782,15 @@ def test_solver_geometry_to_eik_parity_report_matches_imported_geometry(gx_root:
         / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
     theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
-    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    sampled = resample_eik_geometry_reference(reference, theta)
     parallel = _parallel_grid_from_theta(theta)
     fourier = build_fourier_grid(FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35)))
-    geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+    geometry = build_flux_tube_geometry_from_eik_reference(sampled, parallel)
 
-    report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
-    gate = run_solver_geometry_to_gx_eik_gate(geometry, sampled, fourier)
+    report = compare_geometry_to_eik_reference(geometry, sampled, fourier)
+    gate = run_solver_geometry_to_eik_gate(geometry, sampled, fourier)
 
     assert bool(gate.passed)
     assert report.field_names[-1] == "kperp2"
@@ -819,14 +821,14 @@ def test_desc_fixture_geometry_exports_to_gx_eik_contract():
         b_cross_kappa_dot_grad_alpha=data["b_cross_kappa_dot_grad_alpha"],
     )
 
-    reference = geometry_to_gx_eik_reference(geometry)
-    report = compare_geometry_to_gx_eik_reference(
+    reference = geometry_to_eik_reference(geometry)
+    report = compare_geometry_to_eik_reference(
         geometry,
         reference,
         fourier,
         include_mirror_proxy=False,
     )
-    gate = run_geometry_to_gx_eik_export_gate(geometry, fourier)
+    gate = run_geometry_to_eik_export_gate(geometry, fourier)
 
     assert reference.source == "desc:gx-eik-export"
     assert not any(name.startswith("G/") for name in report.field_names)
@@ -864,7 +866,7 @@ def test_external_gist_eik_suite_gate_runs_multiple_stellarator_fixtures(gx_root
         producer_names=names,
         n_theta=17,
     )
-    gate = run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
+    gate = run_external_eik_suite_gate(paths, n_theta=17)
 
     assert isinstance(report, ExternalEikProducerReport)
     assert bool(report.passed)
@@ -897,15 +899,15 @@ def test_desc_gx_eik_reference_matches_external_block_fixture(desc_root: Path):
     desc_path = desc_root / "desc/examples/DSHAPE_output.h5"
     eik_path = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
 
-    reference = build_desc_gx_eik_reference_from_path(
+    reference = build_desc_eik_reference_from_path(
         desc_path,
         ntheta=32,
         npol=1,
         rho=0.5,
         alpha=0.0,
     )
-    external = load_gx_eik_geometry_reference(eik_path)
-    gate = run_desc_gx_eik_external_geometry_gate(desc_path, eik_path)
+    external = load_eik_geometry_reference(eik_path)
+    gate = run_desc_eik_external_geometry_gate(desc_path, eik_path)
 
     np.testing.assert_allclose(reference.bmag, external.bmag, rtol=0.0, atol=2.0e-14)
     np.testing.assert_allclose(reference.gds21, external.gds21, rtol=0.0, atol=2.0e-14)
@@ -1443,7 +1445,7 @@ def test_solver_mode_structure_fixture_feeds_scan_gate():
 
 
 def test_gx_salpha_moment_rhs_mode_structure_fixture_runs_reduced_gate():
-    fixture = run_gx_salpha_moment_rhs_mode_structure_fixture(
+    fixture = run_s_alpha_moment_rhs_mode_structure_fixture(
         ky_values=(0.3, 0.5),
         n_z=8,
         n_hermite=5,
@@ -1463,8 +1465,8 @@ def test_gx_salpha_moment_rhs_mode_structure_fixture_runs_reduced_gate():
 
     assert isinstance(fixture, PerKyModeStructureFixture)
     assert fixture.phi.shape == (2, 8)
-    assert fixture.normalization == "complex_phi_gx_moment_rhs"
-    assert dict(fixture.metadata)["model"] == "reduced_gx_salpha_moment_rhs"
+    assert fixture.normalization == "complex_phi_moment_rhs"
+    assert dict(fixture.metadata)["model"] == "reduced_s_alpha_moment_rhs"
     assert jnp.all(jnp.isfinite(fixture.phi.real))
     assert jnp.all(jnp.isfinite(fixture.growth_rate))
     assert jnp.all(jnp.isfinite(fixture.frequency))

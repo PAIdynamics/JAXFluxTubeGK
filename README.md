@@ -6,9 +6,9 @@ This repository is a standalone JAX-first implementation of a local flux-tube
 gyrokinetic solver. Its provider-neutral geometry interface supports any
 magnetic configuration for which an adapter supplies the required field-line
 and metric data, including stellarators and axisymmetric tokamaks. The physics
-and sign conventions are aligned with GKW and Gyaradax. DESC, VMEC++, GVEC,
-GX, and stella are separately installed geometry providers or validation
-tools, not vendored runtime dependencies.
+and sign conventions are aligned with independent reference formulations.
+DESC, VMEC++, and GVEC are optional geometry providers; external gyrokinetic
+codes are validation tools, not vendored runtime dependencies.
 
 The current production milestone is a trusted linear W7-X stellarator run.  The
 code can already run reduced stellarator scans, reduced optimization examples,
@@ -17,7 +17,7 @@ checks. The production collocation Fokker--Planck collision path, dealiased
 nonlinear ExB operator with adaptive CFL control, and independently
 parity-checked algebraic `A_parallel` and coupled `phi`/`B_parallel` field
 solves are implemented. Full nonlinear turbulence validation, independent
-CUDA/GX nonlinear parity, and unrestricted equilibrium-shape optimization
+independent nonlinear parity, and unrestricted equilibrium-shape optimization
 remain explicitly deferred scientific gates. The pinned heavy-electron kinetic
 TEM and production-grid electromagnetic benchmarks pass.
 
@@ -92,7 +92,7 @@ uv run --no-sync python scripts/bootstrap_dependencies.py \
   --profile mhd --local-root ..
 ```
 
-GX, stella, GKW, and Gyaradax are validation dependencies and are prepared
+External reference solvers are validation dependencies and are prepared
 separately with `--profile validation`. See
 [`docs/dependencies.md`](docs/dependencies.md) for profiles, pinned revisions,
 native build requirements, and dry-run/fetch-only options.
@@ -192,7 +192,7 @@ The scan can also read:
 - `--geometry-source desc-path --desc-path ...` for a DESC equilibrium path,
 - `--geometry-provider vmecpp --configuration w7x-standard` for the installed
   live W7-X VMEC++ design, with `--vmec-wout ...` as an interoperability path,
-- `--geometry-source eik --eik-reference ...` for GX/GIST/GS2 eik tables,
+- `--geometry-source eik --eik-reference ...` for generic eik tables,
 - `--geometry-source stella-geometry --stella-geometry ...` for stella
   `.geometry` files.
 
@@ -223,15 +223,15 @@ geometry = internal_geometry_from_result(result)
 ```
 
 `DescGeometryProvider`, `VmecppGeometryProvider`, `GvecGeometryProvider`,
-`GxEikGeometryProvider`, and `StellaGeometryProvider` can replace the synthetic
+`EikGeometryProvider`, and `StellaGeometryProvider` can replace the synthetic
 provider without changing solver construction. VMEC++ runs a packaged named
 W7-X input and consumes `VmecOutput.wout` directly; GVEC consumes an in-memory
 state or an explicit parameter file and normalizes its SI output to the same
 minor-radius/edge-flux contract. File I/O and validation happen before JAX
 tracing; continuous in-memory DESC arrays can retain gradients. Native VMEC++
 and current GVEC evaluations are declared non-differentiable. Opt-in tests
-cross-check direct W7-X geometry against stella, matched GX/GIST, and a common
-GVEC/VMEC equilibrium.
+cross-check direct W7-X geometry against stella, generic eik-table fixtures,
+and a common GVEC/VMEC equilibrium.
 
 Optional geometry caches are explicit and must be outside the source tree.
 They preserve the schema and provenance but are non-differentiable after
@@ -295,17 +295,6 @@ JAX_ENABLE_X64=1 uv run --no-sync python \
   --configuration w7x-standard \
   --rho 0.8 \
   --output-dir runs/w7x_vmecpp_linear_scan
-```
-
-Generate a reduced W7-X benchmark from explicit GX/GIST geometry and input
-paths:
-
-```bash
-JAX_ENABLE_X64=1 uv run --no-sync python \
-  scripts/generate_w7x_itg_reduced_benchmark.py \
-  --eik-reference /path/to/w7x.eik.out \
-  --gx-input /path/to/itg_w7x_adiabatic_electrons.in \
-  --output-dir /path/to/output
 ```
 
 Run the W7-X production-readiness ledger:
@@ -466,30 +455,6 @@ uv run python scripts/compare_w7x_stella_rhs_trace_to_solver_balance.py \
 The committed comparator remains a compact scalar diagnostic. Direct weighted
 array parity uses the external raw stella trace and the opt-in solver archive;
 neither large array artifact belongs in Git.
-
-### External GX W7-X Cross-Check
-
-GX is a secondary W7-X reference path because it needs a suitable GPU/CUDA
-environment.  Package the prepared handoff bundle with:
-
-```bash
-uv run python scripts/package_w7x_external_reference_bundle.py \
-  --output fixtures/gx_w7x_mode_structure_run/w7x_external_reference_bundle.tar.gz
-```
-
-On a GX-capable machine:
-
-```bash
-GX_EXECUTABLE=/path/to/gx \
-  bash fixtures/gx_w7x_mode_structure_run/run_external_reference.sh
-```
-
-After returned GX outputs are copied back:
-
-```bash
-bash fixtures/gx_w7x_mode_structure_run/ingest_returned_outputs.sh \
-  --copy-outputs --resample-reference-to-observed-z
-```
 
 ### External Gyaradax TEM Reference
 
@@ -904,58 +869,12 @@ eight Laguerre--Legendre contributions for every channel.
 This makes nonlinear heat-flux histories measurable from evolved states; it
 does not by itself establish stationarity or external turbulence parity.
 
-GX nonlinear heat-flux output can be converted into the package's compact
-external-reference contract without copying the NetCDF file into this
-repository:
-
-```bash
-.venv/bin/python scripts/prepare_gx_nonlinear_heat_flux_run.py \
-  --gx-root /path/to/gx \
-  --output-dir /scratch/gx-cyclone-nonlinear \
-  --gx-executable /path/to/gx/bin/gx
-
-# Run the printed GX command on a CUDA-capable machine, then run its printed
-# summarization command.
-
-.venv/bin/python scripts/summarize_gx_nonlinear_heat_flux.py \
-  --gx-root /path/to/gx \
-  --expected-revision bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5 \
-  --run-manifest /scratch/gx-cyclone-nonlinear/gx_nonlinear_run.json \
-  --netcdf /scratch/gx-cyclone-nonlinear/jax_fluxtube_gk_cyclone_nonlinear.nc \
-  --output /tmp/gx-cyclone-nonlinear-heat-flux.json
-```
-
-The preparation helper starts from the pinned sibling GX input, writes the
-case-matched s-alpha, electrostatic, linked-boundary input outside this
-repository, and records its SHA-256, revision, physics/box contract, run
-command, and summarization command. The summarizer rejects a changed input,
-revision, or NetCDF path. The final campaign also compares the GX case contract
-to the finest local rung, so an unrelated stationary GX run cannot satisfy the
-independent parity gate. The helper explicitly zeros GX species collisions and
-sets a large step ceiling so the declared `t_max=500` controls termination.
-
-Generate the matching local reduced trajectory in caller-owned storage with:
+Generate a local reduced trajectory in caller-owned storage with:
 
 ```bash
 JAX_ENABLE_X64=1 .venv/bin/python examples/run_nonlinear_heat_flux.py \
-  --output /tmp/jax-fluxtube-gk-cyclone-nonlinear.json \
-  --flux-moment gx_total_energy
+  --output /tmp/jax-fluxtube-gk-cyclone-nonlinear.json
 ```
-
-The local producer makes the GX profile conversion explicit: its default
-`fprim=0.8` and `tprim=2.49` are multiplied by `Rmaj/Lref=2.77778` before they
-enter the local residual as `R/Ln` and `R/LT`. All three inputs and both derived
-gradients are recorded in the JSON report.
-
-For GX parity, `--flux-moment gx_total_energy` evaluates the same gyroaveraged
-total-energy moment used by pinned GX revision
-`bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`. In s-alpha geometry GX has
-`grho=1`, so its flux weight is the same normalized Jacobian average used
-locally; the local nonzero-`ky` Parseval factor also matches GX's explicit
-factor of two. Reports from this mode therefore use `gx_Q_over_Q_GB` directly.
-The default `nonadvective_heat` mode retains the historical
-`T_s(E_s-3/2)f_s` diagnostic and `jax_fluxtube_gk_native` label; the two differ
-by `3/2 T_s` times the particle flux and must not be silently interchanged.
 
 The default random perturbation seeds only nonzonal modes. This avoids a large
 artificial `ky=0` potential from the weak zonal polarization denominator and
@@ -965,14 +884,14 @@ lets zonal flows arise through nonlinear mode transfer. Use
 `--collision-frequency` enables the package's density/momentum/energy-
 conserving BGK model and includes its stiffness in adaptive CFL control. It is
 off by default because it is a numerical discriminator, not a replacement for
-matching GX's hypercollision controls or for the open Landau collision gate.
+an independently validated collision model or for the open Landau collision gate.
 
 The local nonlinear producer now defaults to a cell-centered finite-difference
 parallel grid, shear-consistent `kx` spacing, and twist-and-shift boundary
 connectivity. The shift scales with the `ky/ky_min` mode index. The former
 independent periodic-chain configuration remains available explicitly as
 `--parallel-boundary-model periodic_chains` for historical discrimination;
-reports from that profile must not be used to claim GX nonlinear parity.
+reports from that profile must not be used to claim external nonlinear parity.
 
 Add `--require-stationary` only for acceptance runs; short smoke trajectories
 are expected to report `stationary=false`. The stationarity amplitude guard is
@@ -1029,7 +948,7 @@ field. It recomputes the physical-time blocks over the merged window. Its
 output is schema-v1 and can be passed directly to the convergence and parity
 comparison functions.
 
-Both local and GX schema-v1 reports carry a required top-level `stationary`
+All schema-v1 reports carry a required top-level `stationary`
 decision. Downstream convergence and parity preserve this producer decision in
 addition to applying their drift and uncertainty limits, so a rejected window
 cannot be promoted later by a weaker subset of the gates.
@@ -1049,8 +968,8 @@ contracts also record the complex state dtype, preventing a float32 state from
 being resumed into an x64 campaign.
 
 Load these schema-v1 reports with `load_nonlinear_heat_flux_record(...)` and
-evaluate them using `compare_nonlinear_heat_flux(...)`. Local native heat flux
-and GX `Q/Q_GB` labels deliberately fail comparison unless a documented
+evaluate them using `compare_nonlinear_heat_flux(...)`. Different heat-flux
+normalization labels deliberately fail comparison unless a documented
 `local_to_reference_factor` is supplied. Resolution and box-size ladders use
 `compare_nonlinear_heat_flux_convergence(...)` and require every rung to be
 stationary before testing the finest-pair mean.
@@ -1068,14 +987,13 @@ initialized coarse lineages:
   --lineage-report /scratch/coarse-seed-1.json \
   --lineage-report /scratch/coarse-seed-2.json \
   --lineage-report /scratch/coarse-seed-3.json \
-  --reference-report /scratch/gx-cyclone-nonlinear.json \
+  --reference-report /scratch/independent-cyclone-nonlinear.json \
   --output /scratch/nonlinear-campaign.json
 ```
 
-No conversion factor is needed when the local reports were generated with
-`--flux-moment gx_total_energy`. For a genuinely different documented
-normalization, pass `--local-to-reference-factor FACTOR`; the factor must not
-be fitted to make the means agree. The command exits nonzero unless all lineage
+For a genuinely different documented normalization, pass
+`--local-to-reference-factor FACTOR`; the factor must not be fitted to make the
+means agree. The command exits nonzero unless all lineage
 roots are unique, every lineage is stationary, their means agree within 15%,
 and resolution convergence, domain convergence, and independent parity pass.
 
@@ -1093,13 +1011,13 @@ The current coarse three-root campaign passes its ensemble sub-gate. Seeds
 18, 19, and 20 give stationary means `-24.5555`, `-24.3764`, and `-23.7248`;
 the ensemble mean is `-24.2189` and the maximum relative deviation is `2.04%`.
 These caller-owned trajectories justify proceeding to the resolution and
-domain ladders, but do not replace those ladders or the pinned GX comparison.
+domain ladders, but do not replace those ladders or an independent comparison.
 The first fine phase-space rung (`16x16x8`, with the same `9x5` Fourier grid)
 is stationary over time 200--500 with mean `-29.6930`, but changes the matched
 seed-19 coarse mean by `17.91%`. Because this exceeds the fixed 15% tolerance,
 the ladder was extended to `20x20x10`. Its stationary time-400--500 mean is
 `-30.8928`; the finest-pair change is `3.88%`, so phase-space resolution now
-passes. The separate domain and pinned-GX gates remain required.
+passes. The separate domain and independent-parity gates remain required.
 
 The first box expansion (`17x9`, `ky_min=0.05`) is stationary over time
 200--500 with mean `-7.0770`, but it does not agree with the narrow `9x5` mean:
@@ -1114,7 +1032,7 @@ Passing guardrails:
 - Rosenbluth-Hinton late-plateau gate.
 - Cyclone selected-ky scalar growth gate.
 - Cyclone term-level and GKW RHS/action parity gates.
-- DESC/GX/GX-GIST eik geometry contracts.
+- provider-neutral eik-table geometry contracts.
 - Reduced stellarator scan and fixed-topology optimization plumbing.
 
 Open blockers:
@@ -1124,7 +1042,7 @@ Open blockers:
 - convergence of the independent low-`ky` stella branches before making a
   broader spectral claim,
 - full GKW state-history/long-time velocity-slice parity and the low-`ky`
-  Cyclone/GX complex branch shape, retained by the machine-readable Priority 5
+  Cyclone complex branch shape, retained by the machine-readable Priority 5
   confidence ledger,
 - inter-species Landau/Fokker--Planck field-particle parity (the species-local
   Xu correction matches pinned Gyaradax/GKW factors and action, but does not

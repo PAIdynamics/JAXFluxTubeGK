@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-08-10
+Last updated: 2026-08-12
 
 ## Executive Summary
 
@@ -22,6 +22,21 @@ design objectives, gradient audits, topology guards, robust multi-sample
 aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
+
+### 2026-08-12: Provider-Neutral Production Refactor
+
+- Removed GX-derived names and provenance from the core geometry and spectral-
+  moment APIs. The generic `EikGeometryProvider` owns the eik-table contract;
+  external-code readers remain opt-in validation tooling.
+- Removed GX benchmark symbols from top-level compatibility access. Package
+  version reporting now comes from installed distribution metadata.
+- Hardened geometry construction so non-finite request scalars, invalid dtypes,
+  boolean grid sizes, zero/non-finite iota, and invalid provider metadata fail
+  before array construction or JIT compilation.
+- GX/CUDA execution is no longer a production acceptance blocker. Nonlinear
+  readiness still fails closed on the scientifically relevant unresolved work:
+  domain convergence and an independent, explicitly normalized parity record.
+  Historical GX campaign notes below are retained as an audit log only.
 
 ### 2026-08-12: Priority 5 Future-Work Boundary
 

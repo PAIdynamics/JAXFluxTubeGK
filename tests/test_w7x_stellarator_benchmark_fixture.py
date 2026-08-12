@@ -41,7 +41,7 @@ def test_committed_w7x_reduced_benchmark_fixture_contract():
     assert audit["geometry"]["rho"] is None
     assert audit["geometry"]["radial_coordinate"] == "external_eik_table"
     assert not audit["mirror_fd_check_enabled"]
-    assert audit["checks"]["gx_eik_export_contract"]
+    assert audit["checks"]["eik_export_contract"]
     assert audit["field_stats"]["B"]["min"] > 0.0
     assert audit["kperp2"]["min"] >= -1.0e-12
 

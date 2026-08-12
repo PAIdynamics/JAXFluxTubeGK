@@ -34,6 +34,13 @@ def test_validation_namespace_and_legacy_attribute_are_lazy_compatible():
     assert CycloneTrace.__module__ == "jax_fluxtube_gk.benchmarks"
 
 
+def test_gx_validation_names_are_not_exposed_from_core_api():
+    import jax_fluxtube_gk
+
+    assert not hasattr(jax_fluxtube_gk, "GxEikGeometryProvider")
+    assert not hasattr(jax_fluxtube_gk, "gx_salpha_cyclone_growth_target")
+
+
 def test_validation_namespace_import_is_itself_lazy():
     import subprocess
     import sys

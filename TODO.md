@@ -15,8 +15,8 @@ The trusted, externally validated linear electrostatic W7-X milestone and the
 reduced fixed-topology design loop are complete. Production collisions and
 linear electromagnetic fields are implemented and independently exercised.
 The active scientific milestone is electrostatic nonlinear-turbulence
-acceptance: stationary resolution/domain ladders and a revision-pinned GX
-comparison. Nonlinear electromagnetic evolution and unrestricted production
+acceptance: stationary resolution/domain ladders and an independent,
+explicitly normalized comparison. Nonlinear electromagnetic evolution and unrestricted production
 equilibrium-shape optimization remain later milestones.
 
 Keep the workflow simple:
@@ -37,9 +37,9 @@ Implemented and tested:
 - a versioned MHD-neutral `GeometryProvider` contract, extended physical
   geometry model, strict validation, and one map from physical arrays to the
   solver's internal coefficients;
-- synthetic, physical-array, DESC object/path, GX/GIST eik, and stella
+- synthetic, physical-array, DESC object/path, provider-neutral eik-table, and stella
   `.geometry` providers, plus explicit external caching and provenance;
-- reduced RH, Cyclone, GKW/Gyaradax, DESC/eik, W7-X, stella, and GX validation
+- reduced RH, Cyclone, GKW/Gyaradax, DESC/eik, W7-X, and stella validation
   infrastructure;
 - reduced stellarator scans and optimization examples.
 

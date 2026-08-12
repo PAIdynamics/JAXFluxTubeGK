@@ -1,7 +1,7 @@
 # Velocity Backend Policy
 
 The production CPU representation is velocity-space collocation. The
-Hermite–Laguerre implementation remains a reduced GX-style discriminator and is
+Hermite–Laguerre implementation remains a reduced spectral discriminator and is
 not a prerequisite for continued production use of the collocation solver.
 
 The decision is claim-specific:
@@ -12,7 +12,7 @@ The decision is claim-specific:
 | `finite_difference` | GKW-compatible specialist collocation | Reduced CPU solves and GKW term/operator parity |
 | `midpoint_gauss_laguerre` | Source-matched W7-X collocation | Reduced/differentiable linear CPU solves and the validated W7-X linear recipe |
 | `native` | Arbitrary supplied nodes | Custom-grid plumbing only until a named gate passes |
-| `hermite_laguerre` | GX-style moments | Reduced GX branch discriminator only |
+| `hermite_laguerre` | Spectral moments | Reduced branch discriminator only |
 
 The W7-X claim is not granted by the backend name alone. It also requires the
 validated 32-by-8 resolution, phase-space measure, stella-compatible split

@@ -3,26 +3,26 @@ from pathlib import Path
 import numpy as np
 
 from jax_fluxtube_gk import (
-    GxEikGeometryProvider,
+    EikGeometryProvider,
     GeometryRequest,
     StellaGeometryProvider,
     has_duplicate_stella_endpoint,
     internal_geometry_from_result,
-    load_gx_eik_data,
+    load_eik_data,
     load_stella_geometry_data,
     resolve_geometry,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GX_EIK = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
+EIK_FIXTURE = ROOT / "fixtures/gx_desc_dshape_rho05_alpha0.eik.out"
 STELLA_GEOMETRY = (
     ROOT / "fixtures/stella_w7x_mode_structure_run/stella_w7x_adiabatic_electrons.geometry"
 )
 
 
-def test_gx_block_eik_reader_lives_in_geometry_adapter():
-    data = load_gx_eik_data(GX_EIK)
+def test_block_eik_reader_lives_in_geometry_adapter():
+    data = load_eik_data(EIK_FIXTURE)
 
     assert data.theta.shape == (33,)
     assert data.header[:3] == (16.0, 1.0, 32.0)
@@ -31,15 +31,15 @@ def test_gx_block_eik_reader_lives_in_geometry_adapter():
     assert np.all(data.bmag > 0.0)
 
 
-def test_gx_eik_provider_returns_physical_contract_and_canonical_drifts():
+def test_eik_provider_returns_physical_contract_and_canonical_drifts():
     request = GeometryRequest(
         configuration="desc-dshape-eik",
         radial_value=0.5,
         alpha=0.0,
         n_z=32,
     )
-    provider = GxEikGeometryProvider(
-        GX_EIK,
+    provider = EikGeometryProvider(
+        EIK_FIXTURE,
         iota=1.0 / 1.2012012012012012,
         shear=0.40240240240240244,
         provider_version="fixture",
@@ -48,11 +48,11 @@ def test_gx_eik_provider_returns_physical_contract_and_canonical_drifts():
 
     result = resolve_geometry(provider, request)
     internal = internal_geometry_from_result(result)
-    sampled = load_gx_eik_data(GX_EIK)
+    sampled = load_eik_data(EIK_FIXTURE)
 
-    assert result.metadata.provenance.provider == "gx-eik"
+    assert result.metadata.provenance.provider == "eik-table"
     assert result.metadata.differentiable is False
-    assert result.physical.provider == "gx-eik"
+    assert result.physical.provider == "eik-table"
     np.testing.assert_allclose(result.physical.alpha, request.alpha)
     np.testing.assert_allclose(
         internal.D_x,

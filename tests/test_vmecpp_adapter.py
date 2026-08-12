@@ -9,7 +9,7 @@ from jax_fluxtube_gk import (
     VmecppGeometryProvider,
     internal_geometry_from_result,
     load_stella_geometry_data,
-    load_gx_eik_data,
+    load_eik_data,
     resolve_geometry,
     vmec_field_line_from_wout,
 )
@@ -238,7 +238,7 @@ def test_direct_vmec_w7x_matches_independent_stella_geometry_terms(gx_root):
 
 @pytest.mark.external
 def test_direct_vmec_w7x_matches_same_surface_gx_gist_terms(gx_root):
-    eik = load_gx_eik_data(
+    eik = load_eik_data(
         gx_root
         / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"

@@ -4,10 +4,10 @@ import numpy as np
 from scipy import special
 
 from jax_fluxtube_gk import (
-    GxMomentRHSParams,
+    MomentRHSParams,
     VelocityBasisKind,
     VelocityBasisSpec,
-    apply_gx_kz_hypercollision,
+    apply_kz_hypercollision,
     apply_hypercollision,
     apply_linked_abs_kz,
     apply_linked_grad_z,
@@ -17,12 +17,12 @@ from jax_fluxtube_gk import (
     free_energy_spectrum,
     gamma0,
     gamma0_limit_error,
-    gx_moment_adiabatic_phi,
-    gx_moment_itg_drive_source,
-    gx_moment_linear_rhs,
-    gx_kz_hypercollision_hermite_rates,
-    gx_kz_hypercollision_prefactor,
-    gx_linked_kz_wavenumbers,
+    moment_adiabatic_phi,
+    moment_itg_drive_source,
+    moment_linear_rhs,
+    kz_hypercollision_hermite_rates,
+    kz_hypercollision_prefactor,
+    linked_kz_wavenumbers,
     gyroaverage_laguerre_coefficients,
     hypercollision_damping_rates,
     parallel_heat_flux_moment,
@@ -253,12 +253,12 @@ def test_hypercollision_closure_hook_damps_only_selected_moments():
     np.testing.assert_allclose(rhs, -rates[:, :, None] * coeffs)
 
 
-def test_gx_linked_kz_wavenumbers_follow_cuda_ordering_and_dealiasing():
-    kz = gx_linked_kz_wavenumbers(4, n_links=2, z_periods=3.0)
+def test_linked_kz_wavenumbers_follow_cuda_ordering_and_dealiasing():
+    kz = linked_kz_wavenumbers(4, n_links=2, z_periods=3.0)
     expected = jnp.asarray([0.0, 1.0, 2.0, 3.0, 4.0, -3.0, -2.0, -1.0]) / 6.0
     np.testing.assert_allclose(kz, expected, rtol=0.0, atol=0.0)
 
-    dealias = gx_linked_kz_wavenumbers(4, n_links=2, z_periods=3.0, dealias=True)
+    dealias = linked_kz_wavenumbers(4, n_links=2, z_periods=3.0, dealias=True)
     expected_dealias = jnp.asarray([0.0, 1.0, 2.0, 0.0, 0.0, 0.0, -2.0, -1.0]) / 6.0
     np.testing.assert_allclose(dealias, expected_dealias, rtol=0.0, atol=0.0)
 
@@ -287,8 +287,8 @@ def test_linked_grad_z_operator_matches_discrete_fourier_mode():
     np.testing.assert_allclose(out, 1j * mode / z_periods * values, rtol=3e-14, atol=3e-14)
 
 
-def test_gx_kz_hypercollision_prefactor_and_rates_match_source_formula():
-    prefactor = gx_kz_hypercollision_prefactor(
+def test_kz_hypercollision_prefactor_and_rates_match_source_formula():
+    prefactor = kz_hypercollision_prefactor(
         6,
         nu_hyper_m=0.7,
         p_hyper_m=2,
@@ -298,7 +298,7 @@ def test_gx_kz_hypercollision_prefactor_and_rates_match_source_formula():
     expected_prefactor = 0.7 * 2.5 / (5.0**2.5) * 2.3 * 1.5 * 0.25
     np.testing.assert_allclose(prefactor, expected_prefactor, rtol=2e-15, atol=2e-15)
 
-    rates = gx_kz_hypercollision_hermite_rates(
+    rates = kz_hypercollision_hermite_rates(
         6,
         nu_hyper_m=0.7,
         p_hyper_m=2,
@@ -318,7 +318,7 @@ def test_gx_kz_hypercollision_damps_only_high_hermite_modes_then_abs_kz():
     coeffs = jnp.zeros((2, 6, n_total), dtype=jnp.complex128)
     coeffs = coeffs.at[:, :, :].set(wave[None, None, :])
 
-    rhs = apply_gx_kz_hypercollision(
+    rhs = apply_kz_hypercollision(
         coeffs,
         nu_hyper_m=0.7,
         p_hyper_m=2,
@@ -327,7 +327,7 @@ def test_gx_kz_hypercollision_damps_only_high_hermite_modes_then_abs_kz():
         n_links=2,
         z_periods=3.0,
     )
-    rates = gx_kz_hypercollision_hermite_rates(
+    rates = kz_hypercollision_hermite_rates(
         6,
         nu_hyper_m=0.7,
         p_hyper_m=2,
@@ -340,7 +340,7 @@ def test_gx_kz_hypercollision_damps_only_high_hermite_modes_then_abs_kz():
     np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
 
     constant = jnp.ones_like(coeffs)
-    constant_rhs = apply_gx_kz_hypercollision(
+    constant_rhs = apply_kz_hypercollision(
         constant,
         nu_hyper_m=0.7,
         p_hyper_m=2,
@@ -362,7 +362,7 @@ def test_gx_kz_hypercollision_is_jittable_and_differentiable():
 
     @jax.jit
     def objective(scale):
-        rhs = apply_gx_kz_hypercollision(
+        rhs = apply_kz_hypercollision(
             scale * base,
             nu_hyper_m=0.4,
             p_hyper_m=2,
@@ -380,7 +380,7 @@ def test_gx_kz_hypercollision_is_jittable_and_differentiable():
 
 def test_gx_moment_field_solve_and_drive_projection_are_consistent():
     basis = build_velocity_basis(VelocityBasisSpec(n_hermite=5, n_laguerre=4))
-    params = GxMomentRHSParams(density_gradient=0.8, temperature_gradient=2.49)
+    params = MomentRHSParams(density_gradient=0.8, temperature_gradient=2.49)
     ky = jnp.asarray([0.3, 0.5], dtype=jnp.float64)
     z = jnp.linspace(-1.0, 1.0, 6)
     b = 0.5 * ky[:, None] ** 2 * jnp.ones((ky.shape[0], z.shape[0]))
@@ -399,8 +399,8 @@ def test_gx_moment_field_solve_and_drive_projection_are_consistent():
     )
     coeffs = coeffs.at[:, 0].set(gyro * density / gamma)
 
-    solved = gx_moment_adiabatic_phi(coeffs, b, params)
-    drive = gx_moment_itg_drive_source(solved, b, ky, basis, params)
+    solved = moment_adiabatic_phi(coeffs, b, params)
+    drive = moment_itg_drive_source(solved, b, ky, basis, params)
 
     np.testing.assert_allclose(solved, phi_target, rtol=3e-13, atol=3e-13)
     assert drive.shape == coeffs.shape
@@ -414,7 +414,7 @@ def test_gx_moment_rhs_hypercollision_only_preserves_low_hermite_modes():
     z = jnp.linspace(-1.0, 1.0, 8, endpoint=False)
     ky = jnp.asarray([0.4], dtype=jnp.float64)
     coeffs = jnp.ones((basis.n_laguerre, basis.n_hermite, 1, z.shape[0]), dtype=jnp.complex128)
-    params = GxMomentRHSParams(
+    params = MomentRHSParams(
         density_gradient=0.0,
         temperature_gradient=0.0,
         streaming_scale=0.0,
@@ -425,14 +425,14 @@ def test_gx_moment_rhs_hypercollision_only_preserves_low_hermite_modes():
         z_periods=2.0,
     )
 
-    rhs = gx_moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
+    rhs = moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
 
     np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
     np.testing.assert_allclose(rhs[:, 3:], 0.0, rtol=0.0, atol=3e-14)
 
     wave = jnp.exp(2j * jnp.pi * jnp.arange(z.shape[0]) / z.shape[0])
     coeffs = coeffs.at[:, 3:].set(wave[None, None, None, :])
-    rhs = gx_moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
+    rhs = moment_linear_rhs(coeffs, basis, ky, z, b=0.5 * ky[:, None] ** 2, params=params)
 
     np.testing.assert_allclose(rhs[:, :3], 0.0, rtol=0.0, atol=3e-14)
     assert jnp.max(jnp.abs(rhs[:, 3:])) > 0.0
@@ -445,11 +445,11 @@ def test_gx_moment_rhs_is_jittable_and_differentiable():
     b = 0.5 * ky[:, None] ** 2 * jnp.ones((ky.shape[0], z.shape[0]))
     base = jnp.zeros((basis.n_laguerre, basis.n_hermite, ky.shape[0], z.shape[0]))
     base = base.at[0, 0].set(jnp.cos(jnp.pi * z)[None, :])
-    params = GxMomentRHSParams(z_periods=2.0)
+    params = MomentRHSParams(z_periods=2.0)
 
     @jax.jit
     def objective(scale):
-        rhs = gx_moment_linear_rhs(scale * base, basis, ky, z, b, params)
+        rhs = moment_linear_rhs(scale * base, basis, ky, z, b, params)
         return jnp.real(jnp.sum(jnp.abs(rhs) ** 2))
 
     value = objective(0.7)

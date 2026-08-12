@@ -23,6 +23,22 @@ The canonical imports for this surface are from `jax_fluxtube_gk` or the
 focused subsystem module. Symbols present in `jax_fluxtube_gk.__all__` define
 the compact top-level API for this series.
 
+### Provider-neutral naming
+
+Core APIs are named for solver concepts and file contracts, not external
+implementations. The production refactor intentionally removed the former
+GX-prefixed core aliases:
+
+| Current API | Purpose |
+| --- | --- |
+| `EikData`, `EikGeometryProvider` | Generic numeric or labelled eik tables |
+| `load_eik_data`, `resample_eik_data` | Eik parsing and interpolation |
+| `MomentRHSParams`, `moment_linear_rhs` | Experimental spectral-moment model |
+| `linked_kz_wavenumbers`, `apply_kz_hypercollision` | Linked parallel spectral operators |
+
+External-code-specific parsers and comparisons belong under
+`jax_fluxtube_gk.validation` and are not re-exported by the core package.
+
 ## Validation surface
 
 External-reference workflows live under `jax_fluxtube_gk.validation`:

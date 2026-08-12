@@ -36,7 +36,7 @@ from jax_fluxtube_gk import (
     AdiabaticElectronParams,
     DescGeometryProvider,
     FourierGridSpec,
-    GxEikGeometryProvider,
+    EikGeometryProvider,
     GeometryRequest,
     PerKyModeStructureFixture,
     ParallelGridSpec,
@@ -69,12 +69,12 @@ from jax_fluxtube_gk import (
     implicit_parallel_response_step,
     real_frequency,
     resolve_geometry,
-    run_desc_gx_eik_external_geometry_gate,
     run_stellarator_geometry_preflight,
     solve_field_from_state,
     weighted_quasilinear_proxy,
     write_per_ky_mode_structure_fixture_csv,
 )
+from jax_fluxtube_gk.validation.geometry_parity import run_desc_eik_external_geometry_gate
 
 DESC_FIXTURE_KEYS = (
     "theta",
@@ -337,7 +337,7 @@ def _load_geometry(args):
             field_periods=args.field_line_periods,
         )
         result = resolve_geometry(
-            GxEikGeometryProvider(
+            EikGeometryProvider(
                 args.eik_reference,
                 iota=1.0 if args.iota is None else args.iota,
                 nfp=args.nfp,
@@ -489,7 +489,7 @@ def _geometry_audit(geometry, fourier, args, geometry_metadata):
                 "--external-eik-reference is supported for --geometry-source desc-path; "
                 "the fixture and imported-eik paths use the internal export contract"
             )
-        external_gate = run_desc_gx_eik_external_geometry_gate(
+        external_gate = run_desc_eik_external_geometry_gate(
             args.desc_path,
             args.external_eik_reference,
             rho=args.rho,
@@ -524,7 +524,7 @@ def _geometry_audit(geometry, fourier, args, geometry_metadata):
             "observed_value": float(report.eik_export_error),
             "reference_value": 0.0,
             "tolerance": 1.0e-12,
-            "passed": bool(checks["gx_eik_export_contract"]),
+            "passed": bool(checks["eik_export_contract"]),
             "notes": report.notes,
         },
         "mirror_fd_error": float(report.mirror_fd_error),

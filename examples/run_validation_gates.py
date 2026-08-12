@@ -28,17 +28,21 @@ from jax_fluxtube_gk import (
     build_desc_geometry_from_arrays,
     build_fourier_grid,
     build_parallel_grid,
-    load_gx_eik_geometry_reference,
-    resample_gx_eik_geometry_reference,
-    run_desc_gx_eik_external_geometry_gate,
-    run_geometry_to_gx_eik_export_gate,
-    run_gx_gist_external_eik_suite_gate,
-    run_gx_eik_geometry_gate,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_trace,
     run_rosenbluth_hinton_plateau_gate,
     run_reduced_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
+)
+from jax_fluxtube_gk.validation.fixture_io import (
+    load_eik_geometry_reference,
+    resample_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.geometry_parity import (
+    run_desc_eik_external_geometry_gate,
+    run_eik_geometry_gate,
+    run_external_eik_suite_gate,
+    run_geometry_to_eik_export_gate,
 )
 
 
@@ -123,9 +127,9 @@ def main() -> None:
 
 
 def _run_eik_gate(args):
-    reference = load_gx_eik_geometry_reference(args.eik_reference)
+    reference = load_eik_geometry_reference(args.eik_reference)
     theta = np.linspace(-np.pi, np.pi, args.eik_nodes, endpoint=False)
-    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    sampled = resample_eik_geometry_reference(reference, theta)
     z = theta / (2.0 * np.pi)
     dz = z[1] - z[0]
     parallel = build_parallel_grid(
@@ -134,7 +138,7 @@ def _run_eik_gate(args):
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
-    return run_gx_eik_geometry_gate(sampled, parallel, fourier)
+    return run_eik_geometry_gate(sampled, parallel, fourier)
 
 
 def _run_rh_plateau_gate(args):
@@ -177,7 +181,7 @@ def _run_desc_eik_export_gate(args):
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
-    return run_geometry_to_gx_eik_export_gate(geometry, fourier)
+    return run_geometry_to_eik_export_gate(geometry, fourier)
 
 
 def _run_desc_gx_eik_external_gate(args):
@@ -187,7 +191,7 @@ def _run_desc_gx_eik_external_gate(args):
     print(f"DESC root: {desc_root}")
     if desc_root.exists() and str(desc_root) not in sys.path:
         sys.path.insert(0, str(desc_root))
-    return run_desc_gx_eik_external_geometry_gate(
+    return run_desc_eik_external_geometry_gate(
         args.desc_path,
         args.desc_gx_eik_reference,
         rho=args.desc_gx_eik_rho,
@@ -196,7 +200,7 @@ def _run_desc_gx_eik_external_gate(args):
 
 
 def _run_gx_gist_suite_gate(args):
-    return run_gx_gist_external_eik_suite_gate(
+    return run_external_eik_suite_gate(
         args.gx_gist_reference,
         n_theta=args.gx_gist_nodes,
     )

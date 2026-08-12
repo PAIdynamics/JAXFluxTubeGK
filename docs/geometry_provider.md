@@ -120,16 +120,16 @@ boundaries. Opt-in tests compare GVEC with direct VMEC++ on the same
 VMEC-initialized W7-X state and compare direct VMEC++ term by term with matched
 GX/GIST and stella references.
 
-## GX/GIST and stella readers
+## eik-table and stella readers
 
-`GxEikGeometryProvider` and `StellaGeometryProvider` contain the file parsing
+`EikGeometryProvider` and `StellaGeometryProvider` contain the file parsing
 that previously lived in `benchmarks.py` and the linear-scan example. Both are
 file-backed and therefore non-differentiable. They convert imported normalized
 grad-B and curvature contributions into the common physical split; the
 canonical mapper then constructs the summed solver drift coefficients.
 
-GX/GIST eik requests use a radian parallel coordinate. The adapter supports
-both the numeric ten-column layout and the older GX multi-block layout,
+Eik-table requests use a radian parallel coordinate. The adapter supports
+both the numeric ten-column layout and the labelled multi-block layout,
 resampling onto the requested endpoint-excluded grid. stella requests declare
 `parallel_coordinate="zed_over_2pi"` with unit `turn`; the adapter drops and
 rejects duplicate periodic endpoints, retains the file's field-line span, and

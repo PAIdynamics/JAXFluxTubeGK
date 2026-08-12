@@ -46,18 +46,20 @@ import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from jax_fluxtube_gk import (
+from jax_fluxtube_gk.validation.cyclone_gkw import (
     calibrate_gx_growth_rate_reference_to_target,
     compare_per_ky_mode_structure_fixtures,
     cyclone_base_case_growth_target,
     evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures,
     gx_salpha_cyclone_growth_target,
+    run_cyclone_base_case_mode_structure_fixture,
+    run_s_alpha_moment_rhs_mode_structure_fixture,
+)
+from jax_fluxtube_gk.validation.fixture_io import (
     load_gx_growth_rate_reference,
     load_gx_mode_structure_fixture,
     load_per_ky_mode_structure_fixture_csv,
     resample_per_ky_mode_structure_fixture,
-    run_cyclone_base_case_mode_structure_fixture,
-    run_gx_salpha_moment_rhs_mode_structure_fixture,
     write_per_ky_mode_structure_fixture_csv,
 )
 
@@ -137,7 +139,7 @@ def main() -> None:
             )
     elif args.reference_moment_rhs:
         moment_defaults = _moment_profile_defaults(args.profile)
-        reference_fixture = run_gx_salpha_moment_rhs_mode_structure_fixture(
+        reference_fixture = run_s_alpha_moment_rhs_mode_structure_fixture(
             ky_values=_parse_float_tuple(args.ky_values),
             n_z=args.moment_n_z or args.n_z or moment_defaults["n_z"],
             n_hermite=args.moment_n_hermite or moment_defaults["n_hermite"],

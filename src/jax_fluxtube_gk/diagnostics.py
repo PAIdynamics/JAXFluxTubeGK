@@ -225,7 +225,7 @@ def gyrokinetic_energy_response(
     species: SpeciesParams | tuple[SpeciesParams, ...],
     bessel_j0,
 ):
-    """Return the gyroaveraged total-energy response used by GX heat flux.
+    """Return a gyroaveraged total-energy response for heat-flux diagnostics.
 
     Unlike :func:`gyrokinetic_heat_response`, this moment does not subtract
     ``3/2 T_s`` times the particle response. The two fluxes agree only when

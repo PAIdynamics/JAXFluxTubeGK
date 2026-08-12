@@ -85,9 +85,21 @@ class GeometryRequest:
                 f"radial_coordinate must be one of {_RADIAL_COORDINATES}; "
                 f"got {self.radial_coordinate!r}"
             )
+        scalar_values = {
+            "radial_value": self.radial_value,
+            "alpha": self.alpha,
+            "z_min": self.z_min,
+            "z_max": self.z_max,
+            "field_periods": self.field_periods,
+        }
+        nonfinite = tuple(name for name, value in scalar_values.items() if not np.isfinite(value))
+        if nonfinite:
+            raise ValueError(
+                "geometry request contains non-finite values for " + ", ".join(nonfinite)
+            )
         if self.radial_coordinate in ("rho", "x") and not 0.0 <= self.radial_value <= 1.0:
             raise ValueError("rho/x radial_value must lie in [0, 1]")
-        if self.n_z < 2:
+        if isinstance(self.n_z, bool) or not isinstance(self.n_z, int) or self.n_z < 2:
             raise ValueError("geometry request n_z must be at least 2")
         if self.z_max <= self.z_min:
             raise ValueError("geometry request z_max must be greater than z_min")
@@ -104,6 +116,12 @@ class GeometryRequest:
             raise ValueError("periodic provider grids must exclude the duplicate upper endpoint")
         if self.field_periods <= 0.0:
             raise ValueError("field_periods must be positive")
+        try:
+            dtype = np.dtype(self.dtype)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"unsupported geometry dtype {self.dtype!r}") from error
+        if dtype.kind != "f":
+            raise ValueError("geometry dtype must be a real floating-point dtype")
 
 
 @dataclass(frozen=True)

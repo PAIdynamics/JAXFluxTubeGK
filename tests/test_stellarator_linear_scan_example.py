@@ -71,7 +71,7 @@ def test_stellarator_linear_scan_example_writes_machine_readable_outputs(tmp_pat
 
     audit = json.loads((output_dir / "geometry_audit.json").read_text())
     assert audit["passed"]
-    assert audit["checks"]["gx_eik_export_contract"]
+    assert audit["checks"]["eik_export_contract"]
     assert audit["geometry"]["geometry_source"] == "fixture"
 
     with (output_dir / "ky_growth.csv").open(newline="") as handle:

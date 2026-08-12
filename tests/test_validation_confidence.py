@@ -17,7 +17,7 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
     assert set(by_id) == {
         "gkw_selected_mode_state_history",
         "gkw_multi_time_velocity_slice",
-        "cyclone_gx_low_ky_branch_shape",
+        "cyclone_low_ky_branch_shape",
         "kinetic_electron_tem_external_parity",
         "production_collisions_electromagnetic_parity",
         "nonlinear_stationary_heat_flux_parity",
@@ -45,7 +45,7 @@ def test_priority5_ledger_keeps_known_gaps_explicit():
         metric.name: metric.value
         for metric in by_id["nonlinear_stationary_heat_flux_parity"].metrics
     }
-    assert nonlinear_metrics["regenerated_merged_mean_gx_qgb"] == pytest.approx(-24.2322731)
+    assert nonlinear_metrics["regenerated_merged_total_energy_mean"] == pytest.approx(-24.2322731)
     assert nonlinear_metrics["regenerated_merged_relative_drift"] == pytest.approx(-0.69131945)
 
 
@@ -68,7 +68,7 @@ def test_w7x_claim_records_narrow_independent_supersession():
             "gkw_cyclone_full_velocity_space_history_parity",
             "gkw_multi_time_velocity_slice",
         ),
-        ("cyclone_gx_multi_ky_mode_structure_parity", "cyclone_gx_low_ky_branch_shape"),
+        ("cyclone_multi_ky_mode_structure_validation", "cyclone_low_ky_branch_shape"),
         (
             "collisional_electromagnetic_production_physics",
             "production_collisions_electromagnetic_parity",

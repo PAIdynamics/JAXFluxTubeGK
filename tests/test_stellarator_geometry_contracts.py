@@ -7,16 +7,20 @@ import pytest
 
 from jax_fluxtube_gk import (
     FourierGridSpec,
-    ModeBoundaryContractReport,
     ParallelGridSpec,
-    StellaratorGeometryPreflightReport,
     build_desc_geometry_from_arrays,
-    build_flux_tube_geometry_from_gx_eik_reference,
     build_fourier_grid,
     build_mode_connectivity,
     build_parallel_grid,
-    load_gx_eik_geometry_reference,
-    resample_gx_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.fixture_io import (
+    load_eik_geometry_reference,
+    resample_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.geometry_parity import (
+    ModeBoundaryContractReport,
+    StellaratorGeometryPreflightReport,
+    build_flux_tube_geometry_from_eik_reference,
     run_mode_boundary_contract,
     run_stellarator_geometry_preflight,
 )
@@ -41,7 +45,7 @@ def test_desc_fixture_passes_shared_stellarator_geometry_preflight():
         "positive_metric_diagonal",
         "finite_kperp2",
         "nonnegative_representative_kperp2",
-        "gx_eik_export_contract",
+        "eik_export_contract",
         "finite_difference_mirror_force",
     }
     np.testing.assert_allclose(report.eik_export_error, 0.0, atol=1.0e-13)
@@ -131,7 +135,7 @@ def test_external_w7x_eik_preflight_handles_two_field_line_lengths(gx_root: Path
         / "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
-    reference = load_gx_eik_geometry_reference(path)
+    reference = load_eik_geometry_reference(path)
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
@@ -139,9 +143,9 @@ def test_external_w7x_eik_preflight_handles_two_field_line_lengths(gx_root: Path
     mean_b = []
     for npol, n_theta in ((1, 17), (2, 33)):
         theta = np.linspace(-np.pi * npol, np.pi * npol, n_theta, endpoint=False)
-        sampled = resample_gx_eik_geometry_reference(reference, theta)
+        sampled = resample_eik_geometry_reference(reference, theta)
         parallel = _parallel_grid_from_theta(theta)
-        geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
+        geometry = build_flux_tube_geometry_from_eik_reference(sampled, parallel)
         report = run_stellarator_geometry_preflight(
             geometry,
             fourier,

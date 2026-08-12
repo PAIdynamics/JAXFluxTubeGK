@@ -35,18 +35,22 @@ from jax_fluxtube_gk import (
     build_desc_geometry_from_arrays,
     build_fourier_grid,
     build_parallel_grid,
-    load_gx_eik_geometry_reference,
-    resample_gx_eik_geometry_reference,
-    run_desc_gx_eik_external_geometry_gate,
-    run_geometry_to_gx_eik_export_gate,
-    run_gx_gist_external_eik_suite_gate,
-    run_gx_eik_geometry_gate,
     run_cyclone_base_case_term_parity_audit,
     run_cyclone_base_case_trace,
     run_production_cyclone_base_case_gate,
     run_reduced_rosenbluth_hinton_gate,
     run_rosenbluth_hinton_plateau_gate,
     write_cyclone_trace_csv,
+)
+from jax_fluxtube_gk.validation.fixture_io import (
+    load_eik_geometry_reference,
+    resample_eik_geometry_reference,
+)
+from jax_fluxtube_gk.validation.geometry_parity import (
+    run_desc_eik_external_geometry_gate,
+    run_eik_geometry_gate,
+    run_external_eik_suite_gate,
+    run_geometry_to_eik_export_gate,
 )
 
 
@@ -182,9 +186,9 @@ def _run_eik_gate():
         "geometry_modules/vmec/tests/"
         "gist_gs2_wout_w7x_standardConfig_highres_surf12_pol_10_nz0_10000"
     )
-    reference = load_gx_eik_geometry_reference(reference_path)
+    reference = load_eik_geometry_reference(reference_path)
     theta = np.linspace(-np.pi, np.pi, 17, endpoint=False)
-    sampled = resample_gx_eik_geometry_reference(reference, theta)
+    sampled = resample_eik_geometry_reference(reference, theta)
     z = theta / (2.0 * np.pi)
     dz = z[1] - z[0]
     parallel = build_parallel_grid(
@@ -193,7 +197,7 @@ def _run_eik_gate():
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
-    return run_gx_eik_geometry_gate(sampled, parallel, fourier)
+    return run_eik_geometry_gate(sampled, parallel, fourier)
 
 
 def _run_desc_eik_export_gate():
@@ -218,14 +222,14 @@ def _run_desc_eik_export_gate():
     fourier = build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
-    return run_geometry_to_gx_eik_export_gate(geometry, fourier)
+    return run_geometry_to_eik_export_gate(geometry, fourier)
 
 
 def _run_desc_gx_eik_external_gate():
     desc_root = _required_dependency_root("desc")
     if desc_root.exists() and str(desc_root) not in sys.path:
         sys.path.insert(0, str(desc_root))
-    return run_desc_gx_eik_external_geometry_gate(
+    return run_desc_eik_external_geometry_gate(
         desc_root / "desc/examples/DSHAPE_output.h5",
         "fixtures/gx_desc_dshape_rho05_alpha0.eik.out",
     )
@@ -247,7 +251,7 @@ def _run_gx_gist_suite_gate():
             "gist_gs2_wout_st_a34_i32v22_beta_35_scaledAUG.txt_highres_surf12_pol_10_nz0_10000"
         ),
     )
-    return run_gx_gist_external_eik_suite_gate(paths, n_theta=17)
+    return run_external_eik_suite_gate(paths, n_theta=17)
 
 
 def _required_dependency_root(name: str) -> Path:

@@ -17,17 +17,22 @@ __all__ = [
     "CycloneTraceComparisonReport",
     "PerKyModeStructureComparisonReport",
     "PerKyModeStructureFixture",
+    "calibrate_gx_growth_rate_reference_to_target",
     "compare_cyclone_base_case_traces",
     "compare_gkw_state_trace_to_source_term_trace",
     "compare_per_ky_mode_structure_fixtures",
+    "cyclone_base_case_growth_target",
     "evaluate_benchmark_gate",
     "evaluate_cyclone_ky_scan_gate",
+    "evaluate_cyclone_ky_scan_gate_from_mode_structure_fixtures",
+    "gx_salpha_cyclone_growth_target",
     "run_cyclone_base_case_ky_scan_gate",
     "run_cyclone_base_case_mode_structure_fixture",
     "run_cyclone_base_case_term_parity_audit",
     "run_cyclone_base_case_trace",
     "run_production_cyclone_base_case_gate",
     "run_reduced_cyclone_base_case_gate",
+    "run_s_alpha_moment_rhs_mode_structure_fixture",
 ]
 
 _EXPORTS = frozenset(__all__)

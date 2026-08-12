@@ -101,10 +101,10 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
             ),
         ),
         ValidationConfidenceGap(
-            identifier="cyclone_gx_low_ky_branch_shape",
+            identifier="cyclone_low_ky_branch_shape",
             status="open",
-            summary="The low-ky Cyclone/GX complex branch shape is not closed.",
-            blocks_claims=("cyclone_gx_multi_ky_mode_structure_parity",),
+            summary="The low-ky Cyclone complex branch shape is not closed.",
+            blocks_claims=("cyclone_multi_ky_mode_structure_validation",),
             superseded_for_claims=(),
             evidence=(
                 "The selected calibrated branch is useful as a scalar guardrail, "
@@ -112,7 +112,7 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "establish the low-ky complex eigenfunction branch."
             ),
             next_action=(
-                "Run the revision-pinned GX producer with big diagnostics and compare "
+                "Generate an independent, revisioned reference fixture and compare "
                 "phase-aligned per-ky structures only after matching branch windows."
             ),
         ),
@@ -211,7 +211,7 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "statistics pass unit tests, and the collocation heat response matches "
                 "direct quadrature. A corrected twist-and-shift 12x12x6, 9x5 trajectory "
                 "once produced a passing t=220--300 candidate, but an independently staged "
-                "regeneration does not reproduce that decision. Its source-matched GX-energy "
+                "regeneration does not reproduce that decision. Its total-energy "
                 "t=220--300 window has mean -26.6568, block relative error 6.47%, and drift "
                 "-0.2204. Extending and merging t=220--400 gives mean -24.2323, 17 physical-"
                 "time blocks, block relative error 7.12%, drift -0.6913, and nonzonal growth "
@@ -220,8 +220,8 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "different chaotic realization. Adaptive traces now use time-weighted block "
                 "statistics instead of treating every correlated RK step as independent. "
                 "Checkpoints and reports retain initialization and segment lineage. "
-                "The GX summarizer and local producer "
-                "now emit explicit stationarity decisions, and the shared loader preserves "
+                "Reference and local producers emit explicit stationarity decisions, and "
+                "the shared loader preserves "
                 "those decisions instead of accepting rejected windows from drift alone. "
                 "A fail-closed campaign command evaluates separate resolution and domain "
                 "ladders plus independent parity. It now also requires at least three "
@@ -231,23 +231,22 @@ def priority5_confidence_gaps() -> tuple[ValidationConfidenceGap, ...]:
                 "through time 300 fails: its t=220--300 candidate mean is -14.3748, "
                 "block relative error 25.61%, drift 0.5378, nonzonal growth -5.89e-3, "
                 "and full-segment RMS ratio 0.750. The earlier seed-17 candidate is "
-                "therefore not initialization-robust. No second stationary local rung or GX "
-                "comparison has yet passed. Source tracing against pinned GX established "
-                "its total-energy moment, Fourier factor, and s-alpha flux weight; the local "
-                "producer now exposes the matched gx_Q_over_Q_GB diagnostic separately from "
-                "its historical non-advective heat moment."
+                "therefore not initialization-robust. No second stationary local rung or "
+                "independent comparison has yet passed. The local producer exposes its "
+                "total-energy diagnostic separately from its historical non-advective "
+                "heat moment."
             ),
             next_action=(
                 "Extend multiple lineage-identified coarse realizations until stationary "
-                "block windows are robust, then run resolved/wider-domain rungs and the "
-                "pinned GX case before executing the combined campaign gate."
+                "block windows are robust, then run resolved/wider-domain rungs and an "
+                "independent reference before executing the combined campaign gate."
             ),
             metrics=(
-                ConfidenceMetric("regenerated_merged_mean_gx_qgb", -24.232273096839844),
+                ConfidenceMetric("regenerated_merged_total_energy_mean", -24.232273096839844),
                 ConfidenceMetric("regenerated_merged_block_relative_error", 7.124978e-2),
                 ConfidenceMetric("regenerated_merged_relative_drift", -6.91319448348199e-1),
                 ConfidenceMetric("regenerated_merged_nonzonal_growth", 4.2386475e-3),
-                ConfidenceMetric("seed18_t220_t300_mean_gx_qgb", -14.374818270136231),
+                ConfidenceMetric("seed18_t220_t300_total_energy_mean", -14.374818270136231),
                 ConfidenceMetric("seed18_t220_t300_block_relative_error", 0.2560513848799404),
                 ConfidenceMetric("seed18_t220_t300_relative_drift", 0.5378087177639954),
             ),

@@ -6,7 +6,22 @@ build-backend = "setuptools.build_meta"
 name = "jax-fluxtube-gk"
 version = "0.1.0"
 description = "Differentiable local flux-tube gyrokinetics for magnetic-confinement design"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
+authors = [{ name = "JAXFluxTubeGK contributors" }]
+keywords = ["jax", "gyrokinetics", "plasma-physics", "stellarator", "tokamak"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Typing :: Typed",
+]
 dependencies = [
   "jax>=0.4.30",
   "numpy>=1.26",
@@ -42,6 +57,9 @@ mhd = [
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["jax_fluxtube_gk*"]
+
+[tool.setuptools.package-data]
+jax_fluxtube_gk = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

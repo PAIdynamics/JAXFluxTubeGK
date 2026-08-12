@@ -664,7 +664,7 @@ class CycloneKyScanConventionAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class GxEikGeometryReference(_PyTreeDataclass):
+class EikGeometryReference(_PyTreeDataclass):
     """GS2/GX eik-style geometry table sampled along a field line."""
 
     theta: object
@@ -3043,7 +3043,7 @@ class CycloneIghArakawaSeriesAudit(_PyTreeDataclass):
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class GxEikGeometryParityReport(_PyTreeDataclass):
+class EikGeometryParityReport(_PyTreeDataclass):
     """Field-by-field comparison between solver geometry and a GX/GS2 eik table."""
 
     field_errors: object
@@ -4984,7 +4984,7 @@ def run_cyclone_base_case_mode_structure_fixture(
     )
 
 
-def run_gx_salpha_moment_rhs_mode_structure_fixture(
+def run_s_alpha_moment_rhs_mode_structure_fixture(
     *,
     ky_values=(0.3, 0.5),
     n_z: int = 96,
@@ -5008,20 +5008,19 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
     initial_profile: str = "gaussian",
     initial_width: float = 0.35,
 ) -> PerKyModeStructureFixture:
-    """Run the reduced GX-style moment RHS and return a fixture.
+    """Run the reduced spectral-moment RHS and return a fixture.
 
-    This implementation-side fallback evolves GX-layout Hermite-Laguerre
-    moments when no retained external `.big.nc`/eigenfunction artifact is
-    available.  It emits the same portable complex mode-structure fixture used
-    by the external-code gate.
+    This implementation-side fallback evolves Hermite-Laguerre moments when no
+    retained external eigenfunction artifact is available. It emits the same
+    portable complex mode-structure fixture used by external-code gates.
     """
 
     from .physics import (
-        GxMomentRHSParams,
+        MomentRHSParams,
         VelocityBasisSpec,
         build_velocity_basis,
-        gx_moment_adiabatic_phi,
-        gx_moment_linear_rhs,
+        moment_adiabatic_phi,
+        moment_linear_rhs,
         gyroaverage_laguerre_coefficients,
         truncated_gamma0_from_laguerre,
     )
@@ -5055,7 +5054,7 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
     basis = build_velocity_basis(
         VelocityBasisSpec(n_hermite=int(n_hermite), n_laguerre=int(n_laguerre))
     )
-    params = GxMomentRHSParams(
+    params = MomentRHSParams(
         density_gradient=float(density_gradient),
         temperature_gradient=float(temperature_gradient),
         tau=float(tau),
@@ -5067,9 +5066,9 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
         p_hyper_m=p_hyper_m,
         z_periods=z_periods,
     )
-    b = _gx_salpha_moment_b(ky_j, z, magnetic_shear=magnetic_shear)
-    phi0 = _gx_moment_initial_phi(ky_j, z, profile=initial_profile, width=initial_width)
-    state = _gx_moment_state_from_phi(
+    b = _s_alpha_moment_b(ky_j, z, magnetic_shear=magnetic_shear)
+    phi0 = _moment_initial_phi(ky_j, z, profile=initial_profile, width=initial_width)
+    state = _moment_state_from_phi(
         phi0,
         b,
         basis,
@@ -5078,8 +5077,8 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
         truncated_gamma0_from_laguerre,
     )
 
-    rhs = jax.jit(lambda value: gx_moment_linear_rhs(value, basis, ky_j, z, b, params))
-    solve_phi = jax.jit(lambda value: gx_moment_adiabatic_phi(value, b, params))
+    rhs = jax.jit(lambda value: moment_linear_rhs(value, basis, ky_j, z, b, params))
+    solve_phi = jax.jit(lambda value: moment_adiabatic_phi(value, b, params))
 
     log_normalization = np.zeros(ky.shape, dtype=float)
     times = []
@@ -5116,10 +5115,10 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
         phi=phi,
         growth_rate=jnp.asarray(growth, dtype=jnp.float64),
         frequency=jnp.asarray(frequency, dtype=jnp.float64),
-        source="jax_fluxtube_gk reduced GX-style Hermite-Laguerre moment RHS",
-        normalization="complex_phi_gx_moment_rhs",
+        source="jax_fluxtube_gk reduced Hermite-Laguerre moment RHS",
+        normalization="complex_phi_moment_rhs",
         metadata=(
-            ("model", "reduced_gx_salpha_moment_rhs"),
+            ("model", "reduced_s_alpha_moment_rhs"),
             ("n_z", int(n_z)),
             ("n_hermite", int(n_hermite)),
             ("n_laguerre", int(n_laguerre)),
@@ -5146,14 +5145,14 @@ def run_gx_salpha_moment_rhs_mode_structure_fixture(
     )
 
 
-def _gx_salpha_moment_b(ky, z, *, magnetic_shear: float):
+def _s_alpha_moment_b(ky, z, *, magnetic_shear: float):
     theta = 2.0 * jnp.pi * jnp.asarray(z)
     shear = jnp.asarray(magnetic_shear, dtype=theta.dtype)
     kperp2_over_ky2 = 1.0 + (shear * theta) ** 2
     return 0.5 * jnp.asarray(ky)[:, None] ** 2 * kperp2_over_ky2[None, :]
 
 
-def _gx_moment_initial_phi(ky, z, *, profile: str, width: float):
+def _moment_initial_phi(ky, z, *, profile: str, width: float):
     z = jnp.asarray(z)
     if profile == "gaussian":
         base = jnp.exp(-0.5 * (z / width) ** 2)
@@ -5169,7 +5168,7 @@ def _gx_moment_initial_phi(ky, z, *, profile: str, width: float):
     return jnp.broadcast_to((base * phase)[None, :], (jnp.asarray(ky).shape[0], z.shape[0]))
 
 
-def _gx_moment_state_from_phi(
+def _moment_state_from_phi(
     phi,
     b,
     basis,
@@ -5210,7 +5209,7 @@ def _fit_last_window_slope(time_array, values, fraction: float):
     )
 
 
-def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
+def load_eik_geometry_reference(path) -> EikGeometryReference:
     """Load a numeric GS2/GX eik geometry table.
 
     The local GX VMEC test fixtures use one numeric header row followed by
@@ -5221,10 +5220,10 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     reference object.
     """
 
-    from .geometry.gx_eik_adapter import load_gx_eik_data
+    from .geometry.eik_adapter import load_eik_data
 
-    data = load_gx_eik_data(path)
-    return GxEikGeometryReference(
+    data = load_eik_data(path)
+    return EikGeometryReference(
         theta=data.theta,
         bmag=data.bmag,
         gradpar=data.gradpar,
@@ -5240,31 +5239,31 @@ def load_gx_eik_geometry_reference(path) -> GxEikGeometryReference:
     )
 
 
-def resample_gx_eik_geometry_reference(
-    reference: GxEikGeometryReference,
+def resample_eik_geometry_reference(
+    reference: EikGeometryReference,
     theta,
-) -> GxEikGeometryReference:
+) -> EikGeometryReference:
     """Interpolate a loaded GX/GS2 eik table onto requested theta nodes."""
 
-    from .geometry.gx_eik_adapter import GxEikData, resample_gx_eik_data
+    from .geometry.eik_adapter import EikData, resample_eik_data
 
-    sampled = resample_gx_eik_data(
-        GxEikData(
+    sampled = resample_eik_data(
+        EikData(
             **{name: np.asarray(getattr(reference, name)) for name in reference._dynamic_fields},
             source=reference.source,
             header=reference.header,
         ),
         theta,
     )
-    return GxEikGeometryReference(
+    return EikGeometryReference(
         **{name: getattr(sampled, name) for name in reference._dynamic_fields},
         source=sampled.source,
         header=sampled.header,
     )
 
 
-def build_flux_tube_geometry_from_gx_eik_reference(
-    reference: GxEikGeometryReference,
+def build_flux_tube_geometry_from_eik_reference(
+    reference: EikGeometryReference,
     parallel_grid,
     *,
     radial_coordinate: str = "rho",
@@ -5312,11 +5311,11 @@ def build_flux_tube_geometry_from_gx_eik_reference(
     )
 
 
-def geometry_to_gx_eik_reference(
+def geometry_to_eik_reference(
     geometry,
     *,
     source: str | None = None,
-) -> GxEikGeometryReference:
+) -> EikGeometryReference:
     """Export a solver geometry object to the GX/GS2 eik table contract.
 
     GX/GS2 eik tables store the metric, parallel-gradient coefficient, and
@@ -5329,7 +5328,7 @@ def geometry_to_gx_eik_reference(
 
     theta = jnp.asarray(getattr(geometry, "theta", geometry.z), dtype=jnp.float64)
     zero = jnp.zeros_like(theta)
-    return GxEikGeometryReference(
+    return EikGeometryReference(
         theta=theta,
         bmag=jnp.asarray(geometry.B, dtype=jnp.float64),
         gradpar=jnp.asarray(geometry.F, dtype=jnp.float64),
@@ -5345,8 +5344,8 @@ def geometry_to_gx_eik_reference(
     )
 
 
-def gx_eik_kperp2(
-    reference: GxEikGeometryReference,
+def eik_kperp2(
+    reference: EikGeometryReference,
     kx,
     ky,
 ):
@@ -5361,13 +5360,13 @@ def gx_eik_kperp2(
     )
 
 
-def compare_geometry_to_gx_eik_reference(
+def compare_geometry_to_eik_reference(
     geometry,
-    reference: GxEikGeometryReference,
+    reference: EikGeometryReference,
     fourier_grid,
     *,
     include_mirror_proxy: bool = True,
-) -> GxEikGeometryParityReport:
+) -> EikGeometryParityReport:
     """Compare a solver-produced geometry object with a GX/GS2 eik reference."""
 
     from .geometry import k_perp_squared
@@ -5413,11 +5412,11 @@ def compare_geometry_to_gx_eik_reference(
     errors.append(
         _max_abs_error(
             k_perp_squared(geometry, fourier_grid),
-            gx_eik_kperp2(reference, fourier_grid.kx, fourier_grid.ky),
+            eik_kperp2(reference, fourier_grid.kx, fourier_grid.ky),
         )
     )
     field_errors = jnp.asarray(errors, dtype=jnp.float64)
-    return GxEikGeometryParityReport(
+    return EikGeometryParityReport(
         field_errors=field_errors,
         max_abs_error=jnp.max(field_errors),
         max_abs_kperp2_error=field_errors[-1],
@@ -13524,9 +13523,9 @@ def run_cyclone_base_case_term_parity_audit(
     )
 
 
-def run_solver_geometry_to_gx_eik_gate(
+def run_solver_geometry_to_eik_gate(
     geometry,
-    reference: GxEikGeometryReference,
+    reference: EikGeometryReference,
     fourier_grid,
     *,
     target: BenchmarkTarget | None = None,
@@ -13534,13 +13533,13 @@ def run_solver_geometry_to_gx_eik_gate(
     """Validate solver-produced geometry arrays against a GX/GS2 eik table."""
 
     target = target or BenchmarkTarget(
-        name="gx_eik_solver_geometry_parity",
+        name="eik_solver_geometry_parity",
         quantity="max_abs_geometry_error",
         reference_value=0.0,
         tolerance=1.0e-10,
         source=reference.source,
     )
-    report = compare_geometry_to_gx_eik_reference(geometry, reference, fourier_grid)
+    report = compare_geometry_to_eik_reference(geometry, reference, fourier_grid)
     return evaluate_benchmark_gate(
         report.max_abs_error,
         target,
@@ -13596,9 +13595,9 @@ def run_stellarator_geometry_preflight(
     kperp2_mean = jnp.mean(kperp2)
     nonnegative_kperp2 = kperp2_min >= -float(kperp2_tolerance)
 
-    eik_report = compare_geometry_to_gx_eik_reference(
+    eik_report = compare_geometry_to_eik_reference(
         geometry,
-        geometry_to_gx_eik_reference(geometry),
+        geometry_to_eik_reference(geometry),
         fourier_grid,
         include_mirror_proxy=False,
     )
@@ -13617,7 +13616,7 @@ def run_stellarator_geometry_preflight(
         "positive_metric_diagonal",
         "finite_kperp2",
         "nonnegative_representative_kperp2",
-        "gx_eik_export_contract",
+        "eik_export_contract",
         "finite_difference_mirror_force",
     )
     check_passed = jnp.asarray(
@@ -13748,7 +13747,7 @@ def run_mode_boundary_contract(
     )
 
 
-def run_geometry_to_gx_eik_export_gate(
+def run_geometry_to_eik_export_gate(
     geometry,
     fourier_grid,
     *,
@@ -13764,15 +13763,15 @@ def run_geometry_to_gx_eik_export_gate(
     do not carry it as an independent field.
     """
 
-    reference = geometry_to_gx_eik_reference(geometry)
+    reference = geometry_to_eik_reference(geometry)
     target = target or BenchmarkTarget(
-        name=f"{getattr(geometry, 'source', 'solver')}_gx_eik_export_contract",
+        name=f"{getattr(geometry, 'source', 'solver')}_eik_export_contract",
         quantity="max_abs_eik_export_error",
         reference_value=0.0,
         tolerance=1.0e-12,
         source=reference.source,
     )
-    report = compare_geometry_to_gx_eik_reference(
+    report = compare_geometry_to_eik_reference(
         geometry,
         reference,
         fourier_grid,
@@ -13789,7 +13788,7 @@ def run_geometry_to_gx_eik_export_gate(
     )
 
 
-def build_desc_gx_eik_reference_from_path(
+def build_desc_eik_reference_from_path(
     desc_path,
     *,
     ntheta: int = 32,
@@ -13801,7 +13800,7 @@ def build_desc_gx_eik_reference_from_path(
     file_format: str | None = None,
     index: int = -1,
     loader=None,
-) -> GxEikGeometryReference:
+) -> EikGeometryReference:
     """Evaluate DESC geometry using the GX DESC ``eik.out`` convention.
 
     This mirrors the field-line normalization in
@@ -13874,7 +13873,7 @@ def build_desc_gx_eik_reference_from_path(
     return reference
 
 
-def run_desc_gx_eik_external_geometry_gate(
+def run_desc_eik_external_geometry_gate(
     desc_path,
     eik_path,
     *,
@@ -13892,9 +13891,9 @@ def run_desc_gx_eik_external_geometry_gate(
     from .grids import build_fourier_grid
     from .types import FourierGridSpec
 
-    external = load_gx_eik_geometry_reference(eik_path)
+    external = load_eik_geometry_reference(eik_path)
     ntheta, npol = _infer_gx_eik_dimensions(external)
-    solver_reference = build_desc_gx_eik_reference_from_path(
+    solver_reference = build_desc_eik_reference_from_path(
         desc_path,
         ntheta=ntheta,
         npol=npol,
@@ -13909,8 +13908,8 @@ def run_desc_gx_eik_external_geometry_gate(
     fourier = fourier_grid or build_fourier_grid(
         FourierGridSpec(n_kx=3, n_ky=2, kx_max=0.2, ky_values=(0.0, 0.35))
     )
-    geometry = build_flux_tube_geometry_from_gx_eik_reference(solver_reference, parallel)
-    report = compare_geometry_to_gx_eik_reference(geometry, external, fourier)
+    geometry = build_flux_tube_geometry_from_eik_reference(solver_reference, parallel)
+    report = compare_geometry_to_eik_reference(geometry, external, fourier)
     target = target or BenchmarkTarget(
         name="desc_gx_external_eik_geometry_parity",
         quantity="max_abs_geometry_error",
@@ -13982,10 +13981,10 @@ def run_independent_external_eik_producer_report(
     errors = []
     sources = []
     for path in paths:
-        reference = load_gx_eik_geometry_reference(path)
-        sampled = resample_gx_eik_geometry_reference(reference, theta)
-        geometry = build_flux_tube_geometry_from_gx_eik_reference(sampled, parallel)
-        report = compare_geometry_to_gx_eik_reference(geometry, sampled, fourier)
+        reference = load_eik_geometry_reference(path)
+        sampled = resample_eik_geometry_reference(reference, theta)
+        geometry = build_flux_tube_geometry_from_eik_reference(sampled, parallel)
+        report = compare_geometry_to_eik_reference(geometry, sampled, fourier)
         errors.append(report.max_abs_error)
         sources.append(sampled.source)
 
@@ -14042,7 +14041,7 @@ def run_independent_external_eik_producer_gate(
     )
 
 
-def run_gx_gist_external_eik_suite_gate(
+def run_external_eik_suite_gate(
     paths,
     *,
     n_theta: int = 33,
@@ -14082,8 +14081,8 @@ def run_gx_gist_external_eik_suite_gate(
     )
 
 
-def run_gx_eik_geometry_gate(
-    reference: GxEikGeometryReference,
+def run_eik_geometry_gate(
+    reference: EikGeometryReference,
     parallel_grid,
     fourier_grid,
     *,
@@ -14092,14 +14091,14 @@ def run_gx_eik_geometry_gate(
     """Validate the imported GX/GS2 eik metric against the solver kperp contract."""
 
     target = target or BenchmarkTarget(
-        name="gx_eik_kperp_contract",
+        name="eik_kperp_contract",
         quantity="max_abs_kperp2_error",
         reference_value=0.0,
         tolerance=1.0e-12,
         source=reference.source,
     )
-    geometry = build_flux_tube_geometry_from_gx_eik_reference(reference, parallel_grid)
-    report = compare_geometry_to_gx_eik_reference(geometry, reference, fourier_grid)
+    geometry = build_flux_tube_geometry_from_eik_reference(reference, parallel_grid)
+    report = compare_geometry_to_eik_reference(geometry, reference, fourier_grid)
     observed = report.max_abs_kperp2_error
     return evaluate_benchmark_gate(
         observed,
@@ -14683,7 +14682,7 @@ def _desc_gx_eik_reference_from_data(
     nzgrid: int,
     npol: int,
     source: str,
-) -> GxEikGeometryReference:
+) -> EikGeometryReference:
     from scipy.constants import mu_0
 
     zeta = np.asarray(zeta, dtype=float)
@@ -14798,7 +14797,7 @@ def _desc_gx_eik_reference_from_data(
         float(1.0 / iota),
         float(2 * npol - 1),
     )
-    return GxEikGeometryReference(
+    return EikGeometryReference(
         theta=theta,
         bmag=bmag,
         gradpar=gradpar,
@@ -14879,7 +14878,7 @@ def _gx_interp_to_new_grid(values, source_grid, uniform_grid):
     return out
 
 
-def _infer_gx_eik_dimensions(reference: GxEikGeometryReference) -> tuple[int, int]:
+def _infer_gx_eik_dimensions(reference: EikGeometryReference) -> tuple[int, int]:
     if len(reference.header) >= 9:
         ntheta = int(round(reference.header[2]))
         scale = int(round(reference.header[8]))

@@ -46,11 +46,11 @@ from .provider import (
     validate_geometry_result,
     write_geometry_result_cache,
 )
-from .gx_eik_adapter import (
-    GxEikData,
-    GxEikGeometryProvider,
-    load_gx_eik_data,
-    resample_gx_eik_data,
+from .eik_adapter import (
+    EikData,
+    EikGeometryProvider,
+    load_eik_data,
+    resample_eik_data,
 )
 from .gvec_adapter import (
     GVEC_GEOMETRY_COMPUTE_KEYS,
@@ -86,8 +86,8 @@ __all__ = [
     "GeometryRequest",
     "GeometryResult",
     "GeometrySignConvention",
-    "GxEikData",
-    "GxEikGeometryProvider",
+    "EikData",
+    "EikGeometryProvider",
     "GVEC_GEOMETRY_COMPUTE_KEYS",
     "GvecGeometryProvider",
     "PhysicalFluxTubeGeometry",
@@ -115,12 +115,12 @@ __all__ = [
     "internal_geometry_from_result",
     "k_perp_squared",
     "load_desc_equilibrium",
-    "load_gx_eik_data",
+    "load_eik_data",
     "load_geometry_result_cache",
     "load_stella_geometry_data",
     "map_physical_to_internal_geometry",
     "resolve_geometry",
-    "resample_gx_eik_data",
+    "resample_eik_data",
     "sample_boozer_field_line",
     "has_duplicate_stella_endpoint",
     "gvec_geometry_arrays_from_data",
