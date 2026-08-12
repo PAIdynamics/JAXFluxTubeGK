@@ -298,7 +298,7 @@ def solve_parallel_ampere(mixed_distribution, precompute: ParallelAmperePrecompu
     """Solve normalized parallel Ampere's law from the evolved mixed variable."""
 
     distribution = _with_species_axis(mixed_distribution, precompute.n_species)
-    numerator = jnp.sum(precompute.source_weight * distribution, axis=(0, 1, 2))
+    numerator = _parallel_current_numerator(distribution, precompute.source_weight)
     denominator = _safe_denominator(precompute)
     return numerator / denominator
 
@@ -307,7 +307,7 @@ def parallel_ampere_residual(apar, mixed_distribution, precompute: ParallelAmper
     """Return ``numerator - denominator*A_parallel`` for field diagnostics."""
 
     distribution = _with_species_axis(mixed_distribution, precompute.n_species)
-    numerator = jnp.sum(precompute.source_weight * distribution, axis=(0, 1, 2))
+    numerator = _parallel_current_numerator(distribution, precompute.source_weight)
     return numerator - precompute.denominator * jnp.asarray(apar)
 
 
@@ -361,6 +361,34 @@ def solve_electromagnetic_fields(
 
 def _safe_denominator(precompute: ParallelAmperePrecompute):
     return _safe_field_denominator(precompute.denominator, precompute.denominator_floor)
+
+
+def _parallel_current_numerator(distribution, source_weight):
+    """Reduce the current after pairing opposite parallel-velocity nodes.
+
+    Built-in velocity grids order symmetric nodes from negative to positive.
+    Decomposing each pair into even and odd parts makes parity cancellation
+    explicit before the wider reduction and avoids platform-dependent residue
+    from summing a large odd moment. The decomposition is algebraically valid
+    for caller-supplied, nonsymmetric grids as well.
+    """
+
+    weights = jnp.asarray(source_weight)
+    values = jnp.asarray(distribution)
+    n_vpar = values.shape[1]
+    half = n_vpar // 2
+    lower_weights = weights[:, :half, ...]
+    upper_weights = jnp.flip(weights[:, n_vpar - half :, ...], axis=1)
+    lower_values = values[:, :half, ...]
+    upper_values = jnp.flip(values[:, n_vpar - half :, ...], axis=1)
+    paired = 0.5 * (
+        (lower_weights + upper_weights) * (lower_values + upper_values)
+        + (upper_weights - lower_weights) * (upper_values - lower_values)
+    )
+    if n_vpar % 2:
+        center = weights[:, half : half + 1, ...] * values[:, half : half + 1, ...]
+        paired = jnp.concatenate((paired, center), axis=1)
+    return jnp.sum(paired, axis=(0, 1, 2))
 
 
 def _safe_field_denominator(denominator, denominator_floor):

@@ -94,7 +94,10 @@ def test_parallel_ampere_selects_odd_parallel_velocity_current():
     even = (velocity.vpar**2)[None, :, None, None, None, None] * envelope
     odd = velocity.vpar[None, :, None, None, None, None] * envelope
 
-    np.testing.assert_allclose(solve_parallel_ampere(even, precompute), 0.0, atol=1.0e-14)
+    eager_even = solve_parallel_ampere(even, precompute)
+    compiled_even = jax.jit(solve_parallel_ampere)(even, precompute)
+    np.testing.assert_array_equal(eager_even, np.zeros_like(eager_even))
+    np.testing.assert_array_equal(compiled_even, np.zeros_like(compiled_even))
     assert float(jnp.max(jnp.abs(solve_parallel_ampere(odd, precompute)))) > 0.0
 
 
