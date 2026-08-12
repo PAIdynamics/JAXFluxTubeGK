@@ -332,8 +332,10 @@ that evidence.
 
 The authoritative remaining-work checklist is:
 
-- [ ] Obtain a stationary `129x65`, `ky_min=0.00625` local nonlinear report
-  and finish the bandwidth-preserving domain-convergence ladder.
+- [ ] Obtain a stationary `257x129`, `ky_min=0.003125` local nonlinear report
+  and finish the bandwidth-preserving domain-convergence ladder. The preceding
+  `129x65` rung is complete and stationary, but the `65x33 -> 129x65` change
+  is `25.65%`, above the `15%` gate.
 - [ ] Run the matched revision-pinned GX case on CUDA/native capacity and pass
   the independent nonlinear heat-flux parity gate.
 - [ ] Run the complete campaign evaluator with stationary resolution, domain,
@@ -373,7 +375,16 @@ JAX_ENABLE_X64=1 uv run python examples/run_nonlinear_heat_flux.py \
   --flux-moment gx_total_energy --seed 19 --diagnostic-stride 8
 ```
 
-Continue in bounded 20-time-unit segments. After each segment:
+The bootstrap was launched on the CPU-only macOS development host on
+2026-08-11. It remained active for more than fourteen hours without a solver
+or memory error, but had not yet written its atomic report/checkpoint when the
+interactive monitor was interrupted. Before launching a duplicate, check for
+the two output paths above and whether the original process is still active.
+This machine is suitable for preserving the run, but a CPU cluster or GPU JAX
+backend is the practical place to complete this rung and its continuations.
+
+After the bootstrap completes, continue in bounded 20-time-unit segments. For
+each segment:
 
 1. Verify that the state is finite complex128, the checkpoint time is exact,
    and `trajectory_lineage.segment_end_times` contains the full schedule.
@@ -383,20 +394,19 @@ Continue in bounded 20-time-unit segments. After each segment:
    growth merely to increase the sample count.
 4. Stop extending only when a merged late window reports `stationary=true`.
 
-For every rung, two 20-unit segments provide only about 73
-candidate samples and four blocks after the merger applies its late-half
-window. Three segments provide 109 samples but only five complete blocks
-because their late window is just under 30 time units. The first four-segment
-time-80-to-160 merge supplied eight blocks but missed the drift limit by
-`0.00709`. After reaching time 180, shift the four-segment window forward:
+Two 20-unit segments provide only about 73 candidate samples and four blocks
+after the merger applies its late-half window. Three segments provide about
+109 samples but only five complete blocks because their late window is just
+under 30 time units. Plan to merge at least four contiguous post-turnover
+segments. For example, after reaching time 180 on the new rung:
 
 ```console
 uv run python scripts/merge_nonlinear_heat_flux_segments.py \
-  /private/tmp/p5-domain-next-seed19-t100-t120.json \
-  /private/tmp/p5-domain-next-seed19-t120-t140.json \
-  /private/tmp/p5-domain-next-seed19-t140-t160.json \
-  /private/tmp/p5-domain-next-seed19-t160-t180.json \
-  --output /private/tmp/p5-domain-next-seed19-t100-t180-merged.json
+  /private/tmp/p5-domain-ultra-seed19-t100-t120.json \
+  /private/tmp/p5-domain-ultra-seed19-t120-t140.json \
+  /private/tmp/p5-domain-ultra-seed19-t140-t160.json \
+  /private/tmp/p5-domain-ultra-seed19-t160-t180.json \
+  --output /private/tmp/p5-domain-ultra-seed19-t100-t180-merged.json
 ```
 
 If a merged window fails a physical statistic, extend it and shift the

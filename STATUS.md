@@ -23,6 +23,32 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-12: Priority 5 Future-Work Boundary
+
+- The local `129x65`, `ky_min=0.00625`, seed-19 domain rung is complete. Its
+  time-100-to-180 merge is stationary with mean `-5.93381269`, 145 samples over
+  40 time units, eight blocks, `1.995%` relative block error, drift `0.18168`,
+  candidate RMS ratio `0.87996`, and field growth `-0.00276`. Its caller-owned
+  time-180 checkpoint is finite complex128 with exact lineage through all nine
+  segment endpoints.
+- The CPU domain ladder is not converged: the stationary `65x33 -> 129x65`
+  mean change is `25.65%`, above the unchanged `15%` gate. The required next
+  rung is `257x129`, `ky_min=0.003125`, with the same `12x12x6` phase-space
+  resolution, physics, seed, and diagnostic contract.
+- That `257x129` time-0-to-20 bootstrap was launched on the CPU-only macOS host
+  and remained active for more than fourteen hours without a solver or memory
+  error. At the last check it had not written its atomic report or checkpoint;
+  its completion must be validated before it is counted or relaunched.
+- Independent nonlinear GX parity is still externally blocked on a built GX
+  executable and CUDA-capable host. The sibling source is at the required
+  revision `bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`, but this machine has no
+  GX executable or CUDA runtime. This is deferred evidence, not a passing gate.
+- After domain convergence and GX parity pass, run the existing fail-closed
+  nonlinear campaign evaluator. Only then attempt the checkpointed
+  unrestricted equilibrium-shape design demonstration. These are the only
+  remaining Priority 5 gates; completed operator and diagnostic work remains
+  summarized in the older round log below.
+
 ### 2026-08-10: Priority 5 Acceptance Audit and Finest-Domain Result
 
 - Audited nonlinear acceptance from raw producer through checkpoint restart,
