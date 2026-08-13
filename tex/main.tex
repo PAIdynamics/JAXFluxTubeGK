@@ -51,7 +51,7 @@
 \DeclareMathOperator{\diag}{diag}
 \DeclareMathOperator{\argmax}{arg\,max}
 
-\title{Physical Model and Numerical Scheme for a Differentiable Flux-Tube Stellarator Gyrokinetic Solver}
+\title{JAXFluxTubeGK: Physical Model and Numerical Scheme for a Differentiable Flux-Tube Stellarator Gyrokinetic Solver}
 \author{Mohsen Sadr}
 \date{\today}
 
@@ -474,7 +474,7 @@ The first implementation evolves the collisionless linear electrostatic system
   +\Dop_s.
   \label{eq:linear-rhs}
 \end{equation}
-Term numbers follow the GKW/Gyaradax convention.  Term III, the nonlinear ExB term, is omitted in the linear baseline and documented in Section~\ref{sec:nonlinear-extension}.
+Term numbers follow the GKW/Gyaradax convention.  Term III, the nonlinear ExB term, is omitted in the linear baseline and documented in Appendix~\ref{sec:nonlinear-extension}.
 
 Let
 \begin{equation}
@@ -1107,7 +1107,7 @@ stable design objectives, gradient audits, robust multi-sample aggregation,
 fixed-topology guards, and schema-versioned optimization checkpoints.  The production
 physics target remains linear electrostatic gyrokinetics with adiabatic
 electrons; nonlinear turbulence and extended physics are deferred to
-Sec.~\ref{sec:nonlinear-extension}.
+Appendix~\ref{sec:nonlinear-extension}.
 
 \subsection{Validation guardrails}
 
@@ -1209,7 +1209,7 @@ nonnormal spectrum with slowly separating branches.
 \label{sec:nonlinear-acceptance-status}
 
 The electrostatic nonlinear-turbulence acceptance campaign
-(Sec.~\ref{sec:nonlinear-extension}) is implemented but not scientifically
+(Appendix~\ref{sec:nonlinear-extension}) is implemented but not scientifically
 closed; this is a compute-evidence gap, not a missing operator.  Three of its
 four gates have passing rungs:
 \begin{itemize}
@@ -1235,7 +1235,7 @@ deliberately terminated; no partial artifact was produced or retained.  Both
 remaining gates need external compute this project does not currently have
 access to (a CPU cluster or GPU/CUDA host), not further algorithmic
 development.  Unrestricted equilibrium-shape optimization
-(Sec.~\ref{sec:nonlinear-extension}) is explicitly gated behind all four
+(Appendix~\ref{sec:nonlinear-extension}) is explicitly gated behind all four
 nonlinear-acceptance items and is not attempted before they pass.
 
 \subsection{Optimization status}
@@ -1407,7 +1407,57 @@ differentiable equilibrium provider (or a validated sensitivity interface) and
 physics beyond the present reduced linear objective.  A broader low-\(k_y\)
 spectral claim additionally requires converged independent reference windows.
 
+\section{Testing and Benchmark Contract}
 
+Every public function in \path{src/} should have focused tests.  For a narrow
+change, update the smallest relevant unit or fixture test; for a change that
+alters shared physics, geometry, time advancement, or validation contracts, run
+the corresponding focused gate plus the broader suite.
+
+\subsection{Required unit-test coverage}
+
+\begin{longtable}{p{0.28\textwidth}p{0.62\textwidth}}
+\toprule
+Component & Required tests \\
+\midrule
+Parameter PyTrees & flatten/unflatten, static/dynamic fields, JIT behavior. \\
+Grids and topology & shapes, centering, quadrature weights, Parseval weights, mode labels, linked/open boundary maps. \\
+Derivative backends & manufactured derivative checks, finite-difference parity, filter behavior. \\
+Geometry & finite fields, \(B>0\), \(k_\perp^2\ge0\), eik/DESC/stella adapter contracts, differentiability of continuous arrays. \\
+Physics primitives & Bessel/FLR limits, Maxwellian and drive factors, mirror/drift/streaming coefficients, broadcasting, AD checks. \\
+Field solve & zero-input behavior, zonal and nonzonal paths, quasineutrality residuals. \\
+RHS terms & zero-input behavior, linearity, isolated term formulas, full residual reconstruction, JIT compatibility. \\
+Time advance & RK4 order, fixed-step scans, growth/frequency recovery, phase-unwrapped frequency on long windows. \\
+Objectives & finite values, gradients, finite-difference checks on reduced fixed-topology problems. \\
+Validation scripts & committed fixture schemas, status JSON contracts, failure states, and command-line smoke paths. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Benchmark ladder}
+
+The benchmark order should remain:
+\begin{enumerate}
+  \item manufactured derivatives, field solves, and scalar ODE tests;
+  \item Gyaradax circular and s-alpha parity;
+  \item GKW simple/Cyclone fixtures and selected-mode RHS/action traces;
+  \item Rosenbluth-Hinton late plateau;
+  \item Cyclone selected-\(k_y\) scalar and mode-structure diagnostics;
+  \item DESC/GX/GS2/stella eik and geometry contracts;
+  \item matched W7-X stella growth, frequency, and complex \(\phi(z)\) parity;
+  \item production-control W7-X convergence and CPU timing;
+  \item only then DESC optimization campaigns and nonlinear extensions.
+\end{enumerate}
+
+\subsection{First trusted solver milestone}
+
+The first trusted solver milestone is complete when \(\Phi(f)\), \(\RHS(f)\),
+RK4 stepping, \(\gamma\), \(\omega\), and \(Q_{\mathrm{QL}}\) are implemented,
+the reduced RH/Cyclone/GKW/DESC/eik guardrails pass, a matched W7-X stella
+mode-structure gate passes, production-control convergence and CPU timing are
+recorded, and \path{STATUS.md} states the remaining caveats without using
+reduced examples as production evidence.
+
+\appendix
 \section{Nonlinear and Extended Physics Roadmap}
 \label{sec:nonlinear-extension}
 
@@ -1502,151 +1552,37 @@ low-rank pair/component contraction
 \end{equation}
 where $c=(l,m,j)$, $D$ includes the discrete velocity measure and all driver
 normalizations, and $R$ is the target-space response.  The JAX implementation
-accepts these tensors without depending on stella.  Native stella traces verify
-the response application and indexing at roundoff.  The response $R$ is now
-constructed independently from the physical velocity and magnetic grids,
-species mass ratios, pair collision frequencies, gyroaverages, and
-$\Delta_j$.  A 44,928-row native primitive trace agrees with this construction
-to $1.84\times10^{-14}$ in relative $L_2$, and the analytic incomplete-gamma
-construction of $\Delta_0$ agrees to $4.25\times10^{-13}$.  Independent
-construction of the higher-$j$ recurrence now uses the complete native
-velocity-integration measure and agrees for all traced $j=0,1$ values to
-$7.84\times10^{-13}$ in scaled $L_2$.  Construction of the normalized driver
-$D$ now uses the reversed-pair recurrence, Maxwellian, background gyroaverage,
-velocity measure, and locally evaluated pair normalization; it agrees with
-44,928 native coefficients to $3.07\times10^{-11}$ in scaled $L_2$.  The local
-$D$ and $R$ tensors can therefore be assembled into the differentiable
-low-rank precompute without stella.  A second state with changed initialization
-retains byte-identical coefficient traces and replays the native solved-$\Psi$
-action at $1.39\times10^{-13}$ relative $L_2$.  Thus the remaining distinction
-is the differential test-particle matrix.  A differentiable Woodbury solve now
-combines any supplied $I-\Delta t C_{\mathrm{tp}}$ with $D$ and $R$ in
-stella's implicit ordering and agrees with a directly materialized dense
-backward-Euler system at roundoff.  Native construction parity for
-$C_{\mathrm{tp}}$ remains required.
-The independently Gyaradax-matched nine-point differential stencil can now be
-materialized as $I-\Delta t C_{\mathrm{tp}}$ on each spatial/Fourier batch and
-inserted directly into this solve; its matrix application matches the original
-stencil action at roundoff.  A scratch-only native export reconstructs all 234
-unfactorized stella matrices as real $12\times12$ operators with bandwidth 3.
-Relative to each zero-$k_\perp$ base matrix, all 208 nonzero-$k_\perp$
-corrections are diagonal and linear in $k_\perp^2$ to
-$6.44\times10^{-14}$.  A mode-by-mode replay of
-$\operatorname{solve}(I-\Delta t C_{\mathrm{tp}},
-g_{\mathrm{in}}+\Delta t C_{\mathrm{fp}})$ reproduces all 2,808 final native
-values at $1.64\times10^{-16}$ relative $L_2$.  This closes storage, sign, and
-implicit-ordering ambiguity.  The local gyro-diagonal construction matches all
-208 matrix differences to $6.65\times10^{-14}$ maximum absolute error.  A
-differentiable block assembler also packs the native lower, diagonal, and upper
-velocity blocks: 1,248 traced pair blocks reproduce all 26 zero-$k_\perp$
-matrices exactly.  Independent local generation of the interior and boundary
-block coefficients, followed by production residual wiring, remains before
-claiming full stella parity.  Paired native runs with the mu operator enabled
-and disabled localize that work: the mu path has Frobenius norm $32.2503$
-($88.20\%$ of the full-block norm) and is almost entirely in the diagonal
-blocks, whereas the remaining parallel-velocity path has norm $14.4030$.
-Because the compact gate has only two mu nodes, both rows use boundary
-closures; the mu boundary is therefore the next local coefficient target.
-An additional factorial split using the mixed-coefficient knob shows that pure
-mu diffusion has norm $32.2473$ ($88.19\%$ of full) and lies entirely in the
-diagonal velocity blocks.  The mixed term nested in that path has norm
-$0.444517$; pure parallel-velocity diffusion has norm $0.0846490$, while its
-mixed path has norm $14.4028$.  This establishes the implementation order:
-two-node pure-mu boundary diffusion before the parallel-path mixed derivative.
-A differentiable JAX constructor implements that two-node boundary slice,
-including half-mu ordered collision frequencies and both default ghost-cell
-closures.  It matches all 1,248 native block rows at
-$1.10\times10^{-15}$ relative $L_2$ and $7.99\times10^{-15}$ maximum absolute
-error.
-A second differentiable constructor now covers the mixed derivative assembled
-through the parallel-velocity path, including both ghost boundaries and every
-interior block.  It agrees with the native factorial component at
-$9.11\times10^{-16}$ relative $L_2$ and $2.66\times10^{-15}$ maximum absolute
-error.
-The pure parallel-velocity half-grid flux is now constructed for arbitrary mu
-grids and matches its native component at $1.35\times10^{-15}$ relative
-$L_2$.  A final constructor closes the mixed-mu component at
-$2.80\times10^{-15}$ relative $L_2$.  Their sum reproduces the complete native
-compact block trace at $1.08\times10^{-15}$ relative $L_2$; the remaining
-matrix work is general interior-$\mu$ construction and production-residual
-selection.
-The pure-$\mu$ constructor has also been extended to a nonuniform four-node
-grid.  A new pinned trace exercises both interior rows and agrees at
-$1.42\times10^{-15}$ relative $L_2$, leaving only the general mixed branches
-at the coefficient layer.  Those branches now agree at $1.30\times10^{-15}$
-and $6.48\times10^{-16}$ relative $L_2$; all four components reproduce the
-complete 4,992-row native trace at $9.62\times10^{-16}$ relative $L_2$.
-The production builder packages these blocks with the implicit identity and
-mode-dependent gyro diagonal, matching the pinned zero-$k_\perp$ matrix at
-$6.39\times10^{-17}$ relative $L_2$.  A complete precompute combines this
-matrix with the local Laguerre--Legendre factors and exposes the resulting
-backward-Euler collision solve as a selectable split step.
-The four ordered species-channel matrices reconstruct the all-channel matrix at
-$3.77\times10^{-17}$ relative $L_2$.  Their departure-from-identity Frobenius
-norms show that the remaining coefficient comparison is dominated by the
-electron--electron and electron--ion target blocks.
-The underlying analytic coefficient layer is now constructed independently
-from velocity nodes, magnetic field, species masses, and pair frequencies.  A
-624-row native trace of speed, Maxwellian, parallel diffusion, deflection, and
-mixed diffusion agrees with the differentiable JAX construction at relative
-$L_2$ errors no larger than $1.99\times10^{-16}$.  Consequently the remaining
-matrix gap is confined to finite-difference interior and boundary assembly and
-the already isolated diagonal gyro term.
-The local gyro-diagonal construction subsequently agrees with all 208
-nonzero-$k_\perp$ native matrix differences to a maximum absolute error of
-$6.65\times10^{-14}$.  Thus only the zero-$k_\perp$ finite-difference interior
-and boundary assembly remains unresolved in the differential matrix.
+accepts these tensors without depending on stella.  Native stella traces
+verify every stage of this construction: the driver $D$, the response $R$
+(built independently from the physical velocity and magnetic grids, species
+mass ratios, pair collision frequencies, gyroaverages, and $\Delta_j$), and
+their low-rank contraction reproduce tens of thousands of native reference
+coefficients and the native solved-$\Psi$ action at relative $L_2$ errors
+between $10^{-11}$ and $10^{-16}$, independent of the equilibrium state.
 
+The remaining piece, the differential test-particle matrix $C_{\mathrm{tp}}$,
+is independently constructed rather than read from stella: the
+Gyaradax-matched nine-point stencil; the mu- and parallel-velocity
+finite-difference blocks, including their interior and boundary closures on
+uniform and nonuniform grids; the mode-dependent gyro diagonal; and the
+underlying analytic collision-frequency layer (speed, Maxwellian, parallel
+diffusion, deflection, mixed diffusion).  Each piece matches the corresponding
+native stella matrices and, for the four ordered species channels, the
+all-channel matrix and final 2,808-value phase-space state, at relative $L_2$
+errors between $10^{-14}$ and $10^{-17}$.  A differentiable Woodbury solve
+combines $I-\Delta t\,C_{\mathrm{tp}}$ with $D$ and $R$ in stella's implicit
+ordering and agrees with a directly materialized dense backward-Euler system
+at roundoff.
 
-\section{Testing and Benchmark Contract}
+The resulting production implicit collision backend -- selectable as a split
+step alongside the linear residual -- is therefore validated end to end
+against native stella at near-roundoff precision, closing the collision
+implementation item.  Together with the independent electromagnetic parity
+gates in Sec.~\ref{sec:current-status}, production collisional and linear
+electromagnetic physics are implemented and validated for the accepted scope;
+nonlinear-turbulence and unrestricted design-optimization evidence remain the
+open items tracked in Sec.~\ref{sec:nonlinear-acceptance-status}.
 
-Every public function in \path{src/} should have focused tests.  For a narrow
-change, update the smallest relevant unit or fixture test; for a change that
-alters shared physics, geometry, time advancement, or validation contracts, run
-the corresponding focused gate plus the broader suite.
-
-\subsection{Required unit-test coverage}
-
-\begin{longtable}{p{0.28\textwidth}p{0.62\textwidth}}
-\toprule
-Component & Required tests \\
-\midrule
-Parameter PyTrees & flatten/unflatten, static/dynamic fields, JIT behavior. \\
-Grids and topology & shapes, centering, quadrature weights, Parseval weights, mode labels, linked/open boundary maps. \\
-Derivative backends & manufactured derivative checks, finite-difference parity, filter behavior. \\
-Geometry & finite fields, \(B>0\), \(k_\perp^2\ge0\), eik/DESC/stella adapter contracts, differentiability of continuous arrays. \\
-Physics primitives & Bessel/FLR limits, Maxwellian and drive factors, mirror/drift/streaming coefficients, broadcasting, AD checks. \\
-Field solve & zero-input behavior, zonal and nonzonal paths, quasineutrality residuals. \\
-RHS terms & zero-input behavior, linearity, isolated term formulas, full residual reconstruction, JIT compatibility. \\
-Time advance & RK4 order, fixed-step scans, growth/frequency recovery, phase-unwrapped frequency on long windows. \\
-Objectives & finite values, gradients, finite-difference checks on reduced fixed-topology problems. \\
-Validation scripts & committed fixture schemas, status JSON contracts, failure states, and command-line smoke paths. \\
-\bottomrule
-\end{longtable}
-
-\subsection{Benchmark ladder}
-
-The benchmark order should remain:
-\begin{enumerate}
-  \item manufactured derivatives, field solves, and scalar ODE tests;
-  \item Gyaradax circular and s-alpha parity;
-  \item GKW simple/Cyclone fixtures and selected-mode RHS/action traces;
-  \item Rosenbluth-Hinton late plateau;
-  \item Cyclone selected-\(k_y\) scalar and mode-structure diagnostics;
-  \item DESC/GX/GS2/stella eik and geometry contracts;
-  \item matched W7-X stella growth, frequency, and complex \(\phi(z)\) parity;
-  \item production-control W7-X convergence and CPU timing;
-  \item only then DESC optimization campaigns and nonlinear extensions.
-\end{enumerate}
-
-\subsection{First trusted solver milestone}
-
-The first trusted solver milestone is complete when \(\Phi(f)\), \(\RHS(f)\),
-RK4 stepping, \(\gamma\), \(\omega\), and \(Q_{\mathrm{QL}}\) are implemented,
-the reduced RH/Cyclone/GKW/DESC/eik guardrails pass, a matched W7-X stella
-mode-structure gate passes, production-control convergence and CPU timing are
-recorded, and \path{STATUS.md} states the remaining caveats without using
-reduced examples as production evidence.
 
 \begin{thebibliography}{9}
 

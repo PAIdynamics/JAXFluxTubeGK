@@ -23,6 +23,39 @@ aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
 
+### 2026-08-13: Iterative Boundary-Evolution Notebooks, Paper Restructuring, GitHub Pages Docs
+
+- Added a `.github/workflows/docs.yml` GitHub Actions workflow that builds
+  the Doxygen reference on push to `main` and publishes it to GitHub Pages
+  (`actions/upload-pages-artifact` + `actions/deploy-pages`). Publishing
+  requires a one-time manual step outside this repository: enable Pages in
+  the GitHub repository settings with source "GitHub Actions".
+- Extended each of the three geometry-optimization notebooks' single 3-point
+  boundary scan into a real 5-iteration outer-loop hill-climb: at each
+  iteration a 3-point central-difference sensitivity through fresh
+  DESC/VMEC++/GVEC solves steps one boundary-harmonic scale, and the
+  resulting real 3D boundary surface is reconstructed and plotted
+  (`figures/{desc,vmecpp,gvec}_boundary_evolution.png`). DESC via
+  `surface.compute(["X","Y","Z"], grid=...)`, VMEC++ via direct Fourier
+  reconstruction from `rbc`/`zbs`, GVEC via `state.evaluate("pos", ...)` at
+  `rho=1`; all three were executed live and produce visually correct
+  toroidal/stellarator boundaries (verified against known W7-X/DSHAPE major
+  and minor radii before wiring into the notebooks). All three notebooks ran
+  end to end with no errors.
+- Restructured `tex/main.tex`: added "JAXFluxTubeGK:" to the title; moved
+  the "Nonlinear and Extended Physics Roadmap" section to Appendix A via
+  `\appendix`, updating its four cross-references from "Section" to
+  "Appendix" wording; condensed the appendix's ~110-line Fokker-Planck/
+  Laguerre-Legendre collision-matrix derivation log (which had accumulated
+  as a near-verbatim copy of dense STATUS.md-style incremental entries, and
+  had gone stale -- its last sentence claimed a matrix construction
+  "remains unresolved" when it and the full collision backend were in fact
+  already closed per this file's 2026-08-07 entry) into four accurate
+  paragraphs stating the final validated architecture, precision (relative
+  L2 1e-11 to 1e-17 across components), and closed status.
+- `ruff check src tests examples scripts` passes; no `src/` changes were
+  made in this round, so the prior 615-passed pytest result still applies.
+
 ### 2026-08-13: Doxygen API Reference, Live Optimization Notebooks, Paper Sync
 
 - Added a root `Doxyfile` (Python input, call/class graphs via installed
