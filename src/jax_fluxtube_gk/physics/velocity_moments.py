@@ -45,6 +45,8 @@ class VelocityBasisSpec(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Normalize ``kind`` to its canonical value and validate mode/grid counts."""
+
         kind = VelocityBasisKind(self.kind)
         object.__setattr__(self, "kind", kind.value)
         if self.n_hermite < 1:
@@ -155,6 +157,8 @@ class MomentRHSParams(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Validate that the physical and numerical parameters are in admissible ranges."""
+
         if self.tau <= 0.0:
             raise ValueError("tau must be positive")
         if self.vt < 0.0:
@@ -367,6 +371,13 @@ def perpendicular_heat_flux_moment(coefficients, gyroaverage_coefficients=None):
 
 
 def _perpendicular_laguerre_weighted_moment(laguerre_slice, gyroaverage_coefficients=None):
+    """Return the Laguerre mu-weighted contraction ``sum_l (l J_{l-1}+2l J_l+(l+1) J_{l+1}) G_l``, or ``G_1`` without gyroaveraging.
+
+    Shared by :func:`perpendicular_temperature_moment` and
+    :func:`perpendicular_heat_flux_moment` to apply the same mu-weighting to
+    different Hermite slices of the Laguerre coefficients.
+    """
+
     coefficients = jnp.asarray(laguerre_slice)
     n_laguerre = coefficients.shape[0]
     if gyroaverage_coefficients is None:
@@ -840,6 +851,8 @@ def apply_kz_hypercollision(
 
 
 def _hermite_derivative_matrix(n_hermite: int):
+    """Return the matrix representation of ``d/dv`` in the normalized Hermite basis."""
+
     matrix = np.zeros((n_hermite, n_hermite), dtype=float)
     for m in range(1, n_hermite):
         matrix[m - 1, m] = np.sqrt(m)
@@ -847,6 +860,8 @@ def _hermite_derivative_matrix(n_hermite: int):
 
 
 def _hermite_v_matrix(n_hermite: int):
+    """Return the tridiagonal matrix representation of multiplication by ``v`` in the normalized Hermite basis."""
+
     matrix = np.zeros((n_hermite, n_hermite), dtype=float)
     for m in range(n_hermite):
         if m + 1 < n_hermite:
@@ -857,6 +872,8 @@ def _hermite_v_matrix(n_hermite: int):
 
 
 def _laguerre_x_matrix(n_laguerre: int):
+    """Return the tridiagonal matrix representation of multiplication by ``x`` (mu) in the signed Laguerre basis."""
+
     matrix = np.zeros((n_laguerre, n_laguerre), dtype=float)
     for ell in range(n_laguerre):
         matrix[ell, ell] = 2 * ell + 1
@@ -868,6 +885,8 @@ def _laguerre_x_matrix(n_laguerre: int):
 
 
 def _shift_laguerre_coefficients(coefficients, offset: int):
+    """Shift ``coefficients`` along the leading Laguerre axis by ``offset`` modes, zero-padding the vacated entries."""
+
     zeros = jnp.zeros_like(coefficients)
     if offset > 0:
         return jnp.concatenate([zeros[:offset], coefficients[:-offset]], axis=0)
@@ -877,6 +896,8 @@ def _shift_laguerre_coefficients(coefficients, offset: int):
 
 
 def _normalize_axis(axis: int, ndim: int) -> int:
+    """Return ``axis`` resolved to a non-negative index within ``[0, ndim)``, raising if out of bounds."""
+
     if ndim < 1:
         raise ValueError("expected at least one array dimension")
     axis = int(axis)
@@ -888,6 +909,8 @@ def _normalize_axis(axis: int, ndim: int) -> int:
 
 
 def _broadcast_b_to_ky_z(b, n_ky: int, n_z: int):
+    """Broadcast the gyroaverage argument ``b`` to shape ``(n_ky, n_z)`` from a scalar or a compatible partial shape."""
+
     b = jnp.asarray(b)
     if b.ndim == 0:
         return jnp.broadcast_to(b, (n_ky, n_z))
@@ -905,6 +928,8 @@ def _broadcast_b_to_ky_z(b, n_ky: int, n_z: int):
 
 
 def _validate_ky(ky, n_ky: int, dtype):
+    """Cast ``ky`` to ``dtype`` and verify it has shape ``(n_ky,)``."""
+
     ky = jnp.asarray(ky, dtype=dtype)
     if ky.shape != (n_ky,):
         raise ValueError("ky must have shape (n_ky,)")
@@ -912,6 +937,8 @@ def _validate_ky(ky, n_ky: int, dtype):
 
 
 def _safe_signed_denominator(denominator, floor):
+    """Return ``denominator`` with its magnitude floored, preserving sign, to avoid division blow-up near zero."""
+
     denominator = jnp.asarray(denominator)
     floor = jnp.asarray(floor, dtype=denominator.dtype)
     sign = jnp.where(denominator.real < 0.0, -1.0, 1.0)

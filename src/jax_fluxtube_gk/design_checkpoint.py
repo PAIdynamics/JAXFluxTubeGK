@@ -185,6 +185,7 @@ def assert_checkpoint_topology(
 
 
 def _checkpoint_payload(checkpoint: OptimizationCheckpoint) -> dict[str, object]:
+    """Convert an OptimizationCheckpoint into its public JSON-serializable schema dict."""
     return {
         "schema_version": checkpoint.schema_version,
         "iteration": checkpoint.iteration,
@@ -209,6 +210,7 @@ def _checkpoint_payload(checkpoint: OptimizationCheckpoint) -> dict[str, object]
 
 
 def _topology_contract_from_payload(payload) -> OptimizationTopologyContract:
+    """Rebuild an OptimizationTopologyContract from its JSON payload, restoring tuple-typed fields."""
     values = dict(payload)
     values["velocity_shape"] = tuple(values["velocity_shape"])
     values["fourier_shape"] = tuple(values["fourier_shape"])
@@ -220,6 +222,7 @@ def _topology_contract_from_payload(payload) -> OptimizationTopologyContract:
 
 
 def _float_tuple(values, name: str) -> tuple[float, ...]:
+    """Flatten values into a tuple of finite floats, raising if any element is non-finite."""
     result = tuple(float(value) for value in np.ravel(np.asarray(values)))
     if any(not math.isfinite(value) for value in result):
         raise ValueError(f"{name} must contain only finite values")
@@ -227,6 +230,7 @@ def _float_tuple(values, name: str) -> tuple[float, ...]:
 
 
 def _json_mapping(value: Mapping[str, object]) -> dict[str, object]:
+    """Recursively convert a mapping to a JSON-serializable dict via _json_value."""
     converted = _json_value(dict(value))
     if not isinstance(converted, dict):  # pragma: no cover - defensive type narrowing
         raise TypeError("expected a mapping")
@@ -234,6 +238,7 @@ def _json_mapping(value: Mapping[str, object]) -> dict[str, object]:
 
 
 def _json_value(value):
+    """Recursively coerce a value (mapping, sequence, numpy scalar/array, or scalar) to a JSON-safe form."""
     if isinstance(value, Mapping):
         return {str(key): _json_value(item) for key, item in value.items()}
     if isinstance(value, (tuple, list)):

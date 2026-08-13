@@ -92,6 +92,7 @@ def correlated_flux_statistics(
 
 
 def _interval_mean(times: np.ndarray, values: np.ndarray, left: float, right: float) -> float:
+    """Return the trapezoidal time-average of values over [left, right], interpolating at the endpoints."""
     interior = (times > left) & (times < right)
     sample_times = np.concatenate(([left], times[interior], [right]))
     sample_values = np.concatenate(
@@ -327,6 +328,7 @@ def saturated_radial_flux_statistics(
 
 
 def _z_weights(field, w_z):
+    """Return w_z as an array, or uniform unit weights matching field's dtype if w_z is None."""
     if w_z is None:
         return jnp.ones((field.shape[0],), dtype=field.real.dtype)
     return jnp.asarray(w_z)

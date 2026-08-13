@@ -36,6 +36,7 @@ class TopologyChangeError(ValueError):
     """Raised when an optimizer tries to reuse AD state after remeshing."""
 
     def __init__(self, changed_fields: tuple[str, ...]):
+        """Record which topology contract fields changed and build a descriptive error message."""
         self.changed_fields = changed_fields
         super().__init__(
             "optimization topology changed in "
@@ -96,6 +97,7 @@ def assert_fixed_optimization_topology(
 
 
 def _arrays_digest(*arrays) -> str:
+    """Return a SHA-256 hex digest of the given arrays' shapes, dtypes, and raw bytes."""
     digest = hashlib.sha256()
     for value in arrays:
         array = np.ascontiguousarray(np.asarray(value))
@@ -106,6 +108,7 @@ def _arrays_digest(*arrays) -> str:
 
 
 def _connectivity_digest(connectivity: ModeConnectivity | None) -> str:
+    """Return a digest of the connectivity's arrays and scalars, or "none" if unset."""
     if connectivity is None:
         return "none"
     return _arrays_digest(
@@ -122,6 +125,7 @@ def _connectivity_digest(connectivity: ModeConnectivity | None) -> str:
 
 
 def _provider_topology(metadata) -> tuple[object, ...]:
+    """Flatten geometry provider metadata's schema, topology, and linking fields into a hashable tuple."""
     if metadata is None:
         return ()
     linking = metadata.linking

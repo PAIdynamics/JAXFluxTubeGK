@@ -33,6 +33,7 @@ class ValidationConfidenceGap:
     metrics: tuple[ConfidenceMetric, ...] = ()
 
     def __post_init__(self) -> None:
+        """Reject an unknown status, missing identifier/summary/evidence, or a claim listed as both blocked and superseded."""
         if self.status not in ("open", "passed", "superseded"):
             raise ValueError("confidence-gap status must be open, passed, or superseded")
         if not self.identifier or not self.summary or not self.evidence:

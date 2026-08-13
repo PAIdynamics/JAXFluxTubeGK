@@ -26,6 +26,7 @@ class AdiabaticElectronParams(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("zonal_correction",)
 
     def __post_init__(self):
+        """Validate that density, temperature, and denominator_floor are positive."""
         if self.density <= 0:
             raise ValueError("adiabatic electron density must be positive")
         if self.temperature <= 0:
@@ -358,6 +359,7 @@ def kinetic_quasineutrality_residual_from_density(
 
 
 def _apply_zonal_adiabatic_correction(numerator, denominator, phi, precompute):
+    """Replace the ``ky=0`` slice of phi with the flux-surface-averaged adiabatic correction."""
     iy = precompute.iyzero
     zonal_numerator = numerator[:, :, iy]
     zonal_denominator = denominator[:, :, iy]
@@ -377,10 +379,12 @@ def _apply_zonal_adiabatic_correction(numerator, denominator, phi, precompute):
 
 
 def _as_species_tuple(species: SpeciesParams | tuple[SpeciesParams, ...]):
+    """Wrap a single species in a one-element tuple, or return a tuple unchanged."""
     return species if isinstance(species, tuple) else (species,)
 
 
 def _with_species_axis(array, n_species: int, name: str, *, single_ndim: int):
+    """Insert a leading species axis on a single-species array, or validate an existing one."""
     array = jnp.asarray(array)
     if n_species == 1 and array.ndim == single_ndim:
         return array[None, ...]
@@ -393,6 +397,7 @@ def _with_species_axis(array, n_species: int, name: str, *, single_ndim: int):
 
 
 def _distribution_with_species_axis(distribution, n_species: int):
+    """Insert a leading species axis on a single-species distribution, or validate an existing one."""
     distribution = jnp.asarray(distribution)
     if n_species == 1 and distribution.ndim == 5:
         return distribution[None, ...]
@@ -405,12 +410,14 @@ def _distribution_with_species_axis(distribution, n_species: int):
 
 
 def _normalize_parallel_weights(B, w_z):
+    """Return w_z if given, otherwise uniform parallel quadrature weights matching B's length."""
     if w_z is None:
         return jnp.ones_like(B) / B.shape[0]
     return jnp.asarray(w_z)
 
 
 def _safe_denominator(denominator, floor):
+    """Clamp a field-equation denominator away from zero, preserving its sign."""
     denominator = jnp.asarray(denominator)
     floor = jnp.asarray(floor, dtype=denominator.real.dtype)
     sign = jnp.where(jnp.real(denominator) < 0.0, -1.0, 1.0)
@@ -419,10 +426,12 @@ def _safe_denominator(denominator, floor):
 
 
 def _weighted_z_average(values, w_z):
+    """Return the parallel (z) weighted average of values along its leading axis."""
     return jnp.sum(w_z[:, None] * values, axis=0) / jnp.sum(w_z)
 
 
 def _nonzero_kx_mask(n_kx: int, ixzero: int, dtype):
+    """Return a length-``n_kx`` mask of ones with the ``kx=0`` entry zeroed out, if present."""
     mask = jnp.ones((n_kx,), dtype=dtype)
     if ixzero >= 0:
         mask = mask.at[ixzero].set(0.0)

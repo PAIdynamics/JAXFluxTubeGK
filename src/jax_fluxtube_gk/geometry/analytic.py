@@ -142,6 +142,7 @@ def k_perp_squared(geometry: AnalyticGeometry, fourier_grid: FourierGrid):
 
 
 def _normalize_model(model: GeometryModel) -> str:
+    """Map the ``"circ"`` alias to ``"circular"`` and validate the model name."""
     if model == "circ":
         return "circular"
     if model in ("circular", "s-alpha"):
@@ -150,6 +151,10 @@ def _normalize_model(model: GeometryModel) -> str:
 
 
 def _poloidal_angle(sgrid, eps, model: str, n_iter: int = 10):
+    """Solve ``theta = 2*pi*sgrid - eps*sin(theta)`` by fixed-point iteration.
+
+    Returns ``2*pi*sgrid`` unchanged for the ``"s-alpha"`` limit.
+    """
     if model == "s-alpha":
         return 2.0 * jnp.pi * sgrid
     theta = 2.0 * jnp.pi * sgrid
@@ -159,6 +164,7 @@ def _poloidal_angle(sgrid, eps, model: str, n_iter: int = 10):
 
 
 def _dzetadeps(theta, q, shat, eps, sign_B: float, sign_J: float):
+    """Compute ``d(zeta)/d(eps)`` along ``theta``, unwrapping the ``arctan`` branch jumps."""
     dum2 = jnp.sqrt((1.0 - eps) / (1.0 + eps))
     raw = jnp.arctan(dum2 * jnp.tan(theta / 2.0))
     diffs = raw[1:] - raw[:-1]
@@ -178,6 +184,7 @@ def _dzetadeps(theta, q, shat, eps, sign_B: float, sign_J: float):
 
 
 def _psi_theta_to_psi_s(f_psi, f_theta, theta, eps):
+    """Convert ``(d/d(psi), d/d(theta))`` derivatives to ``(d/d(psi), d/d(s))`` via the chain rule."""
     major_radius = 1.0 + eps * jnp.cos(theta)
     return (
         f_psi - jnp.sin(theta) / major_radius * f_theta,
@@ -195,6 +202,8 @@ def _circular_geometry(
     sign_J: float,
     model: str,
 ):
+    """Evaluate ``B``, ``F``, ``G``, the (psi, s, zeta) metric, and their radial/poloidal
+    derivatives for the circular or s-alpha model at each ``theta``."""
     nz = theta.shape[0]
     finite_epsilon = model != "s-alpha"
     major_radius = 1.0 + eps * jnp.cos(theta)
@@ -291,6 +300,7 @@ def _circular_geometry(
 
 
 def _calc_geom_tensors(circular, *, sign_B: float, sign_J: float):
+    """Derive the ExB and magnetic-drift tensors from the ``_circular_geometry`` metric."""
     B = circular["B"]
     metric = circular["metric"]
     major_radius = circular["major_radius"]

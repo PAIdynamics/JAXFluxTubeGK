@@ -339,6 +339,7 @@ def build_finite_difference_operators(
 
 
 def _chebyshev_collocation(n: int, lower: float, upper: float, dtype: str):
+    """Build Chebyshev-Gauss-Lobatto nodes, quadrature weights, derivative, and modal transforms."""
     reference_nodes = -np.cos(np.pi * np.arange(n, dtype=float) / (n - 1))
     nodes = 0.5 * (upper + lower) + 0.5 * (upper - lower) * reference_nodes
     weights = 0.5 * (upper - lower) * _clenshaw_curtis_weights(n)
@@ -356,6 +357,7 @@ def _chebyshev_collocation(n: int, lower: float, upper: float, dtype: str):
 
 
 def _gkw_velocity_collocation(n: int, vpar_max: float, dtype: str):
+    """Build GKW-style uniform cell-centered v_parallel nodes, weights, and finite-difference derivative."""
     spacing = 2.0 * float(vpar_max) / n
     nodes = -float(vpar_max) + spacing * (np.arange(n, dtype=float) + 0.5)
     weights = np.full(n, spacing, dtype=float)
@@ -372,6 +374,7 @@ def _gkw_velocity_collocation(n: int, vpar_max: float, dtype: str):
 
 
 def _gkw_mu_collocation(n: int, mu_max: float, dtype: str):
+    """Build GKW-style uniform-in-v_perp mu nodes, weights, and barycentric derivative matrix."""
     vperp_max = np.sqrt(2.0 * float(mu_max))
     spacing = vperp_max / n
     vperp = spacing * (np.arange(n, dtype=float) + 0.5)
@@ -390,6 +393,7 @@ def _gkw_mu_collocation(n: int, mu_max: float, dtype: str):
 
 
 def _fourier_collocation(n: int, lower: float, upper: float, dtype: str):
+    """Build uniform periodic nodes, weights, derivative, and forward/inverse DFT transforms."""
     length = upper - lower
     nodes = lower + length * np.arange(n, dtype=float) / n
     weights = np.full(n, length / n, dtype=float)
@@ -411,6 +415,7 @@ def _fourier_collocation(n: int, lower: float, upper: float, dtype: str):
 
 
 def _clenshaw_curtis_weights(n: int) -> np.ndarray:
+    """Return Clenshaw-Curtis quadrature weights on n Chebyshev-Gauss-Lobatto nodes."""
     if n == 1:
         return np.array([2.0])
     order = n - 1
@@ -434,6 +439,7 @@ def _clenshaw_curtis_weights(n: int) -> np.ndarray:
 
 
 def _barycentric_derivative_matrix(nodes: np.ndarray) -> np.ndarray:
+    """Return the exact polynomial differentiation matrix on arbitrary nodes via barycentric weights."""
     nodes = np.asarray(nodes, dtype=float)
     n = nodes.size
     diff = nodes[:, None] - nodes[None, :]
@@ -483,6 +489,7 @@ def _symmetric_simpson_weights(n: int, spacing: float) -> np.ndarray:
 
 
 def _build_ky_values(spec: FourierGridSpec) -> np.ndarray:
+    """Return the ky mode array from spec.ky_values, or evenly spaced from 0 to ky_max otherwise."""
     if spec.ky_values is not None:
         return np.asarray(spec.ky_values, dtype=float)
     if spec.n_ky == 1:
@@ -498,6 +505,7 @@ def _build_mode_label(
     *,
     scale_shift_by_ky: bool = False,
 ) -> np.ndarray:
+    """Assign each (kx, ky) mode an integer label identifying its kx-shift chain for boundary coupling."""
     mode_label = np.zeros((nkx, nky), dtype=np.int32)
     label = 1
     for iy in range(nky):
@@ -518,6 +526,7 @@ def _build_mode_label(
 
 
 def _build_ix_connectivity(mode_label: np.ndarray, iyzero: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return per-mode indices of the next/previous kx neighbor along each mode_label chain, or -1 at chain ends."""
     nkx, nky = mode_label.shape
     ixplus = -np.ones((nkx, nky), dtype=np.int32)
     ixminus = -np.ones((nkx, nky), dtype=np.int32)
@@ -540,6 +549,7 @@ def _build_ix_connectivity(mode_label: np.ndarray, iyzero: int) -> tuple[np.ndar
 def _build_kx_shift_maps(
     ixplus: np.ndarray, ixminus: np.ndarray, iyzero: int, max_shift: int
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Precompute, for each kx shift in [-max_shift, max_shift], the target mode index and its validity mask."""
     nkx, nky = ixplus.shape
     offsets = np.arange(-max_shift, max_shift + 1, dtype=np.int32)
     kx_shift = -np.ones((offsets.size, nkx, nky), dtype=np.int32)
@@ -566,6 +576,7 @@ def _build_kx_shift_maps(
 
 
 def _fill_stencil_matrix(matrix: np.ndarray, stencil: dict[int, float], periodic: bool) -> None:
+    """Add finite-difference stencil coefficients into matrix rows, wrapping or clipping at the boundary."""
     n = matrix.shape[0]
     for row in range(n):
         for offset, value in stencil.items():

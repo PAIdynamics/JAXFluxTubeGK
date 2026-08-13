@@ -1676,6 +1676,8 @@ def stella_laguerre_legendre_delta0(
 
 
 def _associated_laguerre(degree: int, alpha: float, argument):
+    """Evaluate the generalized (associated) Laguerre polynomial via its three-term recurrence."""
+
     if degree == 0:
         return jnp.ones_like(argument)
     previous = jnp.ones_like(argument)
@@ -2701,6 +2703,8 @@ def fokker_planck_conserved_moments(values, precompute: FokkerPlanckPrecompute):
 
 
 def _project_collision_constraints(values, invariants, basis, inverse, measure):
+    """Subtract the moment-matrix correction so the collision output conserves the given invariants."""
+
     moments = jnp.einsum("csvmz,vmz,svmzxy->czxy", invariants, measure, values)
     coefficients = jnp.einsum("zdc,czxy->zdxy", inverse, moments)
     correction = jnp.einsum("dsvmz,zdxy->svmzxy", basis, coefficients)
@@ -2796,6 +2800,8 @@ def collision_moments(values, precompute: ConservingBGKPrecompute):
 
 
 def _build_fokker_planck_conservation(velocity_grid, B, species):
+    """Build the density/momentum/energy invariants, Maxwellian basis, and inverse moment matrix used to project Fokker-Planck collisions onto a conserving correction."""
+
     n_species = len(species)
     maxwellians = jnp.asarray(maxwellian(velocity_grid.vpar, velocity_grid.mu, B, species))
     energy = jnp.asarray(normalized_energy(velocity_grid.vpar, velocity_grid.mu, B, species))
@@ -2912,10 +2918,14 @@ def _build_xu_conservation(velocity_grid, B, species):
 
 
 def _erf_derivative(value):
+    """Derivative of the error function, d(erf)/dx = 2/sqrt(pi) exp(-x^2)."""
+
     return 2.0 / jnp.sqrt(jnp.pi) * jnp.exp(-(value**2))
 
 
 def _pitch_diffusion(speed, prefactor, background_scale):
+    """Pitch-angle (Lorentz) scattering diffusion coefficient at the background-scaled speed."""
+
     safe_speed = jnp.maximum(speed, 1.0e-14)
     background_speed = jnp.maximum(safe_speed * background_scale, 1.0e-14)
     numerator = (2.0 - 1.0 / background_speed**2) * erf(background_speed) + _erf_derivative(
@@ -2925,6 +2935,8 @@ def _pitch_diffusion(speed, prefactor, background_scale):
 
 
 def _energy_diffusion(speed, prefactor, background_scale):
+    """Energy (speed-space) diffusion coefficient at the background-scaled speed."""
+
     safe_speed = jnp.maximum(speed, 1.0e-14)
     background_speed = jnp.maximum(safe_speed * background_scale, 1.0e-14)
     numerator = (
@@ -2935,6 +2947,8 @@ def _energy_diffusion(speed, prefactor, background_scale):
 
 
 def _friction(speed, prefactor, background_scale, mass_ratio):
+    """Dynamical friction (drag) coefficient, scaled by the target/background mass ratio."""
+
     safe_speed = jnp.maximum(speed, 1.0e-14)
     background_speed = jnp.maximum(safe_speed * background_scale, 1.0e-14)
     numerator = erf(background_speed) - _erf_derivative(background_speed) * background_speed
@@ -2956,6 +2970,8 @@ def _build_fokker_planck_stencil(
     friction,
     mass_conserving_boundary,
 ):
+    """Assemble the nine-point (v_parallel, mu) finite-difference stencil for one target/background species pair's pitch-angle, energy-diffusion, and friction collision operator."""
+
     nv, nmu, nz = vpar.size, mu.size, B.size
     vp = vpar.reshape(nv, 1, 1)
     vperp = jnp.sqrt(jnp.maximum(2.0 * mu, 0.0)).reshape(1, nmu, 1)
@@ -3054,6 +3070,8 @@ def _build_fokker_planck_stencil(
 
 
 def _apply_fokker_planck_stencil(distribution, stencil):
+    """Apply the nine-point (v_parallel, mu) collision stencil to the distribution via shifted, edge-clipped sums."""
+
     nv, nmu = distribution.shape[:2]
     iv, imu = jnp.arange(nv), jnp.arange(nmu)
     shifts = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1))

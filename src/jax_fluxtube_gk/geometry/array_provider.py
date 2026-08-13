@@ -36,12 +36,19 @@ class PhysicalArrayGeometryProvider:
     differentiable: bool = False
 
     def __post_init__(self) -> None:
+        """Validate that ``provider_name`` is non-empty and ``nfp`` is at least 1."""
         if not self.provider_name:
             raise ValueError("physical-array provider_name must be non-empty")
         if self.nfp < 1:
             raise ValueError("physical-array provider nfp must be at least 1")
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Build a ``GeometryResult`` from the configured in-memory arrays or factory.
+
+        Missing optional fields (``theta``, ``phi``, ``alpha``, ``rho``, ``iota``,
+        ``shear``) fall back to request/provider defaults; the physical drift and
+        metric fields are required and raise if absent.
+        """
         parallel = _parallel_grid(request)
         values = self.arrays(request, parallel) if callable(self.arrays) else self.arrays
         physical = build_physical_flux_tube_geometry_from_coordinate_arrays(
@@ -99,6 +106,7 @@ class SyntheticGeometryProvider:
     nfp: int = 1
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Build a differentiable cosine-``B`` fixture geometry via ``PhysicalArrayGeometryProvider``."""
         def arrays(_request: GeometryRequest, parallel: ParallelGrid):
             ones = jnp.ones_like(parallel.z)
             zeros = jnp.zeros_like(parallel.z)
@@ -132,6 +140,7 @@ class SyntheticGeometryProvider:
 
 
 def _parallel_grid(request: GeometryRequest) -> ParallelGrid:
+    """Build the parallel grid for ``request`` from its grid-control fields."""
     return build_parallel_grid(
         ParallelGridSpec(
             n_z=request.n_z,
@@ -144,6 +153,7 @@ def _parallel_grid(request: GeometryRequest) -> ParallelGrid:
 
 
 def _required(values: Mapping[str, object], name: str):
+    """Fetch ``name`` from ``values``, raising a descriptive error if missing."""
     try:
         return values[name]
     except KeyError as exc:

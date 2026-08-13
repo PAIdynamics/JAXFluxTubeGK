@@ -59,9 +59,11 @@ class StellaGeometryData:
     field_periods: float
 
     def column(self, name: str) -> np.ndarray:
+        """Return the per-row values for field ``name`` (one of ``STELLA_GEOMETRY_COLUMNS``)."""
         return self.rows[:, STELLA_GEOMETRY_COLUMNS.index(name)]
 
     def global_value(self, name: str) -> float:
+        """Return the scalar global-header value for ``name`` (one of ``STELLA_GLOBAL_COLUMNS``)."""
         return float(self.global_header[STELLA_GLOBAL_COLUMNS.index(name)])
 
 
@@ -75,6 +77,9 @@ class StellaGeometryProvider:
     revision: str = "unknown"
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Load the stella geometry table, resample it onto the requested grid, and
+        build a non-differentiable ``GeometryResult`` (parallel coordinate
+        ``zed_over_2pi`` in turns)."""
         if request.topology != "periodic" or request.endpoint_policy != "exclude":
             raise ValueError("stella geometry provider requires periodic endpoint-excluded grids")
         if (
@@ -243,6 +248,7 @@ def has_duplicate_stella_endpoint(rows) -> bool:
 
 
 def _resample_stella_rows(data: StellaGeometryData, target_zed: np.ndarray) -> np.ndarray:
+    """Linearly interpolate every stella geometry column onto ``target_zed``."""
     source_zed = data.column("zed")
     if not np.all(np.diff(source_zed) > 0.0):
         raise ValueError("stella zed grid must be strictly increasing")

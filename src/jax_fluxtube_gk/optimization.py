@@ -63,6 +63,8 @@ class OptimizationKnobs(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Coerce ``equilibrium_coefficients`` to a one-dimensional array."""
+
         coefficients = jnp.asarray(self.equilibrium_coefficients, dtype=jnp.float64)
         if coefficients.ndim != 1:
             raise ValueError("equilibrium_coefficients must be one-dimensional")
@@ -97,6 +99,8 @@ class SingleSurfaceOptimizationConfig(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Validate geometry_model, n_steps, dt, and objective_kind choices."""
+
         if self.geometry_model not in _GEOMETRY_MODELS:
             raise ValueError(
                 "geometry_model must be one of "
@@ -199,6 +203,8 @@ class DesignObjectiveSpec:
     branch_gap_tolerance: float = 1.0e-3
 
     def __post_init__(self) -> None:
+        """Validate aggregation choice, selected_ky requirements, and weight signs."""
+
         if self.growth_aggregation not in ("selected", "max", "softmax"):
             raise ValueError("growth_aggregation must be 'selected', 'max', or 'softmax'")
         if self.growth_aggregation == "selected" and self.selected_ky is None:
@@ -277,6 +283,8 @@ class RobustAggregationSpec:
     softmax_temperature: float = 0.05
 
     def __post_init__(self) -> None:
+        """Validate the aggregation method and softmax_temperature."""
+
         if self.method not in ("weighted_mean", "worst_case", "softmax"):
             raise ValueError(
                 "aggregation method must be 'weighted_mean', 'worst_case', or 'softmax'"
@@ -723,6 +731,8 @@ def _objective_geometry(
     config: SingleSurfaceOptimizationConfig,
     geometry,
 ):
+    """Build geometry from knobs, or validate and pass through a supplied geometry."""
+
     if geometry is None:
         return build_optimization_geometry(parallel_grid, knobs, config)
     _validate_objective_geometry(parallel_grid, geometry)
@@ -730,6 +740,8 @@ def _objective_geometry(
 
 
 def _validate_objective_geometry(parallel_grid: ParallelGrid, geometry):
+    """Check that a supplied geometry's field arrays match the parallel grid shape."""
+
     target_shape = parallel_grid.z.shape
     for name in ("w_z", "B", "F", "G", "E_y", "D_x", "D_y", "g_xx", "g_xy", "g_yy"):
         array = jnp.asarray(getattr(geometry, name))
@@ -743,6 +755,8 @@ def _scalar_from_objective_values(
     values: LinearObjectiveValues,
     config: SingleSurfaceOptimizationConfig,
 ):
+    """Select or combine growth/quasilinear/mode-structure terms per objective_kind."""
+
     if config.objective_kind == "selected_growth":
         return values.selected_growth_rate
     if config.objective_kind == "max_growth":
@@ -757,6 +771,8 @@ def _scalar_from_objective_values(
 
 
 def _benchmark_observed_value(result: SingleSurfaceOptimizationResult, quantity: str):
+    """Resolve a benchmark target quantity name (with aliases) to its observed value."""
+
     aliases = {
         "growth_rate": "selected_growth_rate",
         "selected_growth": "selected_growth_rate",
@@ -773,6 +789,8 @@ def _benchmark_observed_value(result: SingleSurfaceOptimizationResult, quantity:
 
 
 def _apply_toy_equilibrium_coefficients(geometry, knobs: OptimizationKnobs):
+    """Apply a toy algebraic beta/pressure-gradient/coefficient modulation to geometry."""
+
     coefficients = jnp.asarray(knobs.equilibrium_coefficients, dtype=geometry.B.dtype)
     modulation = _coefficient_modulation(geometry.theta + knobs.alpha, coefficients)
     beta_scale = 1.0 + 0.01 * knobs.beta
@@ -798,6 +816,8 @@ def _species_from_optimization_knobs(
     base_species: SpeciesParams,
     knobs: OptimizationKnobs,
 ) -> SpeciesParams:
+    """Build a SpeciesParams from base charge/mass/kinetic and knob profile values."""
+
     species = SpeciesParams.__new__(SpeciesParams)
     for name, value in (
         ("charge", base_species.charge),
@@ -813,6 +833,8 @@ def _species_from_optimization_knobs(
 
 
 def _geometry_params_from_optimization_knobs(knobs: OptimizationKnobs) -> GeometryScalarParams:
+    """Build GeometryScalarParams from knob q/shat/eps, deriving iota as 1/q."""
+
     params = GeometryScalarParams.__new__(GeometryScalarParams)
     for name, value in (
         ("q", knobs.q),
@@ -825,6 +847,8 @@ def _geometry_params_from_optimization_knobs(knobs: OptimizationKnobs) -> Geomet
 
 
 def _coefficient_modulation(theta, coefficients):
+    """Return the cosine-series modulation sum_n coefficients[n] * cos(n * theta)."""
+
     if coefficients.shape[0] == 0:
         return jnp.zeros_like(theta)
     modes = jnp.arange(1, coefficients.shape[0] + 1, dtype=theta.dtype)
@@ -833,6 +857,8 @@ def _coefficient_modulation(theta, coefficients):
 
 
 def _growth_branch_gap(growth_rates):
+    """Return the gap between the largest and second-largest growth rate."""
+
     growth_rates = jnp.asarray(growth_rates)
     if growth_rates.shape[0] < 2:
         return jnp.asarray(jnp.inf, dtype=growth_rates.dtype)

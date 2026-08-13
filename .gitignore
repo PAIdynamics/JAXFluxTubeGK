@@ -11,6 +11,16 @@ dist/
 .DS_Store
 .dependencies/
 
+# Generated Doxygen API reference; rebuild with scripts/generate_docs.py.
+docs/api/
+
+# LaTeX build byproducts; compile tex/main.tex locally (pdflatex/latexmk).
+tex/*.aux
+tex/*.log
+tex/*.out
+tex/*.toc
+tex/*.pdf
+
 # External codes are separately installed dependencies, never vendored here.
 relevant-codes/
 

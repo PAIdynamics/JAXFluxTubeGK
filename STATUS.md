@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 ## Executive Summary
 
@@ -22,6 +22,48 @@ design objectives, gradient audits, topology guards, robust multi-sample
 aggregation, reproducible checkpoints, and a real VMEC++ W7-X outer loop are
 implemented. End-to-end VMEC++ autodiff and full-boundary optimization are not
 claimed.
+
+### 2026-08-13: Doxygen API Reference, Live Optimization Notebooks, Paper Sync
+
+- Added a root `Doxyfile` (Python input, call/class graphs via installed
+  Graphviz) and `scripts/generate_docs.py`; generated output is gitignored
+  (`docs/api/`) and documented in the README. Closed essentially all
+  Doxygen "undocumented member" warnings across the public solver, geometry
+  adapter, physics, and optimization modules (types, grids, solver,
+  operators, objectives, optimization, design topology/checkpoint, time
+  advance, diagnostics, targets, performance, external, geometry/*, and
+  physics/*) with docstrings grounded in the actual function bodies and, for
+  physics kernels, `tex/main.tex` terminology. Individual dataclass-field
+  warnings and the `benchmarks.py`/`validation/` legacy surface were
+  intentionally left at module-level documentation only, per
+  `docs/fixture_policy.md`'s and Priority 6's existing framing of that code
+  as pending a physical split.
+- Executed all three geometry-optimization notebooks
+  (`examples/{desc,gvec,vmecpp}_geometry_optimization.ipynb`) end to end
+  against their installed live providers (DESC named `DSHAPE`, VMEC++ named
+  `w7x-standard`, GVEC's tracked VMEC-initialized W7-X parameterization) and
+  committed the real outputs. All three live-provider boundary-harmonic
+  scans and the fixed-geometry differentiable objective/gradient cells ran
+  successfully; GVEC's bounded `MaxIter=100` minimizer did not reach its
+  force-tolerance criterion at any scale, consistent with its own
+  diagnostic framing. No new bugs were found in the notebooks.
+- Resynced `tex/main.tex` with this file: added a "Nonlinear turbulence
+  acceptance status" subsection stating the current Priority 5 evidence
+  (stationary resolution and lineage-ensemble ladders passed; the domain
+  ladder still fails at 25.65% against the 15% gate; GX/CUDA parity
+  deferred) and a new "Optimization results" subsection reporting the
+  regenerated circular-geometry gradient-descent traces
+  (`examples/generate_optimization_figures.py`, cases A/B/C) and the three
+  live-provider scans above, each captioned with its scope/caveats. Fixed
+  two pre-existing corrupted-byte LaTeX errors (`\begin{equation}` mangled
+  to a stray backspace) and a missing `\usepackage{float}` that had left the
+  paper unable to compile; `tex/main.tex` now builds cleanly to a 25-page
+  PDF with `pdflatex`. `tex/task.tex` (the supervisor's assignment brief)
+  was not modified.
+- Repository-wide verification: `ruff check src tests examples scripts`
+  passes, and the full `JAX_ENABLE_X64=1` pytest suite reports **615 passed,
+  25 external tests deselected in 437.12s** after these changes (no
+  regressions from the additive docstring pass or notebook/paper edits).
 
 ### 2026-08-12: Provider-Neutral Production Refactor
 

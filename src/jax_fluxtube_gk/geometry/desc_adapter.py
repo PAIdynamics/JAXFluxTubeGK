@@ -58,6 +58,8 @@ class DescGeometryProvider:
     named_loader: Callable | None = None
 
     def __post_init__(self) -> None:
+        """Validate that at most one equilibrium source is given, ``nfp``, and that
+        file-backed sources are not marked differentiable."""
         if self.equilibrium is not None and self.path is not None:
             raise ValueError("DescGeometryProvider accepts at most one of equilibrium or path")
         if self.nfp is not None and self.nfp < 1:
@@ -66,6 +68,9 @@ class DescGeometryProvider:
             raise ValueError("file-backed DESC geometry cannot be marked differentiable")
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Resolve the equilibrium (in-memory, path, or named configuration), sample
+        DESC geometry on the requested field line, and return the provider-neutral
+        ``GeometryResult``."""
         if request.radial_coordinate != "rho":
             raise ValueError("DESC provider currently requires radial_coordinate='rho'")
         parallel = build_parallel_grid(
@@ -319,11 +324,13 @@ def _desc_field_line_grid(
     iota,
     get_rtz_grid: Callable | None,
 ):
+    """Build the DESC field-line-following grid at fixed ``(rho, alpha)`` over ``zeta``."""
     get_rtz_grid = get_rtz_grid or _import_desc_get_rtz_grid()
     return get_rtz_grid(eq, rho, alpha, zeta, coordinates="raz", iota=iota)
 
 
 def _desc_iota(eq, rho, *, linear_grid_cls):
+    """Evaluate the rotational transform ``iota`` at ``rho`` via a single-point DESC grid."""
     linear_grid_cls = linear_grid_cls or _import_desc_linear_grid()
     grid = linear_grid_cls(rho=np.asarray([rho]), theta=np.asarray([0.0]), zeta=np.asarray([0.0]))
     data = eq.compute(["iota"], grid=grid)
@@ -334,6 +341,7 @@ def _desc_iota(eq, rho, *, linear_grid_cls):
 
 
 def _select_desc_equilibrium(loaded, *, index: int):
+    """Return ``loaded`` if it is already an equilibrium, else select ``index`` from a family."""
     if hasattr(loaded, "compute"):
         return loaded
     try:
@@ -348,6 +356,7 @@ def _select_desc_equilibrium(loaded, *, index: int):
 
 
 def _import_desc_load():
+    """Lazily import and return ``desc.io.load``."""
     try:
         module = importlib.import_module("desc.io")
     except ImportError as exc:
@@ -359,6 +368,7 @@ def _import_desc_load():
 
 
 def _import_desc_get_rtz_grid():
+    """Lazily import and return ``desc.equilibrium.coords.get_rtz_grid``."""
     try:
         module = importlib.import_module("desc.equilibrium.coords")
     except ImportError as exc:
@@ -370,6 +380,7 @@ def _import_desc_get_rtz_grid():
 
 
 def _import_desc_linear_grid():
+    """Lazily import and return ``desc.grid.LinearGrid``."""
     try:
         module = importlib.import_module("desc.grid")
     except ImportError as exc:
@@ -381,6 +392,7 @@ def _import_desc_linear_grid():
 
 
 def _import_desc_example_get():
+    """Lazily import and return ``desc.examples.get``."""
     try:
         module = importlib.import_module("desc.examples")
     except ImportError as exc:
@@ -392,6 +404,7 @@ def _import_desc_example_get():
 
 
 def _desc_nfp(eq) -> int:
+    """Read the number of field periods off ``eq.NFP``/``eq.nfp``, defaulting to 1."""
     for name in ("NFP", "nfp"):
         value = getattr(eq, name, None)
         if value is not None:
@@ -400,6 +413,7 @@ def _desc_nfp(eq) -> int:
 
 
 def _coerce_scalar_or_1d(name: str, value):
+    """Cast to a JAX array, promoting a 0-d scalar to a length-1 vector; reject ndim > 1."""
     array = jnp.asarray(value)
     if array.ndim == 0:
         return array[None]
@@ -409,12 +423,14 @@ def _coerce_scalar_or_1d(name: str, value):
 
 
 def _require_1d(data: dict, name: str, shape: tuple[int, ...]):
+    """Fetch a required 1-d field ``name`` from DESC ``compute`` output, raising if absent."""
     if name not in data:
         raise KeyError(f"DESC data is missing required key {name!r}")
     return _optional_1d(data, name, shape, default=None)
 
 
 def _optional_1d(data: dict, name: str, shape: tuple[int, ...], *, default):
+    """Fetch an optional 1-d field, broadcasting a scalar default/value to ``shape``."""
     value = data.get(name, default)
     array = jnp.asarray(value)
     if array.shape == ():
@@ -425,6 +441,7 @@ def _optional_1d(data: dict, name: str, shape: tuple[int, ...], *, default):
 
 
 def _require_vector(data: dict, name: str, shape: tuple[int, ...], *, default=None):
+    """Fetch a required per-point 3-vector field ``name``, validating shape ``shape + (3,)``."""
     if name not in data and default is None:
         raise KeyError(f"DESC data is missing required key {name!r}")
     array = jnp.asarray(data.get(name, default))
@@ -435,4 +452,5 @@ def _require_vector(data: dict, name: str, shape: tuple[int, ...], *, default=No
 
 
 def _dot(left, right):
+    """Pointwise dot product of two vector arrays along their last (component) axis."""
     return jnp.sum(left * right, axis=-1)

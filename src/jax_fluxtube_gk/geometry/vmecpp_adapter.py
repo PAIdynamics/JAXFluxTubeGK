@@ -42,6 +42,7 @@ class VmecppGeometryProvider:
     revision: str = "unknown"
 
     def __post_init__(self) -> None:
+        """Validate that at most one of ``output``/``vmec_input``/``wout_path`` is given."""
         sources = sum(
             value is not None for value in (self.output, self.vmec_input, self.wout_path)
         )
@@ -51,6 +52,8 @@ class VmecppGeometryProvider:
             )
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Resolve a VMEC++ ``wout`` (in-memory, path, or run from named/explicit input),
+        evaluate the PEST field line, and return a non-differentiable ``GeometryResult``."""
         if request.radial_coordinate != "rho":
             raise ValueError("VMEC++ provider currently requires radial_coordinate='rho'")
         if request.parallel_coordinate != "zeta" or request.parallel_coordinate_unit != "radian":
@@ -100,6 +103,8 @@ class VmecppGeometryProvider:
         return GeometryResult(parallel_grid=parallel, physical=physical, metadata=metadata)
 
     def _resolve_wout(self, request: GeometryRequest):
+        """Return the ``(wout, source, command)`` to use: a consumed in-memory output,
+        a loaded ``wout`` file, or a fresh VMEC++ run from an explicit or named input."""
         if self.output is not None:
             return _as_wout(self.output), "in-memory VmecOutput", "consume in-memory output"
         if self.wout_path is not None:
@@ -272,6 +277,8 @@ def vmec_field_line_from_wout(wout, request: GeometryRequest) -> dict[str, objec
 
 
 def _invert_pest_angle(theta_pest, zeta, modes, toroidal_modes, lmns):
+    """Newton-solve VMEC's ``theta`` from ``theta_pest = theta + lambda(theta, zeta)``
+    at fixed ``zeta``, given the stream-function Fourier coefficients ``lmns``."""
     theta = np.asarray(theta_pest, dtype=float).copy()
     for _ in range(20):
         phase = modes[:, None] * theta[None, :] - toroidal_modes[:, None] * zeta[None, :]
@@ -285,6 +292,8 @@ def _invert_pest_angle(theta_pest, zeta, modes, toroidal_modes, lmns):
 
 
 def _full_grid_coefficients(values, grid, s):
+    """Interpolate full-grid Fourier coefficients and their radial derivative to ``s``,
+    the derivative computed by finite differences at the intervening half-grid points."""
     coefficients = np.asarray(values)
     value = _linear_interpolate(coefficients, grid, s)
     derivative = _linear_interpolate(
@@ -296,6 +305,8 @@ def _full_grid_coefficients(values, grid, s):
 
 
 def _half_grid_coefficients(values, full_grid, s):
+    """Interpolate half-grid Fourier coefficients to ``s``, with their radial derivative
+    finite-differenced onto the full grid (edge-extrapolated) and then interpolated to ``s``."""
     half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
     coefficients = np.asarray(values)[:, 1:]
     value = _linear_interpolate(coefficients, half_grid, s)
@@ -310,18 +321,22 @@ def _half_grid_coefficients(values, full_grid, s):
 
 
 def _half_grid_value(values, full_grid, s):
+    """Linearly interpolate a scalar profile defined on the VMEC half grid to ``s``."""
     half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
     profile = np.asarray(values)[1:]
     return float(np.interp(s, half_grid, profile))
 
 
 def _full_grid_derivative_on_half_grid(values, full_grid, s):
+    """Finite-difference the radial derivative of a full-grid profile at half-grid
+    nodes and linearly interpolate it to ``s``."""
     derivative = np.diff(np.asarray(values)) / (full_grid[1] - full_grid[0])
     half_grid = 0.5 * (full_grid[1:] + full_grid[:-1])
     return float(np.interp(s, half_grid, derivative))
 
 
 def _linear_interpolate(values, grid, s):
+    """Linearly interpolate column-wise ``values`` (one column per ``grid`` node) at ``s``."""
     upper = int(np.searchsorted(grid, s, side="right"))
     upper = min(max(upper, 1), len(grid) - 1)
     lower = upper - 1
@@ -330,18 +345,22 @@ def _linear_interpolate(values, grid, s):
 
 
 def _profile_value(values, grid, s):
+    """Evaluate a cubic-spline fit of ``values(grid)`` at ``s``."""
     return float(CubicSpline(grid, np.asarray(values))(s))
 
 
 def _profile_derivative(values, grid, s):
+    """Evaluate the first derivative of a cubic-spline fit of ``values(grid)`` at ``s``."""
     return float(CubicSpline(grid, np.asarray(values))(s, 1))
 
 
 def _dot(left, right):
+    """Pointwise dot product of two ``(n, 3)`` vector arrays, returning shape ``(n,)``."""
     return np.einsum("ij,ij->i", left, right)
 
 
 def _canonical_configuration(configuration: str) -> str:
+    """Map accepted W7-X name aliases to VMEC++'s installed ``"w7x-standard"`` name."""
     normalized = configuration.lower()
     if normalized in _W7X_NAMES:
         return "w7x-standard"
@@ -349,10 +368,12 @@ def _canonical_configuration(configuration: str) -> str:
 
 
 def _as_wout(output):
+    """Unwrap a VMEC++ run result's ``.wout`` attribute, or return it unchanged."""
     return output.wout if hasattr(output, "wout") else output
 
 
 def _import_vmecpp():
+    """Lazily import and return the ``vmecpp`` package."""
     try:
         return importlib.import_module("vmecpp")
     except ImportError as exc:
@@ -363,6 +384,7 @@ def _import_vmecpp():
 
 
 def _distribution_version(name: str) -> str:
+    """Look up the installed version of package ``name``, or ``"unknown"`` if not found."""
     try:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:

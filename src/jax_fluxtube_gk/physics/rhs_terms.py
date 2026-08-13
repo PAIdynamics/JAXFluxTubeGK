@@ -29,6 +29,8 @@ from .primitives import (
 
 
 def _center_9(stencil5):
+    """Return a 9-point stencil with ``stencil5`` centered and the rest zero."""
+
     out = [0.0] * 9
     out[2:7] = stencil5
     return out
@@ -102,6 +104,8 @@ class GKWParallelStencil(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("spacing",)
 
     def __post_init__(self):
+        """Validate that ``spacing`` is positive."""
+
         if self.spacing <= 0.0:
             raise ValueError("spacing must be positive")
 
@@ -120,6 +124,8 @@ class GKWArakawaIghStencil(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("spacing_z", "spacing_vpar")
 
     def __post_init__(self):
+        """Validate that ``spacing_z`` and ``spacing_vpar`` are positive."""
+
         if self.spacing_z <= 0.0:
             raise ValueError("spacing_z must be positive")
         if self.spacing_vpar <= 0.0:
@@ -175,6 +181,8 @@ class LinearRHSPrecompute(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("parallel_derivative_model", "n_species")
 
     def __post_init__(self):
+        """Validate ``n_species`` and ``parallel_derivative_model`` against their allowed values."""
+
         if self.n_species < 1:
             raise ValueError("n_species must be at least 1")
         if self.parallel_derivative_model not in ("matrix", "gkw_upwind", "gkw_igh"):
@@ -396,6 +404,13 @@ def _empty_gkw_parallel_stencil(
     *,
     dtype,
 ) -> GKWParallelStencil:
+    """Return a zero-filled ``GKWParallelStencil`` placeholder sized to the grids.
+
+    Used when ``parallel_derivative_model`` does not require the GKW
+    finite-difference parallel stencil, so the precompute pytree still has a
+    well-shaped, jit-compatible field to carry.
+    """
+
     n_z = int(jnp.asarray(parallel_grid.z).shape[0])
     n_kx = int(jnp.asarray(fourier_grid.kx).shape[0])
     n_ky = int(jnp.asarray(fourier_grid.ky).shape[0])
@@ -624,6 +639,12 @@ def _empty_gkw_igh_stencil(
     *,
     dtype,
 ) -> GKWArakawaIghStencil:
+    """Return a zero-filled ``GKWArakawaIghStencil`` placeholder sized to the grids.
+
+    Used when ``parallel_derivative_model`` is not ``"gkw_igh"``, so the
+    precompute pytree still has a well-shaped, jit-compatible field to carry.
+    """
+
     n_vpar = int(jnp.asarray(velocity_grid.vpar).shape[0])
     n_mu = int(jnp.asarray(velocity_grid.mu).shape[0])
     n_z = int(jnp.asarray(parallel_grid.z).shape[0])
@@ -638,6 +659,12 @@ def _empty_gkw_igh_stencil(
 
 
 def _gkw_parallel_scale_from_coeff(vpar: np.ndarray, parallel_coeff: np.ndarray) -> np.ndarray:
+    """Return the per-species, per-``z`` ``parallel_coeff / vpar`` ratio averaged over nonzero ``vpar``.
+
+    This recovers the velocity-independent ``v_th * F(z)`` prefactor of the
+    parallel streaming coefficient, used to scale the igh diffusion terms.
+    """
+
     valid = np.abs(vpar) > 1.0e-300
     if not np.any(valid):
         return np.zeros((parallel_coeff.shape[0], parallel_coeff.shape[2]), dtype=float)
@@ -645,6 +672,13 @@ def _gkw_parallel_scale_from_coeff(vpar: np.ndarray, parallel_coeff: np.ndarray)
 
 
 def _add_gkw_igh_jhg_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, hh):
+    """Add the interior 9-point Arakawa Hamiltonian-bracket stencil coefficients to the igh table.
+
+    Computes the discrete ``{H, f}`` bracket with ``H = v_parallel^2/2 + mu*B``
+    (evaluated via ``hh``) around ``(iv, iz)`` and adds each neighbor's
+    coefficient through ``add``.
+    """
+
     d1 = dum / 6.0
     d2 = -dum / 24.0
     entries = (
@@ -750,6 +784,12 @@ def _add_gkw_igh_jhg_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, hh):
 
 
 def _add_gkw_igh_zero_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, position, hh):
+    """Add the one-sided Arakawa-bracket boundary stencil for a row two cells from an open ``z`` end.
+
+    ``position`` selects the left (``-2``) or right (``2``) open boundary;
+    coefficients are added through ``add``.
+    """
+
     fac = 0.25
     if position == 2:
         val = fac * dum * (3.0 * hh(iz, imu, iv) - 4.0 * hh(iz - 1, imu, iv) + hh(iz - 2, imu, iv))
@@ -768,6 +808,12 @@ def _add_gkw_igh_zero_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, 
 
 
 def _add_gkw_igh_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, position, hh):
+    """Add the one-sided Arakawa-bracket boundary stencil for a row one cell from an open ``z`` end.
+
+    ``position`` selects the left (``-1``) or right (``1``) open boundary;
+    coefficients are added through ``add``.
+    """
+
     fac = 1.0 / 72.0
     if position == -1:
         val = (
@@ -834,6 +880,12 @@ def _add_gkw_igh_two_coefficients(add, ispecies, iv, imu, iz, ix, iy, dum, posit
 
 
 def _add_gkw_igh_diffusion_coefficients(add, ispecies, iv, imu, iz, ix, iy, speed, spacing, axis):
+    """Add the fourth-difference ``disp_par``/``disp_vp`` diffusion stencil along ``axis`` to the igh table.
+
+    ``axis`` is ``"z"`` or ``"vpar"``; no coefficients are added when
+    ``speed`` is not strictly positive.
+    """
+
     if speed <= 0.0:
         return
     coefficient = -abs(float(speed)) / (12.0 * float(spacing))
@@ -924,6 +976,8 @@ def parallel_field_drive(phi, D_z, precompute: LinearRHSPrecompute):
 
 
 def _parallel_field_drive_from_gyroaveraged(gyro_field, D_z, precompute):
+    """Return Term VII (parallel field drive) for an already gyroaveraged field, using the matrix ``D_z``."""
+
     dz_gyro_field = _parallel_derivative(gyro_field, D_z)
     result = (
         -precompute.charge_over_temperature[:, None, None, None, None, None]
@@ -1006,6 +1060,12 @@ def gkw_parallel_field_drive(phi, precompute: LinearRHSPrecompute):
 
 
 def _gkw_parallel_field_drive_from_gyroaveraged(gyro_field, precompute):
+    """Return Term VII for an already gyroaveraged field using the GKW upwind parallel stencil.
+
+    The one-sided derivative direction is selected from the sign of the
+    field-drive coefficient rather than from the streaming velocity sign.
+    """
+
     d1_pos = _apply_gkw_parallel_stencil_table(
         gyro_field,
         precompute.gkw_parallel_stencil.d1_pos,
@@ -1038,6 +1098,8 @@ def drift_field_drive(phi, precompute: LinearRHSPrecompute):
 
 
 def _drift_field_drive_from_gyroaveraged(gyro_field, precompute):
+    """Return Term VIII (drift field drive) for an already gyroaveraged field."""
+
     result = (
         -precompute.charge_over_temperature[:, None, None, None, None, None]
         * 1j
@@ -1208,6 +1270,8 @@ def linear_residual_from_fields(
 
 
 def _gyroaveraged_potential(phi, precompute: LinearRHSPrecompute):
+    """Return ``J0(k_perp rho) * phi`` broadcast onto the species and ``vpar`` axes."""
+
     phi = jnp.asarray(phi)
     if phi.ndim != 3:
         raise ValueError("phi must have shape (n_z,n_kx,n_ky)")
@@ -1215,15 +1279,21 @@ def _gyroaveraged_potential(phi, precompute: LinearRHSPrecompute):
 
 
 def _parallel_derivative(values, D_z):
+    """Return ``D_z`` applied along the ``z`` axis (third from the end) of ``values``."""
+
     axis = jnp.asarray(values).ndim - 3
     return _apply_matrix_along_axis(D_z, values, axis)
 
 
 def _vpar_derivative(values, D_vpar):
+    """Return ``D_vpar`` applied along the ``vpar`` axis (axis 1) of ``values``."""
+
     return _apply_matrix_along_axis(D_vpar, values, axis=1)
 
 
 def _apply_matrix_along_axis(matrix, values, axis: int):
+    """Return ``matrix`` contracted against ``values`` along ``axis``, treating ``matrix`` as a dense derivative operator."""
+
     values = jnp.asarray(values)
     matrix = jnp.asarray(matrix)
     moved = jnp.moveaxis(values, axis, 0)
@@ -1232,6 +1302,13 @@ def _apply_matrix_along_axis(matrix, values, axis: int):
 
 
 def _apply_gkw_parallel_stencil_table(values, coefficients, stencil: GKWParallelStencil):
+    """Return the weighted sum of the 9 sign-dependent GKW parallel-stencil shifts of ``values``.
+
+    Gathers ``values`` at each of the stencil's z/kx shift maps, zeros
+    entries flagged invalid (open mode-chain ends), and combines them with
+    ``coefficients``.
+    """
+
     values = jnp.asarray(values)
     prefix_shape = values.shape[:-3]
     n_z, n_kx, n_ky = values.shape[-3:]
@@ -1251,6 +1328,12 @@ def _apply_gkw_parallel_stencil_table(values, coefficients, stencil: GKWParallel
 
 
 def _apply_gkw_parallel_single_shift(values, delta_z: int, stencil: GKWParallelStencil):
+    """Return ``values`` shifted by ``delta_z`` along ``z`` using the GKW stencil's mode-connectivity maps.
+
+    Entries whose shift would cross an open (non-connected) mode-chain end
+    are zeroed rather than wrapped.
+    """
+
     values = jnp.asarray(values)
     prefix_shape = values.shape[:-3]
     n_z, n_kx, n_ky = values.shape[-3:]
@@ -1268,6 +1351,8 @@ def _apply_gkw_parallel_single_shift(values, delta_z: int, stencil: GKWParallelS
 
 
 def _shift_vpar_zero(values, delta_v: int, valid_v_shift):
+    """Return ``values`` shifted by ``delta_v`` along the ``vpar`` axis, zero-padded at out-of-range indices."""
+
     values = jnp.asarray(values)
     n_vpar = values.shape[1]
     indices = jnp.arange(n_vpar, dtype=jnp.int32) + int(delta_v)
@@ -1278,6 +1363,8 @@ def _shift_vpar_zero(values, delta_v: int, valid_v_shift):
 
 
 def _k_perp_squared(geometry, fourier_grid: FourierGrid):
+    """Return ``k_perp^2 = g_xx kx^2 + 2 g_xy kx ky + g_yy ky^2`` over the field-line/Fourier grid."""
+
     kx = fourier_grid.kx[None, :, None]
     ky = fourier_grid.ky[None, None, :]
     return (
@@ -1288,6 +1375,8 @@ def _k_perp_squared(geometry, fourier_grid: FourierGrid):
 
 
 def _with_species_axis_flr(flr: FLRFactors, n_species: int) -> FLRFactors:
+    """Return ``flr`` with a leading species axis added to each field, via ``_with_species_axis``."""
+
     return FLRFactors(
         bessel_argument=_with_species_axis(
             flr.bessel_argument,
@@ -1317,6 +1406,14 @@ def _with_species_axis_flr(flr: FLRFactors, n_species: int) -> FLRFactors:
 
 
 def _with_species_axis(array, n_species: int, name: str, *, single_ndim: int):
+    """Return ``array`` with a leading species axis of length ``n_species``.
+
+    Adds a size-1 leading axis when ``array`` is a bare single-species array
+    and ``n_species`` is 1; otherwise validates that ``array`` already has a
+    leading axis of length ``n_species``. ``name`` is used in the error
+    message.
+    """
+
     array = jnp.asarray(array)
     if n_species == 1 and array.ndim == single_ndim:
         return array[None, ...]
@@ -1329,6 +1426,8 @@ def _with_species_axis(array, n_species: int, name: str, *, single_ndim: int):
 
 
 def _distribution_with_species_axis(distribution, n_species: int):
+    """Return ``distribution`` with a leading species axis, adding one when it is a bare single-species array."""
+
     distribution = jnp.asarray(distribution)
     if n_species == 1 and distribution.ndim == 5:
         return distribution[None, ...]
@@ -1341,6 +1440,8 @@ def _distribution_with_species_axis(distribution, n_species: int):
 
 
 def _restore_distribution_shape(distribution, original_ndim: int):
+    """Return ``distribution`` restored to its original single- or multi-species rank, undoing ``_distribution_with_species_axis``."""
+
     if original_ndim == 5:
         return distribution[0]
     if original_ndim == 6:
@@ -1352,12 +1453,16 @@ def _restore_distribution_shape(distribution, original_ndim: int):
 
 
 def _drop_single_species(values, n_species: int):
+    """Return ``values`` with the leading species axis dropped when ``n_species`` is 1."""
+
     if n_species == 1:
         return values[0]
     return values
 
 
 def _coefficient_species_count(array, *, single_ndim: int, name: str) -> int:
+    """Return the species count implied by ``array``'s rank: 1 for a bare coefficient, else its leading axis length."""
+
     if array.ndim == single_ndim:
         return 1
     if array.ndim == single_ndim + 1:
@@ -1368,6 +1473,8 @@ def _coefficient_species_count(array, *, single_ndim: int, name: str) -> int:
 
 
 def _normalize_perpendicular_damping(damping, n_kx: int, n_ky: int, *, dtype):
+    """Return ``damping`` broadcast to shape ``(n_kx, n_ky)``, defaulting to zero for ``None``."""
+
     if damping is None:
         return jnp.zeros((n_kx, n_ky), dtype=dtype)
     damping = jnp.asarray(damping, dtype=dtype)
@@ -1424,6 +1531,12 @@ def _gkw_velocity_recurrence_operator(velocity_grid: VelocityGrid, *, dtype):
 
 
 def _finite_difference_recurrence_operator(n: int, spacing: float, *, periodic: bool, dtype):
+    """Return the dense ``n x n`` GKW fourth-derivative recurrence-control matrix ``[-1,4,-6,4,-1]/(12*spacing)``.
+
+    Rows wrap periodically when ``periodic`` is true, otherwise out-of-range
+    columns are dropped (truncated boundary stencil).
+    """
+
     matrix = np.zeros((n, n), dtype=float)
     coefficients = {
         -2: -1.0 / (12.0 * spacing),
@@ -1448,6 +1561,13 @@ def _gkw_parallel_position_classes(
     iyzero: int,
     n_z: int,
 ) -> np.ndarray:
+    """Return, per ``(z, kx, ky)`` point, a boundary-position class in ``{-2,-1,0,1,2}``.
+
+    Nonzero classes mark rows within two cells of an open (non-connected,
+    non-zonal) end of the ``z`` mode chain, so the igh assembly can select
+    one-sided boundary stencils instead of the interior Arakawa stencil.
+    """
+
     pos = np.zeros((n_z,) + ixplus.shape, dtype=np.int8)
     zonal = np.zeros(ixplus.shape, dtype=bool)
     if 0 <= iyzero < ixplus.shape[1]:
@@ -1471,6 +1591,14 @@ def _gkw_parallel_shift_maps(
     *,
     max_shift: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the ``(z, kx)`` target-index maps and validity mask for shifts up to ``max_shift`` along ``z``.
+
+    For each offset in ``[-max_shift, max_shift]`` and each ``(z, kx, ky)``
+    point, resolves the shifted target either by periodic wrap (zonal mode)
+    or by following the ``ixplus``/``ixminus`` mode-connectivity chain at an
+    open boundary; targets that cannot be resolved are marked invalid.
+    """
+
     n_kx, n_ky = ixplus.shape
     offsets = np.arange(-max_shift, max_shift + 1, dtype=np.int32)
     shape = (offsets.size, n_z, n_kx, n_ky)
@@ -1512,6 +1640,13 @@ def _gkw_parallel_shift_maps(
 
 
 def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity_model: str):
+    """Return the GKW ``disp_par`` recurrence-control coefficient: ``rate`` times a local or rms-scaled advection speed.
+
+    ``velocity_model="local"`` uses ``|parallel_coeff|`` directly;
+    ``"rms"`` scales the rms of ``vpar`` by the species/z-wise maximum of
+    ``|parallel_coeff / vpar|``.
+    """
+
     if rate < 0.0:
         raise ValueError("parallel_recurrence_rate must be nonnegative")
     if velocity_model not in ("local", "rms"):
@@ -1542,6 +1677,13 @@ def _parallel_recurrence_coefficient(vpar, parallel_coeff, rate: float, velocity
 
 
 def _velocity_recurrence_coefficient(mu, mirror_coeff, rate: float, velocity_model: str):
+    """Return the GKW ``disp_vp`` recurrence-control coefficient: ``rate`` times a local or rms-scaled mirror speed.
+
+    ``velocity_model="local"`` uses ``|mirror_coeff|`` directly; ``"rms"``
+    scales the rms of ``mu`` by the species/z-wise maximum of
+    ``|mirror_coeff / mu|``.
+    """
+
     if rate < 0.0:
         raise ValueError("velocity_recurrence_rate must be nonnegative")
     if velocity_model not in ("local", "rms"):
@@ -1570,4 +1712,6 @@ def _velocity_recurrence_coefficient(mu, mirror_coeff, rate: float, velocity_mod
 
 
 def _as_species_tuple(species: SpeciesParams | tuple[SpeciesParams, ...]):
+    """Return ``species`` as a tuple, wrapping a single ``SpeciesParams`` if needed."""
+
     return species if isinstance(species, tuple) else (species,)

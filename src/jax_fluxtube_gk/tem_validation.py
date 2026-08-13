@@ -65,6 +65,7 @@ class TemCaseSpec:
     velocity_recurrence_rate: float = 0.1
 
     def __post_init__(self) -> None:
+        """Reject non-positive geometry/velocity bounds, undersized grids, and unsupported backend or initial-condition combinations."""
         if self.q <= 0.0 or self.eps <= 0.0 or self.ky <= 0.0:
             raise ValueError("q, eps, and ky must be positive")
         if not 0.0 < self.electron_mass < 1.0:
@@ -341,6 +342,7 @@ def compare_tem_resolution_ladder(
 
 
 def _relative_error(observed: float, reference: float) -> float:
+    """Return ``|observed - reference|`` divided by ``|reference|``, floored to avoid division by zero."""
     return float(abs(observed - reference) / max(abs(reference), 1.0e-14))
 
 
@@ -527,6 +529,7 @@ def run_reduced_tem_linear_smoke(
 
 
 def _build_tem_system(spec: TemCaseSpec):
+    """Assemble the species, velocity/parallel/Fourier grids, s-alpha geometry, and kinetic-field linear-residual precompute for one TEM case."""
     species = tem_species(spec)
     velocity = build_velocity_grid(
         VelocityGridSpec(
@@ -566,6 +569,7 @@ def _build_tem_system(spec: TemCaseSpec):
 
 
 def _build_tem_parallel_grid(spec: TemCaseSpec) -> ParallelGrid:
+    """Build the field-line parallel grid spanning ``field_periods``, as an open finite-difference stencil or a periodic Fourier grid depending on ``spec.parallel_backend``."""
     half_span = 0.5 * spec.field_periods
     spacing = spec.field_periods / spec.n_z
     lower = -half_span + 0.5 * spacing
@@ -592,6 +596,7 @@ def _build_tem_parallel_grid(spec: TemCaseSpec) -> ParallelGrid:
 
 
 def _initial_tem_state(precompute, parallel, spec: TemCaseSpec | None = None):
+    """Return the small-amplitude complex initial perturbation state, either the pinned Gyaradax cosine-squared profile or a generic phased Maxwellian-weighted profile."""
     spec = spec or TemCaseSpec()
     if spec.initial_condition == "gyaradax_cosine2":
         profile = 1.0e-3 * (jnp.cos(2.0 * jnp.pi * parallel.z) + 1.0)

@@ -78,6 +78,7 @@ class GeometryRequest:
     dtype: str = "float64"
 
     def __post_init__(self) -> None:
+        """Validate coordinate names/ranges, grid size, topology, and dtype."""
         if not self.configuration:
             raise ValueError("geometry configuration must be non-empty")
         if self.radial_coordinate not in _RADIAL_COORDINATES:
@@ -187,6 +188,7 @@ class GeometryMetadata:
     differentiable: bool = False
 
     def __post_init__(self) -> None:
+        """Validate the schema version and metadata coordinate/topology fields."""
         if self.schema_version != GEOMETRY_SCHEMA_VERSION:
             raise ValueError(
                 f"unsupported geometry schema version {self.schema_version}; "
@@ -527,6 +529,7 @@ def load_geometry_result_cache(
 
 
 def _metadata_from_dict(payload: dict) -> GeometryMetadata:
+    """Reconstruct ``GeometryMetadata`` (with nested dataclasses) from a JSON-loaded cache payload."""
     normalization_data = dict(payload["normalization"])
     normalization_data["field_units"] = tuple(
         tuple(item) for item in normalization_data["field_units"]

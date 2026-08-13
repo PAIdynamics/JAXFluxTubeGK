@@ -1170,6 +1170,20 @@ of the legacy benchmark implementation is explicit future work behind stable,
 lazy public facades**. Repository-wide verification after these changes passes
 with **572 tests passed and 25 external tests deselected**.
 
+- [x] Add a Doxygen API reference (`Doxyfile`, `scripts/generate_docs.py`,
+  `docs/api/` gitignored) covering the public solver, geometry-adapter,
+  physics, and optimization modules with real docstrings; `benchmarks.py`
+  and `validation/*` intentionally kept at module-level documentation only,
+  pending the split above.
+- [x] Execute the three geometry-optimization notebooks end to end against
+  their installed live DESC/VMEC++/GVEC providers and commit real outputs;
+  see `STATUS.md` (2026-08-13) for the resulting numbers.
+- [x] Resync `tex/main.tex` with `STATUS.md`'s Priority 5 nonlinear-campaign
+  state and add an "Optimization results" section reporting the live
+  notebook runs and regenerated differentiable-optimization figures; fixed
+  two pre-existing corrupted-byte errors that had left the paper unable to
+  compile.
+
 ## Project Rules
 
 - `jax-fluxtube-gk` must never require a particular sibling-directory layout.

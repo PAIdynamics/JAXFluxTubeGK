@@ -51,6 +51,8 @@ class GvecGeometryProvider:
     revision: str = "unknown"
 
     def __post_init__(self) -> None:
+        """Validate that exactly one of ``state``/``parameter_file`` is given and
+        that ``state_file`` is only used together with ``parameter_file``."""
         if (self.state is None) == (self.parameter_file is None):
             raise ValueError(
                 "GvecGeometryProvider requires exactly one of state or parameter_file"
@@ -59,6 +61,8 @@ class GvecGeometryProvider:
             raise ValueError("GVEC state_file requires parameter_file")
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Evaluate the PEST field line on the GVEC state and return a non-differentiable
+        ``GeometryResult`` in the common physical normalization."""
         if request.radial_coordinate != "rho":
             raise ValueError("GVEC provider currently requires radial_coordinate='rho'")
         if request.parallel_coordinate != "zeta" or request.parallel_coordinate_unit != "radian":
@@ -218,6 +222,7 @@ def gvec_geometry_arrays_from_data(
 
 
 def _array(data, name, shape):
+    """Fetch and squeeze a scalar-field GVEC quantity, broadcasting a 0-d result to ``shape``."""
     value = _value(data, name)
     array = np.asarray(value).squeeze()
     if array.shape == ():
@@ -228,6 +233,7 @@ def _array(data, name, shape):
 
 
 def _vector(data, name, shape):
+    """Fetch a GVEC vector quantity as ``shape + (3,)``, moving a leading component axis if needed."""
     array = np.asarray(_value(data, name)).squeeze()
     expected = shape + (3,)
     if array.shape == (3,) + shape:
@@ -238,6 +244,7 @@ def _vector(data, name, shape):
 
 
 def _scalar(data, name):
+    """Fetch a GVEC quantity and return it as a Python float, requiring a 0-d result."""
     array = np.asarray(_value(data, name)).squeeze()
     if array.shape != ():
         raise ValueError(f"GVEC quantity {name!r} must be scalar; got {array.shape}")
@@ -245,12 +252,14 @@ def _scalar(data, name):
 
 
 def _positive_orientation(flux: float) -> float:
+    """Return ``+1.0``/``-1.0`` for the sign of a nonzero edge flux, used to fix coordinate orientation."""
     if abs(flux) < 1.0e-14:
         raise ValueError("GVEC edge flux must be nonzero to determine coordinate orientation")
     return 1.0 if flux > 0.0 else -1.0
 
 
 def _value(data, name):
+    """Fetch ``name`` from a GVEC data mapping, unwrapping a ``.data`` attribute if present."""
     try:
         value = data[name]
     except (KeyError, TypeError) as exc:
@@ -259,10 +268,12 @@ def _value(data, name):
 
 
 def _dot(left, right):
+    """Pointwise dot product of two ``(n, 3)`` vector arrays, returning shape ``(n,)``."""
     return np.einsum("ij,ij->i", left, right)
 
 
 def _import_gvec():
+    """Lazily import and return the ``gvec`` package."""
     try:
         return importlib.import_module("gvec")
     except ImportError as exc:
@@ -273,6 +284,7 @@ def _import_gvec():
 
 
 def _distribution_version(name):
+    """Look up the installed version of package ``name``, or ``"unknown"`` if not found."""
     try:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:

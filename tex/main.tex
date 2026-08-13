@@ -8,10 +8,14 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{longtable}
+\usepackage{float}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{url}
+\usepackage{siunitx}
+
+\graphicspath{{../figures/}}
 
 \hypersetup{
   colorlinks=true,
@@ -1201,6 +1205,39 @@ whereas the generic scan used a dense oscillatory state.  The
 W7-X distribution is stored.  This distinction matters at finite time for a
 nonnormal spectrum with slowly separating branches.
 
+\subsection{Nonlinear turbulence acceptance status}
+\label{sec:nonlinear-acceptance-status}
+
+The electrostatic nonlinear-turbulence acceptance campaign
+(Sec.~\ref{sec:nonlinear-extension}) is implemented but not scientifically
+closed; this is a compute-evidence gap, not a missing operator.  Three of its
+four gates have passing rungs:
+\begin{itemize}
+  \item a stationary phase-space resolution ladder, \(16{\times}16{\times}8
+  \to 20{\times}20{\times}10\) at fixed Fourier/physics contract, changes the
+  mean local heat-flux proxy by \(3.88\%\), below the \(15\%\) gate;
+  \item a three-lineage ensemble with distinct initialization roots (seed,
+  amplitude, zonal fraction) is stationary with maximum relative deviation
+  \(2.04\%\) from the ensemble mean, below the \(15\%\) gate;
+  \item the bandwidth-preserving domain-convergence ladder is \emph{not}
+  converged: the stationary \(65{\times}33\to129{\times}65\),
+  \(k_{y,\min}=0.0125\to0.00625\) finest-pair change is \(25.65\%\), above the
+  \(15\%\) gate, so a further \(257{\times}129\), \(k_{y,\min}=0.003125\)
+  bandwidth-preserving rung is required;
+  \item independent nonlinear parity against a revision-pinned GX run remains
+  deferred: it needs a CUDA-capable host, which was not available for this
+  campaign.
+\end{itemize}
+The required next domain rung was attempted on a CPU-only development
+workstation and ran for approximately \(19.5\) hours without a solver or
+memory error, but did not reach its checkpoint/report phase before being
+deliberately terminated; no partial artifact was produced or retained.  Both
+remaining gates need external compute this project does not currently have
+access to (a CPU cluster or GPU/CUDA host), not further algorithmic
+development.  Unrestricted equilibrium-shape optimization
+(Sec.~\ref{sec:nonlinear-extension}) is explicitly gated behind all four
+nonlinear-acceptance items and is not attempted before they pass.
+
 \subsection{Optimization status}
 
 The reduced fixed-topology optimization milestone is complete.  The public
@@ -1221,6 +1258,139 @@ difference step.  No equilibrium artifact is stored in the repository.  This
 demonstrates the real MHD provider boundary but does not differentiate through
 VMEC++, claim unrestricted equilibrium-shape optimization, or predict nonlinear
 turbulent heat flux.
+
+\subsection{Optimization results}
+\label{sec:optimization-results}
+
+This section reports two distinct classes of executed optimization evidence.
+The first is a genuine multi-step, end-to-end differentiable optimization on
+analytic circular geometry: every iteration differentiates through the full
+residual, field solve, and time advance via \texttt{jax.grad}.  The second is
+a real MHD-coupled boundary-harmonic scan through the installed DESC, GVEC,
+and VMEC++ providers: a fresh equilibrium is re-solved at each of three
+boundary-scale points and the resulting geometry is fed through the unchanged
+gyrokinetic objective.  The two are not the same claim.  The first exercises
+the differentiable optimizer on a fixed, cheap analytic geometry; the second
+exercises the live equilibrium/geometry/objective pipeline but only as a
+three-point central-difference sensitivity, not a multi-step optimizer, and
+is not a claim of converged shape optimization.  Section~\ref{sec:current-status}
+already documents that end-to-end automatic differentiation \emph{through} a
+live equilibrium solve is a separate, unimplemented milestone; both result
+classes below are consistent with that boundary.
+
+\subsubsection{Differentiable knob optimization}
+
+\texttt{examples/generate\_optimization\_figures.py} runs three
+\(1000\)-iteration gradient-descent cases (\(A\), \(B\), \(C\)) that minimize
+\(\tfrac12(\gamma_{\text{obj}}-\gamma_{\text{target}})^2\) with
+\(\gamma_{\text{target}}=0\) (drive to marginal stability) by differentiating
+through \(q\), \(\hat s\), \(R/L_n\), \(R/L_T\), and the other circular-geometry
+knobs in \texttt{OptimizationKnobs}.  Case \(A\) targets a single selected
+\(k_y\) branch on a two-mode grid; case \(B\) targets a single selected branch
+on a three-mode grid with a different starting equilibrium; case \(C\) targets
+the differentiable soft/hard maximum over the nonzonal branches
+(\texttt{scalar\_mode="max\_nonzonal"}) rather than one fixed mode index.  All
+three converge:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Case & Initial \(|\text{obj.\ error}|\) & Final \(|\text{obj.\ error}|\) & \(q\): initial\(\to\)final & \(\hat s\): initial\(\to\)final \\
+\midrule
+A & \(6.47\times10^{-3}\) & \(3.78\times10^{-8}\) & \(1.250\to1.261\) & \(0.450\to0.448\) \\
+B & \(7.85\times10^{-2}\) & \(<10^{-12}\) & \(1.350\to1.371\) & \(0.650\to0.661\) \\
+C & \(6.72\times10^{-2}\) & \(<10^{-12}\) & \(1.450\to1.468\) & \(0.750\to0.759\) \\
+\bottomrule
+\end{tabular}
+\caption{Reduced circular-geometry gradient-descent cases: absolute objective
+error and geometry-knob drift from \(1000\) \texttt{jax.value\_and\_grad}
+steps at learning rate \(10^{-3}\).  Case A's selected-\(k_y\) growth rate
+moves from \(1.138\times10^{-1}\) to \(2.748\times10^{-4}\); case C's
+differentiable nonzonal maximum reaches its zero target while the specific
+selected branch (index 1, not the arg-max) settles at a distinct, more stable
+value \(-3.166\times10^{-1}\), showing the soft-maximum objective correctly
+tracks the least-stable branch rather than a fixed mode index.}
+\label{tab:optimization-cases}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{optimization_objectives.pdf}
+\caption{Absolute objective error versus iteration for cases A--C (log
+scale).  All three cases converge monotonically to within numerical noise of
+the marginal-stability target.}
+\label{fig:optimization-objectives}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{optimization_growth_rates.pdf}
+\caption{Selected-mode and nonzonal-maximum growth-rate change relative to
+each case's initial value.  Case C shows the distinct selected-branch and
+max-nonzonal-branch trajectories referenced in
+Table~\ref{tab:optimization-cases}.}
+\label{fig:optimization-growth-rates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{optimization_geometry_knobs.pdf}
+\caption{Safety-factor \(q\) and magnetic-shear \(\hat s\) drift from their
+initial values under the gradient-descent update.  Knob changes stay small
+(a few percent) over the full trajectory, consistent with driving toward a
+nearby marginal-stability point rather than an unconstrained large excursion.}
+\label{fig:optimization-geometry-knobs}
+\end{figure}
+
+\subsubsection{Live-provider design-loop results}
+
+Each of the three geometry-optimization notebooks
+(\path{examples/desc_geometry_optimization.ipynb},
+\path{examples/gvec_geometry_optimization.ipynb},
+\path{examples/vmecpp_geometry_optimization.ipynb}) was executed end to end
+against its installed live provider: DESC's named \texttt{DSHAPE}
+configuration, VMEC++'s named \texttt{w7x-standard} configuration, and GVEC's
+tracked VMEC-initialized W7-X parameterization.  Each notebook scales one
+boundary Fourier harmonic by \(\{1-\delta,1,1+\delta\}\), re-solves the
+equilibrium at every scale, reconstructs the flux-tube geometry, and
+re-evaluates the unchanged reduced gyrokinetic objective, verifying fixed
+optimization topology between solves with
+\texttt{assert\_fixed\_optimization\_topology}.
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllrrr}
+\toprule
+Provider & Harmonic & Scale \(\delta\) & Growth rate & Frequency & Central-diff.\ sensitivity \\
+\midrule
+DESC & \(R_{2,0}\) & \(0.01\) &
+  \(0.15295\to0.15287\) & \(-0.0928\to-0.0907\) & \(-4.14\times10^{-3}\) \\
+GVEC & \(X1^{\cos}_{1,1}\) & \(0.005\) &
+  \(0.27422\to0.27414\) & \(-0.0498\to-0.0498\) & \(-7.63\times10^{-3}\) \\
+VMEC++ & \((m,n)=(1,0)\) & \(0.005\) &
+  \(-0.21841\to-0.22166\) & \(0.1155\to0.1160\) & \(-3.26\times10^{-1}\) \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Live-provider boundary-harmonic scans.  ``Growth rate''/``Frequency''
+span the three evaluated scale points \(1-\delta\) to \(1+\delta\); the
+central-difference sensitivity is \((\text{obj.}(1+\delta)-\text{obj.}(1-\delta))/(2\delta)\)
+of the scalar reduced-growth objective.  GVEC's minimizer was run at a bounded
+\texttt{MaxIter=100} and did not reach its force-tolerance criterion
+(\(|\text{force}|\approx2.3\times10^{-3}\) against a \(10^{-8}\) target) at any
+of the three scales, so its geometry is a diagnostic near-equilibrium, not a
+converged one -- consistent with each notebook's own framing of this scan as
+an interface/sensitivity demonstration rather than an accepted design point.}
+\label{tab:live-provider-scans}
+\end{table}
+
+None of the three scans differentiates through the equilibrium solve itself;
+each is an outer-loop, finite-difference sensitivity through independently
+re-solved equilibria, matching the ``Outer loop (available now)'' path
+described in the notebooks rather than the deferred end-to-end automatic-
+differentiation path.
 
 \subsection{Production criteria}
 
@@ -1270,13 +1440,13 @@ statistically stationary heat flux, resolution and box-size convergence, and
 independent-code parity.
 
 For a collocation-space state, the implemented electrostatic heat response is
-egin{equation}
+\begin{equation}
   \mathcal{Q}_{s,\mathbf{k}}(z)
   = \int d^3v\,J_{0,s}\,T_s
     \left(\mathcal{E}_s-\frac{3}{2}\right)f_{s,\mathbf{k}},
-end{equation}
+\end{equation}
 and its radial spectral contribution is proportional to
-(k_y\operatorname{Im}[\phi_{\mathbf{k}}^*\mathcal{Q}_{s,\mathbf{k}}]).
+\(k_y\operatorname{Im}[\phi_{\mathbf{k}}^*\mathcal{Q}_{s,\mathbf{k}}]\).
 The velocity integral uses the same discrete measure as the field solve.  This
 defines the evolved-state diagnostic but does not replace the stationarity,
 resolution, domain-size, and independent-code gates.
@@ -1303,18 +1473,18 @@ differentiable model-collision foundation, not a replacement for a validated
 Landau/Fokker--Planck operator with inter-species exchange.
 
 The finite-difference Fokker--Planck development path also retains the ordered
-test-particle contributions (C_{ab}[f_a]).  Its experimental pairwise
-completion groups (C_{ab}[f_a]) and (C_{ba}[f_b]), then applies a discrete
+test-particle contributions \(C_{ab}[f_a]\).  Its experimental pairwise
+completion groups \(C_{ab}[f_a]\) and \(C_{ba}[f_b]\), then applies a discrete
 projection for the two density constraints and the pair's combined physical
 parallel-momentum and energy constraints.  Consequently, the directed
 contributions satisfy
-egin{equation}
-  int C_{ab}^{\mathrm{pair}}\,d^3v = 0,
+\begin{equation}
+  \int C_{ab}^{\mathrm{pair}}\,d^3v = 0,
   \qquad
   \sum_{s\in\{a,b\}} \int
   \begin{pmatrix}p_{\parallel,s}\\ E_s\end{pmatrix}
   C_{s\bar{s}}^{\mathrm{pair}}\,d^3v = 0.
-end{equation}
+\end{equation}
 This creates reciprocal cross-species data flow and a pairwise conservation
 contract.  It is not the Laguerre--Legendre field-particle response used by
 stella and must not be described as a validated Landau operator until its

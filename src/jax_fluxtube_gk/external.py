@@ -9,12 +9,15 @@ import subprocess
 
 @dataclass(frozen=True)
 class ExternalPathProvenance:
+    """Resolved location of an external path, plus its enclosing git repo root and revision if any."""
+
     path: Path
     git_root: Path | None
     revision: str | None
 
 
 def external_path_provenance(path: str | Path) -> ExternalPathProvenance:
+    """Resolve path and, if it sits inside a git checkout, record that repo's root and HEAD revision."""
     resolved = Path(path).expanduser().resolve()
     anchor = resolved if resolved.is_dir() else resolved.parent
     result = subprocess.run(
@@ -32,6 +35,7 @@ def external_path_provenance(path: str | Path) -> ExternalPathProvenance:
 
 
 def announce_external_path(label: str, path: str | Path) -> ExternalPathProvenance:
+    """Print the resolved path and git revision for an external dependency, and return its provenance."""
     provenance = external_path_provenance(path)
     revision = provenance.revision or "unversioned"
     print(f"external {label}: {provenance.path} @ {revision}")

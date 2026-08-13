@@ -10,6 +10,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class NonlinearHeatFluxRecord:
+    """Stationarity-window statistics for a single nonlinear heat-flux run."""
+
     producer: str
     normalization: str
     mean: float
@@ -56,6 +58,7 @@ class NonlinearHeatFluxEnsembleReport:
 
 
 def load_nonlinear_heat_flux_record(path: str | Path) -> NonlinearHeatFluxRecord:
+    """Load and validate a schema-version-1 nonlinear heat-flux JSON report into a record."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("schema_version") != 1:
         raise ValueError("nonlinear heat-flux report must use schema version 1")
@@ -250,6 +253,7 @@ def compare_nonlinear_heat_flux_ensemble(
 
 
 def _validate_heat_flux_record(record: NonlinearHeatFluxRecord) -> None:
+    """Raise ValueError unless the record's provenance and statistics are well-formed and finite."""
     if not isinstance(record.producer, str) or not record.producer.strip():
         raise ValueError("nonlinear heat-flux record requires a producer")
     if not isinstance(record.normalization, str) or not record.normalization.strip():

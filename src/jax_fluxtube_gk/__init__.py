@@ -874,6 +874,7 @@ _VALIDATION_COMPAT_NAMES = frozenset(
 
 
 def __getattr__(name: str):
+    """Lazily resolve legacy validation-module attribute names via PEP 562 module-level access."""
     if name not in _VALIDATION_COMPAT_NAMES:
         raise AttributeError(name)
     from .validation._lazy import benchmark_symbol

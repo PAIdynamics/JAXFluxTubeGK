@@ -20,6 +20,7 @@ class VelocityBackendDecision:
     limitations: str
 
     def __post_init__(self) -> None:
+        """Validate that maturity is one of the recognized readiness levels."""
         if self.maturity not in ("production", "validated_specialist", "experimental"):
             raise ValueError("unsupported velocity-backend maturity")
 

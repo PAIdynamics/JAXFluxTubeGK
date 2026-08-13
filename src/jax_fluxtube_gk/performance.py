@@ -194,6 +194,7 @@ def format_bytes(nbytes: int) -> str:
 
 
 def _validate_dimensions(n_species, n_vpar, n_mu, n_z, n_kx, n_ky, n_steps):
+    """Raise ValueError unless all grid sizes are positive and n_steps is nonnegative."""
     for name, value in (
         ("n_species", n_species),
         ("n_vpar", n_vpar),
@@ -209,6 +210,7 @@ def _validate_dimensions(n_species, n_vpar, n_mu, n_z, n_kx, n_ky, n_steps):
 
 
 def _dtype_sizes(complex_dtype, real_dtype):
+    """Return (complex itemsize, real itemsize, real dtype name), inferring real_dtype if unset."""
     complex_dtype = np.dtype(complex_dtype)
     if real_dtype is None:
         real_dtype = np.float64 if complex_dtype.itemsize == 16 else np.float32
@@ -217,6 +219,7 @@ def _dtype_sizes(complex_dtype, real_dtype):
 
 
 def _complex_dtype_for(dtype) -> str:
+    """Return the matching complex dtype name for a real dtype, or dtype's own name if already complex."""
     dtype = np.dtype(dtype)
     if np.issubdtype(dtype, np.complexfloating):
         return dtype.name
@@ -224,6 +227,7 @@ def _complex_dtype_for(dtype) -> str:
 
 
 def _state_shape(n_species, n_vpar, n_mu, n_z, n_kx, n_ky):
+    """Return the distribution array shape, prefixing a species axis only when n_species > 1."""
     shape = (n_vpar, n_mu, n_z, n_kx, n_ky)
     if n_species == 1:
         return shape
@@ -231,14 +235,17 @@ def _state_shape(n_species, n_vpar, n_mu, n_z, n_kx, n_ky):
 
 
 def _num_elements(shape):
+    """Return the total element count for an array shape."""
     return int(np.prod(shape, dtype=np.int64))
 
 
 def _history_state_count(n_steps: int, store_history: bool):
+    """Return the number of stored states: all n_steps+1 snapshots, or just the two endpoints."""
     return n_steps + 1 if store_history else 2
 
 
 def _estimated_coefficient_bytes(n_species, n_vpar, n_mu, n_z, n_kx, n_ky, real_itemsize):
+    """Estimate the byte footprint of precomputed RHS coefficients (operators, FLR, drift, streaming terms)."""
     operator_terms = n_z * n_z + n_vpar * n_vpar + n_ky + n_z + n_species + n_kx * n_ky
     flr_terms = 2 * n_species * n_mu * n_z * n_kx * n_ky
     flr_terms += 2 * n_species * n_z * n_kx * n_ky

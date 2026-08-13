@@ -131,6 +131,7 @@ def dense_eigensystem(matrix_or_action, template=None, *, max_size: int | None =
 
 
 def _operator_dtype(template, dtype):
+    """Return dtype if given, else the complex dtype matching template's real precision."""
     if dtype is not None:
         return jnp.dtype(dtype)
     real_dtype = jnp.asarray(template).real.dtype

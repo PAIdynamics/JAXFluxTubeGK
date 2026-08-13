@@ -36,6 +36,7 @@ class EikData:
     header: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
+        """Validate ``theta`` and all per-node fields, casting them to finite NumPy arrays."""
         theta = np.asarray(self.theta, dtype=float)
         if theta.ndim != 1 or theta.size < 2:
             raise ValueError("eik theta must be one-dimensional with at least two nodes")
@@ -74,6 +75,7 @@ class EikGeometryProvider:
     revision: str = "unknown"
 
     def __post_init__(self) -> None:
+        """Validate ``iota``, ``shear``, ``nfp``, and provenance strings."""
         if not np.isfinite(self.iota) or self.iota == 0.0:
             raise ValueError("eik provider iota must be finite and non-zero")
         if not np.isfinite(self.shear):
@@ -84,6 +86,8 @@ class EikGeometryProvider:
             raise ValueError("eik provider version and revision must be non-empty")
 
     def get_geometry(self, request: GeometryRequest) -> GeometryResult:
+        """Load and resample the eik table onto the requested grid and build a
+        non-differentiable ``GeometryResult``."""
         if request.topology != "periodic":
             raise ValueError("eik provider currently requires periodic topology")
         if request.parallel_coordinate_unit != "radian":
@@ -205,10 +209,12 @@ def resample_eik_data(data: EikData, theta) -> EikData:
 
 
 def _request_z(request: GeometryRequest) -> np.ndarray:
+    """Build the endpoint-excluded parallel-coordinate array requested by ``request``."""
     return np.linspace(request.z_min, request.z_max, request.n_z, endpoint=False, dtype=float)
 
 
 def _load_block_eik(path: Path, text: str) -> EikData:
+    """Parse the labelled multi-block eik layout (four separate field blocks) into ``EikData``."""
     lines = text.splitlines()
     header = _first_numeric_row(lines)
     if len(header) < 8:
@@ -243,6 +249,7 @@ def _load_block_eik(path: Path, text: str) -> EikData:
 
 
 def _numeric_rows(path: Path) -> list[list[float]]:
+    """Parse each non-blank, non-comment line of ``path`` as a row of floats, skipping bad lines."""
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
@@ -256,6 +263,7 @@ def _numeric_rows(path: Path) -> list[list[float]]:
 
 
 def _first_numeric_row(lines: list[str]) -> list[float]:
+    """Return the first line that parses entirely as floats, used as the block header row."""
     for line in lines:
         try:
             row = [float(value) for value in line.split()]
@@ -272,6 +280,8 @@ def _parse_block(
     expected_rows: int,
     expected_columns: int,
 ) -> np.ndarray:
+    """Read ``expected_rows`` numeric rows of ``expected_columns`` values following the
+    line matching ``label`` exactly."""
     try:
         start = next(index for index, line in enumerate(lines) if line.strip() == label)
     except StopIteration as exc:

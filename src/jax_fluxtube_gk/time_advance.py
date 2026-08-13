@@ -27,6 +27,7 @@ class TimeAdvanceResult(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("n_steps",)
 
     def __post_init__(self):
+        """Validate that n_steps is nonnegative."""
         if self.n_steps < 0:
             raise ValueError("n_steps must be nonnegative")
 
@@ -465,6 +466,8 @@ def implicit_parallel_streaming_step(state, propagator):
 
 
 def _integrate_fixed_step_endpoints(state, dt, n_steps: int, rhs_fn, *rhs_args, filter_fn=None):
+    """Advance state by n_steps RK4 steps in a fori_loop, recording only the initial and final states."""
+
     def body(_index, carry):
         return rk4_step(carry, dt, rhs_fn, *rhs_args, filter_fn=filter_fn)
 
@@ -945,12 +948,14 @@ def _electromagnetic_field_response_radius(precompute):
 
 
 def _apply_filter(state, filter_fn):
+    """Apply filter_fn to state if provided, otherwise return state unchanged."""
     if filter_fn is None:
         return state
     return filter_fn(state)
 
 
 def _apply_modal_factor(values, axis: int, transform, inverse_transform, factor):
+    """Transform values to modal space along axis, scale by factor, and transform back."""
     coefficients = _apply_matrix_along_axis(transform, values, axis)
     shape = [1] * coefficients.ndim
     shape[axis] = factor.shape[0]
@@ -959,6 +964,7 @@ def _apply_modal_factor(values, axis: int, transform, inverse_transform, factor)
 
 
 def _apply_matrix_along_axis(matrix, values, axis: int):
+    """Contract matrix against values along the given axis, moving that axis to the front and back."""
     values = jnp.asarray(values)
     matrix = jnp.asarray(matrix)
     moved = jnp.moveaxis(values, axis, 0)
@@ -967,11 +973,13 @@ def _apply_matrix_along_axis(matrix, values, axis: int):
 
 
 def _modal_damping_factor(n: int, dt, rate: float, order: int, backend: str):
+    """Return per-mode exponential damping factors exp(-dt*rate*relative_index**order)."""
     relative = _relative_modal_index(n, backend)
     return jnp.exp(-jnp.asarray(dt) * jnp.asarray(rate) * relative**order)
 
 
 def _relative_modal_index(n: int, backend: str):
+    """Return each mode's index normalized to [0, 1], folded around Nyquist for the fourier backend."""
     if n < 1:
         raise ValueError("modal dimension must be positive")
     indices = jnp.arange(n, dtype=jnp.float64)
@@ -984,6 +992,7 @@ def _relative_modal_index(n: int, backend: str):
 
 
 def _phase_space_axes(ndim: int):
+    """Return the (vpar, mu, z) axis positions for a 5D state or 6D species-batched state."""
     if ndim == 5:
         return 0, 1, 2
     if ndim == 6:
@@ -995,12 +1004,14 @@ def _phase_space_axes(ndim: int):
 
 
 def _z_weights(field, w_z):
+    """Return w_z as an array matching field's dtype, or uniform unit weights if w_z is None."""
     if w_z is None:
         return jnp.ones((field.shape[0],), dtype=field.real.dtype)
     return jnp.asarray(w_z, dtype=field.real.dtype)
 
 
 def _mode_chain_mask(n_kx: int, n_ky: int, connectivity: ModeConnectivity | None, dtype):
+    """Return a (kx, ky) mask selecting modes on the same connectivity chain as the ky=0 mode, or all ones."""
     if connectivity is None:
         return jnp.ones((n_kx, n_ky), dtype=dtype)
     labels = jnp.asarray(connectivity.mode_label)

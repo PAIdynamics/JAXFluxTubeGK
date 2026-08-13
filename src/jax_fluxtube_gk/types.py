@@ -36,12 +36,14 @@ class _PyTreeDataclass:
     _static_fields: ClassVar[tuple[str, ...]] = ()
 
     def tree_flatten(self):
+        """Implement the JAX PyTree contract: split into dynamic leaves and static aux data."""
         leaves = tuple(getattr(self, name) for name in self._dynamic_fields)
         aux = tuple((name, getattr(self, name)) for name in self._static_field_names())
         return leaves, aux
 
     @classmethod
     def tree_unflatten(cls, aux, leaves):
+        """Implement the JAX PyTree contract: rebuild an instance from aux data and leaves."""
         values = {name: value for name, value in aux}
         values.update(zip(cls._dynamic_fields, leaves, strict=True))
         obj = cls.__new__(cls)
@@ -51,6 +53,7 @@ class _PyTreeDataclass:
 
     @classmethod
     def _static_field_names(cls) -> tuple[str, ...]:
+        """Return dataclass field names treated as static aux data (explicit or not dynamic)."""
         explicit_static = set(cls._static_fields)
         dynamic = set(cls._dynamic_fields)
         declared = tuple(field.name for field in fields(cls))
@@ -81,6 +84,7 @@ class SpeciesParams(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("kinetic",)
 
     def __post_init__(self):
+        """Validate that charge, mass, density, and temperature are physically admissible."""
         if self.charge == 0:
             raise ValueError("charge must be nonzero")
         if self.mass <= 0:
@@ -109,6 +113,7 @@ class SolverControls(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Normalize derivative_backend to a validated DerivativeBackend value."""
         backend = DerivativeBackend(self.derivative_backend)
         object.__setattr__(self, "derivative_backend", backend.value)
 
@@ -126,6 +131,7 @@ class GeometryScalarParams(_PyTreeDataclass):
     _dynamic_fields: ClassVar[tuple[str, ...]] = ("q", "shat", "eps", "iota")
 
     def __post_init__(self):
+        """Validate that eps, q, and iota are positive."""
         if self.eps <= 0:
             raise ValueError("eps must be positive")
         if self.q <= 0:
@@ -156,6 +162,7 @@ class VelocityGridSpec(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Normalize the backend choice and validate grid sizes and extents."""
         backend = DerivativeBackend(self.backend)
         object.__setattr__(self, "backend", backend.value)
         if backend not in (DerivativeBackend.CHEBYSHEV, DerivativeBackend.FINITE_DIFFERENCE):
@@ -192,6 +199,7 @@ class ParallelGridSpec(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Normalize topology/backend, defaulting backend by topology, and validate consistency."""
         topology = ParallelTopology(self.topology)
         object.__setattr__(self, "topology", topology.value)
         if self.n_z < 2:
@@ -245,6 +253,7 @@ class FourierGridSpec(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Validate mode counts/extents and normalize ky_values against ky_max/shear spacing."""
         if self.n_kx < 1 or self.n_kx % 2 == 0:
             raise ValueError("n_kx must be a positive odd integer")
         if self.n_ky < 1:

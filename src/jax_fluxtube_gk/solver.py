@@ -52,6 +52,7 @@ class LinearResidualPrecompute(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("field_model", "n_species")
 
     def __post_init__(self):
+        """Validate field_model choice and n_species."""
         if self.field_model not in ("adiabatic", "kinetic", "electromagnetic"):
             raise ValueError("field_model must be 'adiabatic', 'kinetic', or 'electromagnetic'")
         if self.n_species < 1:
@@ -235,14 +236,17 @@ def implicit_parallel_response_step(
 
 
 def _apply_parallel_left_inverse(distribution, left_inverse):
+    """Apply the per-v_parallel Schur-complement left-inverse matrix along the parallel (z) axis."""
     return jnp.einsum("vij,vmjxy->vmixy", left_inverse, distribution)
 
 
 def _apply_parallel_matrix(distribution, matrix):
+    """Apply a per-v_parallel operator matrix along the parallel (z) axis of the distribution."""
     return jnp.einsum("vij,vmjxy->vmixy", matrix, distribution)
 
 
 def _implicit_parallel_streaming(distribution, response):
+    """Compute the implicit parallel-streaming contribution using the precomputed derivative operator."""
     differentiated = _apply_parallel_matrix(distribution, response.derivative)
     return -response.streaming_coefficient[:, None, :, None, None] * differentiated
 
@@ -254,6 +258,7 @@ def _implicit_parallel_field_drive(
     streaming_coefficient,
     field_maxwellian,
 ):
+    """Compute the implicit parallel-streaming contribution driven by the gyroaveraged field phi."""
     rhs = precompute.rhs
     gyro_phi = rhs.flr_factors.bessel_j0[0] * phi[None, :, :, :]
     differentiated = jnp.einsum("vij,mjxy->vmixy", derivative, gyro_phi)
@@ -519,6 +524,7 @@ def jitted_linear_residual(distribution, precomputed: LinearResidualPrecompute):
 
 
 def _solve_phi(distribution, precompute: LinearResidualPrecompute):
+    """Solve for the electrostatic potential using the field model recorded in precompute."""
     if precompute.field_model == "adiabatic":
         return solve_adiabatic_electron_phi(distribution, precompute.field)
     if precompute.field_model == "kinetic":
@@ -529,6 +535,7 @@ def _solve_phi(distribution, precompute: LinearResidualPrecompute):
 
 
 def _coerce_precompute(geometry, params, precomputed):
+    """Resolve a linear residual precompute from an explicit value or a legacy positional argument."""
     if precomputed is not None:
         return precomputed
     if isinstance(geometry, (LinearResidualPrecompute, LinearRHSPrecompute)):
@@ -539,6 +546,7 @@ def _coerce_precompute(geometry, params, precomputed):
 
 
 def _normalize_field_model(field_model: str) -> str:
+    """Validate field_model is one of the supported names and return it unchanged."""
     if field_model not in ("adiabatic", "kinetic", "electromagnetic"):
         raise ValueError("field_model must be 'adiabatic', 'kinetic', or 'electromagnetic'")
     return field_model

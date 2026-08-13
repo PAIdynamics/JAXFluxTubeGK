@@ -284,6 +284,7 @@ def solve_field_from_state(state, precomputed: LinearResidualPrecompute):
 
 
 def _z_weights(field, w_z):
+    """Return w_z as an array matching field's dtype, or uniform unit weights if w_z is None."""
     if w_z is None:
         return jnp.ones((field.shape[0],), dtype=field.real.dtype)
     return jnp.asarray(w_z, dtype=field.real.dtype)

@@ -115,6 +115,17 @@ changing solver construction. Details are in the
 - [Current validation status](STATUS.md)
 - [Prioritized backlog](TODO.md)
 
+Generate a browsable Doxygen API reference (module index, class graphs, and
+call graphs) with:
+
+```bash
+uv run python scripts/generate_docs.py --open
+```
+
+This requires `doxygen` and, for graphs, `graphviz` (`dot`) on `PATH`. Output
+goes to `docs/api/html/` and is not tracked in git; rebuild it locally or in
+CI whenever you want an up-to-date reference.
+
 ## Repository layout
 
 ```text

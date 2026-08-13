@@ -33,6 +33,7 @@ class BenchmarkTarget(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Validate tolerance and coerce reference_value/metadata to canonical array/tuple form."""
         if self.tolerance <= 0:
             raise ValueError("tolerance must be positive")
         object.__setattr__(

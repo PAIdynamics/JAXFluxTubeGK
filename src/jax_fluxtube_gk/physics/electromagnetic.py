@@ -360,6 +360,8 @@ def solve_electromagnetic_fields(
 
 
 def _safe_denominator(precompute: ParallelAmperePrecompute):
+    """Return the floor-regularized parallel Ampere denominator from `precompute`."""
+
     return _safe_field_denominator(precompute.denominator, precompute.denominator_floor)
 
 
@@ -392,6 +394,8 @@ def _parallel_current_numerator(distribution, source_weight):
 
 
 def _safe_field_denominator(denominator, denominator_floor):
+    """Replace near-zero entries of `denominator` with a sign-preserving floor value."""
+
     denominator = jnp.asarray(denominator)
     floor = jnp.asarray(denominator_floor, dtype=denominator.real.dtype)
     sign = jnp.where(jnp.real(denominator) < 0.0, -1.0, 1.0)
@@ -400,6 +404,8 @@ def _safe_field_denominator(denominator, denominator_floor):
 
 
 def _with_species_axis(values, n_species: int):
+    """Return `values` with a leading species axis, inserting one for a single implicit species."""
+
     values = jnp.asarray(values)
     if values.ndim == 5 and n_species == 1:
         return values[None, ...]

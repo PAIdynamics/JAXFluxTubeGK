@@ -51,6 +51,8 @@ def bessel_j0(x):
 
 @bessel_j0.defjvp
 def _bessel_j0_jvp(primals, tangents):
+    """Return ``bessel_j0(x)`` and its tangent using ``d/dx J_0(x) = -J_1(x)``."""
+
     (x,) = primals
     (x_dot,) = tangents
     return bessel_j0(x), -_bessel_j1(x) * x_dot
@@ -69,6 +71,8 @@ def bessel_j1_hat(x):
 
 @bessel_j1_hat.defjvp
 def _bessel_j1_hat_jvp(primals, tangents):
+    """Return ``bessel_j1_hat(x)`` and its tangent, with a series limit at ``x=0``."""
+
     (x,) = primals
     (x_dot,) = tangents
     ax = jnp.abs(x)
@@ -94,6 +98,8 @@ def _nonnegative_sqrt(x):
 
 @_nonnegative_sqrt.defjvp
 def _nonnegative_sqrt_jvp(primals, tangents):
+    """Return ``_nonnegative_sqrt(x)`` and its tangent, zeroed for ``x <= 0``."""
+
     (x,) = primals
     (x_dot,) = tangents
     y = _nonnegative_sqrt(x)
@@ -267,6 +273,8 @@ def parallel_streaming_coefficient(vpar, F, species: SpeciesParams | tuple[Speci
 
 
 def _bessel_j0_small(x):
+    """Return the Cephes-style rational polynomial approximation of ``J_0(x)`` for ``|x| < 8``."""
+
     y = x * x
     numerator = 57568490574.0 + y * (
         -13362590354.0
@@ -279,6 +287,8 @@ def _bessel_j0_small(x):
 
 
 def _bessel_j0_large(ax):
+    """Return the Cephes-style asymptotic (large-argument) approximation of ``J_0(ax)`` for ``ax >= 8``."""
+
     z = 8.0 / ax
     y = z * z
     phase = ax - 0.785398164
@@ -296,6 +306,8 @@ def _bessel_j0_large(ax):
 
 
 def _bessel_j1(x):
+    """Evaluate ``J_1(x)`` by blending a small-``x`` series with the small/large branch approximations."""
+
     x = jnp.asarray(x)
     ax = jnp.abs(x)
     y = x * x
@@ -309,6 +321,8 @@ def _bessel_j1(x):
 
 
 def _bessel_j1_small(x):
+    """Return the Cephes-style rational polynomial approximation of ``J_1(x)`` for ``|x| < 8``."""
+
     y = x * x
     numerator = x * (
         72362614232.0
@@ -322,6 +336,8 @@ def _bessel_j1_small(x):
 
 
 def _bessel_j1_large(ax):
+    """Return the Cephes-style asymptotic (large-argument) approximation of ``J_1(ax)`` for ``ax >= 8``."""
+
     z = 8.0 / ax
     y = z * z
     phase = ax - 2.356194491
@@ -339,6 +355,8 @@ def _bessel_j1_large(ax):
 
 
 def _velocity_3d(vpar, mu, B):
+    """Broadcast ``vpar``, ``mu``, and ``B`` onto ``(v, mu, z)`` grids."""
+
     return (
         jnp.asarray(vpar)[:, None, None],
         jnp.asarray(mu)[None, :, None],
@@ -347,6 +365,8 @@ def _velocity_3d(vpar, mu, B):
 
 
 def _velocity_5d(vpar, mu, B):
+    """Broadcast ``vpar``, ``mu``, and ``B`` onto ``(v, mu, z, kx, ky)`` grids."""
+
     return (
         jnp.asarray(vpar)[:, None, None, None, None],
         jnp.asarray(mu)[None, :, None, None, None],
@@ -355,6 +375,8 @@ def _velocity_5d(vpar, mu, B):
 
 
 def _kdot_geometry(D_x, D_y, kx, ky):
+    """Return ``kx D_x + ky D_y`` broadcast onto ``(v, mu, z, kx, ky)`` grids."""
+
     D_x_b = jnp.asarray(D_x)[None, None, :, None, None]
     D_y_b = jnp.asarray(D_y)[None, None, :, None, None]
     kx_b = jnp.asarray(kx)[None, None, None, :, None]
@@ -363,9 +385,13 @@ def _kdot_geometry(D_x, D_y, kx, ky):
 
 
 def _species_array(species: tuple[SpeciesParams, ...], name: str, ndim: int):
+    """Stack the named scalar attribute across ``species`` and reshape for broadcasting over ``ndim`` axes."""
+
     values = jnp.asarray([getattr(item, name) for item in species])
     return jnp.reshape(values, (values.shape[0],) + (1,) * (ndim - 1))
 
 
 def _nonzero_charge(species: SpeciesParams):
+    """Return the species charge ``Z_s`` as an array, for use as a nonzero divisor."""
+
     return jnp.asarray(species.charge)

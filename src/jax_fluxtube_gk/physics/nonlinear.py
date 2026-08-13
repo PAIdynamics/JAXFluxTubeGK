@@ -163,6 +163,8 @@ def estimate_nonlinear_exb_dt(
 
 
 def _expand_half_spectrum(values, precompute: ExBPseudospectralPrecompute):
+    """Reconstruct the full padded Fourier plane from the retained Hermitian half spectrum."""
+
     values = jnp.asarray(values)
     if values.shape[-2:] != (precompute.n_kx, precompute.n_ky):
         raise ValueError("last two array dimensions must match the retained Fourier grid")
@@ -179,6 +181,8 @@ def _expand_half_spectrum(values, precompute: ExBPseudospectralPrecompute):
 
 
 def _odd_ceiling(value: float) -> int:
+    """Return the smallest odd integer at least `value`."""
+
     result = int(np.ceil(value))
     return result if result % 2 else result + 1
 

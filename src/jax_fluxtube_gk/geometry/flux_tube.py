@@ -37,6 +37,7 @@ class BoozerSurface(_PyTreeDataclass):
     )
 
     def __post_init__(self):
+        """Validate mode/coefficient consistency and cast fields to JAX arrays."""
         if self.field_periods < 1:
             raise ValueError("field_periods must be at least 1")
         if self.radial_coordinate not in ("rho", "psi", "x"):
@@ -68,6 +69,7 @@ class FieldLineSpec(_PyTreeDataclass):
     _static_fields: ClassVar[tuple[str, ...]] = ("radial_coordinate",)
 
     def __post_init__(self):
+        """Validate the radial coordinate name and bound ``rho``/``x`` to ``[0, 1]``."""
         if self.radial_coordinate not in ("rho", "psi", "x"):
             raise ValueError("radial_coordinate must be 'rho', 'psi', or 'x'")
         if self.radial_coordinate in ("rho", "x") and not 0.0 <= self.rho <= 1.0:
@@ -545,6 +547,7 @@ def map_physical_to_internal_geometry(
 
 
 def _coerce_geometry_array(name: str, value, shape: tuple[int, ...]):
+    """Cast ``value`` to a JAX array, broadcasting scalars to ``shape`` or validating it."""
     array = jnp.asarray(value)
     if array.shape == ():
         return jnp.broadcast_to(array, shape)
