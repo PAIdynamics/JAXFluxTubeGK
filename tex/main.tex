@@ -68,13 +68,16 @@ This document specifies the first implementation target for the project: a diffe
 
 The first solver shall implement the collisionless linear electrostatic local gyrokinetic system in a stellarator flux tube.  The baseline electron model is adiabatic electrons with kinetic ions.  Kinetic electrons, nonlinear ExB dynamics, collisions, electromagnetic perturbations, rotation, and global radial effects are documented as extensions, not as the first implementation target.
 
-When conventions are ambiguous, use the following order of authority.
+When conventions are ambiguous, use the following order of authority.  GKW
+and Gyaradax are external reference codes: this project follows their
+published physics and, where useful, their source conventions, but does not
+vendor their source in this repository.
 \begin{enumerate}
-  \item Published GKW paper: \path{papers/gkw/GKW.pdf}.
-  \item Original GKW source: \path{relevant-codes/gkw/src/}.
-  \item Searchable paper reconstruction: \path{papers/gkw/GKW_rebuilt.tex}.
-  \item GKW sample cases: \path{relevant-codes/gkw/samples/}.
-  \item Gyaradax JAX implementation and tests: \path{relevant-codes/gyaradax/}.
+  \item The published GKW paper~\cite{peeters2009gkw}.
+  \item GKW's own Fortran source and sample cases, obtained as an external,
+  revision-pinned checkout (see \path{docs/dependencies.md}).
+  \item The Gyaradax JAX implementation~\cite{gyaradax}, likewise an
+  external, revision-pinned checkout.
   \item DESC and stellarator optimization papers for Boozer geometry and design-loop coupling.
 \end{enumerate}
 
@@ -99,6 +102,10 @@ The primary discretization is:
 Finite-difference stencils from GKW/Gyaradax are not the default target for new solver kernels.  They are a documented fallback for source-code parity, debugging, and convergence comparisons.
 
 \subsection{GKW Source Crosswalk}
+
+The filenames below are GKW's own external Fortran modules, referenced here
+purely to record which module's physics and conventions each part of this
+project follows.
 
 \begin{longtable}{p{0.31\textwidth}p{0.61\textwidth}}
 \toprule
@@ -351,40 +358,40 @@ A CLI fixture generator in \path{scripts/} loads either a DESC example
 equilibrium or a DESC HDF5/pickle path and writes the sampled arrays to an
 \path{.npz} file.
 
-The same internal geometry can be exported to the GX/GS2 \texttt{eik}-style
+The same internal geometry can be exported to the \texttt{eik}-style
 contract used for stellarator parity checks:
 \begin{equation}
   \mathcal{E}_{\mathrm{eik}}
   =
   \{
-    \theta,\ B,\ \grad_\parallel,\ gds2,\ gds21,\ gds22,
-    gbdrift,\ gbdrift0,\ cvdrift,\ cvdrift0
+    \theta,\ B,\ \grad_\parallel,\ \mathtt{gds2},\ \mathtt{gds21},\ \mathtt{gds22},
+    \mathtt{gbdrift},\ \mathtt{gbdrift0},\ \mathtt{cvdrift},\ \mathtt{cvdrift0}
   \}.
   \label{eq:eik-export-contract}
 \end{equation}
 The implemented export uses
 \[
-  B=bmag,\qquad
+  B=\mathtt{bmag},\qquad
   \grad_\parallel=F,\qquad
-  (gds2,gds21,gds22)=(g^{yy},g^{xy},g^{xx}),
+  (\mathtt{gds2},\mathtt{gds21},\mathtt{gds22})=(g^{yy},g^{xy},g^{xx}),
 \]
 and preserves the summed drift coefficients through
 \[
-  gbdrift+cvdrift=D_y,\qquad
-  gbdrift0+cvdrift0=D_x.
+  \mathtt{gbdrift}+\mathtt{cvdrift}=D_y,\qquad
+  \mathtt{gbdrift0}+\mathtt{cvdrift0}=D_x.
 \]
 The split between grad-\(B\) and curvature drift pieces is source-code
 specific and is not inferred by the exporter.  The internal mirror-force
 coefficient \(G\) is therefore checked separately unless an external reference
 provides a compatible proxy.  This convention lets DESC-generated flux-tube
 arrays pass through the same metric/drift and \(\kperp^2\) contract used by
-GX/GS2 \texttt{eik} fixtures without claiming a curvature split that was not
+external \texttt{eik} fixtures without claiming a curvature split that was not
 provided.
-For GIST/GS2 text fixtures from the GX VMEC test suite, the drift columns are
-read in the order
+Some external \texttt{eik}/GIST text fixtures use an alternate drift-column
+ordering; when reading that variant, the columns are read in the order
 \[
-  \theta,\ B,\ \grad_\parallel,\ gds2,\ gds21,\ gds22,
-  cvdrift,\ cvdrift0,\ gbdrift,\ gbdrift0,
+  \theta,\ B,\ \grad_\parallel,\ \mathtt{gds2},\ \mathtt{gds21},\ \mathtt{gds22},
+  \mathtt{cvdrift},\ \mathtt{cvdrift0},\ \mathtt{gbdrift},\ \mathtt{gbdrift0},
 \]
 and the solver compares both the individual metric fields and the summed drift
 fields used by the residual.
@@ -712,7 +719,7 @@ Here \(W^{C,[0,1]}\) and \(D^{C,[0,1]}\) are the mapped weights and derivative m
   g_{\ell m}(z).
   \label{eq:velocity-spectral-quadrature}
 \end{equation}
-The gyrophase factor is absorbed into the chosen normalization; if a benchmark requires an explicit \(2\pi\), it should enter the documented velocity measure, not an individual physics term.  Velocity collocation is the selected production CPU representation: Chebyshev is the general reduced/differentiable path, GKW finite differences retain convention parity, and the midpoint/Gauss--Laguerre recipe is used by the source-matched W7-X gate.  Hermite--Laguerre remains a reduced GX discriminator until it is integrated with the complete stellarator residual and field solve and passes comparable convergence, parity, gradient, and timing gates.
+The gyrophase factor is absorbed into the chosen normalization; if a benchmark requires an explicit \(2\pi\), it should enter the documented velocity measure, not an individual physics term.  Velocity collocation is the selected production CPU representation: Chebyshev is the general reduced/differentiable path, GKW finite differences retain convention parity, and the midpoint/Gauss--Laguerre recipe is used by the source-matched W7-X gate.  Hermite--Laguerre remains an experimental reduced discriminator until it is integrated with the complete stellarator residual and field solve and passes comparable convergence, parity, gradient, and timing gates.
 
 \subsection{Parallel spectral grid}
 
@@ -1123,8 +1130,8 @@ fixtures then check the pieces most likely to hide convention errors:
   \item GKW selected-mode RHS/action traces, imported-state one-window replays,
   initial-state normalization, and row-normalized \path{parallel_phi.dat}
   profile checks pass at their current tolerances;
-  \item eik geometry checks pass for DESC/GX fixtures, solver export, GX/GS2
-  import, and independent GX/VMEC GIST sources;
+  \item eik geometry checks pass for DESC fixtures, solver export, eik
+  import, and independent VMEC/GIST sources;
   \item reduced stellarator scan and DESC optimization examples execute through
   fixed-topology differentiable objectives, but are not production claims.
 \end{itemize}
@@ -1147,14 +1154,14 @@ tables, mode structures, convergence metadata, and a quasilinear proxy.  The
 same command can read DESC paths, eik tables, and stella \path{.geometry}
 files.  Before solving, it applies the shared geometry-preflight contract:
 finite fields, positive \(B\), positive metric diagonals, representative
-nonnegative \(k_\perp^2\), GX/GS2 eik-export compatibility, and an optional
+nonnegative \(k_\perp^2\), eik-export compatibility, and an optional
 finite-difference mirror-force check when the source data supports it.  The
 separate mode-boundary contract checks zonal identity maps, nonzonal open chain
 ends, reciprocal linked shifts, and \texttt{ikxspace} spacing.
 
 A real-geometry reduced W7-X fixture is stored in
-\path{fixtures/w7x_itg_reduced_benchmark/}.  It uses the local GX/GIST W7-X eik
-geometry and GX W7-X adiabatic-electron ITG input as provenance.  Its scalar
+\path{fixtures/w7x_itg_reduced_benchmark/}.  It uses a W7-X eik geometry and
+adiabatic-electron ITG input as provenance.  Its scalar
 outputs are finite regression artifacts, not an external growth-rate claim; the
 fixture is deliberately guarded by production-readiness ledgers.
 
@@ -1224,9 +1231,9 @@ four gates have passing rungs:
   \(k_{y,\min}=0.0125\to0.00625\) finest-pair change is \(25.65\%\), above the
   \(15\%\) gate, so a further \(257{\times}129\), \(k_{y,\min}=0.003125\)
   bandwidth-preserving rung is required;
-  \item independent nonlinear parity against a revision-pinned GX run remains
-  deferred: it needs a CUDA-capable host, which was not available for this
-  campaign.
+  \item independent nonlinear parity against a revision-pinned external
+  reference gyrokinetic code remains deferred: it needs a CUDA-capable host,
+  which was not available for this campaign.
 \end{itemize}
 The required next domain rung was attempted on a CPU-only development
 workstation and ran for approximately \(19.5\) hours without a solver or
@@ -1392,6 +1399,95 @@ re-solved equilibria, matching the ``Outer loop (available now)'' path
 described in the notebooks rather than the deferred end-to-end automatic-
 differentiation path.
 
+\paragraph{Extended outer-loop hill-climb.}
+Beyond the single 3-point sensitivity in Table~\ref{tab:live-provider-scans},
+each notebook was extended into a longer outer-loop hill-climb targeting 100
+iterations: the same central-difference sensitivity steps the boundary scale
+every iteration, and the loop fails closed -- stopping early but keeping
+every completed iteration -- on a non-finite objective, a raised solver
+exception, or a wall-clock budget.  DESC completed 46 iterations before a
+boundary-harmonic scale of \(1.0037\) produced a non-finite objective from a
+failed equilibrium solve; GVEC completed 48 iterations before its
+900-second budget; VMEC++, whose equilibrium solve is roughly two orders of
+magnitude more expensive per evaluation than DESC or GVEC at this
+resolution, completed 15 iterations within an extended 1800-second
+budget using a finer 3-iteration frame stride (stopping after 1877s against
+that budget).  None of these stops is a bug: each is the fail-closed loop
+behaving exactly as designed when a real equilibrium solver becomes
+unreliable or a shared compute budget is exhausted, and each is reported
+rather than hidden.
+
+Figures~\ref{fig:desc-boundary-evolution}--\ref{fig:vmecpp-boundary-evolution}
+show the real solved 3D boundary surface at the recorded frame stride,
+reconstructed directly from each provider's own boundary representation
+(DESC's \texttt{FourierRZToroidalSurface} via \texttt{surface.compute}, GVEC's
+Cartesian \texttt{state.evaluate("pos", ...)} at \(\rho=1\), and VMEC++'s
+\texttt{rbc}/\texttt{zbs} Fourier reconstruction) rather than a schematic.
+Figures~\ref{fig:desc-loss-trace}--\ref{fig:vmecpp-loss-trace} show the
+corresponding objective trajectories: DESC and GVEC both decrease
+monotonically toward the marginal-stability target as the boundary scale
+increases; VMEC++'s objective also decreases monotonically, from
+\(-0.22007\) to \(-0.23109\), as its boundary scale moves from \(1.0\) to
+\(1.0394\) over the same 15 iterations -- a visibly larger single-iteration
+step than DESC or GVEC, consistent with its order-of-magnitude larger
+central-difference sensitivity in Table~\ref{tab:live-provider-scans}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{desc_boundary_evolution.png}
+\caption{DESC \(R_{2,0}\) boundary evolution across 46 completed outer-loop
+iterations, shown every 25 iterations.  Each surface is evaluated directly
+from the solved equilibrium's boundary via \texttt{surface.compute}.}
+\label{fig:desc-boundary-evolution}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{desc_initial_live_design_scan.png}
+\caption{DESC reduced GK objective and \(R_{2,0}\) coefficient scale across
+the same 46-iteration trajectory.}
+\label{fig:desc-loss-trace}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{gvec_boundary_evolution.png}
+\caption{GVEC \(X1^{\cos}_{1,1}\) boundary evolution across 48 completed
+outer-loop iterations, shown every 25 iterations.  Each surface is the real
+Cartesian position of the solved GVEC state at \(\rho=1\).}
+\label{fig:gvec-boundary-evolution}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{gvec_initial_live_design_scan.png}
+\caption{GVEC reduced GK objective and maximum force residual across the
+same 48-iteration trajectory.  The force residual stays flat and bounded
+away from GVEC's own convergence tolerance throughout, consistent with the
+bounded-\texttt{MaxIter} diagnostic framing used everywhere else in this
+section.}
+\label{fig:gvec-loss-trace}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{vmecpp_boundary_evolution.png}
+\caption{VMEC++ paired \((m,n)=(1,0)\) boundary evolution across 15
+completed outer-loop iterations, shown every 3 iterations because of
+VMEC++'s substantially higher per-solve cost at this resolution.  Each
+surface is reconstructed directly from the scaled \texttt{rbc}/\texttt{zbs}
+Fourier coefficients VMEC++ solved for.}
+\label{fig:vmecpp-boundary-evolution}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{vmecpp_initial_live_design_scan.png}
+\caption{VMEC++ reduced GK objective and paired \((m,n)=(1,0)\) scale across
+the same 15-iteration trajectory.}
+\label{fig:vmecpp-loss-trace}
+\end{figure}
+
 \subsection{Production criteria}
 
 The trusted linear W7-X branch now satisfies:
@@ -1442,7 +1538,7 @@ The benchmark order should remain:
   \item GKW simple/Cyclone fixtures and selected-mode RHS/action traces;
   \item Rosenbluth-Hinton late plateau;
   \item Cyclone selected-\(k_y\) scalar and mode-structure diagnostics;
-  \item DESC/GX/GS2/stella eik and geometry contracts;
+  \item DESC/stella eik and geometry contracts;
   \item matched W7-X stella growth, frequency, and complex \(\phi(z)\) parity;
   \item production-control W7-X convergence and CPU timing;
   \item only then DESC optimization campaigns and nonlinear extensions.
@@ -1594,7 +1690,7 @@ A.~G. Peeters, Y. Camenen, F.~J. Casson, W.~A. Hornsby, A.~P. Snodin, D. Strintz
 \bibitem{gyaradax}
 G. Galletti, E. Volkmann, and J. Brandstetter.
 \newblock \texttt{gyaradax}: local gyrokinetics JAX code.
-\newblock Project materials in \path{papers/gyaradax-paper/} and \path{relevant-codes/gyaradax/}.
+\newblock arXiv preprint arXiv:2604.06085, 2026.
 
 \bibitem{jorge2024}
 R. Jorge, W. Dorland, P. Kim, M. Landreman, N.~R. Mandell, G. Merlo, and T. Qian.

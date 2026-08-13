@@ -76,6 +76,16 @@ synthetic paths are explicit opt-in alternatives. Each notebook shows the
 geometry contract, reduced GK objective, solver-side JAX differentiation, an
 outer-loop geometry surrogate, and the seam for a real design loop.
 
+Each notebook also runs a real outer-loop hill-climb on one boundary Fourier
+harmonic: a 3-point central-difference sensitivity through fresh equilibrium
+solves steps the boundary scale for up to 100 iterations, failing closed
+(stopping early, keeping every completed iteration) on a solver error or a
+wall-clock budget. The resulting objective/boundary-scale trajectory and the
+real solved 3D boundary surface every 25 iterations are plotted directly from
+each provider's own boundary representation and saved to
+`figures/{desc,gvec,vmecpp}_initial_live_design_scan.png` and
+`figures/{desc,gvec,vmecpp}_boundary_evolution.png`.
+
 ## Geometry interface
 
 All providers resolve to the same versioned contract:
